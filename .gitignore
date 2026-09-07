@@ -1,2 +1,6 @@
 .superpowers/
-
+bank-data.jsonl
+bank-data.json
+log.json
+.env
+*.env
