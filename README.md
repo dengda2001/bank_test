@@ -25,8 +25,9 @@ Optional:
 
 - Provider selector values from the TrueLayer Console auth-link builder, set as `TL_PROVIDERS` or `TL_PROVIDER_ID`.
 - A full Console-generated authorization link, set as `TL_AUTH_URL`. If set, the demo uses that link and only overwrites `state`.
-- Date range for transactions with `TL_FROM=YYYY-MM-DD` and `TL_TO=YYYY-MM-DD`.
+- Transaction start date with `TL_FROM=YYYY-MM-DD`. The transaction end bound is always the current UTC time.
 - Local JSONL log path with `TL_LOG_FILE`. Defaults to `bank-data.jsonl`.
+- Local refresh token path with `TL_TOKEN_FILE`. Defaults to `truelayer-token.json`.
 
 Do not put real client secrets in git, chat, or screenshots.
 
@@ -60,6 +61,8 @@ http://localhost:8080
 ```
 
 Click **Connect bank**. After consent, the callback returns JSON containing each account plus balance and transaction responses.
+
+The default scopes include `offline_access`, so the first successful consent stores a local refresh token in `TL_TOKEN_FILE` with `0600` permissions. After that, use **Query with saved login** or open `/refresh` to get a fresh access token and query again without completing bank login each time. If you use `TL_AUTH_URL`, make sure that Console-generated link also includes the `offline_access` scope, otherwise TrueLayer will not return a refresh token.
 
 The same callback result is appended to `TL_LOG_FILE` as one JSON object per line. The log contains bank account, balance, and transaction payloads, so treat it as sensitive local data.
 

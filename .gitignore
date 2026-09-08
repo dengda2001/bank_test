@@ -6,3 +6,4 @@ log.json
 *.env
 /truelayer-demo
 /demo-run.log
+truelayer-token.json

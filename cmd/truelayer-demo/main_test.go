@@ -87,15 +87,12 @@ func TestVerifyStateRejectsUnknownState(t *testing.T) {
 	}
 }
 
-// The transactions `to` bound is never taken from config: it is always
-// "now in UTC minus one hour" (RFC3339), so the bank never sees an end bound
-// that is in the future and cannot reject the range.
-func TestTxQueryToIsAlwaysNowMinusOneHourUTC(t *testing.T) {
+func TestTxQueryToIsCurrentTimeUTC(t *testing.T) {
 	now := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
 
 	q := txQuery("2026-01-01", now)
-	if got := q.Get("to"); got != "2026-09-08T11:00:00Z" {
-		t.Fatalf("to=%q want now-1h UTC 2026-09-08T11:00:00Z", got)
+	if got := q.Get("to"); got != "2026-09-08T12:00:00Z" {
+		t.Fatalf("to=%q want current UTC time 2026-09-08T12:00:00Z", got)
 	}
 	if got := q.Get("from"); got != "2026-01-01" {
 		t.Fatalf("from=%q want 2026-01-01", got)
@@ -109,9 +106,45 @@ func TestTxQueryDropsFutureFrom(t *testing.T) {
 	if got := q.Get("from"); got != "" {
 		t.Fatalf("future from=%q want empty (dropped)", got)
 	}
-	// to is still always set
-	if got := q.Get("to"); got != "2026-09-08T11:00:00Z" {
-		t.Fatalf("to=%q want now-1h UTC even when from is dropped", got)
+	if got := q.Get("to"); got != "2026-09-08T12:00:00Z" {
+		t.Fatalf("to=%q want current UTC time even when from is dropped", got)
+	}
+}
+
+func TestAppendStoredTokenPersistsRefreshTokenOnly(t *testing.T) {
+	tokenPath := filepath.Join(t.TempDir(), "token.json")
+	a := app{cfg: config{TokenFile: tokenPath}}
+
+	if err := a.saveStoredToken(tokenResponse{
+		AccessToken:  "access-token-should-not-be-stored",
+		RefreshToken: "refresh-token-123",
+		TokenType:    "Bearer",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	body, err := os.ReadFile(tokenPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "access-token-should-not-be-stored") {
+		t.Fatalf("stored token file contains access token: %s", body)
+	}
+
+	info, err := os.Stat(tokenPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("token file mode=%v want 0600", got)
+	}
+
+	stored, err := a.loadStoredToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.RefreshToken != "refresh-token-123" {
+		t.Fatalf("refresh_token=%q want refresh-token-123", stored.RefreshToken)
 	}
 }
 

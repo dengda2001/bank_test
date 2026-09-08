@@ -15,6 +15,7 @@ export TL_ENV="${TL_ENV:-sandbox}"
 export TL_ADDR="${TL_ADDR:-:8080}"
 export TL_REDIRECT_URI="${TL_REDIRECT_URI:-http://localhost:8080/callback}"
 export TL_LOG_FILE="${TL_LOG_FILE:-bank-data.jsonl}"
+export TL_TOKEN_FILE="${TL_TOKEN_FILE:-truelayer-token.json}"
 
 missing=()
 if [[ -z "${TL_CLIENT_ID:-}" ]]; then
@@ -39,8 +40,8 @@ TL_PROVIDERS=...
 TL_PROVIDER_ID=...
 TL_AUTH_URL=https://auth.truelayer.com/?...
 TL_FROM=2026-01-01
-TL_TO=2026-06-01
 TL_LOG_FILE=bank-data.jsonl
+TL_TOKEN_FILE=truelayer-token.json
 EOF
   exit 1
 fi
@@ -51,6 +52,7 @@ Starting TrueLayer demo
   Redirect URI: ${TL_REDIRECT_URI}
   Environment:  ${TL_ENV}
   Log file:     ${TL_LOG_FILE}
+  Token file:   ${TL_TOKEN_FILE}
 
 Open http://localhost${TL_ADDR} and click "Connect bank".
 EOF

@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	defaultScopes = "info accounts balance transactions"
+	defaultScopes = "info accounts balance transactions offline_access"
 	stateTTL      = 15 * time.Minute
 	dateLayout    = "2006-01-02"
 )
@@ -40,6 +40,7 @@ type config struct {
 	ProviderID   string
 	From         string
 	LogFile      string
+	TokenFile    string
 }
 
 type tokenResponse struct {
@@ -48,6 +49,11 @@ type tokenResponse struct {
 	ExpiresIn    int    `json:"expires_in,omitempty"`
 	TokenType    string `json:"token_type"`
 	Scope        string `json:"scope,omitempty"`
+}
+
+type storedToken struct {
+	RefreshToken string `json:"refresh_token"`
+	SavedAt      string `json:"saved_at"`
 }
 
 type accountList struct {
@@ -139,6 +145,7 @@ func main() {
 	mux.HandleFunc("/", a.handleIndex)
 	mux.HandleFunc("/login", a.handleLogin)
 	mux.HandleFunc("/callback", a.handleCallback)
+	mux.HandleFunc("/refresh", a.handleRefresh)
 
 	log.Printf("TrueLayer demo listening on http://localhost%s", cfg.Address)
 	log.Printf("Redirect URI must be registered in TrueLayer Console: %s", cfg.RedirectURI)
@@ -159,6 +166,7 @@ func loadConfig() (config, error) {
 		ProviderID:   strings.TrimSpace(os.Getenv("TL_PROVIDER_ID")),
 		From:         strings.TrimSpace(os.Getenv("TL_FROM")),
 		LogFile:      strings.TrimSpace(getenv("TL_LOG_FILE", "bank-data.jsonl")),
+		TokenFile:    strings.TrimSpace(getenv("TL_TOKEN_FILE", "truelayer-token.json")),
 	}
 
 	switch env {
@@ -248,8 +256,56 @@ func (a *app) handleCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "token exchange failed: "+err.Error(), http.StatusBadGateway)
 		return
 	}
+	if token.RefreshToken != "" {
+		if err := a.saveStoredToken(token); err != nil {
+			http.Error(w, "token save failed: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
 
 	result, err := a.fetchDemoResult(ctx, token.AccessToken)
+	if err != nil {
+		http.Error(w, "data fetch failed: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	if err := a.appendDemoResultLog(result); err != nil {
+		http.Error(w, "log write failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(result); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (a *app) handleRefresh(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	stored, err := a.loadStoredToken()
+	if err != nil {
+		http.Error(w, "no reusable login found; use /login once with offline_access scope: "+err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	token, err := a.refreshAccessToken(r.Context(), stored.RefreshToken)
+	if err != nil {
+		http.Error(w, "token refresh failed; reconnect with /login: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	if token.RefreshToken != "" && token.RefreshToken != stored.RefreshToken {
+		if err := a.saveStoredToken(token); err != nil {
+			http.Error(w, "token save failed: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	result, err := a.fetchDemoResult(r.Context(), token.AccessToken)
 	if err != nil {
 		http.Error(w, "data fetch failed: "+err.Error(), http.StatusBadGateway)
 		return
@@ -338,6 +394,29 @@ func (a *app) exchangeCode(ctx context.Context, code string) (tokenResponse, err
 	return token, nil
 }
 
+func (a *app) refreshAccessToken(ctx context.Context, refreshToken string) (tokenResponse, error) {
+	form := url.Values{}
+	form.Set("grant_type", "refresh_token")
+	form.Set("client_id", a.cfg.ClientID)
+	form.Set("client_secret", a.cfg.ClientSecret)
+	form.Set("refresh_token", refreshToken)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(a.cfg.AuthBaseURL, "/")+"/connect/token", strings.NewReader(form.Encode()))
+	if err != nil {
+		return tokenResponse{}, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	var token tokenResponse
+	if err := a.doJSON(req, &token); err != nil {
+		return tokenResponse{}, err
+	}
+	if token.AccessToken == "" {
+		return tokenResponse{}, errors.New("empty access_token in token response")
+	}
+	return token, nil
+}
+
 func (a *app) fetchDemoResult(ctx context.Context, accessToken string) (demoResult, error) {
 	var accounts accountList
 	if err := a.getJSON(ctx, accessToken, "/data/v1/accounts", nil, &accounts); err != nil {
@@ -373,9 +452,7 @@ func (a *app) fetchDemoResult(ctx context.Context, accessToken string) (demoResu
 }
 
 // txQuery builds the from/to query for the transactions request. The `to`
-// bound is never taken from config: it is always "now in UTC minus one hour",
-// so it is guaranteed to be in the past and TrueLayer can never reject it as
-// an invalid (future) date range. A configured `from` in the future is
+// bound is always the current UTC time. A configured `from` in the future is
 // meaningless and dropped; unparseable values are passed through unchanged.
 func txQuery(from string, now time.Time) url.Values {
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
@@ -385,8 +462,52 @@ func txQuery(from string, now time.Time) url.Values {
 			q.Set("from", from)
 		}
 	}
-	q.Set("to", now.UTC().Add(-time.Hour).Format(time.RFC3339))
+	q.Set("to", now.UTC().Format(time.RFC3339))
 	return q
+}
+
+func (a *app) saveStoredToken(token tokenResponse) error {
+	if a.cfg.TokenFile == "" || token.RefreshToken == "" {
+		return nil
+	}
+	dir := filepath.Dir(a.cfg.TokenFile)
+	if dir != "." {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return err
+		}
+	}
+
+	stored := storedToken{
+		RefreshToken: token.RefreshToken,
+		SavedAt:      time.Now().UTC().Format(time.RFC3339),
+	}
+	body, err := json.MarshalIndent(stored, "", "  ")
+	if err != nil {
+		return err
+	}
+	body = append(body, '\n')
+	if err := os.WriteFile(a.cfg.TokenFile, body, 0o600); err != nil {
+		return err
+	}
+	return os.Chmod(a.cfg.TokenFile, 0o600)
+}
+
+func (a *app) loadStoredToken() (storedToken, error) {
+	if a.cfg.TokenFile == "" {
+		return storedToken{}, errors.New("TL_TOKEN_FILE is empty")
+	}
+	body, err := os.ReadFile(a.cfg.TokenFile)
+	if err != nil {
+		return storedToken{}, err
+	}
+	var stored storedToken
+	if err := json.Unmarshal(body, &stored); err != nil {
+		return storedToken{}, err
+	}
+	if strings.TrimSpace(stored.RefreshToken) == "" {
+		return storedToken{}, errors.New("stored refresh_token is empty")
+	}
+	return stored, nil
 }
 
 func (a *app) appendDemoResultLog(result demoResult) error {
@@ -468,13 +589,17 @@ var indexTemplate = template.Must(template.New("index").Parse(`<!doctype html>
 <body>
   <h1>TrueLayer Ireland Demo</h1>
   <p>This local demo starts a TrueLayer OAuth flow, then reads accounts, balances, and transactions after user consent.</p>
-  <p><a class="button" href="/login">Connect bank</a></p>
+  <p>
+    <a class="button" href="/login">Connect bank</a>
+    <a class="button" href="/refresh">Query with saved login</a>
+  </p>
   <dl>
     <dt>Environment</dt><dd><code>{{.Environment}}</code></dd>
     <dt>Redirect URI</dt><dd><code>{{.RedirectURI}}</code></dd>
     <dt>Scopes</dt><dd><code>{{range $i, $s := .Scopes}}{{if $i}} {{end}}{{$s}}{{end}}</code></dd>
     <dt>Providers</dt><dd><code>{{if .Providers}}{{.Providers}}{{else}}not set{{end}}</code></dd>
     <dt>Provider ID</dt><dd><code>{{if .ProviderID}}{{.ProviderID}}{{else}}not set{{end}}</code></dd>
+    <dt>Token file</dt><dd><code>{{.TokenFile}}</code></dd>
   </dl>
 </body>
 </html>
