@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -221,6 +222,100 @@ func TestTxQueryDropsFutureFrom(t *testing.T) {
 	}
 	if got := q.Get("to"); got != "2026-09-08T12:00:00Z" {
 		t.Fatalf("to=%q want current UTC time even when from is dropped", got)
+	}
+}
+
+func TestRefreshTransactionFromCapsOlderConfiguredDate(t *testing.T) {
+	now := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
+
+	got := refreshTransactionFrom("2026-01-01", now)
+	if got != "2026-06-10" {
+		t.Fatalf("refresh from=%q want 90-day cutoff 2026-06-10", got)
+	}
+}
+
+func TestRefreshTransactionFromKeepsRecentConfiguredDate(t *testing.T) {
+	now := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
+
+	got := refreshTransactionFrom("2026-08-01", now)
+	if got != "2026-08-01" {
+		t.Fatalf("refresh from=%q want configured recent date 2026-08-01", got)
+	}
+}
+
+func TestHandleRefreshRedirectsOnTransactionFetchFailure(t *testing.T) {
+	tokenPath := filepath.Join(t.TempDir(), "token.json")
+	logPath := filepath.Join(t.TempDir(), "bank-data.jsonl")
+	a := testApp()
+	a.cfg.From = "2026-01-01"
+	a.cfg.TokenFile = tokenPath
+	a.cfg.LogFile = logPath
+
+	var transactionFrom string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/connect/token":
+			w.Header().Set("Content-Type", "application/json")
+			io.WriteString(w, `{"access_token":"access-token-123","refresh_token":"refresh-token-123","token_type":"Bearer"}`)
+		case "/data/v1/accounts":
+			w.Header().Set("Content-Type", "application/json")
+			io.WriteString(w, `{"results":[{"account_id":"acct-1","display_name":"Rent account","currency":"EUR"}]}`)
+		case "/data/v1/accounts/acct-1/balance":
+			w.Header().Set("Content-Type", "application/json")
+			io.WriteString(w, `{"results":[]}`)
+		case "/data/v1/accounts/acct-1/transactions":
+			transactionFrom = r.URL.Query().Get("from")
+			http.Error(w, `{"error":"access_denied"}`, http.StatusForbidden)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	a.cfg.AuthBaseURL = server.URL
+	a.cfg.APIBaseURL = server.URL
+	a.httpClient = server.Client()
+
+	if err := a.saveStoredToken(tokenResponse{RefreshToken: "refresh-token-123"}); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/refresh", nil)
+	req.AddCookie(sessionCookie(a.cfg, time.Now().Add(sessionTTL)))
+	rec := httptest.NewRecorder()
+
+	a.handleRefresh(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status=%d want %d", rec.Code, http.StatusFound)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/billing?error=data_fetch_failed" {
+		t.Fatalf("Location=%q want /billing?error=data_fetch_failed", loc)
+	}
+	if transactionFrom == "2026-01-01" {
+		t.Fatalf("refresh used uncapped historical from date %q", transactionFrom)
+	}
+	if _, err := os.Stat(logPath); err == nil {
+		t.Fatal("refresh failure should not append a bank data log entry")
+	} else if !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+}
+
+func TestBillingTemplateShowsDataFetchError(t *testing.T) {
+	var body strings.Builder
+
+	err := billingTemplate.Execute(&body, billingPageData{
+		Username:    "ddrzh",
+		Environment: "sandbox",
+		LastSync:    "No sync yet",
+		Error:       "data_fetch_failed",
+		TokenFile:   "truelayer-token.json",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body.String(), "Bank data refresh failed") {
+		t.Fatalf("billing page did not render data fetch error notice: %s", body.String())
 	}
 }
 

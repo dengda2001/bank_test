@@ -25,10 +25,11 @@ import (
 )
 
 const (
-	defaultScopes = "info accounts balance transactions offline_access"
-	stateTTL      = 15 * time.Minute
-	sessionTTL    = 12 * time.Hour
-	dateLayout    = "2006-01-02"
+	defaultScopes       = "info accounts balance transactions offline_access"
+	stateTTL            = 15 * time.Minute
+	sessionTTL          = 12 * time.Hour
+	refreshLookbackDays = 90
+	dateLayout          = "2006-01-02"
 )
 
 type config struct {
@@ -429,9 +430,10 @@ func (a *app) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	result, err := a.fetchDemoResult(r.Context(), token.AccessToken)
+	from := refreshTransactionFrom(a.cfg.From, time.Now())
+	result, err := a.fetchDemoResultWithOptions(r.Context(), token.AccessToken, from, true)
 	if err != nil {
-		http.Error(w, "data fetch failed: "+err.Error(), http.StatusBadGateway)
+		http.Redirect(w, r, "/billing?error=data_fetch_failed", http.StatusFound)
 		return
 	}
 	if err := a.appendDemoResultLog(result); err != nil {
@@ -602,6 +604,10 @@ func (a *app) refreshAccessToken(ctx context.Context, refreshToken string) (toke
 }
 
 func (a *app) fetchDemoResult(ctx context.Context, accessToken string) (demoResult, error) {
+	return a.fetchDemoResultWithOptions(ctx, accessToken, a.cfg.From, false)
+}
+
+func (a *app) fetchDemoResultWithOptions(ctx context.Context, accessToken, from string, failOnTransactionError bool) (demoResult, error) {
 	var accounts accountList
 	if err := a.getJSON(ctx, accessToken, "/data/v1/accounts", nil, &accounts); err != nil {
 		return demoResult{}, err
@@ -622,10 +628,13 @@ func (a *app) fetchDemoResult(ctx context.Context, accessToken string) (demoResu
 			item.Balance = balance
 		}
 
-		q := txQuery(a.cfg.From, time.Now())
+		q := txQuery(from, time.Now())
 		var txs json.RawMessage
 		if err := a.getJSON(ctx, accessToken, "/data/v1/accounts/"+url.PathEscape(acct.AccountID)+"/transactions", q, &txs); err != nil {
 			item.Errors = append(item.Errors, "transactions: "+err.Error())
+			if failOnTransactionError {
+				return demoResult{}, fmt.Errorf("transactions fetch failed")
+			}
 		} else {
 			item.Transactions = txs
 		}
@@ -633,6 +642,16 @@ func (a *app) fetchDemoResult(ctx context.Context, accessToken string) (demoResu
 		result.Accounts = append(result.Accounts, item)
 	}
 	return result, nil
+}
+
+func refreshTransactionFrom(configuredFrom string, now time.Time) string {
+	today := time.Date(now.UTC().Year(), now.UTC().Month(), now.UTC().Day(), 0, 0, 0, 0, time.UTC)
+	cutoff := today.AddDate(0, 0, -refreshLookbackDays)
+	d, err := time.Parse(dateLayout, configuredFrom)
+	if configuredFrom == "" || err != nil || d.After(today) || d.Before(cutoff) {
+		return cutoff.Format(dateLayout)
+	}
+	return configuredFrom
 }
 
 // txQuery builds the from/to query for the transactions request. The `to`
@@ -1146,6 +1165,7 @@ var billingTemplate = template.Must(template.New("billing").Parse(`<!doctype htm
       </header>
 
       {{if .NeedsReconnect}}<div class="notice error">Bank access needs a new authorization. Bind the bank account again to continue refreshing transactions.</div>{{end}}
+      {{if eq .Error "data_fetch_failed"}}<div class="notice error">Bank data refresh failed. The app did not save this refresh; bind the bank account again if the bank requires new authorization.</div>{{end}}
       {{if eq .Message "bank_connected"}}<div class="notice ok">Bank account connected. Latest transactions were fetched.</div>{{end}}
       {{if eq .Message "refreshed"}}<div class="notice ok">Bank data refreshed with saved login.</div>{{end}}
 

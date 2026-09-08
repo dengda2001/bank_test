@@ -74,6 +74,8 @@ The default scopes include `offline_access`, so the first successful consent sto
 
 Refresh tokens are reusable, but they are not permanent. TrueLayer connections and user consent commonly expire on a 90-day cycle, and access can also fail if the user revokes consent or the bank requires re-authorization. When that happens, bind the bank account again.
 
+`TL_FROM` is used as the transaction start date for the first bank authorization callback, so a fresh consent can fetch as much historical data as the bank permits. Manual refreshes intentionally cap the transaction start date to the later of `TL_FROM` and the last 90 days because many banks reject older transaction ranges after the initial strong-customer-authentication window.
+
 The same callback result is appended to `TL_LOG_FILE` as one JSON object per line. The log contains bank account, balance, and transaction payloads, so treat it as sensitive local data.
 
 The billing page reads the latest JSONL entry and renders incoming transactions only. It treats `transaction_type == "CREDIT"` or positive amounts as income. Payer id and payer name are shown as confirmed, inferred, or unknown because those fields vary by bank and provider metadata.
