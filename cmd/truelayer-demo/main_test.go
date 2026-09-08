@@ -12,6 +12,19 @@ import (
 	"time"
 )
 
+func testApp() app {
+	return app{cfg: config{
+		AuthBaseURL:   "https://auth.truelayer-sandbox.com",
+		ClientID:      "client-123",
+		ClientSecret:  "secret-123",
+		RedirectURI:   "http://localhost:8080/callback",
+		Scopes:        []string{"info", "accounts", "balance", "transactions"},
+		AdminUsername: "admin",
+		AdminPassword: "password",
+		SessionSecret: "test-session-secret",
+	}}
+}
+
 func TestAuthURLIncludesOAuthParameters(t *testing.T) {
 	a := app{cfg: config{
 		AuthBaseURL: "https://auth.truelayer-sandbox.com",
@@ -56,10 +69,12 @@ func TestAuthURLTemplateOnlyOverwritesState(t *testing.T) {
 // different one (Safari), which has no copy of the login cookie. State must be
 // validated against the server-side issued-state store, not the cookie.
 func TestLoginThenCallbackVerifiesAcrossBrowser(t *testing.T) {
-	a := &app{cfg: config{AuthBaseURL: "https://auth.truelayer-sandbox.com"}}
+	a := testApp()
 
 	rec := httptest.NewRecorder()
-	a.handleLogin(rec, httptest.NewRequest(http.MethodGet, "/login", nil))
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	req.AddCookie(sessionCookie(a.cfg, time.Now().Add(sessionTTL)))
+	a.handleLogin(rec, req)
 	if rec.Code != http.StatusFound {
 		t.Fatalf("login status=%d want %d", rec.Code, http.StatusFound)
 	}
@@ -72,11 +87,109 @@ func TestLoginThenCallbackVerifiesAcrossBrowser(t *testing.T) {
 		t.Fatal("login redirect did not include a state parameter")
 	}
 
-	// Callback arrives with the issued state but NO cookie — a different
-	// browser context than the one that started the flow.
+	// OAuth state is still verified server-side, independent of the app login
+	// cookie that handleCallback now checks separately.
 	cb := httptest.NewRequest(http.MethodGet, "/callback?state="+url.QueryEscape(state), nil)
 	if err := verifyState(cb); err != nil {
-		t.Fatalf("callback with issued state but no cookie was rejected: %v", err)
+		t.Fatalf("issued state was rejected: %v", err)
+	}
+}
+
+func TestLocalLoginSetsSessionCookie(t *testing.T) {
+	a := testApp()
+	form := strings.NewReader("username=admin&password=password")
+	req := httptest.NewRequest(http.MethodPost, "/login-local", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	a.handleLocalLogin(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status=%d want %d", rec.Code, http.StatusFound)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/billing" {
+		t.Fatalf("Location=%q want /billing", loc)
+	}
+	if len(rec.Result().Cookies()) == 0 {
+		t.Fatal("expected a session cookie")
+	}
+}
+
+func TestBillingRequiresSession(t *testing.T) {
+	a := testApp()
+	rec := httptest.NewRecorder()
+
+	a.handleBilling(rec, httptest.NewRequest(http.MethodGet, "/billing", nil))
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status=%d want %d", rec.Code, http.StatusFound)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/" {
+		t.Fatalf("Location=%q want /", loc)
+	}
+}
+
+func TestBankLoginRequiresSession(t *testing.T) {
+	a := testApp()
+	rec := httptest.NewRecorder()
+
+	a.handleLogin(rec, httptest.NewRequest(http.MethodGet, "/login", nil))
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status=%d want %d", rec.Code, http.StatusFound)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/" {
+		t.Fatalf("Location=%q want /", loc)
+	}
+}
+
+func TestCallbackRequiresSessionBeforeConsumingState(t *testing.T) {
+	a := testApp()
+	state := "issued-state-for-callback"
+	issuedStates.record(state)
+	req := httptest.NewRequest(http.MethodGet, "/callback?code=abc&state="+url.QueryEscape(state), nil)
+	rec := httptest.NewRecorder()
+
+	a.handleCallback(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status=%d want %d", rec.Code, http.StatusFound)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/" {
+		t.Fatalf("Location=%q want /", loc)
+	}
+	if !issuedStates.consume(state) {
+		t.Fatal("callback without app session consumed OAuth state")
+	}
+}
+
+func TestRefreshRequiresSession(t *testing.T) {
+	a := testApp()
+	rec := httptest.NewRecorder()
+
+	a.handleRefresh(rec, httptest.NewRequest(http.MethodGet, "/refresh", nil))
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status=%d want %d", rec.Code, http.StatusFound)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/" {
+		t.Fatalf("Location=%q want /", loc)
+	}
+}
+
+func TestHasStoredToken(t *testing.T) {
+	tokenPath := filepath.Join(t.TempDir(), "token.json")
+	a := testApp()
+	a.cfg.TokenFile = tokenPath
+
+	if a.hasStoredToken() {
+		t.Fatal("token should not exist yet")
+	}
+	if err := a.saveStoredToken(tokenResponse{RefreshToken: "refresh-token-123"}); err != nil {
+		t.Fatal(err)
+	}
+	if !a.hasStoredToken() {
+		t.Fatal("expected stored token to be detected")
 	}
 }
 
@@ -218,6 +331,62 @@ func TestAppendDemoResultLogWritesBalancesAndTransactions(t *testing.T) {
 	}
 	if !strings.Contains(string(logged.Accounts[0].Transactions), "tx-1") {
 		t.Fatalf("transactions were not logged: %s", logged.Accounts[0].Transactions)
+	}
+}
+
+func TestIncomeTransactionsNormalizeCreditAndPositiveOnly(t *testing.T) {
+	result := demoResult{
+		FetchedAt: "2026-06-01T16:00:00Z",
+		Accounts: []demoAccount{{
+			Account: account{AccountID: "acct-1", DisplayName: "Rent account", Currency: "EUR"},
+			Transactions: json.RawMessage(`{"results":[
+				{
+					"transaction_id":"credit-1",
+					"normalised_provider_transaction_id":"txn-stable-1",
+					"timestamp":"2026-06-01T08:00:00Z",
+					"description":"RENT-A12-T003 AOIFE MURPHY",
+					"amount":950,
+					"currency":"EUR",
+					"transaction_type":"CREDIT",
+					"meta":{"remitter_name":"Aoife Murphy","remitter_id":"payer-003","payment_reference":"RENT-A12-T003"}
+				},
+				{
+					"transaction_id":"positive-1",
+					"timestamp":"2026-06-02T08:00:00Z",
+					"description":"D BYRNE RENT",
+					"amount":600,
+					"currency":"EUR"
+				},
+				{
+					"transaction_id":"debit-1",
+					"timestamp":"2026-06-03T08:00:00Z",
+					"description":"SUPPLIES",
+					"amount":-50,
+					"currency":"EUR",
+					"transaction_type":"DEBIT"
+				}
+			]}`),
+		}},
+	}
+
+	rows := normalizeIncomeTransactions(result)
+	if len(rows) != 2 {
+		t.Fatalf("income rows=%d want 2", len(rows))
+	}
+	if rows[0].TransactionID != "credit-1" || rows[0].SourceID != "txn-stable-1" {
+		t.Fatalf("unexpected first row ids: %+v", rows[0])
+	}
+	if rows[0].PayerName != "Aoife Murphy" || rows[0].PayerNameKind != "confirmed" {
+		t.Fatalf("unexpected payer: %+v", rows[0])
+	}
+	if rows[0].PayerID != "payer-003" || rows[0].Reference != "RENT-A12-T003" {
+		t.Fatalf("unexpected payer id/reference: %+v", rows[0])
+	}
+	if rows[1].PayerName != "D BYRNE RENT" || rows[1].PayerNameKind != "inferred" {
+		t.Fatalf("expected inferred payer name from description: %+v", rows[1])
+	}
+	if rows[1].PayerID != "unknown" {
+		t.Fatalf("expected unknown payer id, got %+v", rows[1])
 	}
 }
 
