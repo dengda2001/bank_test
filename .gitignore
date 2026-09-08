@@ -4,3 +4,5 @@ bank-data.json
 log.json
 .env
 *.env
+/truelayer-demo
+/demo-run.log

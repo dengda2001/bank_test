@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -17,12 +16,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
 const (
-	stateCookieName = "tl_demo_state"
-	defaultScopes   = "info accounts balance transactions"
+	defaultScopes = "info accounts balance transactions"
+	stateTTL      = 15 * time.Minute
+	dateLayout    = "2006-01-02"
 )
 
 type config struct {
@@ -38,7 +39,6 @@ type config struct {
 	Providers    string
 	ProviderID   string
 	From         string
-	To           string
 	LogFile      string
 }
 
@@ -80,6 +80,48 @@ type app struct {
 	httpClient *http.Client
 }
 
+// issuedStates tracks states this server has handed to TrueLayer so the
+// /callback handler can verify a state came from a login it started — without
+// relying on the login cookie. That cookie is bound to whatever browser opened
+// /login; on iOS the OAuth return can be handed off to a different browser
+// (e.g. WeChat in-app browser -> Safari), which has no copy of the cookie but
+// does carry the state in the URL. See TestLoginThenCallbackVerifiesAcrossBrowser.
+var issuedStates = newStateStore()
+
+type stateStore struct {
+	mu    sync.Mutex
+	items map[string]time.Time // issued state -> expiry
+}
+
+func newStateStore() *stateStore {
+	return &stateStore{items: make(map[string]time.Time)}
+}
+
+func (s *stateStore) record(state string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	for k, exp := range s.items { // opportunistic purge of expired states
+		if !now.Before(exp) {
+			delete(s.items, k)
+		}
+	}
+	s.items[state] = now.Add(stateTTL)
+}
+
+// consume returns true only if state was issued recently and unused; the state
+// is removed whether valid or expired so it can never be replayed.
+func (s *stateStore) consume(state string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	exp, ok := s.items[state]
+	if !ok {
+		return false
+	}
+	delete(s.items, state)
+	return time.Now().Before(exp)
+}
+
 func main() {
 	cfg, err := loadConfig()
 	if err != nil {
@@ -116,7 +158,6 @@ func loadConfig() (config, error) {
 		Providers:    strings.TrimSpace(os.Getenv("TL_PROVIDERS")),
 		ProviderID:   strings.TrimSpace(os.Getenv("TL_PROVIDER_ID")),
 		From:         strings.TrimSpace(os.Getenv("TL_FROM")),
-		To:           strings.TrimSpace(os.Getenv("TL_TO")),
 		LogFile:      strings.TrimSpace(getenv("TL_LOG_FILE", "bank-data.jsonl")),
 	}
 
@@ -181,14 +222,7 @@ func (a *app) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     stateCookieName,
-		Value:    state,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   600,
-	})
+	issuedStates.record(state)
 	http.Redirect(w, r, a.authURL(state), http.StatusFound)
 }
 
@@ -270,16 +304,12 @@ func randomState() (string, error) {
 }
 
 func verifyState(r *http.Request) error {
-	queryState := r.URL.Query().Get("state")
-	if queryState == "" {
+	state := r.URL.Query().Get("state")
+	if state == "" {
 		return errors.New("missing state")
 	}
-	cookie, err := r.Cookie(stateCookieName)
-	if err != nil {
-		return errors.New("missing state cookie")
-	}
-	if subtle.ConstantTimeCompare([]byte(queryState), []byte(cookie.Value)) != 1 {
-		return errors.New("invalid state")
+	if !issuedStates.consume(state) {
+		return errors.New("missing or expired state")
 	}
 	return nil
 }
@@ -329,13 +359,7 @@ func (a *app) fetchDemoResult(ctx context.Context, accessToken string) (demoResu
 			item.Balance = balance
 		}
 
-		q := url.Values{}
-		if a.cfg.From != "" {
-			q.Set("from", a.cfg.From)
-		}
-		if a.cfg.To != "" {
-			q.Set("to", a.cfg.To)
-		}
+		q := txQuery(a.cfg.From, time.Now())
 		var txs json.RawMessage
 		if err := a.getJSON(ctx, accessToken, "/data/v1/accounts/"+url.PathEscape(acct.AccountID)+"/transactions", q, &txs); err != nil {
 			item.Errors = append(item.Errors, "transactions: "+err.Error())
@@ -346,6 +370,23 @@ func (a *app) fetchDemoResult(ctx context.Context, accessToken string) (demoResu
 		result.Accounts = append(result.Accounts, item)
 	}
 	return result, nil
+}
+
+// txQuery builds the from/to query for the transactions request. The `to`
+// bound is never taken from config: it is always "now in UTC minus one hour",
+// so it is guaranteed to be in the past and TrueLayer can never reject it as
+// an invalid (future) date range. A configured `from` in the future is
+// meaningless and dropped; unparseable values are passed through unchanged.
+func txQuery(from string, now time.Time) url.Values {
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	q := url.Values{}
+	if from != "" {
+		if d, err := time.Parse(dateLayout, from); err != nil || !d.After(today) {
+			q.Set("from", from)
+		}
+	}
+	q.Set("to", now.UTC().Add(-time.Hour).Format(time.RFC3339))
+	return q
 }
 
 func (a *app) appendDemoResultLog(result demoResult) error {

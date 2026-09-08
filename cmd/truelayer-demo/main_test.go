@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestAuthURLIncludesOAuthParameters(t *testing.T) {
@@ -50,12 +51,80 @@ func TestAuthURLTemplateOnlyOverwritesState(t *testing.T) {
 	assertQuery(t, u, "state", "new-state")
 }
 
-func TestVerifyStateRejectsMismatch(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/callback?state=from-query", nil)
-	r.AddCookie(&http.Cookie{Name: stateCookieName, Value: "from-cookie"})
+// Regression test for the iOS live flow: the OAuth callback can be handed off
+// from the browser that initiated /login (e.g. WeChat's in-app browser) to a
+// different one (Safari), which has no copy of the login cookie. State must be
+// validated against the server-side issued-state store, not the cookie.
+func TestLoginThenCallbackVerifiesAcrossBrowser(t *testing.T) {
+	a := &app{cfg: config{AuthBaseURL: "https://auth.truelayer-sandbox.com"}}
 
+	rec := httptest.NewRecorder()
+	a.handleLogin(rec, httptest.NewRequest(http.MethodGet, "/login", nil))
+	if rec.Code != http.StatusFound {
+		t.Fatalf("login status=%d want %d", rec.Code, http.StatusFound)
+	}
+	loc, err := url.Parse(rec.Header().Get("Location"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := loc.Query().Get("state")
+	if state == "" {
+		t.Fatal("login redirect did not include a state parameter")
+	}
+
+	// Callback arrives with the issued state but NO cookie — a different
+	// browser context than the one that started the flow.
+	cb := httptest.NewRequest(http.MethodGet, "/callback?state="+url.QueryEscape(state), nil)
+	if err := verifyState(cb); err != nil {
+		t.Fatalf("callback with issued state but no cookie was rejected: %v", err)
+	}
+}
+
+func TestVerifyStateRejectsUnknownState(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/callback?state="+url.QueryEscape("never-issued"), nil)
 	if err := verifyState(r); err == nil {
-		t.Fatal("expected state mismatch error")
+		t.Fatal("expected a state that was never issued to be rejected")
+	}
+}
+
+// The transactions `to` bound is never taken from config: it is always
+// "now in UTC minus one hour" (RFC3339), so the bank never sees an end bound
+// that is in the future and cannot reject the range.
+func TestTxQueryToIsAlwaysNowMinusOneHourUTC(t *testing.T) {
+	now := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
+
+	q := txQuery("2026-01-01", now)
+	if got := q.Get("to"); got != "2026-09-08T11:00:00Z" {
+		t.Fatalf("to=%q want now-1h UTC 2026-09-08T11:00:00Z", got)
+	}
+	if got := q.Get("from"); got != "2026-01-01" {
+		t.Fatalf("from=%q want 2026-01-01", got)
+	}
+}
+
+func TestTxQueryDropsFutureFrom(t *testing.T) {
+	now := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
+
+	q := txQuery("2027-01-01", now) // from is in the future
+	if got := q.Get("from"); got != "" {
+		t.Fatalf("future from=%q want empty (dropped)", got)
+	}
+	// to is still always set
+	if got := q.Get("to"); got != "2026-09-08T11:00:00Z" {
+		t.Fatalf("to=%q want now-1h UTC even when from is dropped", got)
+	}
+}
+
+func TestVerifyStateRejectsExpiredState(t *testing.T) {
+	state := "expired-state-abc"
+	issuedStates.record(state)
+	issuedStates.mu.Lock()
+	issuedStates.items[state] = time.Now().Add(-time.Minute)
+	issuedStates.mu.Unlock()
+
+	r := httptest.NewRequest(http.MethodGet, "/callback?state="+state, nil)
+	if err := verifyState(r); err == nil {
+		t.Fatal("expected an expired state to be rejected")
 	}
 }
 
