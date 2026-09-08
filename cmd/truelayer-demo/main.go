@@ -786,7 +786,7 @@ func normalizeIncomeTransactions(result demoResult) []incomeTransaction {
 				AccountID:     acct.Account.AccountID,
 				AccountName:   firstNonEmpty(acct.Account.DisplayName, acct.Account.AccountID),
 				Description:   tx.Description,
-				Reference:     firstNonEmpty(tx.Reference, metaString(tx.Meta, "payment_reference"), metaString(tx.Meta, "reference"), metaString(tx.Meta, "remittance_information"), metaString(tx.Meta, "remittanceInformation")),
+				Reference:     firstNonEmpty(tx.Reference, metaString(tx.Meta, "payment_reference"), metaString(tx.Meta, "reference"), metaString(tx.Meta, "provider_reference"), metaString(tx.Meta, "remittance_information"), metaString(tx.Meta, "remittanceInformation")),
 				Status:        "needs_review",
 				StatusLabel:   "Needs review",
 			}
@@ -810,13 +810,13 @@ func normalizeIncomeTransactions(result demoResult) []incomeTransaction {
 			row.AmountDisplay = formatMoney(row.Amount, row.Currency, 2)
 			if row.PayerNameKind == "confirmed" {
 				row.Status = "confirmed_payer"
-				row.StatusLabel = "Confirmed payer"
+				row.StatusLabel = "Confirmed sender"
 			} else if row.PayerNameKind == "inferred" {
 				row.Status = "inferred_payer"
-				row.StatusLabel = "Inferred payer"
+				row.StatusLabel = "Inferred sender"
 			} else {
 				row.Status = "unknown_payer"
-				row.StatusLabel = "Unknown payer"
+				row.StatusLabel = "Unknown sender"
 			}
 			rows = append(rows, row)
 		}
@@ -836,7 +836,7 @@ func isIncome(tx rawTransaction) bool {
 }
 
 func payerName(tx rawTransaction) (string, string) {
-	if name := firstNonEmpty(tx.PayerName, tx.RemitterName, tx.CounterpartyName, metaString(tx.Meta, "payer_name"), metaString(tx.Meta, "remitter_name"), metaString(tx.Meta, "counterparty_name")); name != "" {
+	if name := firstNonEmpty(tx.PayerName, tx.RemitterName, tx.CounterpartyName, metaString(tx.Meta, "payer_name"), metaString(tx.Meta, "remitter_name"), metaString(tx.Meta, "counterparty_name"), metaString(tx.Meta, "counter_party_preferred_name"), metaString(tx.Meta, "counterPartyPreferredName")); name != "" {
 		return name, "confirmed"
 	}
 	if name := firstNonEmpty(tx.MerchantName, tx.Description); name != "" {
@@ -908,7 +908,7 @@ func sumIncome(rows []incomeTransaction) float64 {
 func countUnknownPayers(rows []incomeTransaction) int {
 	var count int
 	for _, row := range rows {
-		if row.PayerNameKind == "unknown" || row.PayerID == "unknown" {
+		if row.PayerNameKind == "unknown" {
 			count++
 		}
 	}
@@ -1059,168 +1059,559 @@ var billingTemplate = template.Must(template.New("billing").Parse(`<!doctype htm
   <title>RentOps Billing</title>
   <style>
     :root {
-      --paper: #f7f8f5; --panel: #ffffff; --ink: #1d2522; --muted: #66736e;
-      --line: #d9dfd9; --line-strong: #b9c4bd; --teal: #0f766e;
-      --green: #257a4b; --green-soft: #e8f4ed; --amber: #a45f08;
-      --amber-soft: #fff0d8; --red: #af3333; --red-soft: #fae5e3;
-      --shadow: 0 18px 45px rgba(26, 39, 34, 0.10);
-      --sans: "IBM Plex Sans", "Aptos", "Segoe UI", system-ui, sans-serif;
+      --background-deep: #020203;
+      --background-base: #050506;
+      --background-elevated: #0a0a0c;
+      --surface: rgba(255,255,255,0.05);
+      --surface-strong: rgba(255,255,255,0.08);
+      --foreground: #ededef;
+      --foreground-muted: #8a8f98;
+      --foreground-subtle: rgba(255,255,255,0.62);
+      --accent: #5e6ad2;
+      --accent-bright: #6872d9;
+      --accent-glow: rgba(94,106,210,0.30);
+      --positive: #7dd3a8;
+      --warning: #e9b872;
+      --danger: #ff8b86;
+      --border: rgba(255,255,255,0.06);
+      --border-hover: rgba(255,255,255,0.12);
+      --shadow-card: 0 0 0 1px rgba(255,255,255,0.06), 0 20px 70px rgba(0,0,0,0.48), 0 0 70px rgba(94,106,210,0.08);
+      --shadow-button: 0 0 0 1px rgba(94,106,210,0.50), 0 8px 26px rgba(94,106,210,0.28), inset 0 1px 0 rgba(255,255,255,0.22);
+      --sans: "Inter", "Geist Sans", "Aptos", "Segoe UI", system-ui, sans-serif;
       --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+      --ease: cubic-bezier(0.16, 1, 0.3, 1);
     }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--sans); }
+    html { background: var(--background-deep); }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--foreground);
+      font-family: var(--sans);
+      background:
+        radial-gradient(ellipse at top, #111225 0%, var(--background-base) 48%, var(--background-deep) 100%);
+      overflow-x: hidden;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.022) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.022) 1px, transparent 1px);
+      background-size: 64px 64px;
+      mask-image: radial-gradient(circle at top, black, transparent 75%);
+      opacity: 0.55;
+    }
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.035;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.45'/%3E%3C/svg%3E");
+    }
     button, input { font: inherit; }
-    .app { min-height: 100vh; display: grid; grid-template-columns: 236px minmax(0, 1fr); }
-    aside { background: #17201d; color: #eef5f1; padding: 20px 16px; display: flex; flex-direction: column; gap: 24px; }
-    .brand { display: flex; gap: 10px; align-items: center; padding-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,.12); }
-    .mark { width: 34px; height: 34px; background: #f7f8f5; color: #17201d; display: grid; place-items: center; font: 700 20px Georgia, serif; }
-    .brand-name { font: 700 22px Georgia, serif; }
-    .nav { display: grid; gap: 5px; }
-    .nav div { color: rgba(238,245,241,.64); padding: 10px 9px; border-radius: 6px; }
-    .nav .active { color: #fff; background: rgba(255,255,255,.10); }
-    .side-foot { margin-top: auto; border-top: 1px solid rgba(255,255,255,.12); padding-top: 14px; color: rgba(238,245,241,.72); font-size: 13px; }
-    main { min-width: 0; padding: 24px; }
-    .topbar { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; margin-bottom: 18px; }
-    .kicker { color: var(--muted); font-size: 13px; margin-bottom: 7px; }
-    h1 { margin: 0; font: 700 32px/1.05 Georgia, serif; }
-    .actions { display: flex; gap: 9px; flex-wrap: wrap; justify-content: flex-end; }
+    a { color: inherit; }
+    .ambient {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .blob {
+      position: absolute;
+      border-radius: 999px;
+      filter: blur(130px);
+      opacity: 0.58;
+      animation: float 9s ease-in-out infinite;
+      transform: translateZ(0);
+    }
+    .blob.primary {
+      width: 980px;
+      height: 720px;
+      left: 18%;
+      top: -330px;
+      background: rgba(94,106,210,0.26);
+    }
+    .blob.secondary {
+      width: 560px;
+      height: 760px;
+      left: -230px;
+      top: 220px;
+      background: rgba(151,83,210,0.16);
+      animation-delay: -2s;
+    }
+    .blob.tertiary {
+      width: 620px;
+      height: 620px;
+      right: -240px;
+      top: 180px;
+      background: rgba(74,112,255,0.13);
+      animation-delay: -4s;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-20px) rotate(1deg); }
+    }
+    .app {
+      position: relative;
+      z-index: 1;
+      width: min(1480px, 100%);
+      margin: 0 auto;
+      padding: 24px;
+    }
+    .shell {
+      min-height: calc(100vh - 48px);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.075), rgba(255,255,255,0.026));
+      box-shadow: var(--shadow-card);
+      backdrop-filter: blur(24px);
+      overflow: hidden;
+    }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: center;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(5,5,6,0.62);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+    .mark {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      color: white;
+      font: 700 17px var(--mono);
+      background: linear-gradient(145deg, rgba(104,114,217,0.95), rgba(94,106,210,0.55));
+      box-shadow: var(--shadow-button);
+    }
+    .brand-title { font-weight: 650; letter-spacing: -0.01em; }
+    .brand-meta {
+      color: var(--foreground-muted);
+      font: 500 11px var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-top: 2px;
+    }
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
     .btn {
-      height: 38px; border: 1px solid var(--line-strong); background: var(--panel);
-      color: var(--ink); border-radius: 6px; padding: 0 12px; display: inline-flex;
-      align-items: center; cursor: pointer; text-decoration: none;
+      position: relative;
+      min-height: 38px;
+      border: 0;
+      border-radius: 10px;
+      padding: 0 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: var(--foreground);
+      background: rgba(255,255,255,0.055);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 0 0 1px rgba(255,255,255,0.08);
+      cursor: pointer;
+      text-decoration: none;
+      transition: transform 220ms var(--ease), background 220ms var(--ease), box-shadow 220ms var(--ease);
     }
-    .btn.primary { border-color: #0f665f; background: var(--teal); color: #fff; }
-    .btn.danger { border-color: #d8aaa6; color: var(--red); }
-    .summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
-    .metric { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 14px; box-shadow: 0 10px 30px rgba(26,39,34,.04); }
-    .metric label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 7px; }
-    .metric strong { font: 700 26px Georgia, serif; }
-    .metric span { display: block; color: var(--muted); font-size: 12px; margin-top: 7px; }
-    .notice { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; color: var(--muted); }
-    .notice.error { border-color: #e9aaa5; background: var(--red-soft); color: var(--red); }
-    .notice.ok { border-color: #b8d9c3; background: var(--green-soft); color: var(--green); }
-    .surface { background: #fff; border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); overflow: hidden; }
-    .surface-head { padding: 14px 16px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 12px; align-items: center; }
-    .title { font-weight: 700; }
-    .tiny { color: var(--muted); font-size: 12px; }
+    .btn:hover { transform: translateY(-2px); background: rgba(255,255,255,0.09); box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 0 0 1px rgba(255,255,255,0.13), 0 12px 34px rgba(0,0,0,0.24); }
+    .btn:active { transform: scale(0.98); }
+    .btn:focus-visible { outline: 2px solid rgba(104,114,217,0.9); outline-offset: 3px; }
+    .btn.primary { background: var(--accent); color: white; box-shadow: var(--shadow-button); }
+    .btn.primary:hover { background: var(--accent-bright); box-shadow: 0 0 0 1px rgba(104,114,217,0.65), 0 12px 34px rgba(94,106,210,0.36), inset 0 1px 0 rgba(255,255,255,0.24); }
+    .btn.danger { color: #ffd8d6; background: rgba(255,139,134,0.08); }
+    .content {
+      display: grid;
+      gap: 18px;
+      padding: 24px;
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 340px;
+      gap: 18px;
+      align-items: stretch;
+    }
+    .panel {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.078), rgba(255,255,255,0.026));
+      box-shadow: var(--shadow-card);
+      transition: transform 240ms var(--ease), border-color 240ms var(--ease), box-shadow 240ms var(--ease);
+    }
+    .panel::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(300px circle at var(--mx, 50%) var(--my, 0%), rgba(94,106,210,0.15), transparent 58%);
+      opacity: 0;
+      transition: opacity 220ms var(--ease);
+    }
+    .panel:hover { border-color: var(--border-hover); box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 28px 90px rgba(0,0,0,0.55), 0 0 90px rgba(94,106,210,0.12); }
+    .panel:hover::before { opacity: 1; }
+    .intro { padding: 34px; min-height: 270px; }
+    .eyebrow {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 16px;
+      color: #c5c9ff;
+      font: 700 11px var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+    }
+    .eyebrow::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--accent-bright);
+      box-shadow: 0 0 18px var(--accent-glow);
+    }
+    h1 {
+      max-width: 760px;
+      margin: 0;
+      font-size: clamp(42px, 6vw, 78px);
+      line-height: 0.95;
+      letter-spacing: -0.035em;
+      font-weight: 650;
+      background: linear-gradient(180deg, #fff, rgba(255,255,255,0.92) 44%, rgba(255,255,255,0.62));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .lead {
+      max-width: 680px;
+      margin: 18px 0 0;
+      color: var(--foreground-muted);
+      font-size: 15px;
+      line-height: 1.8;
+    }
+    .sync-card {
+      padding: 24px;
+      display: grid;
+      align-content: space-between;
+      min-height: 270px;
+    }
+    .connection-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+    .label {
+      color: var(--foreground-muted);
+      font: 700 11px var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+    .sync-time {
+      margin-top: 8px;
+      color: var(--foreground);
+      font-size: 18px;
+      line-height: 1.35;
+    }
+    .token-path {
+      margin-top: 18px;
+      color: var(--foreground-muted);
+      font: 12px/1.5 var(--mono);
+      overflow-wrap: anywhere;
+    }
+    .status {
+      display: inline-flex;
+      min-height: 27px;
+      align-items: center;
+      border-radius: 999px;
+      padding: 0 10px;
+      border: 1px solid rgba(255,255,255,0.09);
+      font-size: 12px;
+      font-weight: 650;
+      white-space: nowrap;
+      background: rgba(255,255,255,0.055);
+    }
+    .confirmed_payer { color: #cbffe1; border-color: rgba(125,211,168,0.30); background: rgba(125,211,168,0.10); }
+    .inferred_payer { color: #ffe0a7; border-color: rgba(233,184,114,0.34); background: rgba(233,184,114,0.10); }
+    .unknown_payer { color: #ffd0ce; border-color: rgba(255,139,134,0.34); background: rgba(255,139,134,0.10); }
+    .summary {
+      display: grid;
+      grid-template-columns: 1.1fr 0.8fr 0.8fr 1fr;
+      gap: 12px;
+    }
+    .metric {
+      padding: 18px;
+      min-height: 124px;
+    }
+    .metric strong {
+      display: block;
+      margin-top: 13px;
+      font-size: clamp(26px, 3vw, 38px);
+      line-height: 1;
+      letter-spacing: -0.025em;
+      font-weight: 650;
+    }
+    .metric span {
+      display: block;
+      margin-top: 10px;
+      color: var(--foreground-muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .notice {
+      padding: 13px 15px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      color: var(--foreground-subtle);
+      background: rgba(255,255,255,0.045);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+    .notice.error { border-color: rgba(255,139,134,0.24); background: rgba(255,139,134,0.08); color: #ffd0ce; }
+    .notice.ok { border-color: rgba(125,211,168,0.26); background: rgba(125,211,168,0.08); color: #cbffe1; }
+    .surface { overflow: hidden; }
+    .surface-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(5,5,6,0.42);
+    }
+    .title {
+      color: var(--foreground);
+      font-size: 17px;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+    }
+    .tiny {
+      margin-top: 4px;
+      color: var(--foreground-muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
     .table-wrap { overflow-x: auto; }
-    table { width: 100%; min-width: 1040px; border-collapse: collapse; }
-    th { text-align: left; color: var(--muted); font-size: 12px; padding: 10px 9px; background: #fafbf8; border-bottom: 1px solid var(--line); }
-    td { padding: 11px 9px; border-bottom: 1px solid #edf0ec; font-size: 13px; vertical-align: top; }
-    .mono { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
-    .money { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 700; }
-    .payer { display: grid; gap: 3px; }
-    .payer span { color: var(--muted); }
-    .status { display: inline-flex; height: 25px; align-items: center; border-radius: 999px; padding: 0 8px; font-size: 12px; font-weight: 700; white-space: nowrap; }
-    .confirmed_payer { color: var(--green); background: var(--green-soft); }
-    .inferred_payer { color: var(--amber); background: var(--amber-soft); }
-    .unknown_payer { color: var(--red); background: var(--red-soft); }
-    .empty { padding: 34px 18px; color: var(--muted); text-align: center; }
-    @media (max-width: 900px) {
-      .app { grid-template-columns: 1fr; }
-      aside { display: none; }
-      main { padding: 16px; }
-      .topbar { display: grid; }
-      .actions { justify-content: flex-start; }
-      .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    table {
+      width: 100%;
+      min-width: 1120px;
+      border-collapse: collapse;
     }
-    @media (max-width: 520px) { .summary { grid-template-columns: 1fr; } h1 { font-size: 29px; } }
+    th {
+      text-align: left;
+      color: var(--foreground-muted);
+      font: 700 11px var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 0.10em;
+      padding: 13px 14px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.024);
+    }
+    td {
+      padding: 16px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.045);
+      color: var(--foreground-subtle);
+      font-size: 13px;
+      line-height: 1.45;
+      vertical-align: top;
+    }
+    tr { transition: background 180ms var(--ease); }
+    tbody tr:hover { background: rgba(255,255,255,0.035); }
+    .mono {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--foreground-muted);
+      overflow-wrap: anywhere;
+    }
+    .amount {
+      color: var(--foreground);
+      font-size: 15px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .sender {
+      display: grid;
+      gap: 8px;
+      min-width: 190px;
+    }
+    .sender strong {
+      color: var(--foreground);
+      font-size: 14px;
+      letter-spacing: -0.01em;
+    }
+    .sender-note {
+      color: var(--foreground-muted);
+      font: 700 11px var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 0.10em;
+    }
+    .description {
+      max-width: 280px;
+      color: var(--foreground);
+    }
+    .empty {
+      padding: 64px 20px;
+      color: var(--foreground-muted);
+      text-align: center;
+      line-height: 1.7;
+    }
+    @media (max-width: 1040px) {
+      .hero { grid-template-columns: 1fr; }
+      .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .sync-card { min-height: auto; }
+    }
+    @media (max-width: 700px) {
+      .app { padding: 12px; }
+      .shell { min-height: calc(100vh - 24px); border-radius: 18px; }
+      .topbar, .surface-head { align-items: flex-start; flex-direction: column; }
+      .actions { width: 100%; justify-content: stretch; }
+      .actions .btn, .actions form { flex: 1 1 auto; }
+      .actions form .btn { width: 100%; }
+      .content { padding: 14px; }
+      .intro { padding: 24px; min-height: auto; }
+      .summary { grid-template-columns: 1fr; }
+      table { min-width: 940px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+    }
   </style>
 </head>
 <body>
+  <div class="ambient" aria-hidden="true">
+    <div class="blob primary"></div>
+    <div class="blob secondary"></div>
+    <div class="blob tertiary"></div>
+  </div>
   <div class="app">
-    <aside>
-      <div class="brand">
-        <div class="mark">R</div>
-        <div>
-          <div class="brand-name">RentOps</div>
-          <div class="tiny">Tenant billing</div>
-        </div>
-      </div>
-      <div class="nav">
-        <div class="active">Bank income</div>
-        <div>Bills</div>
-        <div>Tenants</div>
-        <div>Properties</div>
-      </div>
-      <div class="side-foot">
-        <strong>{{.Username}}</strong><br>
-        Demo administrator
-      </div>
-    </aside>
-    <main>
+    <div class="shell">
       <header class="topbar">
-        <div>
-          <div class="kicker">{{.Environment}} environment · manual refresh · {{.LastSync}}</div>
-          <h1>Bank income transactions</h1>
+        <div class="brand">
+          <div class="mark">R</div>
+          <div>
+            <div class="brand-title">RentOps</div>
+            <div class="brand-meta">Bank income workspace</div>
+          </div>
         </div>
         <div class="actions">
           {{if .Connected}}
-            <a class="btn" href="/refresh">Manual refresh</a>
+            <a class="btn primary" href="/refresh" aria-label="Refresh bank income transactions">Refresh bank data</a>
           {{else}}
-            <a class="btn primary" href="/login">Bind bank account</a>
+            <a class="btn primary" href="/login" aria-label="Bind bank account">Bind bank account</a>
           {{end}}
           <form method="post" action="/logout"><button class="btn danger" type="submit">Sign out</button></form>
         </div>
       </header>
 
-      {{if .NeedsReconnect}}<div class="notice error">Bank access needs a new authorization. Bind the bank account again to continue refreshing transactions.</div>{{end}}
-      {{if eq .Error "data_fetch_failed"}}<div class="notice error">Bank data refresh failed. The app did not save this refresh; bind the bank account again if the bank requires new authorization.</div>{{end}}
-      {{if eq .Message "bank_connected"}}<div class="notice ok">Bank account connected. Latest transactions were fetched.</div>{{end}}
-      {{if eq .Message "refreshed"}}<div class="notice ok">Bank data refreshed with saved login.</div>{{end}}
-
-      <section class="summary">
-        <div class="metric"><label>Income total</label><strong>{{.IncomeTotal}}</strong><span>from latest sync</span></div>
-        <div class="metric"><label>Income rows</label><strong>{{.IncomeCount}}</strong><span>credits and positive amounts</span></div>
-        <div class="metric"><label>Unknown payer</label><strong>{{.UnknownPayerCount}}</strong><span>id or name missing</span></div>
-        <div class="metric"><label>Bank connection</label><strong>{{if .Connected}}Connected{{else}}Not bound{{end}}</strong><span>{{.TokenFile}}</span></div>
-      </section>
-
-      <section class="surface">
-        <div class="surface-head">
-          <div>
-            <div class="title">Income transaction list</div>
-            <div class="tiny">Payer fields can be confirmed by bank data, inferred from text, or unknown.</div>
+      <main class="content">
+        <section class="hero" aria-labelledby="page-title">
+          <div class="panel intro" data-spotlight>
+            <div class="eyebrow">{{.Environment}} environment</div>
+            <h1 id="page-title">Bank income transactions</h1>
+            <p class="lead">A focused bank statement view for incoming rent payments. Sender names are marked as confirmed when provided by the bank payload, including preferred counterparty names from transaction metadata.</p>
           </div>
-          {{if .Connected}}<span class="status confirmed_payer">Saved login available</span>{{else}}<span class="status unknown_payer">Bind required</span>{{end}}
-        </div>
-        {{if .Rows}}
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Transaction ID</th>
-                <th>Payer</th>
-                <th>Payer/source ID</th>
-                <th>Date</th>
-                <th>Amount</th>
-                <th>Receiving account</th>
-                <th>Description / reference</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {{range .Rows}}
-              <tr>
-                <td class="mono">{{.TransactionID}}</td>
-                <td><div class="payer"><strong>{{.PayerName}}</strong><span>{{.PayerNameKind}}</span></div></td>
-                <td class="mono">{{.PayerID}}<br>{{.SourceID}}</td>
-                <td>{{.DateDisplay}}</td>
-                <td class="money">{{.AmountDisplay}}</td>
-                <td>{{.AccountName}}<br><span class="mono">{{.AccountID}}</span></td>
-                <td>{{.Description}}<br><span class="mono">REF: {{.Reference}}</span></td>
-                <td><span class="status {{.Status}}">{{.StatusLabel}}</span></td>
-              </tr>
-              {{end}}
-            </tbody>
-          </table>
-        </div>
-        {{else}}
-          <div class="empty">No income transactions are available yet. Bind a bank account or refresh with saved login.</div>
-        {{end}}
-      </section>
-    </main>
+          <aside class="panel sync-card" data-spotlight aria-label="Bank connection status">
+            <div>
+              <div class="connection-row">
+                <div>
+                  <div class="label">Last sync</div>
+                  <div class="sync-time">{{.LastSync}}</div>
+                </div>
+                {{if .Connected}}<span class="status confirmed_payer">Connected</span>{{else}}<span class="status unknown_payer">Not bound</span>{{end}}
+              </div>
+              <div class="label">Saved login</div>
+              <div class="token-path">{{.TokenFile}}</div>
+            </div>
+          </aside>
+        </section>
+
+        {{if .NeedsReconnect}}<div class="notice error">Bank access needs a new authorization. Bind the bank account again to continue refreshing transactions.</div>{{end}}
+        {{if eq .Error "data_fetch_failed"}}<div class="notice error">Bank data refresh failed. The app did not save this refresh; bind the bank account again if the bank requires new authorization.</div>{{end}}
+        {{if eq .Message "bank_connected"}}<div class="notice ok">Bank account connected. Latest transactions were fetched.</div>{{end}}
+        {{if eq .Message "refreshed"}}<div class="notice ok">Bank data refreshed with saved login.</div>{{end}}
+
+        <section class="summary" aria-label="Bank income summary">
+          <div class="panel metric" data-spotlight><div class="label">Income total</div><strong>{{.IncomeTotal}}</strong><span>credits and positive amounts from the latest sync</span></div>
+          <div class="panel metric" data-spotlight><div class="label">Income rows</div><strong>{{.IncomeCount}}</strong><span>normalized bank statement entries</span></div>
+          <div class="panel metric" data-spotlight><div class="label">Unknown sender</div><strong>{{.UnknownPayerCount}}</strong><span>missing sender id or name</span></div>
+          <div class="panel metric" data-spotlight><div class="label">Operator</div><strong>{{.Username}}</strong><span>demo administrator</span></div>
+        </section>
+
+        <section class="panel surface" data-spotlight aria-labelledby="statement-title">
+          <div class="surface-head">
+            <div>
+              <h2 class="title" id="statement-title">Statement entries</h2>
+              <div class="tiny">Confirmed sender names come from payer, remitter, counterparty, or preferred counterparty fields in the bank JSON.</div>
+            </div>
+            {{if .Connected}}<span class="status confirmed_payer">Saved login available</span>{{else}}<span class="status unknown_payer">Bind required</span>{{end}}
+          </div>
+          {{if .Rows}}
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sender</th>
+                  <th>Amount</th>
+                  <th>Date</th>
+                  <th>Reference</th>
+                  <th>Receiving account</th>
+                  <th>Transaction</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{range .Rows}}
+                <tr>
+                  <td>
+                    <div class="sender">
+                      <strong>{{.PayerName}}</strong>
+                      <span class="sender-note">{{if eq .PayerNameKind "confirmed"}}Confirmed sender{{else if eq .PayerNameKind "inferred"}}Inferred from text{{else}}Unknown sender{{end}}</span>
+                      <span class="mono">Sender ID: {{.PayerID}}</span>
+                    </div>
+                  </td>
+                  <td><span class="amount">{{.AmountDisplay}}</span></td>
+                  <td>{{.DateDisplay}}</td>
+                  <td><div class="description">{{.Description}}</div><div class="mono">REF: {{.Reference}}</div></td>
+                  <td>{{.AccountName}}<br><span class="mono">{{.AccountID}}</span></td>
+                  <td><span class="mono">{{.TransactionID}}<br>Source: {{.SourceID}}</span></td>
+                  <td><span class="status {{.Status}}">{{.StatusLabel}}</span></td>
+                </tr>
+                {{end}}
+              </tbody>
+            </table>
+          </div>
+          {{else}}
+            <div class="empty">No income transactions are available yet. Bind a bank account or refresh with saved login.</div>
+          {{end}}
+        </section>
+      </main>
+    </div>
   </div>
+  <script>
+    for (const el of document.querySelectorAll("[data-spotlight]")) {
+      el.addEventListener("pointermove", (event) => {
+        const rect = el.getBoundingClientRect();
+        el.style.setProperty("--mx", String(event.clientX - rect.left) + "px");
+        el.style.setProperty("--my", String(event.clientY - rect.top) + "px");
+      });
+    }
+  </script>
 </body>
 </html>
 `))

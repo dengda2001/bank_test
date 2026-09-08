@@ -453,6 +453,14 @@ func TestIncomeTransactionsNormalizeCreditAndPositiveOnly(t *testing.T) {
 					"currency":"EUR"
 				},
 				{
+					"transaction_id":"preferred-name-1",
+					"timestamp":"2026-06-04T08:00:00Z",
+					"description":"5/26 *MOBI REMAIN RENT",
+					"amount":50,
+					"currency":"EUR",
+					"meta":{"counter_party_preferred_name":"Mike","provider_reference":"IE26050622210934"}
+				},
+				{
 					"transaction_id":"debit-1",
 					"timestamp":"2026-06-03T08:00:00Z",
 					"description":"SUPPLIES",
@@ -465,8 +473,8 @@ func TestIncomeTransactionsNormalizeCreditAndPositiveOnly(t *testing.T) {
 	}
 
 	rows := normalizeIncomeTransactions(result)
-	if len(rows) != 2 {
-		t.Fatalf("income rows=%d want 2", len(rows))
+	if len(rows) != 3 {
+		t.Fatalf("income rows=%d want 3", len(rows))
 	}
 	if rows[0].TransactionID != "credit-1" || rows[0].SourceID != "txn-stable-1" {
 		t.Fatalf("unexpected first row ids: %+v", rows[0])
@@ -482,6 +490,25 @@ func TestIncomeTransactionsNormalizeCreditAndPositiveOnly(t *testing.T) {
 	}
 	if rows[1].PayerID != "unknown" {
 		t.Fatalf("expected unknown payer id, got %+v", rows[1])
+	}
+	if rows[2].PayerName != "Mike" || rows[2].PayerNameKind != "confirmed" {
+		t.Fatalf("expected confirmed payer name from counter_party_preferred_name: %+v", rows[2])
+	}
+	if rows[2].Reference != "IE26050622210934" {
+		t.Fatalf("expected provider reference fallback, got %+v", rows[2])
+	}
+}
+
+func TestCountUnknownPayersCountsUnknownNamesOnly(t *testing.T) {
+	rows := []incomeTransaction{
+		{PayerNameKind: "confirmed", PayerID: "unknown"},
+		{PayerNameKind: "unknown", PayerID: "payer-1"},
+		{PayerNameKind: "inferred", PayerID: "unknown"},
+	}
+
+	got := countUnknownPayers(rows)
+	if got != 1 {
+		t.Fatalf("unknown payer count=%d want only rows with unknown names", got)
 	}
 }
 
