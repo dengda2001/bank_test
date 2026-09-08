@@ -212,8 +212,8 @@ func loadConfig() (config, error) {
 		From:          strings.TrimSpace(os.Getenv("TL_FROM")),
 		LogFile:       strings.TrimSpace(getenv("TL_LOG_FILE", "bank-data.jsonl")),
 		TokenFile:     strings.TrimSpace(getenv("TL_TOKEN_FILE", "truelayer-token.json")),
-		AdminUsername: strings.TrimSpace(getenv("APP_ADMIN_USERNAME", "admin")),
-		AdminPassword: getenv("APP_ADMIN_PASSWORD", "password"),
+		AdminUsername: strings.TrimSpace(getenv("APP_ADMIN_USERNAME", "ddrzh")),
+		AdminPassword: getenv("APP_ADMIN_PASSWORD", "ddrzh512"),
 		SessionSecret: strings.TrimSpace(os.Getenv("APP_SESSION_SECRET")),
 	}
 	if cfg.SessionSecret == "" {

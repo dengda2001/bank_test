@@ -19,8 +19,8 @@ func testApp() app {
 		ClientSecret:  "secret-123",
 		RedirectURI:   "http://localhost:8080/callback",
 		Scopes:        []string{"info", "accounts", "balance", "transactions"},
-		AdminUsername: "admin",
-		AdminPassword: "password",
+		AdminUsername: "ddrzh",
+		AdminPassword: "ddrzh512",
 		SessionSecret: "test-session-secret",
 	}}
 }
@@ -97,7 +97,7 @@ func TestLoginThenCallbackVerifiesAcrossBrowser(t *testing.T) {
 
 func TestLocalLoginSetsSessionCookie(t *testing.T) {
 	a := testApp()
-	form := strings.NewReader("username=admin&password=password")
+	form := strings.NewReader("username=ddrzh&password=ddrzh512")
 	req := httptest.NewRequest(http.MethodPost, "/login-local", form)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
