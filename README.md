@@ -28,6 +28,8 @@ Optional:
 - Transaction start date with `TL_FROM=YYYY-MM-DD`. The transaction end bound is always the current UTC time.
 - Local JSONL log path with `TL_LOG_FILE`. Defaults to `bank-data.jsonl`.
 - Local refresh token path with `TL_TOKEN_FILE`. Defaults to `truelayer-token.json`.
+- Local tenant ledger path with `RENTOPS_TENANT_FILE`. Defaults to `rentops-tenants.json`.
+- Local expense ledger path with `RENTOPS_EXPENSE_FILE`. Defaults to `rentops-expenses.json`.
 - Demo admin username with `APP_ADMIN_USERNAME`. Defaults to `ddrzh`.
 - Demo admin password with `APP_ADMIN_PASSWORD`. Defaults to `ddrzh512`.
 - Session signing secret with `APP_SESSION_SECRET`. If omitted, the server generates one on startup and sessions expire after restart.
@@ -67,6 +69,8 @@ http://localhost:8080
 ```
 
 Sign in with the configured demo admin credentials. The app redirects to `/billing`, where you can bind a bank account or refresh with a saved login.
+
+The sidebar also links to `/tenants` and `/expenses`. `/tenants` supports manual tenant entry with tenant name, monthly rent, currency, and room address. `/expenses` supports manual outgoing expense entry with description, amount, category, date, and payment method. These pages store local JSON files only; they do not sync to the bank provider.
 
 Click **Bind bank account** to start the TrueLayer authorization flow. After consent, the callback checks the local app session, fetches bank data, appends it to the JSONL log, and redirects back to the billing page.
 

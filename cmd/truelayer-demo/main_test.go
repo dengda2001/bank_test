@@ -178,6 +178,92 @@ func TestRefreshRequiresSession(t *testing.T) {
 	}
 }
 
+func TestTenantsRequiresSession(t *testing.T) {
+	a := testApp()
+	rec := httptest.NewRecorder()
+
+	a.handleTenants(rec, httptest.NewRequest(http.MethodGet, "/tenants", nil))
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status=%d want %d", rec.Code, http.StatusFound)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/" {
+		t.Fatalf("Location=%q want /", loc)
+	}
+}
+
+func TestCreateTenantPersistsManualRecord(t *testing.T) {
+	tenantPath := filepath.Join(t.TempDir(), "tenants.json")
+	a := testApp()
+	a.cfg.TenantFile = tenantPath
+
+	form := url.Values{}
+	form.Set("name", "Aoife Murphy")
+	form.Set("monthly_rent", "950")
+	form.Set("currency", "EUR")
+	form.Set("room_address", "Room A12, 14 Harcourt Street, Dublin")
+	req := httptest.NewRequest(http.MethodPost, "/tenants", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(sessionCookie(a.cfg, time.Now().Add(sessionTTL)))
+	rec := httptest.NewRecorder()
+
+	a.handleTenants(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status=%d want %d", rec.Code, http.StatusFound)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/tenants?message=tenant_added" {
+		t.Fatalf("Location=%q want /tenants?message=tenant_added", loc)
+	}
+	rows, err := a.loadTenants()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("tenant count=%d want 1", len(rows))
+	}
+	if rows[0].Name != "Aoife Murphy" || rows[0].MonthlyRent != 950 || rows[0].RoomAddress != "Room A12, 14 Harcourt Street, Dublin" {
+		t.Fatalf("unexpected tenant row: %+v", rows[0])
+	}
+}
+
+func TestCreateExpensePersistsManualRecord(t *testing.T) {
+	expensePath := filepath.Join(t.TempDir(), "expenses.json")
+	a := testApp()
+	a.cfg.ExpenseFile = expensePath
+
+	form := url.Values{}
+	form.Set("description", "Boiler repair")
+	form.Set("category", "Maintenance")
+	form.Set("amount", "125.50")
+	form.Set("expense_date", "2026-09-09")
+	form.Set("payment_method", "Card")
+	form.Set("currency", "EUR")
+	req := httptest.NewRequest(http.MethodPost, "/expenses", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(sessionCookie(a.cfg, time.Now().Add(sessionTTL)))
+	rec := httptest.NewRecorder()
+
+	a.handleExpenses(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status=%d want %d", rec.Code, http.StatusFound)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/expenses?message=expense_added" {
+		t.Fatalf("Location=%q want /expenses?message=expense_added", loc)
+	}
+	rows, err := a.loadExpenses()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expense count=%d want 1", len(rows))
+	}
+	if rows[0].Description != "Boiler repair" || rows[0].Category != "Maintenance" || rows[0].Amount != 125.50 || rows[0].ExpenseDate != "2026-09-09" {
+		t.Fatalf("unexpected expense row: %+v", rows[0])
+	}
+}
+
 func TestHasStoredToken(t *testing.T) {
 	tokenPath := filepath.Join(t.TempDir(), "token.json")
 	a := testApp()

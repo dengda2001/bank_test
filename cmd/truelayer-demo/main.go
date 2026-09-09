@@ -47,6 +47,8 @@ type config struct {
 	From          string
 	LogFile       string
 	TokenFile     string
+	TenantFile    string
+	ExpenseFile   string
 	AdminUsername string
 	AdminPassword string
 	SessionSecret string
@@ -112,6 +114,7 @@ type incomeTransaction struct {
 type billingPageData struct {
 	Username          string
 	Environment       string
+	ActivePage        string
 	Connected         bool
 	NeedsReconnect    bool
 	LastSync          string
@@ -122,6 +125,61 @@ type billingPageData struct {
 	IncomeCount       int
 	UnknownPayerCount int
 	TokenFile         string
+	TenantCount       int
+	ExpenseCount      int
+}
+
+type tenantRecord struct {
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	MonthlyRent float64 `json:"monthly_rent"`
+	Currency    string  `json:"currency"`
+	RoomAddress string  `json:"room_address"`
+	CreatedAt   string  `json:"created_at"`
+
+	RentDisplay string `json:"-"`
+}
+
+type expenseRecord struct {
+	ID            string  `json:"id"`
+	Description   string  `json:"description"`
+	Category      string  `json:"category"`
+	Amount        float64 `json:"amount"`
+	Currency      string  `json:"currency"`
+	ExpenseDate   string  `json:"expense_date"`
+	PaymentMethod string  `json:"payment_method"`
+	CreatedAt     string  `json:"created_at"`
+
+	AmountDisplay string `json:"-"`
+	DateDisplay   string `json:"-"`
+}
+
+type tenantPageData struct {
+	Username     string
+	Environment  string
+	ActivePage   string
+	Message      string
+	Error        string
+	Rows         []tenantRecord
+	TenantCount  int
+	RentTotal    string
+	TenantFile   string
+	ExpenseCount int
+	IncomeCount  int
+}
+
+type expensePageData struct {
+	Username     string
+	Environment  string
+	ActivePage   string
+	Message      string
+	Error        string
+	Rows         []expenseRecord
+	ExpenseCount int
+	ExpenseTotal string
+	ExpenseFile  string
+	TenantCount  int
+	IncomeCount  int
 }
 
 type app struct {
@@ -189,6 +247,8 @@ func main() {
 	mux.HandleFunc("/login-local", a.handleLocalLogin)
 	mux.HandleFunc("/logout", a.handleLogout)
 	mux.HandleFunc("/billing", a.handleBilling)
+	mux.HandleFunc("/tenants", a.handleTenants)
+	mux.HandleFunc("/expenses", a.handleExpenses)
 	mux.HandleFunc("/login", a.handleLogin)
 	mux.HandleFunc("/callback", a.handleCallback)
 	mux.HandleFunc("/refresh", a.handleRefresh)
@@ -213,6 +273,8 @@ func loadConfig() (config, error) {
 		From:          strings.TrimSpace(os.Getenv("TL_FROM")),
 		LogFile:       strings.TrimSpace(getenv("TL_LOG_FILE", "bank-data.jsonl")),
 		TokenFile:     strings.TrimSpace(getenv("TL_TOKEN_FILE", "truelayer-token.json")),
+		TenantFile:    strings.TrimSpace(getenv("RENTOPS_TENANT_FILE", "rentops-tenants.json")),
+		ExpenseFile:   strings.TrimSpace(getenv("RENTOPS_EXPENSE_FILE", "rentops-expenses.json")),
 		AdminUsername: strings.TrimSpace(getenv("APP_ADMIN_USERNAME", "ddrzh")),
 		AdminPassword: getenv("APP_ADMIN_PASSWORD", "ddrzh512"),
 		SessionSecret: strings.TrimSpace(os.Getenv("APP_SESSION_SECRET")),
@@ -322,9 +384,12 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 	}
 	result, _ := a.loadLatestDemoResult()
 	rows := normalizeIncomeTransactions(result)
+	tenants, _ := a.loadTenants()
+	expenses, _ := a.loadExpenses()
 	data := billingPageData{
 		Username:          a.cfg.AdminUsername,
 		Environment:       a.cfg.Environment,
+		ActivePage:        "billing",
 		Connected:         a.hasStoredToken(),
 		NeedsReconnect:    r.URL.Query().Get("reconnect") == "1",
 		LastSync:          result.FetchedAt,
@@ -335,6 +400,8 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 		IncomeCount:       len(rows),
 		UnknownPayerCount: countUnknownPayers(rows),
 		TokenFile:         a.cfg.TokenFile,
+		TenantCount:       len(tenants),
+		ExpenseCount:      len(expenses),
 	}
 	if data.LastSync == "" {
 		data.LastSync = "No sync yet"
@@ -343,6 +410,157 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 	if err := billingTemplate.Execute(w, data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
+	if !a.requireAuth(w, r) {
+		return
+	}
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if r.Method == http.MethodPost {
+		a.createTenant(w, r)
+		return
+	}
+	tenants, err := a.loadTenants()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	expenses, _ := a.loadExpenses()
+	result, _ := a.loadLatestDemoResult()
+	incomeRows := normalizeIncomeTransactions(result)
+	prepareTenants(tenants)
+	data := tenantPageData{
+		Username:     a.cfg.AdminUsername,
+		Environment:  a.cfg.Environment,
+		ActivePage:   "tenants",
+		Message:      r.URL.Query().Get("message"),
+		Error:        r.URL.Query().Get("error"),
+		Rows:         tenants,
+		TenantCount:  len(tenants),
+		RentTotal:    formatMoney(sumTenantRent(tenants), "EUR", 2),
+		TenantFile:   a.cfg.TenantFile,
+		ExpenseCount: len(expenses),
+		IncomeCount:  len(incomeRows),
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tenantTemplate.Execute(w, data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (a *app) createTenant(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/tenants?error=invalid_form", http.StatusFound)
+		return
+	}
+	name := strings.TrimSpace(r.Form.Get("name"))
+	roomAddress := strings.TrimSpace(r.Form.Get("room_address"))
+	monthlyRent, err := parsePositiveAmount(r.Form.Get("monthly_rent"))
+	if name == "" || roomAddress == "" || err != nil {
+		http.Redirect(w, r, "/tenants?error=invalid_tenant", http.StatusFound)
+		return
+	}
+	tenants, err := a.loadTenants()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	now := time.Now().UTC()
+	tenants = append(tenants, tenantRecord{
+		ID:          recordID("tenant", now),
+		Name:        name,
+		MonthlyRent: monthlyRent,
+		Currency:    firstNonEmpty(strings.ToUpper(strings.TrimSpace(r.Form.Get("currency"))), "EUR"),
+		RoomAddress: roomAddress,
+		CreatedAt:   now.Format(time.RFC3339),
+	})
+	if err := a.saveTenants(tenants); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/tenants?message=tenant_added", http.StatusFound)
+}
+
+func (a *app) handleExpenses(w http.ResponseWriter, r *http.Request) {
+	if !a.requireAuth(w, r) {
+		return
+	}
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if r.Method == http.MethodPost {
+		a.createExpense(w, r)
+		return
+	}
+	expenses, err := a.loadExpenses()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	tenants, _ := a.loadTenants()
+	result, _ := a.loadLatestDemoResult()
+	incomeRows := normalizeIncomeTransactions(result)
+	prepareExpenses(expenses)
+	data := expensePageData{
+		Username:     a.cfg.AdminUsername,
+		Environment:  a.cfg.Environment,
+		ActivePage:   "expenses",
+		Message:      r.URL.Query().Get("message"),
+		Error:        r.URL.Query().Get("error"),
+		Rows:         expenses,
+		ExpenseCount: len(expenses),
+		ExpenseTotal: formatMoney(sumExpenses(expenses), "EUR", 2),
+		ExpenseFile:  a.cfg.ExpenseFile,
+		TenantCount:  len(tenants),
+		IncomeCount:  len(incomeRows),
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := expenseTemplate.Execute(w, data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (a *app) createExpense(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/expenses?error=invalid_form", http.StatusFound)
+		return
+	}
+	description := strings.TrimSpace(r.Form.Get("description"))
+	amount, err := parsePositiveAmount(r.Form.Get("amount"))
+	if description == "" || err != nil {
+		http.Redirect(w, r, "/expenses?error=invalid_expense", http.StatusFound)
+		return
+	}
+	expenseDate := strings.TrimSpace(r.Form.Get("expense_date"))
+	if _, err := time.Parse(dateLayout, expenseDate); expenseDate == "" || err != nil {
+		expenseDate = time.Now().UTC().Format(dateLayout)
+	}
+	expenses, err := a.loadExpenses()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	now := time.Now().UTC()
+	expenses = append(expenses, expenseRecord{
+		ID:            recordID("expense", now),
+		Description:   description,
+		Category:      firstNonEmpty(r.Form.Get("category"), "General"),
+		Amount:        amount,
+		Currency:      firstNonEmpty(strings.ToUpper(strings.TrimSpace(r.Form.Get("currency"))), "EUR"),
+		ExpenseDate:   expenseDate,
+		PaymentMethod: firstNonEmpty(r.Form.Get("payment_method"), "Manual"),
+		CreatedAt:     now.Format(time.RFC3339),
+	})
+	if err := a.saveExpenses(expenses); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/expenses?message=expense_added", http.StatusFound)
 }
 
 func (a *app) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -915,6 +1133,131 @@ func countUnknownPayers(rows []incomeTransaction) int {
 	return count
 }
 
+func parsePositiveAmount(value string) (float64, error) {
+	amount, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+	if err != nil {
+		return 0, err
+	}
+	if amount <= 0 {
+		return 0, errors.New("amount must be positive")
+	}
+	return amount, nil
+}
+
+func recordID(prefix string, now time.Time) string {
+	suffix, err := randomState()
+	if err != nil {
+		suffix = strconv.FormatInt(now.UnixNano(), 36)
+	}
+	if len(suffix) > 10 {
+		suffix = suffix[:10]
+	}
+	return prefix + "-" + now.Format("20060102150405") + "-" + suffix
+}
+
+func prepareTenants(rows []tenantRecord) {
+	for i := range rows {
+		rows[i].Currency = firstNonEmpty(rows[i].Currency, "EUR")
+		rows[i].RentDisplay = formatMoney(rows[i].MonthlyRent, rows[i].Currency, 2)
+	}
+}
+
+func prepareExpenses(rows []expenseRecord) {
+	for i := range rows {
+		rows[i].Currency = firstNonEmpty(rows[i].Currency, "EUR")
+		rows[i].AmountDisplay = formatMoney(rows[i].Amount, rows[i].Currency, 2)
+		rows[i].DateDisplay = formatDate(rows[i].ExpenseDate)
+	}
+}
+
+func formatDate(value string) string {
+	if value == "" {
+		return "Unknown"
+	}
+	if d, err := time.Parse(dateLayout, value); err == nil {
+		return d.Format("02 Jan 2006")
+	}
+	return value
+}
+
+func sumTenantRent(rows []tenantRecord) float64 {
+	var total float64
+	for _, row := range rows {
+		total += row.MonthlyRent
+	}
+	return total
+}
+
+func sumExpenses(rows []expenseRecord) float64 {
+	var total float64
+	for _, row := range rows {
+		total += row.Amount
+	}
+	return total
+}
+
+func (a *app) loadTenants() ([]tenantRecord, error) {
+	var rows []tenantRecord
+	if err := readJSONFile(a.cfg.TenantFile, &rows); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+func (a *app) saveTenants(rows []tenantRecord) error {
+	return writeJSONFile(a.cfg.TenantFile, rows)
+}
+
+func (a *app) loadExpenses() ([]expenseRecord, error) {
+	var rows []expenseRecord
+	if err := readJSONFile(a.cfg.ExpenseFile, &rows); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+func (a *app) saveExpenses(rows []expenseRecord) error {
+	return writeJSONFile(a.cfg.ExpenseFile, rows)
+}
+
+func readJSONFile(path string, out any) error {
+	if path == "" {
+		return nil
+	}
+	body, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if len(strings.TrimSpace(string(body))) == 0 {
+		return nil
+	}
+	return json.Unmarshal(body, out)
+}
+
+func writeJSONFile(path string, value any) error {
+	if path == "" {
+		return nil
+	}
+	dir := filepath.Dir(path)
+	if dir != "." {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return err
+		}
+	}
+	body, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return err
+	}
+	body = append(body, '\n')
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0o600)
+}
+
 func (a *app) appendDemoResultLog(result demoResult) error {
 	if a.cfg.LogFile == "" {
 		return nil
@@ -1051,6 +1394,461 @@ var loginTemplate = template.Must(template.New("login").Parse(`<!doctype html>
 </html>
 `))
 
+const workspacePageCSS = `
+    :root {
+      --background-deep: #020203;
+      --background-base: #050506;
+      --foreground: #ededef;
+      --foreground-muted: #8a8f98;
+      --foreground-subtle: rgba(255,255,255,0.66);
+      --accent: #5e6ad2;
+      --accent-bright: #6872d9;
+      --positive: #7dd3a8;
+      --danger: #ff8b86;
+      --warning: #e9b872;
+      --border: rgba(255,255,255,0.08);
+      --shadow-card: 0 0 0 1px rgba(255,255,255,0.06), 0 20px 70px rgba(0,0,0,0.48);
+      --sans: "Inter", "Geist Sans", "Aptos", "Segoe UI", system-ui, sans-serif;
+      --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--background-deep); }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--foreground);
+      font-family: var(--sans);
+      background: radial-gradient(ellipse at top, #111225 0%, var(--background-base) 48%, var(--background-deep) 100%);
+    }
+    button, input, select, textarea { font: inherit; }
+    a { color: inherit; }
+    .app {
+      width: min(1480px, 100%);
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      grid-template-columns: 236px minmax(0, 1fr);
+      gap: 0;
+    }
+    .sidebar,
+    .content {
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,255,255,0.075), rgba(255,255,255,0.026));
+      box-shadow: var(--shadow-card);
+      backdrop-filter: blur(24px);
+    }
+    .sidebar {
+      border-radius: 24px 0 0 24px;
+      border-right: 0;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .content {
+      min-width: 0;
+      border-radius: 0 24px 24px 0;
+      padding: 24px;
+    }
+    .side-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .mark {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      color: white;
+      font: 700 17px var(--mono);
+      background: linear-gradient(145deg, rgba(104,114,217,0.95), rgba(94,106,210,0.55));
+      box-shadow: 0 0 0 1px rgba(94,106,210,0.50), 0 8px 26px rgba(94,106,210,0.28), inset 0 1px 0 rgba(255,255,255,0.22);
+    }
+    .brand-title { font-weight: 650; letter-spacing: 0; }
+    .brand-meta,
+    .label {
+      color: var(--foreground-muted);
+      font: 700 11px var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 0.10em;
+    }
+    .nav { display: grid; gap: 7px; }
+    .nav a {
+      min-height: 40px;
+      border-radius: 10px;
+      padding: 0 11px;
+      display: grid;
+      grid-template-columns: 24px 1fr auto;
+      gap: 9px;
+      align-items: center;
+      color: var(--foreground-subtle);
+      text-decoration: none;
+      font-size: 13px;
+    }
+    .nav a:hover,
+    .nav a.active {
+      color: var(--foreground);
+      background: rgba(255,255,255,0.075);
+    }
+    .glyph {
+      width: 20px;
+      height: 20px;
+      border-radius: 7px;
+      display: grid;
+      place-items: center;
+      color: #d8dcff;
+      background: rgba(104,114,217,0.18);
+      font: 700 11px var(--mono);
+    }
+    .nav-count {
+      min-width: 22px;
+      height: 21px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      padding: 0 6px;
+      color: var(--foreground-muted);
+      background: rgba(255,255,255,0.06);
+      font: 700 11px var(--mono);
+    }
+    .side-foot {
+      margin-top: auto;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      color: var(--foreground-muted);
+      font-size: 12px;
+      line-height: 1.55;
+      overflow-wrap: anywhere;
+    }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    h1 {
+      margin: 8px 0 0;
+      font-size: clamp(32px, 5vw, 56px);
+      line-height: 1;
+      letter-spacing: 0;
+      font-weight: 650;
+    }
+    h2 { margin: 0; font-size: 17px; letter-spacing: 0; }
+    .btn {
+      min-height: 38px;
+      border: 0;
+      border-radius: 10px;
+      padding: 0 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--foreground);
+      background: rgba(255,255,255,0.055);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 0 0 1px rgba(255,255,255,0.08);
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .btn.primary { margin-top: 16px; background: var(--accent); color: white; }
+    .btn.danger { color: #ffd8d6; background: rgba(255,139,134,0.08); }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.078), rgba(255,255,255,0.026));
+      box-shadow: var(--shadow-card);
+    }
+    .metric { padding: 18px; min-height: 118px; }
+    .metric strong {
+      display: block;
+      margin-top: 12px;
+      font-size: clamp(26px, 3vw, 38px);
+      line-height: 1;
+      font-weight: 650;
+    }
+    .metric span,
+    .tiny {
+      display: block;
+      margin-top: 8px;
+      color: var(--foreground-muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .notice {
+      margin-bottom: 14px;
+      padding: 13px 15px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      color: var(--foreground-subtle);
+      background: rgba(255,255,255,0.045);
+    }
+    .notice.error { border-color: rgba(255,139,134,0.24); background: rgba(255,139,134,0.08); color: #ffd0ce; }
+    .notice.ok { border-color: rgba(125,211,168,0.26); background: rgba(125,211,168,0.08); color: #cbffe1; }
+    .grid-two {
+      display: grid;
+      grid-template-columns: 360px minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+    .form { padding: 18px; }
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      margin: 13px 0 6px;
+      color: var(--foreground-muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    input, select, textarea {
+      width: 100%;
+      min-height: 40px;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px;
+      padding: 9px 11px;
+      color: var(--foreground);
+      background: rgba(255,255,255,0.055);
+      outline: none;
+    }
+    textarea { resize: vertical; }
+    input:focus, select:focus, textarea:focus {
+      border-color: rgba(104,114,217,0.85);
+      box-shadow: 0 0 0 3px rgba(104,114,217,0.18);
+    }
+    .surface { overflow: hidden; }
+    .surface .panel-head {
+      margin: 0;
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(5,5,6,0.42);
+    }
+    .table-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      min-width: 760px;
+      border-collapse: collapse;
+    }
+    th {
+      text-align: left;
+      color: var(--foreground-muted);
+      font: 700 11px var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 0.10em;
+      padding: 13px 14px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.024);
+    }
+    td {
+      padding: 16px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.045);
+      color: var(--foreground-subtle);
+      font-size: 13px;
+      line-height: 1.45;
+      vertical-align: top;
+    }
+    .amount {
+      color: var(--foreground);
+      font-size: 15px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .amount.expense { color: #ffd0ce; }
+    .mono {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--foreground-muted);
+      overflow-wrap: anywhere;
+    }
+    .empty {
+      padding: 64px 20px;
+      color: var(--foreground-muted);
+      text-align: center;
+      line-height: 1.7;
+    }
+    @media (max-width: 980px) {
+      .app { grid-template-columns: 1fr; padding: 12px; }
+      .sidebar { border-radius: 18px 18px 0 0; border-right: 1px solid var(--border); border-bottom: 0; }
+      .content { border-radius: 0 0 18px 18px; }
+      .grid-two { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) {
+      .content { padding: 14px; }
+      .topbar { flex-direction: column; }
+      .summary { grid-template-columns: 1fr; }
+      h1 { font-size: 34px; }
+      table { min-width: 720px; }
+    }
+`
+
+var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RentOps Tenants</title>
+  <style>` + workspacePageCSS + `</style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" aria-label="Main navigation">
+      <div class="side-brand"><div class="mark">R</div><div><div class="brand-title">RentOps</div><div class="brand-meta">{{.Environment}} workspace</div></div></div>
+      <nav class="nav">
+        <a href="/billing"><span class="glyph">IN</span><span>Income</span><span class="nav-count">{{.IncomeCount}}</span></a>
+        <a href="/tenants" class="active"><span class="glyph">TN</span><span>Tenants</span><span class="nav-count">{{.TenantCount}}</span></a>
+        <a href="/expenses"><span class="glyph">EX</span><span>Expenses</span><span class="nav-count">{{.ExpenseCount}}</span></a>
+      </nav>
+      <div class="side-foot">Signed in as {{.Username}}<br>Local file: {{.TenantFile}}</div>
+    </aside>
+    <main class="content">
+      <header class="topbar">
+        <div>
+          <div class="brand-title">Tenant management</div>
+          <h1>Manual tenant ledger</h1>
+        </div>
+        <form method="post" action="/logout"><button class="btn danger" type="submit">Sign out</button></form>
+      </header>
+
+      {{if eq .Message "tenant_added"}}<div class="notice ok">Tenant record saved.</div>{{end}}
+      {{if .Error}}<div class="notice error">Tenant name, monthly rent, and room address are required.</div>{{end}}
+
+      <section class="summary" aria-label="Tenant summary">
+        <div class="panel metric"><div class="label">Tenants</div><strong>{{.TenantCount}}</strong><span>manually maintained records</span></div>
+        <div class="panel metric"><div class="label">Monthly rent roll</div><strong>{{.RentTotal}}</strong><span>expected rent from saved tenants</span></div>
+      </section>
+
+      <section class="grid-two">
+        <form class="panel form" method="post" action="/tenants" aria-labelledby="tenant-form-title">
+          <div class="panel-head"><h2 id="tenant-form-title">Add tenant</h2><span class="tiny">Manual entry</span></div>
+          <label for="name">Tenant name</label>
+          <input id="name" name="name" autocomplete="name" required>
+          <label for="monthly_rent">Monthly rent</label>
+          <input id="monthly_rent" name="monthly_rent" type="number" min="0.01" step="0.01" inputmode="decimal" required>
+          <label for="currency">Currency</label>
+          <input id="currency" name="currency" value="EUR" maxlength="3">
+          <label for="room_address">Room address</label>
+          <textarea id="room_address" name="room_address" rows="4" required></textarea>
+          <button class="btn primary" type="submit">Save tenant</button>
+        </form>
+
+        <section class="panel surface" aria-labelledby="tenant-list-title">
+          <div class="panel-head"><h2 id="tenant-list-title">Saved tenants</h2><span class="tiny">{{.TenantCount}} records</span></div>
+          {{if .Rows}}
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Tenant</th><th>Rent</th><th>Room address</th><th>Created</th></tr></thead>
+              <tbody>
+                {{range .Rows}}
+                <tr><td><strong>{{.Name}}</strong><br><span class="mono">{{.ID}}</span></td><td class="amount">{{.RentDisplay}}</td><td>{{.RoomAddress}}</td><td class="mono">{{.CreatedAt}}</td></tr>
+                {{end}}
+              </tbody>
+            </table>
+          </div>
+          {{else}}<div class="empty">No tenants yet. Add the first tenant from the form.</div>{{end}}
+        </section>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
+`))
+
+var expenseTemplate = template.Must(template.New("expenses").Parse(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RentOps Expenses</title>
+  <style>` + workspacePageCSS + `</style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" aria-label="Main navigation">
+      <div class="side-brand"><div class="mark">R</div><div><div class="brand-title">RentOps</div><div class="brand-meta">{{.Environment}} workspace</div></div></div>
+      <nav class="nav">
+        <a href="/billing"><span class="glyph">IN</span><span>Income</span><span class="nav-count">{{.IncomeCount}}</span></a>
+        <a href="/tenants"><span class="glyph">TN</span><span>Tenants</span><span class="nav-count">{{.TenantCount}}</span></a>
+        <a href="/expenses" class="active"><span class="glyph">EX</span><span>Expenses</span><span class="nav-count">{{.ExpenseCount}}</span></a>
+      </nav>
+      <div class="side-foot">Signed in as {{.Username}}<br>Local file: {{.ExpenseFile}}</div>
+    </aside>
+    <main class="content">
+      <header class="topbar">
+        <div>
+          <div class="brand-title">Expenses</div>
+          <h1>Property spending ledger</h1>
+        </div>
+        <form method="post" action="/logout"><button class="btn danger" type="submit">Sign out</button></form>
+      </header>
+
+      {{if eq .Message "expense_added"}}<div class="notice ok">Expense record saved.</div>{{end}}
+      {{if .Error}}<div class="notice error">Description and positive amount are required.</div>{{end}}
+
+      <section class="summary" aria-label="Expense summary">
+        <div class="panel metric"><div class="label">Expenses</div><strong>{{.ExpenseCount}}</strong><span>manual outgoing records</span></div>
+        <div class="panel metric"><div class="label">Expense total</div><strong>{{.ExpenseTotal}}</strong><span>all saved expenses</span></div>
+      </section>
+
+      <section class="grid-two">
+        <form class="panel form" method="post" action="/expenses" aria-labelledby="expense-form-title">
+          <div class="panel-head"><h2 id="expense-form-title">Add expense</h2><span class="tiny">Manual entry</span></div>
+          <label for="description">Description</label>
+          <input id="description" name="description" required>
+          <label for="amount">Amount</label>
+          <input id="amount" name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required>
+          <label for="category">Category</label>
+          <select id="category" name="category">
+            <option>Maintenance</option>
+            <option>Utilities</option>
+            <option>Cleaning</option>
+            <option>Insurance</option>
+            <option>General</option>
+          </select>
+          <label for="expense_date">Date</label>
+          <input id="expense_date" name="expense_date" type="date">
+          <label for="payment_method">Payment method</label>
+          <input id="payment_method" name="payment_method" value="Manual">
+          <input type="hidden" name="currency" value="EUR">
+          <button class="btn primary" type="submit">Save expense</button>
+        </form>
+
+        <section class="panel surface" aria-labelledby="expense-list-title">
+          <div class="panel-head"><h2 id="expense-list-title">Saved expenses</h2><span class="tiny">{{.ExpenseCount}} records</span></div>
+          {{if .Rows}}
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Description</th><th>Amount</th><th>Category</th><th>Date</th><th>Method</th></tr></thead>
+              <tbody>
+                {{range .Rows}}
+                <tr><td><strong>{{.Description}}</strong><br><span class="mono">{{.ID}}</span></td><td class="amount expense">{{.AmountDisplay}}</td><td>{{.Category}}</td><td>{{.DateDisplay}}</td><td>{{.PaymentMethod}}</td></tr>
+                {{end}}
+              </tbody>
+            </table>
+          </div>
+          {{else}}<div class="empty">No expenses yet. Add the first outgoing record from the form.</div>{{end}}
+        </section>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
+`))
+
 var billingTemplate = template.Must(template.New("billing").Parse(`<!doctype html>
 <html lang="en">
 <head>
@@ -1171,6 +1969,77 @@ var billingTemplate = template.Must(template.New("billing").Parse(`<!doctype htm
       box-shadow: var(--shadow-card);
       backdrop-filter: blur(24px);
       overflow: hidden;
+      display: grid;
+      grid-template-columns: 236px minmax(0, 1fr);
+    }
+    .sidebar {
+      padding: 18px;
+      border-right: 1px solid var(--border);
+      background: rgba(5,5,6,0.62);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .side-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .nav {
+      display: grid;
+      gap: 7px;
+    }
+    .nav a {
+      min-height: 40px;
+      border-radius: 10px;
+      padding: 0 11px;
+      display: grid;
+      grid-template-columns: 24px 1fr auto;
+      gap: 9px;
+      align-items: center;
+      color: var(--foreground-subtle);
+      text-decoration: none;
+      font-size: 13px;
+      transition: background 180ms var(--ease), color 180ms var(--ease);
+    }
+    .nav a:hover,
+    .nav a.active {
+      color: var(--foreground);
+      background: rgba(255,255,255,0.075);
+    }
+    .glyph {
+      width: 20px;
+      height: 20px;
+      border-radius: 7px;
+      display: grid;
+      place-items: center;
+      color: #d8dcff;
+      background: rgba(104,114,217,0.18);
+      font: 700 11px var(--mono);
+    }
+    .nav-count {
+      min-width: 22px;
+      height: 21px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      padding: 0 6px;
+      color: var(--foreground-muted);
+      background: rgba(255,255,255,0.06);
+      font: 700 11px var(--mono);
+    }
+    .side-foot {
+      margin-top: auto;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      color: var(--foreground-muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .pane {
+      min-width: 0;
     }
     .topbar {
       display: flex;
@@ -1478,7 +2347,8 @@ var billingTemplate = template.Must(template.New("billing").Parse(`<!doctype htm
     }
     @media (max-width: 700px) {
       .app { padding: 12px; }
-      .shell { min-height: calc(100vh - 24px); border-radius: 18px; }
+      .shell { min-height: calc(100vh - 24px); border-radius: 18px; grid-template-columns: 1fr; }
+      .sidebar { border-right: 0; border-bottom: 1px solid var(--border); }
       .topbar, .surface-head { align-items: flex-start; flex-direction: column; }
       .actions { width: 100%; justify-content: stretch; }
       .actions .btn, .actions form { flex: 1 1 auto; }
@@ -1501,13 +2371,29 @@ var billingTemplate = template.Must(template.New("billing").Parse(`<!doctype htm
   </div>
   <div class="app">
     <div class="shell">
-      <header class="topbar">
-        <div class="brand">
+      <aside class="sidebar" aria-label="Main navigation">
+        <div class="side-brand">
           <div class="mark">R</div>
           <div>
             <div class="brand-title">RentOps</div>
-            <div class="brand-meta">Bank income workspace</div>
+            <div class="brand-meta">{{.Environment}} workspace</div>
           </div>
+        </div>
+        <nav class="nav">
+          <a href="/billing" class="{{if eq .ActivePage "billing"}}active{{end}}"><span class="glyph">IN</span><span>Income</span><span class="nav-count">{{.IncomeCount}}</span></a>
+          <a href="/tenants" class="{{if eq .ActivePage "tenants"}}active{{end}}"><span class="glyph">TN</span><span>Tenants</span><span class="nav-count">{{.TenantCount}}</span></a>
+          <a href="/expenses" class="{{if eq .ActivePage "expenses"}}active{{end}}"><span class="glyph">EX</span><span>Expenses</span><span class="nav-count">{{.ExpenseCount}}</span></a>
+        </nav>
+        <div class="side-foot">
+          Signed in as {{.Username}}<br>
+          Local demo storage only.
+        </div>
+      </aside>
+      <div class="pane">
+      <header class="topbar">
+        <div>
+          <div class="brand-title">Income</div>
+          <div class="brand-meta">Bank income workspace</div>
         </div>
         <div class="actions">
           {{if .Connected}}
@@ -1601,6 +2487,7 @@ var billingTemplate = template.Must(template.New("billing").Parse(`<!doctype htm
           {{end}}
         </section>
       </main>
+      </div>
     </div>
   </div>
   <script>
