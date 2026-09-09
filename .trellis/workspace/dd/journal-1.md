@@ -71,3 +71,36 @@ Added sidebar navigation plus manual tenant and expense ledger pages backed by l
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: MySQL租金匹配工作台
+
+**Date**: 2026-09-10
+**Task**: MySQL租金匹配工作台
+**Branch**: `main`
+
+### Summary
+
+完成 RentOps 从 JSON 到 GORM/MySQL 的账号隔离改造，新增月度租金工作台、租客付款方匹配和人工确认、流水收入/支出筛选、旧 JSON/JSONL 幂等导入及本地启动配置；测试、race、vet 通过。启动验证因本机 3306 无 MySQL 服务未能运行页面。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b21539b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
