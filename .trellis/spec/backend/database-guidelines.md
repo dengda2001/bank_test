@@ -6,16 +6,89 @@
 
 ## Overview
 
-The demo does not use a database yet. Persistent local demo state is stored in
-small JSON or JSONL files configured by environment variables.
+The application uses MySQL-compatible storage through GORM. SQL files under
+`migrations/` are the schema source of truth and are applied by the startup
+migration runner; production code must not call GORM `AutoMigrate`.
 
-## Scenario: Local Ledger JSON Storage
+JSON and JSONL files remain compatibility inputs for the one-time
+`POST /import-legacy` import and for legacy fallback tests. The authenticated UI
+uses account-scoped database rows after a v2 user session is established.
+
+Every business query and write must include the current `user_id`. Bank refresh
+tokens belong to `bank_connections.user_id` and are encrypted with
+`BANK_TOKEN_ENCRYPTION_KEY`; plaintext storage is only an explicit non-live
+development escape.
+
+## Scenario: MySQL/GORM Persistence
+
+### 1. Scope / Trigger
+
+- Trigger: Any new persistent tenant, rent, transaction, allocation, expense,
+  bank connection, or account behavior.
+- Models use GORM for queries, but schema changes are explicit SQL migrations.
+- Monetary values are stored as integer cents; transaction direction is stored
+  separately as `income` or `expense`.
+
+### 2. Signatures
+
+- `MYSQL_DSN`: preferred native MySQL DSN.
+- `DATABASE_URL`: optional `mysql://...` compatibility URL.
+- `MIGRATIONS_DIR`: migration directory, default `migrations`.
+- `BANK_TOKEN_ENCRYPTION_KEY`: raw or base64-encoded 32-byte AES key.
+- `ALLOW_PLAINTEXT_TOKENS=1`: sandbox/development-only escape hatch.
+- `ImportLegacyFiles(ctx, db, userID, cfg)`: idempotent JSON/JSONL import.
+
+### 3. Contracts
+
+- `users` is the real account source. Environment variables only seed the
+  configured default user if its username is absent; they never overwrite an
+  existing password.
+- `tenants`, `rent_obligations`, `payment_transactions`,
+  `payment_allocations`, `manual_expenses`, and `bank_connections` all carry
+  `user_id` and must be filtered by it.
+- `payment_transactions` uses `(user_id, stable_transaction_key)` for idempotent
+  bank ingestion.
+- Rent obligations are monthly in phase 1, but retain interval fields and a
+  reusable batch generation service for later expansion.
+- Payer ID is preferred for matching. Exact name matches are candidates until
+  a user confirms them; confirmation may backfill the tenant payer ID.
+
+### 4. Validation & Error Matrix
+
+- Missing database configuration -> startup fails; do not silently switch the
+  primary UI back to JSON.
+- Unapplied migration failure -> startup fails.
+- Live environment without token encryption key -> configuration fails.
+- Cross-account tenant, transaction, allocation, expense, or token lookup ->
+  returns no row or an authorization-safe error.
+- Duplicate bank import -> no duplicate transaction rows.
+
+### 5. Good/Base/Bad Cases
+
+- Good: HTTP handlers obtain `userID` from a signed v2 session and pass it into
+  service methods; services use GORM with explicit ownership predicates.
+- Base: A fresh MySQL database starts with migrations and seeds one configured
+  default user.
+- Bad: Reading a global token file or JSON ledger for an authenticated user's
+  database page, using AutoMigrate, or trusting a posted tenant/transaction ID
+  without an ownership condition.
+
+### 6. Tests Required
+
+- DSN precedence and token-storage configuration.
+- bcrypt login and signed user session parsing.
+- Stable transaction normalization and duplicate-key behavior.
+- Payer ID/name matching, month hint parsing, obligation status, and manual
+  confirmation ownership.
+- Legacy JSON/JSONL import mapping and repeat-import idempotence.
+
+## Scenario: Legacy JSON Storage
 
 ### 1. Scope / Trigger
 
 - Trigger: Any feature that persists demo data outside the TrueLayer bank log or
   token file.
-- Current examples: manually entered tenants and expenses.
+- Current examples: compatibility fallback when no v2 database session exists.
 
 ---
 
@@ -59,8 +132,9 @@ Expense record fields:
 - `payment_method`: optional, defaults to `Manual`.
 - `created_at`: UTC RFC3339 timestamp.
 
-These files are local demo ledgers only. They do not sync to TrueLayer and must
-not store bank access tokens or raw OAuth payloads.
+These files are legacy compatibility data. They must not store bank access
+tokens or raw OAuth payloads; bank data is imported into the account-scoped
+database transaction table.
 
 ---
 

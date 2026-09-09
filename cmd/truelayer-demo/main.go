@@ -22,6 +22,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 const (
@@ -33,25 +35,30 @@ const (
 )
 
 type config struct {
-	Address       string
-	ClientID      string
-	ClientSecret  string
-	RedirectURI   string
-	Environment   string
-	AuthBaseURL   string
-	AuthURL       string
-	APIBaseURL    string
-	Scopes        []string
-	Providers     string
-	ProviderID    string
-	From          string
-	LogFile       string
-	TokenFile     string
-	TenantFile    string
-	ExpenseFile   string
-	AdminUsername string
-	AdminPassword string
-	SessionSecret string
+	Address                string
+	ClientID               string
+	ClientSecret           string
+	RedirectURI            string
+	Environment            string
+	AuthBaseURL            string
+	AuthURL                string
+	APIBaseURL             string
+	Scopes                 []string
+	Providers              string
+	ProviderID             string
+	From                   string
+	LogFile                string
+	TokenFile              string
+	TenantFile             string
+	ExpenseFile            string
+	MySQLDSN               string
+	DatabaseURL            string
+	MigrationsDir          string
+	BankTokenEncryptionKey string
+	AllowPlaintextTokens   bool
+	AdminUsername          string
+	AdminPassword          string
+	SessionSecret          string
 }
 
 type tokenResponse struct {
@@ -120,22 +127,34 @@ type billingPageData struct {
 	LastSync          string
 	Message           string
 	Error             string
-	Rows              []incomeTransaction
-	IncomeTotal       string
+	TransactionRows   []transactionPageRow
+	DirectionFilter   string
+	MatchStatusFilter string
+	PeriodFilter      string
 	IncomeCount       int
-	UnknownPayerCount int
-	TokenFile         string
 	TenantCount       int
 	ExpenseCount      int
+	TokenFile         string
 }
 
 type tenantRecord struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	MonthlyRent float64 `json:"monthly_rent"`
-	Currency    string  `json:"currency"`
-	RoomAddress string  `json:"room_address"`
-	CreatedAt   string  `json:"created_at"`
+	ID               string  `json:"id"`
+	Name             string  `json:"name"`
+	PayerID          string  `json:"payer_id,omitempty"`
+	PayerNameHint    string  `json:"payer_name_hint,omitempty"`
+	MonthlyRent      float64 `json:"monthly_rent"`
+	Currency         string  `json:"currency"`
+	IntervalUnit     string  `json:"interval_unit,omitempty"`
+	IntervalCount    int     `json:"interval_count,omitempty"`
+	BillingStartDate string  `json:"billing_start_date,omitempty"`
+	DueDay           int     `json:"due_day,omitempty"`
+	RentStartDate    string  `json:"rent_start_date,omitempty"`
+	RentEndDate      string  `json:"rent_end_date,omitempty"`
+	Status           string  `json:"status,omitempty"`
+	RoomLabel        string  `json:"room_label,omitempty"`
+	RoomAddress      string  `json:"room_address"`
+	PropertyHint     string  `json:"property_hint,omitempty"`
+	CreatedAt        string  `json:"created_at"`
 
 	RentDisplay string `json:"-"`
 }
@@ -148,6 +167,8 @@ type expenseRecord struct {
 	Currency      string  `json:"currency"`
 	ExpenseDate   string  `json:"expense_date"`
 	PaymentMethod string  `json:"payment_method"`
+	RoomHint      string  `json:"room_hint,omitempty"`
+	TenantHint    string  `json:"tenant_hint,omitempty"`
 	CreatedAt     string  `json:"created_at"`
 
 	AmountDisplay string `json:"-"`
@@ -182,9 +203,46 @@ type expensePageData struct {
 	IncomeCount  int
 }
 
+type rentDashboardPageData struct {
+	Username      string
+	Environment   string
+	ActivePage    string
+	Period        string
+	Rows          []rentDashboardRow
+	ExpectedTotal string
+	PaidTotal     string
+	BalanceTotal  string
+	ExpenseTotal  string
+	OpenCount     int
+	PartialCount  int
+	PaidCount     int
+	ReviewCount   int
+	TenantCount   int
+	IncomeCount   int
+	ExpenseCount  int
+	Message       string
+	Error         string
+}
+
+type rentDashboardRow struct {
+	TenantName     string
+	RoomLabel      string
+	RoomAddress    string
+	Period         string
+	DueDate        string
+	ExpectedAmount string
+	PaidAmount     string
+	BalanceAmount  string
+	Status         string
+	StatusLabel    string
+}
+
 type app struct {
-	cfg        config
-	httpClient *http.Client
+	cfg             config
+	httpClient      *http.Client
+	db              *gorm.DB
+	auth            *authService
+	bankConnections *bankConnectionStore
 }
 
 // issuedStates tracks states this server has handed to TrueLayer so the
@@ -234,19 +292,32 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	db, err := initDatabase(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	a := &app{
 		cfg: cfg,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		db:              db,
+		auth:            newAuthService(db, cfg),
+		bankConnections: newBankConnectionStore(db, cfg),
+	}
+	if err := a.auth.seedDefaultUser(context.Background()); err != nil {
+		log.Fatal(err)
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", a.handleIndex)
 	mux.HandleFunc("/login-local", a.handleLocalLogin)
 	mux.HandleFunc("/logout", a.handleLogout)
+	mux.HandleFunc("/rent-dashboard", a.handleRentDashboard)
 	mux.HandleFunc("/billing", a.handleBilling)
+	mux.HandleFunc("/billing/confirm", a.handleRentMatchConfirmation)
+	mux.HandleFunc("/import-legacy", a.handleLegacyImport)
 	mux.HandleFunc("/tenants", a.handleTenants)
 	mux.HandleFunc("/expenses", a.handleExpenses)
 	mux.HandleFunc("/login", a.handleLogin)
@@ -261,23 +332,28 @@ func main() {
 func loadConfig() (config, error) {
 	env := strings.ToLower(strings.TrimSpace(getenv("TL_ENV", "sandbox")))
 	cfg := config{
-		Address:       getenv("TL_ADDR", ":8080"),
-		ClientID:      strings.TrimSpace(os.Getenv("TL_CLIENT_ID")),
-		ClientSecret:  strings.TrimSpace(os.Getenv("TL_CLIENT_SECRET")),
-		RedirectURI:   strings.TrimSpace(getenv("TL_REDIRECT_URI", "http://localhost:8080/callback")),
-		Environment:   env,
-		AuthURL:       strings.TrimSpace(os.Getenv("TL_AUTH_URL")),
-		Scopes:        splitWords(getenv("TL_SCOPES", defaultScopes)),
-		Providers:     strings.TrimSpace(os.Getenv("TL_PROVIDERS")),
-		ProviderID:    strings.TrimSpace(os.Getenv("TL_PROVIDER_ID")),
-		From:          strings.TrimSpace(os.Getenv("TL_FROM")),
-		LogFile:       strings.TrimSpace(getenv("TL_LOG_FILE", "bank-data.jsonl")),
-		TokenFile:     strings.TrimSpace(getenv("TL_TOKEN_FILE", "truelayer-token.json")),
-		TenantFile:    strings.TrimSpace(getenv("RENTOPS_TENANT_FILE", "rentops-tenants.json")),
-		ExpenseFile:   strings.TrimSpace(getenv("RENTOPS_EXPENSE_FILE", "rentops-expenses.json")),
-		AdminUsername: strings.TrimSpace(getenv("APP_ADMIN_USERNAME", "ddrzh")),
-		AdminPassword: getenv("APP_ADMIN_PASSWORD", "ddrzh512"),
-		SessionSecret: strings.TrimSpace(os.Getenv("APP_SESSION_SECRET")),
+		Address:                getenv("TL_ADDR", ":8080"),
+		ClientID:               strings.TrimSpace(os.Getenv("TL_CLIENT_ID")),
+		ClientSecret:           strings.TrimSpace(os.Getenv("TL_CLIENT_SECRET")),
+		RedirectURI:            strings.TrimSpace(getenv("TL_REDIRECT_URI", "http://localhost:8080/callback")),
+		Environment:            env,
+		AuthURL:                strings.TrimSpace(os.Getenv("TL_AUTH_URL")),
+		Scopes:                 splitWords(getenv("TL_SCOPES", defaultScopes)),
+		Providers:              strings.TrimSpace(os.Getenv("TL_PROVIDERS")),
+		ProviderID:             strings.TrimSpace(os.Getenv("TL_PROVIDER_ID")),
+		From:                   strings.TrimSpace(os.Getenv("TL_FROM")),
+		LogFile:                strings.TrimSpace(getenv("TL_LOG_FILE", "bank-data.jsonl")),
+		TokenFile:              strings.TrimSpace(getenv("TL_TOKEN_FILE", "truelayer-token.json")),
+		TenantFile:             strings.TrimSpace(getenv("RENTOPS_TENANT_FILE", "rentops-tenants.json")),
+		ExpenseFile:            strings.TrimSpace(getenv("RENTOPS_EXPENSE_FILE", "rentops-expenses.json")),
+		MySQLDSN:               strings.TrimSpace(os.Getenv("MYSQL_DSN")),
+		DatabaseURL:            strings.TrimSpace(os.Getenv("DATABASE_URL")),
+		MigrationsDir:          strings.TrimSpace(getenv("MIGRATIONS_DIR", "migrations")),
+		BankTokenEncryptionKey: strings.TrimSpace(os.Getenv("BANK_TOKEN_ENCRYPTION_KEY")),
+		AllowPlaintextTokens:   os.Getenv("ALLOW_PLAINTEXT_TOKENS") == "1",
+		AdminUsername:          strings.TrimSpace(getenv("APP_ADMIN_USERNAME", "ddrzh")),
+		AdminPassword:          getenv("APP_ADMIN_PASSWORD", "ddrzh512"),
+		SessionSecret:          strings.TrimSpace(os.Getenv("APP_SESSION_SECRET")),
 	}
 	if cfg.SessionSecret == "" {
 		secret, err := randomState()
@@ -316,11 +392,70 @@ func loadConfig() (config, error) {
 	if len(cfg.Scopes) == 0 {
 		return config{}, errors.New("TL_SCOPES must contain at least one scope")
 	}
+	if err := validateTokenStorageConfig(cfg); err != nil {
+		return config{}, err
+	}
 	return cfg, nil
 }
 
 func splitWords(s string) []string {
 	return strings.Fields(strings.ReplaceAll(s, ",", " "))
+}
+
+func resolveDatabaseDSN(cfg config) (string, error) {
+	if cfg.MySQLDSN != "" {
+		return cfg.MySQLDSN, nil
+	}
+	if cfg.DatabaseURL == "" {
+		return "", errors.New("MYSQL_DSN or DATABASE_URL is required")
+	}
+	u, err := url.Parse(cfg.DatabaseURL)
+	if err != nil {
+		return "", fmt.Errorf("parse DATABASE_URL: %w", err)
+	}
+	if u.Scheme != "mysql" {
+		return "", fmt.Errorf("DATABASE_URL scheme must be mysql, got %q", u.Scheme)
+	}
+	username := u.User.Username()
+	password, _ := u.User.Password()
+	host := u.Host
+	dbName := strings.TrimPrefix(u.EscapedPath(), "/")
+	if username == "" || host == "" || dbName == "" {
+		return "", errors.New("DATABASE_URL must include username, host, and database name")
+	}
+	auth := username
+	if password != "" {
+		auth += ":" + password
+	}
+	q := u.Query()
+	return fmt.Sprintf("%s@tcp(%s)/%s?%s", auth, host, dbName, q.Encode()), nil
+}
+
+func validateTokenStorageConfig(cfg config) error {
+	if cfg.BankTokenEncryptionKey != "" {
+		if _, err := tokenEncryptionKeyBytes(cfg.BankTokenEncryptionKey); err != nil {
+			return err
+		}
+		return nil
+	}
+	if cfg.AllowPlaintextTokens && cfg.Environment != "live" {
+		return nil
+	}
+	return errors.New("BANK_TOKEN_ENCRYPTION_KEY is required for bank token storage")
+}
+
+func tokenEncryptionKeyBytes(value string) ([]byte, error) {
+	raw := strings.TrimSpace(value)
+	if len(raw) == 32 {
+		return []byte(raw), nil
+	}
+	for _, enc := range []*base64.Encoding{base64.StdEncoding, base64.RawStdEncoding, base64.URLEncoding, base64.RawURLEncoding} {
+		decoded, err := enc.DecodeString(raw)
+		if err == nil && len(decoded) == 32 {
+			return decoded, nil
+		}
+	}
+	return nil, errors.New("BANK_TOKEN_ENCRYPTION_KEY must be 32 bytes or base64-encoded 32 bytes")
 }
 
 func getenv(key, fallback string) string {
@@ -362,7 +497,19 @@ func (a *app) handleLocalLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Form.Get("username") != a.cfg.AdminUsername || r.Form.Get("password") != a.cfg.AdminPassword {
-		http.Redirect(w, r, "/?error=invalid_login", http.StatusFound)
+		if a.auth == nil {
+			http.Redirect(w, r, "/?error=invalid_login", http.StatusFound)
+			return
+		}
+	}
+	if a.auth != nil {
+		user, err := a.auth.authenticate(r.Context(), r.Form.Get("username"), r.Form.Get("password"))
+		if err != nil {
+			http.Redirect(w, r, "/?error=invalid_login", http.StatusFound)
+			return
+		}
+		http.SetCookie(w, userSessionCookie(a.cfg, user.ID, user.Username, time.Now().Add(sessionTTL)))
+		http.Redirect(w, r, "/billing", http.StatusFound)
 		return
 	}
 	http.SetCookie(w, sessionCookie(a.cfg, time.Now().Add(sessionTTL)))
@@ -382,26 +529,63 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 	if !a.requireAuth(w, r) {
 		return
 	}
-	result, _ := a.loadLatestDemoResult()
-	rows := normalizeIncomeTransactions(result)
-	tenants, _ := a.loadTenants()
-	expenses, _ := a.loadExpenses()
+	filters := filtersFromQuery(r.URL.Query())
+	filterError := ""
+	if err := validateTransactionFilters(filters); err != nil {
+		filterError = "invalid_filter"
+		filters = transactionFilters{}
+	}
+	var rows []transactionPageRow
+	var lastSync string
+	var tenantCount, expenseCount int
+	if userID, ok := a.currentUserID(r); ok && a.db != nil {
+		var err error
+		rows, err = newTransactionService(a.db).listTransactionPageRows(r.Context(), userID, filters)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		var count int64
+		if err := a.db.WithContext(r.Context()).Model(&tenant{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		tenantCount = int(count)
+		if err := a.db.WithContext(r.Context()).Model(&manualExpense{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		expenseCount = int(count)
+	} else {
+		result, _ := a.loadLatestDemoResult()
+		lastSync = result.FetchedAt
+		rows = fallbackTransactionPageRows(result, filters)
+		tenants, _ := a.loadTenants()
+		expenses, _ := a.loadExpenses()
+		tenantCount = len(tenants)
+		expenseCount = len(expenses)
+	}
+	connected := a.hasStoredToken()
+	if userID, ok := a.currentUserID(r); ok && a.bankConnections != nil {
+		connected, _ = a.bankConnections.hasRefreshToken(r.Context(), userID)
+	}
 	data := billingPageData{
 		Username:          a.cfg.AdminUsername,
 		Environment:       a.cfg.Environment,
 		ActivePage:        "billing",
-		Connected:         a.hasStoredToken(),
+		Connected:         connected,
 		NeedsReconnect:    r.URL.Query().Get("reconnect") == "1",
-		LastSync:          result.FetchedAt,
+		LastSync:          lastSync,
 		Message:           r.URL.Query().Get("message"),
-		Error:             r.URL.Query().Get("error"),
-		Rows:              rows,
-		IncomeTotal:       formatMoney(sumIncome(rows), "EUR", 2),
+		Error:             firstNonEmpty(filterError, r.URL.Query().Get("error")),
+		TransactionRows:   rows,
+		DirectionFilter:   filters.Direction,
+		MatchStatusFilter: filters.MatchStatus,
+		PeriodFilter:      filters.PeriodMonth,
 		IncomeCount:       len(rows),
-		UnknownPayerCount: countUnknownPayers(rows),
 		TokenFile:         a.cfg.TokenFile,
-		TenantCount:       len(tenants),
-		ExpenseCount:      len(expenses),
+		TenantCount:       tenantCount,
+		ExpenseCount:      expenseCount,
 	}
 	if data.LastSync == "" {
 		data.LastSync = "No sync yet"
@@ -410,6 +594,68 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 	if err := billingTemplate.Execute(w, data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func (a *app) handleRentMatchConfirmation(w http.ResponseWriter, r *http.Request) {
+	if !a.requireAuth(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	userID, ok := a.currentUserID(r)
+	if !ok || a.db == nil {
+		http.Error(w, "database session required", http.StatusBadRequest)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/billing?error=invalid_confirmation", http.StatusFound)
+		return
+	}
+	transactionID, err := transactionID(r.Form.Get("transaction_id"))
+	if err != nil {
+		http.Redirect(w, r, "/billing?error=invalid_confirmation", http.StatusFound)
+		return
+	}
+	tenantID, err := strconv.ParseUint(r.Form.Get("tenant_id"), 10, 64)
+	if err != nil || tenantID == 0 {
+		http.Redirect(w, r, "/billing?error=invalid_confirmation", http.StatusFound)
+		return
+	}
+	if err := newTransactionService(a.db).confirmRentMatch(r.Context(), userID, transactionID, tenantID); err != nil {
+		http.Redirect(w, r, "/billing?error=confirmation_failed", http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, "/billing?message=rent_confirmed", http.StatusFound)
+}
+
+func (a *app) requestCounts(ctx context.Context, r *http.Request) (tenantCount, transactionCount, expenseCount int, err error) {
+	if userID, ok := a.currentUserID(r); ok && a.db != nil {
+		var count int64
+		if err := a.db.WithContext(ctx).Model(&tenant{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
+			return 0, 0, 0, err
+		}
+		tenantCount = int(count)
+		if err := a.db.WithContext(ctx).Model(&paymentTransaction{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
+			return 0, 0, 0, err
+		}
+		transactionCount = int(count)
+		if err := a.db.WithContext(ctx).Model(&manualExpense{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
+			return 0, 0, 0, err
+		}
+		return tenantCount, transactionCount, int(count), nil
+	}
+	tenants, tenantsErr := a.loadTenants()
+	if tenantsErr != nil {
+		return 0, 0, 0, tenantsErr
+	}
+	expenses, expensesErr := a.loadExpenses()
+	if expensesErr != nil {
+		return 0, 0, 0, expensesErr
+	}
+	result, _ := a.loadLatestDemoResult()
+	return len(tenants), len(normalizePaymentTransactions(result)), len(expenses), nil
 }
 
 func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
@@ -424,14 +670,16 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 		a.createTenant(w, r)
 		return
 	}
-	tenants, err := a.loadTenants()
+	tenants, err := a.listTenantRecords(r.Context(), r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	expenses, _ := a.loadExpenses()
-	result, _ := a.loadLatestDemoResult()
-	incomeRows := normalizeIncomeTransactions(result)
+	_, incomeCount, expenseCount, err := a.requestCounts(r.Context(), r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	prepareTenants(tenants)
 	data := tenantPageData{
 		Username:     a.cfg.AdminUsername,
@@ -443,8 +691,8 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 		TenantCount:  len(tenants),
 		RentTotal:    formatMoney(sumTenantRent(tenants), "EUR", 2),
 		TenantFile:   a.cfg.TenantFile,
-		ExpenseCount: len(expenses),
-		IncomeCount:  len(incomeRows),
+		ExpenseCount: expenseCount,
+		IncomeCount:  incomeCount,
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tenantTemplate.Execute(w, data); err != nil {
@@ -457,32 +705,60 @@ func (a *app) createTenant(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/tenants?error=invalid_form", http.StatusFound)
 		return
 	}
-	name := strings.TrimSpace(r.Form.Get("name"))
-	roomAddress := strings.TrimSpace(r.Form.Get("room_address"))
-	monthlyRent, err := parsePositiveAmount(r.Form.Get("monthly_rent"))
-	if name == "" || roomAddress == "" || err != nil {
-		http.Redirect(w, r, "/tenants?error=invalid_tenant", http.StatusFound)
+	if err := a.persistTenantRecord(r.Context(), r, r.Form); err != nil {
+		if errors.Is(err, errInvalidTenantInput) {
+			http.Redirect(w, r, "/tenants?error=invalid_tenant", http.StatusFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	http.Redirect(w, r, "/tenants?message=tenant_added", http.StatusFound)
+}
+
+var errInvalidTenantInput = errors.New("invalid tenant input")
+
+func (a *app) listTenantRecords(ctx context.Context, r *http.Request) ([]tenantRecord, error) {
+	if userID, ok := a.currentUserID(r); ok && a.db != nil {
+		return newTenantService(a.db).listTenants(ctx, userID)
+	}
+	return a.loadTenants()
+}
+
+func (a *app) persistTenantRecord(ctx context.Context, r *http.Request, values formValues) error {
+	if userID, ok := a.currentUserID(r); ok && a.db != nil {
+		input, err := tenantInputFromForm(values)
+		if err != nil {
+			return errInvalidTenantInput
+		}
+		if _, err := newTenantService(a.db).createTenant(ctx, userID, input); err != nil {
+			if isValidationError(err) {
+				return errInvalidTenantInput
+			}
+			return err
+		}
+		return nil
+	}
+	name := strings.TrimSpace(values.Get("name"))
+	roomAddress := strings.TrimSpace(values.Get("room_address"))
+	monthlyRent, err := parsePositiveAmount(values.Get("monthly_rent"))
+	if name == "" || roomAddress == "" || err != nil {
+		return errInvalidTenantInput
 	}
 	tenants, err := a.loadTenants()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return err
 	}
 	now := time.Now().UTC()
 	tenants = append(tenants, tenantRecord{
 		ID:          recordID("tenant", now),
 		Name:        name,
 		MonthlyRent: monthlyRent,
-		Currency:    firstNonEmpty(strings.ToUpper(strings.TrimSpace(r.Form.Get("currency"))), "EUR"),
+		Currency:    firstNonEmpty(strings.ToUpper(strings.TrimSpace(values.Get("currency"))), "EUR"),
 		RoomAddress: roomAddress,
 		CreatedAt:   now.Format(time.RFC3339),
 	})
-	if err := a.saveTenants(tenants); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	http.Redirect(w, r, "/tenants?message=tenant_added", http.StatusFound)
+	return a.saveTenants(tenants)
 }
 
 func (a *app) handleExpenses(w http.ResponseWriter, r *http.Request) {
@@ -497,14 +773,16 @@ func (a *app) handleExpenses(w http.ResponseWriter, r *http.Request) {
 		a.createExpense(w, r)
 		return
 	}
-	expenses, err := a.loadExpenses()
+	expenses, err := a.listExpenseRecords(r.Context(), r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	tenants, _ := a.loadTenants()
-	result, _ := a.loadLatestDemoResult()
-	incomeRows := normalizeIncomeTransactions(result)
+	tenantCount, incomeCount, _, err := a.requestCounts(r.Context(), r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	prepareExpenses(expenses)
 	data := expensePageData{
 		Username:     a.cfg.AdminUsername,
@@ -516,8 +794,8 @@ func (a *app) handleExpenses(w http.ResponseWriter, r *http.Request) {
 		ExpenseCount: len(expenses),
 		ExpenseTotal: formatMoney(sumExpenses(expenses), "EUR", 2),
 		ExpenseFile:  a.cfg.ExpenseFile,
-		TenantCount:  len(tenants),
-		IncomeCount:  len(incomeRows),
+		TenantCount:  tenantCount,
+		IncomeCount:  incomeCount,
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := expenseTemplate.Execute(w, data); err != nil {
@@ -530,37 +808,67 @@ func (a *app) createExpense(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/expenses?error=invalid_form", http.StatusFound)
 		return
 	}
-	description := strings.TrimSpace(r.Form.Get("description"))
-	amount, err := parsePositiveAmount(r.Form.Get("amount"))
-	if description == "" || err != nil {
-		http.Redirect(w, r, "/expenses?error=invalid_expense", http.StatusFound)
+	if err := a.persistExpenseRecord(r.Context(), r, r.Form); err != nil {
+		if errors.Is(err, errInvalidExpenseInput) {
+			http.Redirect(w, r, "/expenses?error=invalid_expense", http.StatusFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	expenseDate := strings.TrimSpace(r.Form.Get("expense_date"))
+	http.Redirect(w, r, "/expenses?message=expense_added", http.StatusFound)
+}
+
+var errInvalidExpenseInput = errors.New("invalid expense input")
+
+func (a *app) listExpenseRecords(ctx context.Context, r *http.Request) ([]expenseRecord, error) {
+	if userID, ok := a.currentUserID(r); ok && a.db != nil {
+		return newExpenseService(a.db).listExpenses(ctx, userID)
+	}
+	return a.loadExpenses()
+}
+
+func (a *app) persistExpenseRecord(ctx context.Context, r *http.Request, values formValues) error {
+	if userID, ok := a.currentUserID(r); ok && a.db != nil {
+		input, err := expenseInputFromForm(values, time.Now())
+		if err != nil {
+			return errInvalidExpenseInput
+		}
+		if _, err := newExpenseService(a.db).createExpense(ctx, userID, input); err != nil {
+			if isValidationError(err) {
+				return errInvalidExpenseInput
+			}
+			return err
+		}
+		return nil
+	}
+	description := strings.TrimSpace(values.Get("description"))
+	amount, err := parsePositiveAmount(values.Get("amount"))
+	if description == "" || err != nil {
+		return errInvalidExpenseInput
+	}
+	expenseDate := strings.TrimSpace(values.Get("expense_date"))
 	if _, err := time.Parse(dateLayout, expenseDate); expenseDate == "" || err != nil {
 		expenseDate = time.Now().UTC().Format(dateLayout)
 	}
 	expenses, err := a.loadExpenses()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return err
 	}
 	now := time.Now().UTC()
 	expenses = append(expenses, expenseRecord{
 		ID:            recordID("expense", now),
 		Description:   description,
-		Category:      firstNonEmpty(r.Form.Get("category"), "General"),
+		Category:      firstNonEmpty(values.Get("category"), "General"),
 		Amount:        amount,
-		Currency:      firstNonEmpty(strings.ToUpper(strings.TrimSpace(r.Form.Get("currency"))), "EUR"),
+		Currency:      firstNonEmpty(strings.ToUpper(strings.TrimSpace(values.Get("currency"))), "EUR"),
 		ExpenseDate:   expenseDate,
-		PaymentMethod: firstNonEmpty(r.Form.Get("payment_method"), "Manual"),
+		PaymentMethod: firstNonEmpty(values.Get("payment_method"), "Manual"),
+		RoomHint:      strings.TrimSpace(values.Get("room_hint")),
+		TenantHint:    strings.TrimSpace(values.Get("tenant_hint")),
 		CreatedAt:     now.Format(time.RFC3339),
 	})
-	if err := a.saveExpenses(expenses); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	http.Redirect(w, r, "/expenses?message=expense_added", http.StatusFound)
+	return a.saveExpenses(expenses)
 }
 
 func (a *app) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -603,7 +911,12 @@ func (a *app) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if token.RefreshToken != "" {
-		if err := a.saveStoredToken(token); err != nil {
+		if userID, ok := a.currentUserID(r); ok && a.bankConnections != nil {
+			if err := a.bankConnections.saveRefreshToken(ctx, userID, token.RefreshToken); err != nil {
+				http.Error(w, "token save failed: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		} else if err := a.saveStoredToken(token); err != nil {
 			http.Error(w, "token save failed: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -618,6 +931,15 @@ func (a *app) handleCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "log write failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if userID, ok := a.currentUserID(r); ok && a.db != nil {
+		if err := newTransactionService(a.db).ingestDemoResult(ctx, userID, result); err != nil {
+			http.Error(w, "transaction ingest failed: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if a.bankConnections != nil {
+			_ = a.bankConnections.markLastSync(ctx, userID)
+		}
+	}
 	http.Redirect(w, r, "/billing?message=bank_connected", http.StatusFound)
 }
 
@@ -630,19 +952,35 @@ func (a *app) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stored, err := a.loadStoredToken()
-	if err != nil {
-		http.Redirect(w, r, "/billing?reconnect=1&error=no_saved_login", http.StatusFound)
-		return
+	var refreshToken string
+	if userID, ok := a.currentUserID(r); ok && a.bankConnections != nil {
+		var err error
+		refreshToken, err = a.bankConnections.loadRefreshToken(r.Context(), userID)
+		if err != nil {
+			http.Redirect(w, r, "/billing?reconnect=1&error=no_saved_login", http.StatusFound)
+			return
+		}
+	} else {
+		stored, err := a.loadStoredToken()
+		if err != nil {
+			http.Redirect(w, r, "/billing?reconnect=1&error=no_saved_login", http.StatusFound)
+			return
+		}
+		refreshToken = stored.RefreshToken
 	}
 
-	token, err := a.refreshAccessToken(r.Context(), stored.RefreshToken)
+	token, err := a.refreshAccessToken(r.Context(), refreshToken)
 	if err != nil {
 		http.Redirect(w, r, "/billing?reconnect=1&error=refresh_failed", http.StatusFound)
 		return
 	}
-	if token.RefreshToken != "" && token.RefreshToken != stored.RefreshToken {
-		if err := a.saveStoredToken(token); err != nil {
+	if token.RefreshToken != "" && token.RefreshToken != refreshToken {
+		if userID, ok := a.currentUserID(r); ok && a.bankConnections != nil {
+			if err := a.bankConnections.saveRefreshToken(r.Context(), userID, token.RefreshToken); err != nil {
+				http.Error(w, "token save failed: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		} else if err := a.saveStoredToken(token); err != nil {
 			http.Error(w, "token save failed: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -657,6 +995,15 @@ func (a *app) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	if err := a.appendDemoResultLog(result); err != nil {
 		http.Error(w, "log write failed: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if userID, ok := a.currentUserID(r); ok && a.db != nil {
+		if err := newTransactionService(a.db).ingestDemoResult(r.Context(), userID, result); err != nil {
+			http.Redirect(w, r, "/billing?error=data_fetch_failed", http.StatusFound)
+			return
+		}
+		if a.bankConnections != nil {
+			_ = a.bankConnections.markLastSync(r.Context(), userID)
+		}
 	}
 	http.Redirect(w, r, "/billing?message=refreshed", http.StatusFound)
 }
@@ -675,10 +1022,15 @@ func (a *app) isAuthenticated(r *http.Request) bool {
 		return false
 	}
 	parts := strings.Split(c.Value, "|")
-	if len(parts) != 3 {
-		return false
+	if len(parts) == 5 && parts[0] == "v2" {
+		expiresUnix, err := strconv.ParseInt(parts[3], 10, 64)
+		if err != nil || time.Now().After(time.Unix(expiresUnix, 0)) {
+			return false
+		}
+		want := userSessionSignature(a.cfg, parts[1], parts[2], parts[3])
+		return hmac.Equal([]byte(parts[4]), []byte(want))
 	}
-	if parts[0] != a.cfg.AdminUsername {
+	if len(parts) != 3 || parts[0] != a.cfg.AdminUsername {
 		return false
 	}
 	expiresUnix, err := strconv.ParseInt(parts[1], 10, 64)
@@ -687,6 +1039,30 @@ func (a *app) isAuthenticated(r *http.Request) bool {
 	}
 	want := sessionSignature(a.cfg, parts[0], parts[1])
 	return hmac.Equal([]byte(parts[2]), []byte(want))
+}
+
+func (a *app) currentUserID(r *http.Request) (uint64, bool) {
+	c, err := r.Cookie("rentops_session")
+	if err != nil {
+		return 0, false
+	}
+	parts := strings.Split(c.Value, "|")
+	if len(parts) != 5 || parts[0] != "v2" {
+		return 0, false
+	}
+	expiresUnix, err := strconv.ParseInt(parts[3], 10, 64)
+	if err != nil || time.Now().After(time.Unix(expiresUnix, 0)) {
+		return 0, false
+	}
+	want := userSessionSignature(a.cfg, parts[1], parts[2], parts[3])
+	if !hmac.Equal([]byte(parts[4]), []byte(want)) {
+		return 0, false
+	}
+	userID, err := strconv.ParseUint(parts[1], 10, 64)
+	if err != nil || userID == 0 {
+		return 0, false
+	}
+	return userID, true
 }
 
 func sessionCookie(cfg config, expires time.Time) *http.Cookie {
@@ -1709,7 +2085,8 @@ var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html
     <aside class="sidebar" aria-label="Main navigation">
       <div class="side-brand"><div class="mark">R</div><div><div class="brand-title">RentOps</div><div class="brand-meta">{{.Environment}} workspace</div></div></div>
       <nav class="nav">
-        <a href="/billing"><span class="glyph">IN</span><span>Income</span><span class="nav-count">{{.IncomeCount}}</span></a>
+        <a href="/rent-dashboard"><span class="glyph">DB</span><span>Rent Dashboard</span><span class="nav-count">{{.TenantCount}}</span></a>
+        <a href="/billing"><span class="glyph">TX</span><span>Transactions</span><span class="nav-count">{{.IncomeCount}}</span></a>
         <a href="/tenants" class="active"><span class="glyph">TN</span><span>Tenants</span><span class="nav-count">{{.TenantCount}}</span></a>
         <a href="/expenses"><span class="glyph">EX</span><span>Expenses</span><span class="nav-count">{{.ExpenseCount}}</span></a>
       </nav>
@@ -1737,12 +2114,35 @@ var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html
           <div class="panel-head"><h2 id="tenant-form-title">Add tenant</h2><span class="tiny">Manual entry</span></div>
           <label for="name">Tenant name</label>
           <input id="name" name="name" autocomplete="name" required>
+          <label for="payer_id">Bank payer ID</label>
+          <input id="payer_id" name="payer_id">
+          <label for="payer_name_hint">Payer name hint</label>
+          <input id="payer_name_hint" name="payer_name_hint">
           <label for="monthly_rent">Monthly rent</label>
           <input id="monthly_rent" name="monthly_rent" type="number" min="0.01" step="0.01" inputmode="decimal" required>
           <label for="currency">Currency</label>
           <input id="currency" name="currency" value="EUR" maxlength="3">
+          <input type="hidden" name="interval_unit" value="month">
+          <input type="hidden" name="interval_count" value="1">
+          <label for="billing_start_date">Billing start date</label>
+          <input id="billing_start_date" name="billing_start_date" type="date" required>
+          <label for="due_day">Due day</label>
+          <input id="due_day" name="due_day" type="number" min="1" max="31" value="1" required>
+          <label for="rent_start_date">Rent start date</label>
+          <input id="rent_start_date" name="rent_start_date" type="date" required>
+          <label for="rent_end_date">Rent end date</label>
+          <input id="rent_end_date" name="rent_end_date" type="date">
+          <label for="status">Status</label>
+          <select id="status" name="status">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+          <label for="room_label">Room label</label>
+          <input id="room_label" name="room_label">
           <label for="room_address">Room address</label>
           <textarea id="room_address" name="room_address" rows="4" required></textarea>
+          <label for="property_hint">Property hint</label>
+          <input id="property_hint" name="property_hint">
           <button class="btn primary" type="submit">Save tenant</button>
         </form>
 
@@ -1751,10 +2151,17 @@ var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html
           {{if .Rows}}
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Tenant</th><th>Rent</th><th>Room address</th><th>Created</th></tr></thead>
+              <thead><tr><th>Tenant</th><th>Payer</th><th>Rent</th><th>Schedule</th><th>Room</th><th>Created</th></tr></thead>
               <tbody>
                 {{range .Rows}}
-                <tr><td><strong>{{.Name}}</strong><br><span class="mono">{{.ID}}</span></td><td class="amount">{{.RentDisplay}}</td><td>{{.RoomAddress}}</td><td class="mono">{{.CreatedAt}}</td></tr>
+                <tr>
+                  <td><strong>{{.Name}}</strong><br><span class="mono">{{.ID}}</span></td>
+                  <td>{{if .PayerNameHint}}{{.PayerNameHint}}{{else}}No alias{{end}}<br><span class="mono">ID: {{if .PayerID}}{{.PayerID}}{{else}}missing{{end}}</span></td>
+                  <td class="amount">{{.RentDisplay}}</td>
+                  <td>Monthly, day {{.DueDay}}<br><span class="mono">{{.RentStartDate}}{{if .RentEndDate}} to {{.RentEndDate}}{{end}}</span></td>
+                  <td>{{if .RoomLabel}}{{.RoomLabel}}<br>{{end}}{{.RoomAddress}}{{if .PropertyHint}}<br><span class="mono">{{.PropertyHint}}</span>{{end}}</td>
+                  <td class="mono">{{.CreatedAt}}</td>
+                </tr>
                 {{end}}
               </tbody>
             </table>
@@ -1781,7 +2188,8 @@ var expenseTemplate = template.Must(template.New("expenses").Parse(`<!doctype ht
     <aside class="sidebar" aria-label="Main navigation">
       <div class="side-brand"><div class="mark">R</div><div><div class="brand-title">RentOps</div><div class="brand-meta">{{.Environment}} workspace</div></div></div>
       <nav class="nav">
-        <a href="/billing"><span class="glyph">IN</span><span>Income</span><span class="nav-count">{{.IncomeCount}}</span></a>
+        <a href="/rent-dashboard"><span class="glyph">DB</span><span>Rent Dashboard</span><span class="nav-count">{{.TenantCount}}</span></a>
+        <a href="/billing"><span class="glyph">TX</span><span>Transactions</span><span class="nav-count">{{.IncomeCount}}</span></a>
         <a href="/tenants"><span class="glyph">TN</span><span>Tenants</span><span class="nav-count">{{.TenantCount}}</span></a>
         <a href="/expenses" class="active"><span class="glyph">EX</span><span>Expenses</span><span class="nav-count">{{.ExpenseCount}}</span></a>
       </nav>
@@ -1823,6 +2231,10 @@ var expenseTemplate = template.Must(template.New("expenses").Parse(`<!doctype ht
           <input id="expense_date" name="expense_date" type="date">
           <label for="payment_method">Payment method</label>
           <input id="payment_method" name="payment_method" value="Manual">
+          <label for="room_hint">Room hint</label>
+          <input id="room_hint" name="room_hint">
+          <label for="tenant_hint">Tenant hint</label>
+          <input id="tenant_hint" name="tenant_hint">
           <input type="hidden" name="currency" value="EUR">
           <button class="btn primary" type="submit">Save expense</button>
         </form>
@@ -1832,10 +2244,10 @@ var expenseTemplate = template.Must(template.New("expenses").Parse(`<!doctype ht
           {{if .Rows}}
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Description</th><th>Amount</th><th>Category</th><th>Date</th><th>Method</th></tr></thead>
+              <thead><tr><th>Description</th><th>Amount</th><th>Category</th><th>Date</th><th>Hints</th><th>Method</th></tr></thead>
               <tbody>
                 {{range .Rows}}
-                <tr><td><strong>{{.Description}}</strong><br><span class="mono">{{.ID}}</span></td><td class="amount expense">{{.AmountDisplay}}</td><td>{{.Category}}</td><td>{{.DateDisplay}}</td><td>{{.PaymentMethod}}</td></tr>
+                <tr><td><strong>{{.Description}}</strong><br><span class="mono">{{.ID}}</span></td><td class="amount expense">{{.AmountDisplay}}</td><td>{{.Category}}</td><td>{{.DateDisplay}}</td><td>{{if .RoomHint}}Room: {{.RoomHint}}<br>{{end}}{{if .TenantHint}}Tenant: {{.TenantHint}}{{else if not .RoomHint}}No hints{{end}}</td><td>{{.PaymentMethod}}</td></tr>
                 {{end}}
               </tbody>
             </table>
@@ -1849,7 +2261,7 @@ var expenseTemplate = template.Must(template.New("expenses").Parse(`<!doctype ht
 </html>
 `))
 
-var billingTemplate = template.Must(template.New("billing").Parse(`<!doctype html>
+var legacyBillingTemplate = template.Must(template.New("billing-legacy").Parse(`<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">

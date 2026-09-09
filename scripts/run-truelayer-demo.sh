@@ -16,6 +16,7 @@ export TL_ADDR="${TL_ADDR:-:8080}"
 export TL_REDIRECT_URI="${TL_REDIRECT_URI:-http://localhost:8080/callback}"
 export TL_LOG_FILE="${TL_LOG_FILE:-bank-data.jsonl}"
 export TL_TOKEN_FILE="${TL_TOKEN_FILE:-truelayer-token.json}"
+export MIGRATIONS_DIR="${MIGRATIONS_DIR:-migrations}"
 
 missing=()
 if [[ -z "${TL_CLIENT_ID:-}" ]]; then
@@ -46,11 +47,22 @@ EOF
   exit 1
 fi
 
+if [[ -z "${MYSQL_DSN:-}" && -z "${DATABASE_URL:-}" ]]; then
+  printf 'Missing database configuration: set MYSQL_DSN or DATABASE_URL\n' >&2
+  exit 1
+fi
+
+if [[ "${TL_ENV}" == "live" && -z "${BANK_TOKEN_ENCRYPTION_KEY:-}" ]]; then
+  printf 'Missing BANK_TOKEN_ENCRYPTION_KEY for live token storage\n' >&2
+  exit 1
+fi
+
 cat <<EOF
 Starting TrueLayer demo
   URL:          http://localhost${TL_ADDR}
   Redirect URI: ${TL_REDIRECT_URI}
   Environment:  ${TL_ENV}
+  Database:     ${MYSQL_DSN:-${DATABASE_URL}}
   Log file:     ${TL_LOG_FILE}
   Token file:   ${TL_TOKEN_FILE}
 
