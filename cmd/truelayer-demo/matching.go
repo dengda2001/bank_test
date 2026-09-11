@@ -79,29 +79,46 @@ func selectObligationForTransaction(tx paymentTransactionInput, tenantID uint64,
 	if tx.TransactionTime != nil {
 		transactionTime = *tx.TransactionTime
 	}
+	targetPeriod := monthStart(transactionTime)
 	if period, ok := parseReferencedPeriod(text, transactionTime); ok {
-		for _, obligation := range obligations {
-			if obligation.TenantID == tenantID &&
-				monthStart(obligation.PeriodMonth).Equal(period) &&
-				obligation.PaidAmountCents < obligation.ExpectedAmountCents {
-				return obligation, true
-			}
-		}
+		targetPeriod = period
 	}
-	transactionPeriod := monthStart(transactionTime)
 	for _, obligation := range obligations {
 		if obligation.TenantID == tenantID &&
-			monthStart(obligation.PeriodMonth).Equal(transactionPeriod) &&
+			monthStart(obligation.PeriodMonth).Equal(targetPeriod) &&
 			obligation.PaidAmountCents < obligation.ExpectedAmountCents {
 			return obligation, true
 		}
 	}
+
+	var selected rentObligation
+	selectedOffset := 0
+	found := false
 	for _, obligation := range obligations {
-		if obligation.TenantID == tenantID && obligation.PaidAmountCents < obligation.ExpectedAmountCents {
-			return obligation, true
+		if obligation.TenantID != tenantID || obligation.PaidAmountCents >= obligation.ExpectedAmountCents {
+			continue
+		}
+		offset := monthOffset(targetPeriod, obligation.PeriodMonth)
+		if !found || absInt(offset) < absInt(selectedOffset) || (absInt(offset) == absInt(selectedOffset) && offset > selectedOffset) {
+			selected = obligation
+			selectedOffset = offset
+			found = true
 		}
 	}
-	return rentObligation{}, false
+	return selected, found
+}
+
+func monthOffset(from, to time.Time) int {
+	from = monthStart(from)
+	to = monthStart(to)
+	return (to.Year()-from.Year())*12 + int(to.Month()-from.Month())
+}
+
+func absInt(value int) int {
+	if value < 0 {
+		return -value
+	}
+	return value
 }
 
 func tenantsByPayerID(tenants []tenant, payerID string) []tenant {

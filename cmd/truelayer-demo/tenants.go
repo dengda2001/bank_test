@@ -196,6 +196,50 @@ func (s *tenantService) createTenant(ctx context.Context, userID uint64, input t
 	return row, nil
 }
 
+func (s *tenantService) updateTenant(ctx context.Context, userID, tenantID uint64, input tenantInput) (tenant, error) {
+	if userID == 0 || tenantID == 0 {
+		return tenant{}, errors.New("userID and tenantID are required")
+	}
+	if err := validateTenantInput(input); err != nil {
+		return tenant{}, err
+	}
+	billingStart, _ := parseDate(input.BillingStartDate)
+	rentStart, _ := parseDate(input.RentStartDate)
+	var rentEnd *time.Time
+	if input.RentEndDate != "" {
+		d, _ := parseDate(input.RentEndDate)
+		rentEnd = &d
+	}
+	var row tenant
+	if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", tenantID, userID).First(&row).Error; err != nil {
+		return tenant{}, err
+	}
+	updates := map[string]any{
+		"name":               input.Name,
+		"payer_id":           nullableString(input.PayerID),
+		"payer_name_hint":    nullableString(input.PayerNameHint),
+		"monthly_rent_cents": moneyToCents(input.MonthlyRent),
+		"currency":           input.Currency,
+		"interval_unit":      input.IntervalUnit,
+		"interval_count":     input.IntervalCount,
+		"billing_start_date": billingStart,
+		"due_day":            input.DueDay,
+		"rent_start_date":    rentStart,
+		"rent_end_date":      rentEnd,
+		"status":             input.Status,
+		"room_label":         input.RoomLabel,
+		"room_address":       input.RoomAddress,
+		"property_hint":      nullableString(input.PropertyHint),
+	}
+	if err := s.db.WithContext(ctx).Model(&row).Updates(updates).Error; err != nil {
+		return tenant{}, err
+	}
+	if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", tenantID, userID).First(&row).Error; err != nil {
+		return tenant{}, err
+	}
+	return row, nil
+}
+
 func (s *tenantService) listTenants(ctx context.Context, userID uint64) ([]tenantRecord, error) {
 	var rows []tenant
 	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Order("name ASC").Find(&rows).Error; err != nil {

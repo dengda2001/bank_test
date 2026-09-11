@@ -78,11 +78,27 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Parse(`
     .dashboard-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
     .dashboard-toolbar form { display: flex; align-items: end; gap: 10px; }
     .dashboard-toolbar label { margin: 0; min-width: 150px; }
+    .dashboard-toolbar input[type="month"] { min-height: 42px; border-radius: 14px; padding: 9px 12px; background: rgba(255,255,255,0.07); box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 0 0 1px rgba(255,255,255,0.03); }
+    .dashboard-toolbar input[type="month"]:hover { border-color: rgba(255,255,255,0.22); background: rgba(255,255,255,0.09); }
+    .dashboard-toolbar input[type="month"]:focus { border-color: rgba(104,114,217,0.85); background: rgba(255,255,255,0.08); }
     .status.open, .status.overdue, .status.partial, .status.paid, .status.needs_review { border-radius: 999px; padding: 5px 9px; display: inline-block; font-size: 12px; }
     .status.open { color: #d8dcff; background: rgba(104,114,217,0.12); }
     .status.overdue, .status.needs_review { color: #ffd0ce; background: rgba(255,139,134,0.10); }
+    .review-link { color: #ffd0ce; text-decoration: none; border-bottom: 1px dashed currentColor; }
+    .review-link:hover { color: #fff; }
     .status.partial { color: #ffe0a7; background: rgba(233,184,114,0.10); }
     .status.paid { color: #cbffe1; background: rgba(125,211,168,0.10); }
+    .rent-row { cursor: pointer; }
+    .rent-row:hover, .rent-row:focus { background: rgba(255,255,255,0.035); outline: none; }
+    .rent-row td:first-child::after { content: " +"; margin-left: 6px; color: var(--foreground-muted); font: 700 12px var(--mono); }
+    .rent-row[aria-expanded="true"] td:first-child::after { content: " -"; }
+    .rent-details td { padding: 0; background: rgba(255,255,255,0.025); }
+    .payment-list { padding: 14px 18px 16px 32px; border-top: 1px solid rgba(255,255,255,0.045); }
+    .payment-list h3 { margin: 0 0 10px; font-size: 12px; color: var(--foreground); }
+    .payment-item { display: grid; grid-template-columns: 140px 170px minmax(180px, 1fr) minmax(160px, 1fr) 100px; gap: 12px; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.04); color: var(--foreground-subtle); font-size: 12px; }
+    .payment-item:last-child { border-bottom: 0; }
+    .payment-item .amount { font-size: 13px; }
+    @media (max-width: 760px) { .payment-item { grid-template-columns: 1fr 1fr; } .payment-item .payment-description { grid-column: 1 / -1; } }
     @media (max-width: 900px) { .dashboard-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 640px) { .dashboard-toolbar { align-items: stretch; flex-direction: column; } .dashboard-toolbar form { align-items: stretch; } .dashboard-toolbar label { flex: 1; } }
   </style>
@@ -109,7 +125,7 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Parse(`
       <div class="dashboard-toolbar">
         <div><div class="label">Monthly review</div><div class="tiny">Expected rent, received payments, balances and expenses for one month.</div></div>
         <form method="get" action="/rent-dashboard">
-          <label for="period">Month<input id="period" name="period" type="month" value="{{.Period}}"></label>
+          <label for="period">Month<input id="period" name="period" type="month" value="{{.Period}}" onchange="this.form.submit()"></label>
           <button class="btn primary" type="submit">View month</button>
         </form>
       </div>
@@ -120,18 +136,33 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Parse(`
         <div class="panel metric"><div class="label">Expenses</div><strong>{{.ExpenseTotal}}</strong><span>{{.ExpenseCount}} outgoing transactions</span></div>
       </section>
       <section class="panel surface" aria-labelledby="rent-status-title">
-        <div class="panel-head"><h2 id="rent-status-title">Tenant rent status</h2><span class="tiny">{{.ReviewCount}} needs review</span></div>
+        <div class="panel-head"><h2 id="rent-status-title">Tenant rent status</h2><a class="tiny review-link" href="/billing?match_status=needs_review">{{.ReviewCount}} needs review</a></div>
         {{if .Rows}}
         <div class="table-wrap"><table>
           <thead><tr><th>Tenant</th><th>Room</th><th>Due</th><th>Expected</th><th>Paid</th><th>Balance</th><th>Status</th></tr></thead>
           <tbody>{{range .Rows}}
-            <tr><td><strong>{{.TenantName}}</strong></td><td>{{if .RoomLabel}}{{.RoomLabel}}<br>{{end}}{{.RoomAddress}}</td><td class="mono">{{.DueDate}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span></td></tr>
+            <tr class="rent-row" tabindex="0" role="button" aria-expanded="false" aria-controls="rent-details-{{.ObligationID}}" data-details-target="rent-details-{{.ObligationID}}"><td><strong>{{.TenantName}}</strong></td><td>{{if .RoomLabel}}{{.RoomLabel}}<br>{{end}}{{.RoomAddress}}</td><td class="mono">{{.DueDate}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span></td></tr>
+            <tr id="rent-details-{{.ObligationID}}" class="rent-details" hidden><td colspan="7"><div class="payment-list"><h3>Payment details</h3>{{if .Payments}}{{range .Payments}}<div class="payment-item"><span class="amount">{{.AmountDisplay}}</span><span class="mono">{{.DateDisplay}}</span><span class="payment-description">{{.Description}}</span><span class="mono">REF: {{.Reference}}</span><span class="mono">{{.ConfirmationSource}}</span></div>{{end}}{{else}}<div class="tiny">No payment details for this month.</div>{{end}}</div></td></tr>
           {{end}}</tbody>
         </table></div>
         {{else}}<div class="empty">No monthly obligations yet. Add an active tenant with a rent start date to generate this month.</div>{{end}}
       </section>
     </main>
   </div>
+  <script>
+    for (const row of document.querySelectorAll("[data-details-target]")) {
+      const details = document.getElementById(row.dataset.detailsTarget);
+      const toggle = () => {
+        const expanded = row.getAttribute("aria-expanded") === "true";
+        row.setAttribute("aria-expanded", String(!expanded));
+        details.hidden = expanded;
+      };
+      row.addEventListener("click", toggle);
+      row.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggle(); }
+      });
+    }
+  </script>
 </body>
 </html>
 `))

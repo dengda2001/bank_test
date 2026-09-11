@@ -128,6 +128,7 @@ type billingPageData struct {
 	Message           string
 	Error             string
 	TransactionRows   []transactionPageRow
+	TenantOptions     []billingTenantOption
 	DirectionFilter   string
 	MatchStatusFilter string
 	PeriodFilter      string
@@ -135,6 +136,11 @@ type billingPageData struct {
 	TenantCount       int
 	ExpenseCount      int
 	TokenFile         string
+}
+
+type billingTenantOption struct {
+	ID   uint64
+	Name string
 }
 
 type tenantRecord struct {
@@ -187,6 +193,9 @@ type tenantPageData struct {
 	TenantFile   string
 	ExpenseCount int
 	IncomeCount  int
+	ShowForm     bool
+	Editing      bool
+	Form         tenantRecord
 }
 
 type expensePageData struct {
@@ -235,6 +244,16 @@ type rentDashboardRow struct {
 	BalanceAmount  string
 	Status         string
 	StatusLabel    string
+	ObligationID   uint64
+	Payments       []rentPaymentDetail
+}
+
+type rentPaymentDetail struct {
+	AmountDisplay      string
+	DateDisplay        string
+	Description        string
+	Reference          string
+	ConfirmationSource string
 }
 
 type app struct {
@@ -538,6 +557,7 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 	var rows []transactionPageRow
 	var lastSync string
 	var tenantCount, expenseCount int
+	var tenantOptions []billingTenantOption
 	if userID, ok := a.currentUserID(r); ok && a.db != nil {
 		var err error
 		rows, err = newTransactionService(a.db).listTransactionPageRows(r.Context(), userID, filters)
@@ -545,12 +565,17 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		var count int64
-		if err := a.db.WithContext(r.Context()).Model(&tenant{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
+		var tenantRows []tenant
+		if err := a.db.WithContext(r.Context()).Where("user_id = ?", userID).Order("name ASC").Find(&tenantRows).Error; err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		tenantCount = int(count)
+		tenantCount = len(tenantRows)
+		tenantOptions = make([]billingTenantOption, 0, len(tenantRows))
+		for _, tenantRow := range tenantRows {
+			tenantOptions = append(tenantOptions, billingTenantOption{ID: tenantRow.ID, Name: tenantRow.Name})
+		}
+		var count int64
 		if err := a.db.WithContext(r.Context()).Model(&manualExpense{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -579,6 +604,7 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 		Message:           r.URL.Query().Get("message"),
 		Error:             firstNonEmpty(filterError, r.URL.Query().Get("error")),
 		TransactionRows:   rows,
+		TenantOptions:     tenantOptions,
 		DirectionFilter:   filters.Direction,
 		MatchStatusFilter: filters.MatchStatus,
 		PeriodFilter:      filters.PeriodMonth,
@@ -681,6 +707,18 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	prepareTenants(tenants)
+	formRecord := tenantRecord{Currency: "EUR", IntervalUnit: "month", IntervalCount: 1, Status: "active", DueDay: 1}
+	editing := false
+	if editID := strings.TrimSpace(r.URL.Query().Get("edit")); editID != "" {
+		for _, record := range tenants {
+			if record.ID == editID {
+				formRecord = record
+				editing = true
+				break
+			}
+		}
+	}
+	showForm := editing || r.URL.Query().Get("add") == "1"
 	data := tenantPageData{
 		Username:     a.cfg.AdminUsername,
 		Environment:  a.cfg.Environment,
@@ -693,6 +731,9 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 		TenantFile:   a.cfg.TenantFile,
 		ExpenseCount: expenseCount,
 		IncomeCount:  incomeCount,
+		ShowForm:     showForm,
+		Editing:      editing,
+		Form:         formRecord,
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tenantTemplate.Execute(w, data); err != nil {
@@ -713,7 +754,11 @@ func (a *app) createTenant(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/tenants?message=tenant_added", http.StatusFound)
+	message := "tenant_added"
+	if strings.TrimSpace(r.Form.Get("tenant_id")) != "" {
+		message = "tenant_updated"
+	}
+	http.Redirect(w, r, "/tenants?message="+message, http.StatusFound)
 }
 
 var errInvalidTenantInput = errors.New("invalid tenant input")
@@ -727,11 +772,22 @@ func (a *app) listTenantRecords(ctx context.Context, r *http.Request) ([]tenantR
 
 func (a *app) persistTenantRecord(ctx context.Context, r *http.Request, values formValues) error {
 	if userID, ok := a.currentUserID(r); ok && a.db != nil {
-		input, err := tenantInputFromForm(values)
-		if err != nil {
+		input, parseErr := tenantInputFromForm(values)
+		if parseErr != nil {
 			return errInvalidTenantInput
 		}
-		if _, err := newTenantService(a.db).createTenant(ctx, userID, input); err != nil {
+		service := newTenantService(a.db)
+		var err error
+		if rawID := strings.TrimSpace(values.Get("tenant_id")); rawID != "" {
+			var tenantID uint64
+			tenantID, err = strconv.ParseUint(rawID, 10, 64)
+			if err == nil {
+				_, err = service.updateTenant(ctx, userID, tenantID, input)
+			}
+		} else {
+			_, err = service.createTenant(ctx, userID, input)
+		}
+		if err != nil {
 			if isValidationError(err) {
 				return errInvalidTenantInput
 			}
@@ -750,6 +806,19 @@ func (a *app) persistTenantRecord(ctx context.Context, r *http.Request, values f
 		return err
 	}
 	now := time.Now().UTC()
+	updatedID := strings.TrimSpace(values.Get("tenant_id"))
+	if updatedID != "" {
+		for i := range tenants {
+			if tenants[i].ID == updatedID {
+				tenants[i].Name = name
+				tenants[i].MonthlyRent = monthlyRent
+				tenants[i].Currency = firstNonEmpty(strings.ToUpper(strings.TrimSpace(values.Get("currency"))), "EUR")
+				tenants[i].RoomAddress = roomAddress
+				return a.saveTenants(tenants)
+			}
+		}
+		return errInvalidTenantInput
+	}
 	tenants = append(tenants, tenantRecord{
 		ID:          recordID("tenant", now),
 		Name:        name,
@@ -2000,6 +2069,28 @@ const workspacePageCSS = `
       color: var(--foreground);
       background: rgba(255,255,255,0.055);
       outline: none;
+      color-scheme: dark;
+    }
+    select {
+      appearance: none;
+      padding-right: 34px;
+      background-image: linear-gradient(45deg, transparent 50%, var(--foreground-muted) 50%), linear-gradient(135deg, var(--foreground-muted) 50%, transparent 50%);
+      background-position: calc(100% - 16px) 17px, calc(100% - 11px) 17px;
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
+    }
+    input[type="date"], input[type="month"] {
+      color-scheme: dark;
+    }
+    input[type="date"]::-webkit-calendar-picker-indicator,
+    input[type="month"]::-webkit-calendar-picker-indicator {
+      margin-right: -3px;
+      padding: 5px;
+      border-radius: 7px;
+      background-color: rgba(255,255,255,0.08);
+      opacity: 0.72;
+      filter: invert(1);
+      cursor: pointer;
     }
     textarea { resize: vertical; }
     input:focus, select:focus, textarea:focus {
@@ -2098,10 +2189,11 @@ var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html
           <div class="brand-title">Tenant management</div>
           <h1>Manual tenant ledger</h1>
         </div>
-        <form method="post" action="/logout"><button class="btn danger" type="submit">Sign out</button></form>
+        <div class="actions"><a class="btn primary" href="/tenants?add=1">Add tenant</a><form method="post" action="/logout"><button class="btn danger" type="submit">Sign out</button></form></div>
       </header>
 
       {{if eq .Message "tenant_added"}}<div class="notice ok">Tenant record saved.</div>{{end}}
+      {{if eq .Message "tenant_updated"}}<div class="notice ok">Tenant record updated.</div>{{end}}
       {{if .Error}}<div class="notice error">Tenant name, monthly rent, and room address are required.</div>{{end}}
 
       <section class="summary" aria-label="Tenant summary">
@@ -2109,65 +2201,63 @@ var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html
         <div class="panel metric"><div class="label">Monthly rent roll</div><strong>{{.RentTotal}}</strong><span>expected rent from saved tenants</span></div>
       </section>
 
-      <section class="grid-two">
-        <form class="panel form" method="post" action="/tenants" aria-labelledby="tenant-form-title">
-          <div class="panel-head"><h2 id="tenant-form-title">Add tenant</h2><span class="tiny">Manual entry</span></div>
+      {{if .ShowForm}}<section class="panel form tenant-form" aria-labelledby="tenant-form-title">
+        <div class="panel-head"><h2 id="tenant-form-title">{{if .Editing}}Edit tenant{{else}}Add tenant{{end}}</h2><a class="btn subtle" href="/tenants">Cancel</a></div>
+        <form method="post" action="/tenants">
+          {{if .Editing}}<input type="hidden" name="tenant_id" value="{{.Form.ID}}">{{end}}
           <label for="name">Tenant name</label>
-          <input id="name" name="name" autocomplete="name" required>
+          <input id="name" name="name" autocomplete="name" value="{{.Form.Name}}" required>
           <label for="payer_id">Bank payer ID</label>
-          <input id="payer_id" name="payer_id">
+          <input id="payer_id" name="payer_id" value="{{.Form.PayerID}}">
           <label for="payer_name_hint">Payer name hint</label>
-          <input id="payer_name_hint" name="payer_name_hint">
+          <input id="payer_name_hint" name="payer_name_hint" value="{{.Form.PayerNameHint}}">
           <label for="monthly_rent">Monthly rent</label>
-          <input id="monthly_rent" name="monthly_rent" type="number" min="0.01" step="0.01" inputmode="decimal" required>
+          <input id="monthly_rent" name="monthly_rent" type="number" min="0.01" step="0.01" inputmode="decimal" value="{{.Form.MonthlyRent}}" required>
           <label for="currency">Currency</label>
-          <input id="currency" name="currency" value="EUR" maxlength="3">
+          <input id="currency" name="currency" value="{{.Form.Currency}}" maxlength="3">
           <input type="hidden" name="interval_unit" value="month">
           <input type="hidden" name="interval_count" value="1">
           <label for="billing_start_date">Billing start date</label>
-          <input id="billing_start_date" name="billing_start_date" type="date" required>
+          <input id="billing_start_date" name="billing_start_date" type="date" value="{{.Form.BillingStartDate}}" required>
           <label for="due_day">Due day</label>
-          <input id="due_day" name="due_day" type="number" min="1" max="31" value="1" required>
+          <input id="due_day" name="due_day" type="number" min="1" max="31" value="{{.Form.DueDay}}" required>
           <label for="rent_start_date">Rent start date</label>
-          <input id="rent_start_date" name="rent_start_date" type="date" required>
+          <input id="rent_start_date" name="rent_start_date" type="date" value="{{.Form.RentStartDate}}" required>
           <label for="rent_end_date">Rent end date</label>
-          <input id="rent_end_date" name="rent_end_date" type="date">
+          <input id="rent_end_date" name="rent_end_date" type="date" value="{{.Form.RentEndDate}}">
           <label for="status">Status</label>
-          <select id="status" name="status">
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
+          <select id="status" name="status"><option value="active" {{if eq .Form.Status "active"}}selected{{end}}>Active</option><option value="inactive" {{if eq .Form.Status "inactive"}}selected{{end}}>Inactive</option></select>
           <label for="room_label">Room label</label>
-          <input id="room_label" name="room_label">
+          <input id="room_label" name="room_label" value="{{.Form.RoomLabel}}">
           <label for="room_address">Room address</label>
-          <textarea id="room_address" name="room_address" rows="4" required></textarea>
+          <textarea id="room_address" name="room_address" rows="4" required>{{.Form.RoomAddress}}</textarea>
           <label for="property_hint">Property hint</label>
-          <input id="property_hint" name="property_hint">
-          <button class="btn primary" type="submit">Save tenant</button>
+          <input id="property_hint" name="property_hint" value="{{.Form.PropertyHint}}">
+          <button class="btn primary" type="submit">{{if .Editing}}Save changes{{else}}Save tenant{{end}}</button>
         </form>
-
-        <section class="panel surface" aria-labelledby="tenant-list-title">
-          <div class="panel-head"><h2 id="tenant-list-title">Saved tenants</h2><span class="tiny">{{.TenantCount}} records</span></div>
-          {{if .Rows}}
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Tenant</th><th>Payer</th><th>Rent</th><th>Schedule</th><th>Room</th><th>Created</th></tr></thead>
-              <tbody>
-                {{range .Rows}}
-                <tr>
-                  <td><strong>{{.Name}}</strong><br><span class="mono">{{.ID}}</span></td>
-                  <td>{{if .PayerNameHint}}{{.PayerNameHint}}{{else}}No alias{{end}}<br><span class="mono">ID: {{if .PayerID}}{{.PayerID}}{{else}}missing{{end}}</span></td>
-                  <td class="amount">{{.RentDisplay}}</td>
-                  <td>Monthly, day {{.DueDay}}<br><span class="mono">{{.RentStartDate}}{{if .RentEndDate}} to {{.RentEndDate}}{{end}}</span></td>
-                  <td>{{if .RoomLabel}}{{.RoomLabel}}<br>{{end}}{{.RoomAddress}}{{if .PropertyHint}}<br><span class="mono">{{.PropertyHint}}</span>{{end}}</td>
-                  <td class="mono">{{.CreatedAt}}</td>
-                </tr>
-                {{end}}
-              </tbody>
-            </table>
-          </div>
-          {{else}}<div class="empty">No tenants yet. Add the first tenant from the form.</div>{{end}}
-        </section>
+      </section>{{end}}
+      <section class="panel surface" aria-labelledby="tenant-list-title">
+        <div class="panel-head"><h2 id="tenant-list-title">Saved tenants</h2><span class="tiny">{{.TenantCount}} records</span></div>
+        {{if .Rows}}
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Tenant</th><th>Payer</th><th>Rent</th><th>Schedule</th><th>Room</th><th>Created</th><th></th></tr></thead>
+            <tbody>
+              {{range .Rows}}
+              <tr>
+                <td><strong>{{.Name}}</strong><br><span class="mono">{{.ID}}</span></td>
+                <td>{{if .PayerNameHint}}{{.PayerNameHint}}{{else}}No alias{{end}}<br><span class="mono">ID: {{if .PayerID}}{{.PayerID}}{{else}}missing{{end}}</span></td>
+                <td class="amount">{{.RentDisplay}}</td>
+                <td>Monthly, day {{.DueDay}}<br><span class="mono">{{.RentStartDate}}{{if .RentEndDate}} to {{.RentEndDate}}{{end}}</span></td>
+                <td>{{if .RoomLabel}}{{.RoomLabel}}<br>{{end}}{{.RoomAddress}}{{if .PropertyHint}}<br><span class="mono">{{.PropertyHint}}</span>{{end}}</td>
+                <td class="mono">{{.CreatedAt}}</td>
+                <td><a class="btn subtle" href="/tenants?edit={{.ID}}">Edit</a></td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+        {{else}}<div class="empty">No tenants yet. Use Add tenant to create the first record.</div>{{end}}
       </section>
     </main>
   </div>

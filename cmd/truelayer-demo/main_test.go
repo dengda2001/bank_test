@@ -581,18 +581,26 @@ func TestRentDashboardTemplateRendersMonthlyStatus(t *testing.T) {
 		Period:        "2026-09",
 		ExpectedTotal: "EUR 950.00",
 		Rows: []rentDashboardRow{{
+			ObligationID:   11,
 			TenantName:     "Aoife Murphy",
 			RoomAddress:    "Room A12",
 			DueDate:        "2026-09-05",
 			ExpectedAmount: "EUR 950.00",
 			Status:         "paid",
 			StatusLabel:    "Paid",
+			Payments: []rentPaymentDetail{{
+				AmountDisplay:      "EUR 950.00",
+				DateDisplay:        "04 Sep 2026 08:00",
+				Description:        "September rent",
+				Reference:          "rent-2026-09",
+				ConfirmationSource: "auto_id",
+			}},
 		}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"2026-09", "Tenant rent status", "Aoife Murphy", "Rent Dashboard", "Transactions"} {
+	for _, expected := range []string{"2026-09", "Tenant rent status", "Aoife Murphy", "Rent Dashboard", "Transactions", `onchange="this.form.submit()"`, "Payment details", "September rent", "rent-2026-09"} {
 		if !strings.Contains(body.String(), expected) {
 			t.Fatalf("dashboard missing %q: %s", expected, body.String())
 		}
@@ -1127,6 +1135,29 @@ func TestDecideRentMatchOverpaymentNeedsReview(t *testing.T) {
 	decision := decideRentMatch(tx, []tenant{tenantRow}, []rentObligation{obligation})
 	if decision.Status != "needs_review" || decision.Reason != "overpayment" {
 		t.Fatalf("unexpected overpayment decision: %+v", decision)
+	}
+}
+
+func TestSelectObligationPrefersNextMonthWhenReferencedMonthIsPaid(t *testing.T) {
+	tenantID := uint64(7)
+	tx := paymentTransactionInput{
+		Direction:       "income",
+		AmountCents:     100000,
+		Description:     "REMAINS 50 *MOBI RENT 4/26",
+		TransactionTime: ptrTime(time.Date(2026, 4, 30, 23, 0, 0, 0, time.UTC)),
+	}
+	obligations := []rentObligation{
+		{ID: 31, TenantID: tenantID, PeriodMonth: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), ExpectedAmountCents: 105000},
+		{ID: 41, TenantID: tenantID, PeriodMonth: time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC), ExpectedAmountCents: 105000, PaidAmountCents: 105000},
+		{ID: 51, TenantID: tenantID, PeriodMonth: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), ExpectedAmountCents: 105000},
+	}
+
+	got, ok := selectObligationForTransaction(tx, tenantID, obligations)
+	if !ok {
+		t.Fatal("expected an open obligation")
+	}
+	if got.ID != 51 {
+		t.Fatalf("obligation=%d (%s), want next-month obligation 51", got.ID, got.PeriodMonth.Format("2006-01"))
 	}
 }
 

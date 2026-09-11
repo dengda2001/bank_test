@@ -208,6 +208,10 @@ func (s *obligationService) summarizeRentDashboard(ctx context.Context, userID u
 		default:
 			summary.OpenCount++
 		}
+		payments, err := s.listRentPayments(ctx, userID, obligation.ID)
+		if err != nil {
+			return rentDashboardSummary{}, err
+		}
 		summary.Rows = append(summary.Rows, rentDashboardRow{
 			TenantName:     tenantRow.Name,
 			RoomLabel:      tenantRow.RoomLabel,
@@ -219,6 +223,8 @@ func (s *obligationService) summarizeRentDashboard(ctx context.Context, userID u
 			BalanceAmount:  formatMoney(centsToMoney(maxInt64(obligation.ExpectedAmountCents-obligation.PaidAmountCents, 0)), currency, 2),
 			Status:         status,
 			StatusLabel:    rentStatusLabel(status),
+			ObligationID:   obligation.ID,
+			Payments:       payments,
 		})
 	}
 	start := periodMonth
@@ -236,6 +242,41 @@ func (s *obligationService) summarizeRentDashboard(ctx context.Context, userID u
 		}
 	}
 	return summary, nil
+}
+
+type rentPaymentDetailRow struct {
+	AmountCents        int64      `gorm:"column:amount_cents"`
+	Currency           string     `gorm:"column:currency"`
+	TransactionTime    *time.Time `gorm:"column:transaction_time"`
+	Description        string     `gorm:"column:description"`
+	Reference          string     `gorm:"column:reference"`
+	ConfirmationSource string     `gorm:"column:confirmation_source"`
+}
+
+func (s *obligationService) listRentPayments(ctx context.Context, userID, obligationID uint64) ([]rentPaymentDetail, error) {
+	var rows []rentPaymentDetailRow
+	if err := s.db.WithContext(ctx).Table("payment_allocations AS pa").
+		Select("pa.amount_cents, pt.currency, pt.transaction_time, pt.description, pt.reference, pa.confirmation_source").
+		Joins("JOIN payment_transactions AS pt ON pt.id = pa.payment_transaction_id AND pt.user_id = pa.user_id").
+		Where("pa.user_id = ? AND pa.rent_obligation_id = ?", userID, obligationID).
+		Order("pt.transaction_time ASC, pa.id ASC").Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	payments := make([]rentPaymentDetail, 0, len(rows))
+	for _, row := range rows {
+		dateDisplay := "Unknown"
+		if row.TransactionTime != nil {
+			dateDisplay = row.TransactionTime.UTC().Format("02 Jan 2006 15:04")
+		}
+		payments = append(payments, rentPaymentDetail{
+			AmountDisplay:      formatMoney(centsToMoney(row.AmountCents), firstNonEmpty(row.Currency, "EUR"), 2),
+			DateDisplay:        dateDisplay,
+			Description:        firstNonEmpty(row.Description, "No description"),
+			Reference:          firstNonEmpty(row.Reference, "No reference"),
+			ConfirmationSource: firstNonEmpty(row.ConfirmationSource, "manual"),
+		})
+	}
+	return payments, nil
 }
 
 func maxInt64(value, minimum int64) int64 {
