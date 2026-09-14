@@ -137,3 +137,36 @@ Implemented the Chinese monthly rent dashboard with clear expected/paid/balance 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: 账单日历与流水匹配修复
+
+**Date**: 2026-09-15
+**Task**: 账单日历与流水匹配修复
+**Branch**: `main`
+
+### Summary
+
+统一全局日历为圆角自定义选择器；银行流水选月后自动搜索；首页待处理数量按月份联动并可跳转；租客页新增最近三个月账单与确认流水层级；补充 JULY26、SEP26 等紧凑英文月份解析及回归测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `039d88b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

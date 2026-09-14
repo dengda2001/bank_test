@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 4
-- **Last Active**: 2026-09-14
+- **Total Sessions**: 5
+- **Last Active**: 2026-09-15
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~139 | Active |
+| `journal-1.md` | ~172 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 5 | 2026-09-15 | 账单日历与流水匹配修复 | `039d88b` | `main` |
 | 4 | 2026-09-14 | Monthly rent dashboard and payer matching UX | `5dd03a2` | `main` |
 | 3 | 2026-09-10 | MySQL租金匹配工作台 | `b21539b` | `main` |
 | 2 | 2026-09-09 | Add tenant and expense ledgers | `cf15a95` | `main` |
