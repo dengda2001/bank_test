@@ -172,6 +172,8 @@ type tenantRecord struct {
 	CreatedAt        string  `json:"created_at"`
 
 	RentDisplay string `json:"-"`
+
+	BillingHistory []tenantBillingMonth `json:"-"`
 }
 
 type expenseRecord struct {
@@ -596,7 +598,7 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		expenseCount = int(count)
-		if err := a.db.WithContext(r.Context()).Model(&paymentTransaction{}).Where("user_id = ? AND direction = ? AND match_status IN ?", userID, "income", []string{"candidate", "needs_review", "unmatched"}).Count(&count).Error; err != nil {
+		if err := a.db.WithContext(r.Context()).Model(&paymentTransaction{}).Where("user_id = ? AND direction = ? AND match_status IN ?", userID, "income", pendingMatchStatuses).Count(&count).Error; err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -730,6 +732,19 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if userID, ok := a.currentUserID(r); ok && a.db != nil {
+		history, err := newObligationService(a.db).listTenantBillingHistory(r.Context(), userID, monthStart(time.Now().UTC()), 3)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		for i := range tenants {
+			tenantID, parseErr := strconv.ParseUint(tenants[i].ID, 10, 64)
+			if parseErr == nil {
+				tenants[i].BillingHistory = history[tenantID]
+			}
+		}
 	}
 	_, incomeCount, expenseCount, err := a.requestCounts(r.Context(), r)
 	if err != nil {
@@ -2199,7 +2214,30 @@ var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RentOps Tenants</title>
-  <style>` + workspacePageCSS + `</style>
+  <style>` + workspacePageCSS + workspaceCalendarCSS + `
+    .tenant-row, .tenant-month-row { cursor: pointer; }
+    .tenant-row:hover, .tenant-row:focus, .tenant-month-row:hover, .tenant-month-row:focus { background: rgba(255,255,255,0.035); outline: none; }
+    .tenant-row td:first-child::after, .tenant-month-row td:first-child::after { content: " +"; margin-left: 6px; color: var(--foreground-muted); font: 700 12px var(--mono); }
+    .tenant-row[aria-expanded="true"] td:first-child::after, .tenant-month-row[aria-expanded="true"] td:first-child::after { content: " -"; }
+    .status { display: inline-block; border-radius: 999px; padding: 5px 9px; font-size: 12px; white-space: nowrap; }
+    .status.open { color: #d8dcff; background: rgba(104,114,217,0.12); }
+    .status.overdue, .status.needs_review { color: #ffd0ce; background: rgba(255,139,134,0.10); }
+    .status.partial { color: #ffe0a7; background: rgba(233,184,114,0.10); }
+    .status.paid { color: #cbffe1; background: rgba(125,211,168,0.10); }
+    .tenant-history-row td, .tenant-month-details td { padding: 0; background: rgba(255,255,255,0.025); }
+    .tenant-history { padding: 14px 18px 16px 32px; border-top: 1px solid rgba(255,255,255,0.045); }
+    .tenant-history-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+    .tenant-history-head h3 { margin: 0; font-size: 13px; }
+    .tenant-history-table { min-width: 620px; background: rgba(255,255,255,0.018); }
+    .tenant-history-table th { padding: 10px 12px; }
+    .tenant-history-table td { padding: 12px; }
+    .tenant-month-details .payment-list { padding: 12px 16px 14px 28px; }
+    .tenant-month-details .payment-item { display: grid; grid-template-columns: 140px 170px minmax(180px, 1fr) minmax(160px, 1fr) 100px; gap: 12px; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.04); color: var(--foreground-subtle); font-size: 12px; }
+    .tenant-month-details .payment-item:last-child { border-bottom: 0; }
+    .tenant-month-details .payment-item .amount { font-size: 13px; }
+    @media (max-width: 760px) { .tenant-month-details .payment-item { grid-template-columns: 1fr 1fr; } .tenant-month-details .payment-item .payment-description { grid-column: 1 / -1; } }
+  ` + `</style>
+  <script>` + workspaceCalendarScript + `</script>
 </head>
 <body>
   <div class="app">
@@ -2274,7 +2312,7 @@ var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html
             <thead><tr><th>租客</th><th>付款人</th><th>租金</th><th>账单安排</th><th>房间</th><th>创建时间</th><th></th></tr></thead>
             <tbody>
               {{range .Rows}}
-              <tr>
+              <tr class="tenant-row" tabindex="0" role="button" aria-expanded="false" aria-controls="tenant-billing-{{.ID}}" data-tenant-target="tenant-billing-{{.ID}}">
                 <td><strong>{{.Name}}</strong><br><span class="mono">{{.ID}}</span></td>
                 <td>{{if .PayerNameHint}}{{.PayerNameHint}}{{else}}暂无付款人别名{{end}}<br><span class="mono">编号：{{if .PayerID}}{{.PayerID}}{{else}}暂无{{end}}</span></td>
                 <td class="amount">{{.RentDisplay}}</td>
@@ -2283,6 +2321,18 @@ var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html
                 <td class="mono">{{.CreatedAt}}</td>
                 <td><a class="btn subtle" href="/tenants?edit={{.ID}}">编辑</a></td>
               </tr>
+              <tr id="tenant-billing-{{.ID}}" class="tenant-history-row" hidden><td colspan="7"><div class="tenant-history">
+                <div class="tenant-history-head"><h3>最近三个月缴费</h3><span class="tiny">应收账单 → 已确认流水</span></div>
+                {{if .BillingHistory}}
+                <div class="table-wrap"><table class="tenant-history-table">
+                  <thead><tr><th>月份</th><th>应收</th><th>实际收</th><th>未收</th><th>状态</th></tr></thead>
+                  <tbody>{{range .BillingHistory}}
+                    <tr class="tenant-month-row" tabindex="0" role="button" aria-expanded="false" aria-controls="tenant-month-{{.ObligationID}}" data-month-target="tenant-month-{{.ObligationID}}"><td><strong>{{.PeriodLabel}}</strong><br><span class="mono">应缴日 {{.DueDate}}</span></td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span></td></tr>
+                    <tr id="tenant-month-{{.ObligationID}}" class="tenant-month-details" hidden><td colspan="5"><div class="payment-list"><h3>缴费流水明细</h3>{{if .Payments}}{{range .Payments}}<div class="payment-item"><span class="amount">{{.AmountDisplay}}</span><span class="mono">{{.DateDisplay}}</span><span class="payment-description">{{.Description}}</span><span class="mono">参考号：{{.Reference}}</span><span class="mono">{{.ConfirmationSource}}</span></div>{{end}}{{else}}<div class="tiny">该月暂无已确认缴费。</div>{{end}}</div></td></tr>
+                  {{end}}</tbody>
+                </table></div>
+                {{else}}<div class="empty">最近三个月暂无适用账单。</div>{{end}}
+              </div></td></tr>
               {{end}}
             </tbody>
           </table>
@@ -2291,6 +2341,33 @@ var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html
       </section>
     </main>
   </div>
+  <script>
+    const toggleDetails = (toggle, details) => {
+      const expanded = toggle.getAttribute("aria-expanded") === "true";
+      toggle.setAttribute("aria-expanded", String(!expanded));
+      details.hidden = expanded;
+    };
+    for (const row of document.querySelectorAll("[data-tenant-target]")) {
+      const details = document.getElementById(row.dataset.tenantTarget);
+      if (!details) continue;
+      row.addEventListener("click", (event) => {
+        if (event.target.closest("a, button, input, select, textarea")) return;
+        toggleDetails(row, details);
+      });
+      row.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggleDetails(row, details); }
+      });
+    }
+    for (const row of document.querySelectorAll("[data-month-target]")) {
+      const details = document.getElementById(row.dataset.monthTarget);
+      if (!details) continue;
+      row.addEventListener("click", (event) => { event.stopPropagation(); toggleDetails(row, details); });
+      row.addEventListener("keydown", (event) => {
+        event.stopPropagation();
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggleDetails(row, details); }
+      });
+    }
+  </script>
 </body>
 </html>
 `))
@@ -2301,7 +2378,8 @@ var expenseTemplate = template.Must(template.New("expenses").Parse(`<!doctype ht
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RentOps Expenses</title>
-  <style>` + workspacePageCSS + `</style>
+  <style>` + workspacePageCSS + workspaceCalendarCSS + `</style>
+  <script>` + workspaceCalendarScript + `</script>
 </head>
 <body>
   <div class="app">

@@ -1,0 +1,2 @@
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Implementation follows the existing rent obligation and confirmed allocation hierarchy for tenant history."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Implementation adds regression coverage for JULY26 and SEP26 compact month-year descriptions."}

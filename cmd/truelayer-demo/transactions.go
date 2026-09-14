@@ -64,6 +64,17 @@ type transactionService struct {
 	db *gorm.DB
 }
 
+var pendingMatchStatuses = []string{"candidate", "needs_review", "unmatched"}
+
+func isPendingMatchStatus(status string) bool {
+	for _, pendingStatus := range pendingMatchStatuses {
+		if status == pendingStatus {
+			return true
+		}
+	}
+	return false
+}
+
 func newTransactionService(db *gorm.DB) *transactionService {
 	return &transactionService{db: db}
 }
@@ -212,6 +223,7 @@ func filtersFromQuery(q url.Values) transactionFilters {
 		Direction:   strings.TrimSpace(q.Get("direction")),
 		MatchStatus: strings.TrimSpace(q.Get("match_status")),
 		PeriodMonth: strings.TrimSpace(q.Get("period")),
+		PendingOnly: strings.TrimSpace(q.Get("pending")) == "1",
 	}
 }
 
@@ -219,6 +231,7 @@ type transactionFilters struct {
 	Direction   string
 	MatchStatus string
 	PeriodMonth string
+	PendingOnly bool
 }
 
 func validateTransactionFilters(filters transactionFilters) error {
@@ -333,6 +346,9 @@ func (s *transactionService) listTransactions(ctx context.Context, userID uint64
 	if filters.Direction != "" {
 		q = q.Where("direction = ?", filters.Direction)
 	}
+	if filters.PendingOnly {
+		q = q.Where("direction = ?", "income").Where("match_status IN ?", pendingMatchStatuses)
+	}
 	if filters.MatchStatus != "" {
 		q = q.Where("match_status = ?", filters.MatchStatus)
 	}
@@ -350,11 +366,32 @@ func (s *transactionService) listTransactions(ctx context.Context, userID uint64
 	return rows, nil
 }
 
+func (s *transactionService) countPendingTransactions(ctx context.Context, userID uint64, periodMonth string) (int64, error) {
+	q := s.db.WithContext(ctx).
+		Model(&paymentTransaction{}).
+		Where("user_id = ? AND direction = ? AND match_status IN ?", userID, "income", pendingMatchStatuses)
+	if periodMonth != "" {
+		start, err := parsePeriodMonth(periodMonth)
+		if err != nil {
+			return 0, err
+		}
+		q = q.Where("transaction_time >= ? AND transaction_time < ?", start, start.AddDate(0, 1, 0))
+	}
+	var count int64
+	if err := q.Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 func fallbackTransactionPageRows(result demoResult, filters transactionFilters) []transactionPageRow {
 	rows := normalizePaymentTransactions(result)
 	pageRows := make([]transactionPageRow, 0, len(rows))
 	for _, input := range rows {
 		if filters.Direction != "" && input.Direction != filters.Direction {
+			continue
+		}
+		if filters.PendingOnly && (input.Direction != "income" || !isPendingMatchStatus(input.MatchStatus)) {
 			continue
 		}
 		if filters.MatchStatus != "" && input.MatchStatus != filters.MatchStatus {

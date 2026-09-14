@@ -27,6 +27,45 @@ func testApp() app {
 	}}
 }
 
+func TestWorkspaceTemplatesIncludeSharedCalendarPicker(t *testing.T) {
+	tests := []struct {
+		name   string
+		render func(*strings.Builder) error
+	}{
+		{name: "billing", render: func(body *strings.Builder) error {
+			return billingTemplate.Execute(body, billingPageData{})
+		}},
+		{name: "dashboard", render: func(body *strings.Builder) error {
+			return rentDashboardTemplate.Execute(body, rentDashboardPageData{})
+		}},
+		{name: "tenants", render: func(body *strings.Builder) error {
+			return tenantTemplate.Execute(body, tenantPageData{})
+		}},
+		{name: "expenses", render: func(body *strings.Builder) error {
+			return expenseTemplate.Execute(body, expensePageData{})
+		}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var body strings.Builder
+			if err := test.render(&body); err != nil {
+				t.Fatalf("render template: %v", err)
+			}
+			page := body.String()
+			for _, expected := range []string{
+				".calendar-popover",
+				"calendar-input",
+				"input[type=\"date\"], input[type=\"month\"]",
+			} {
+				if !strings.Contains(page, expected) {
+					t.Fatalf("expected shared calendar picker marker %q", expected)
+				}
+			}
+		})
+	}
+}
+
 func TestAuthURLIncludesOAuthParameters(t *testing.T) {
 	a := app{cfg: config{
 		AuthBaseURL: "https://auth.truelayer-sandbox.com",
@@ -566,7 +605,7 @@ func TestBillingTemplateRendersTransactionFilters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"name=\"period\"", "name=\"direction\"", "name=\"match_status\"", "Boiler repair", "支出"} {
+	for _, expected := range []string{"name=\"period\"", "name=\"direction\"", "name=\"match_status\"", `onchange="this.form.submit()"`, "Boiler repair", "支出"} {
 		if !strings.Contains(body.String(), expected) {
 			t.Fatalf("billing page missing %q: %s", expected, body.String())
 		}
@@ -823,6 +862,47 @@ func TestValidateTransactionFilters(t *testing.T) {
 	}
 	if err := validateTransactionFilters(transactionFilters{PeriodMonth: "2026-13"}); err == nil {
 		t.Fatal("invalid period should be rejected")
+	}
+}
+
+func TestFiltersFromQuerySupportsPendingOnly(t *testing.T) {
+	query := url.Values{}
+	query.Set("period", "2026-09")
+	query.Set("pending", "1")
+	filters := filtersFromQuery(query)
+	if filters.PeriodMonth != "2026-09" || !filters.PendingOnly {
+		t.Fatalf("unexpected pending filters: %+v", filters)
+	}
+}
+
+func TestFallbackTransactionPageRowsFiltersPendingTransactionsByPeriod(t *testing.T) {
+	result := demoResult{Accounts: []demoAccount{{
+		Account: account{AccountID: "acct-1", DisplayName: "Rent account", Currency: "EUR"},
+		Transactions: json.RawMessage(`{"results":[
+			{"transaction_id":"sept-income","provider_transaction_id":"sept-income","timestamp":"2026-09-09T00:00:00Z","amount":950,"transaction_type":"CREDIT"},
+			{"transaction_id":"oct-income","provider_transaction_id":"oct-income","timestamp":"2026-10-09T00:00:00Z","amount":950,"transaction_type":"CREDIT"},
+			{"transaction_id":"sept-expense","provider_transaction_id":"sept-expense","timestamp":"2026-09-10T00:00:00Z","amount":-25,"transaction_type":"DEBIT"}
+		]}`),
+	}}}
+
+	rows := fallbackTransactionPageRows(result, transactionFilters{PeriodMonth: "2026-09", PendingOnly: true})
+	if len(rows) != 1 || rows[0].TransactionID != "sept-income" {
+		t.Fatalf("unexpected pending rows: %+v", rows)
+	}
+}
+
+func TestRentDashboardTemplateLinksPendingCountToSelectedPeriod(t *testing.T) {
+	var body strings.Builder
+	if err := rentDashboardTemplate.Execute(&body, rentDashboardPageData{
+		Period:       "2026-09",
+		PeriodLabel:  "2026年9月",
+		PendingCount: 4,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	page := body.String()
+	if !strings.Contains(page, `href="/billing?period=2026-09&amp;pending=1"`) {
+		t.Fatalf("pending count is not linked to the selected period: %s", page)
 	}
 }
 
@@ -1105,6 +1185,26 @@ func TestParseReferencedPeriodSupportedFormats(t *testing.T) {
 			got, ok := parseReferencedPeriod(text, txTime)
 			if !ok {
 				t.Fatal("expected period reference")
+			}
+			want, _ := time.Parse(dateLayout, wantText)
+			if !got.Equal(want) {
+				t.Fatalf("period=%s want %s", got.Format(dateLayout), wantText)
+			}
+		})
+	}
+}
+
+func TestParseReferencedPeriodUsesYearFromCompactEnglishMonthYear(t *testing.T) {
+	txTime := time.Date(2027, 9, 2, 8, 0, 0, 0, time.UTC)
+	cases := map[string]string{
+		"REMAIN50 *MOBI RENT JULY26": "2026-07-01",
+		"RENT SEP26":                 "2026-09-01",
+	}
+	for text, wantText := range cases {
+		t.Run(text, func(t *testing.T) {
+			got, ok := parseReferencedPeriod(text, txTime)
+			if !ok {
+				t.Fatal("expected compact English month-year reference")
 			}
 			want, _ := time.Parse(dateLayout, wantText)
 			if !got.Equal(want) {

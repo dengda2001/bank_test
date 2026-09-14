@@ -8,9 +8,10 @@ var billingTemplate = template.Must(template.New("billing").Parse(`<!doctype htm
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RentOps Transactions</title>
-  <style>` + workspacePageCSS + `
+  <style>` + workspacePageCSS + workspaceCalendarCSS + `
     .filterbar { display: grid; grid-template-columns: 150px 170px 180px auto; align-items: end; gap: 10px; margin-bottom: 18px; }
     .filterbar label { margin: 0; }
+    .filterbar input[type="month"] { min-height: 40px; border-radius: 10px; }
     .filter-actions { display: flex; align-items: end; gap: 8px; }
     .filterbar .btn { min-height: 40px; margin-top: 0; }
     .filterbar .btn.subtle { color: var(--foreground-muted); background: transparent; box-shadow: none; }
@@ -43,6 +44,7 @@ var billingTemplate = template.Must(template.New("billing").Parse(`<!doctype htm
     @media (max-width: 820px) { .filterbar { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 480px) { .filterbar { grid-template-columns: 1fr; } }
   </style>
+  <script>` + workspaceCalendarScript + `</script>
 </head>
 <body>
   <div class="app">
@@ -76,7 +78,7 @@ var billingTemplate = template.Must(template.New("billing").Parse(`<!doctype htm
       {{if eq .Message "legacy_imported"}}<div class="notice ok">旧版 JSON 和 JSONL 数据已导入。</div>{{end}}
       {{if eq .Error "legacy_import_failed"}}<div class="notice error">旧数据导入失败，请检查源文件。</div>{{end}}
       <form class="filterbar" method="get" action="/billing" aria-label="Transaction filters">
-        <label for="period">月份<input id="period" name="period" type="month" value="{{.PeriodFilter}}"></label>
+        <label for="period">月份<input id="period" name="period" type="month" value="{{.PeriodFilter}}" onchange="this.form.submit()"></label>
         <label for="direction">类型<select id="direction" name="direction"><option value="">全部</option><option value="income" {{if eq .DirectionFilter "income"}}selected{{end}}>收入</option><option value="expense" {{if eq .DirectionFilter "expense"}}selected{{end}}>支出</option></select></label>
         <label for="match_status">关联状态<select id="match_status" name="match_status"><option value="">全部状态</option><option value="matched" {{if eq .MatchStatusFilter "matched"}}selected{{end}}>已关联</option><option value="candidate" {{if eq .MatchStatusFilter "candidate"}}selected{{end}}>待确认</option><option value="unmatched" {{if eq .MatchStatusFilter "unmatched"}}selected{{end}}>未关联</option><option value="needs_review" {{if eq .MatchStatusFilter "needs_review"}}selected{{end}}>需处理</option></select></label>
         <div class="filter-actions"><button class="btn" type="submit">应用筛选</button><a class="btn subtle" href="/billing">清除筛选</a></div>

@@ -119,6 +119,63 @@ func (a *app) handleCallback(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
+### Scenario: Transaction Description Month Parsing
+
+#### 1. Scope / Trigger
+
+- Trigger: Any bank transaction matching or billing-history projection that derives a billing month from `Description` or `Reference`.
+- Keep date extraction in the shared `parseReferencedPeriod` path so matching and UI projections use the same interpretation.
+
+#### 2. Signatures
+
+- `parseReferencedPeriod(text string, transactionTime time.Time) (time.Time, bool)` returns the first recognized billing period and whether the description contained a usable period.
+- `selectObligationForTransaction(tx transactionRow, obligations []obligationRow) (obligationRow, bool)` consumes the parsed period when selecting a billing obligation.
+
+#### 3. Contracts
+
+- Supported explicit formats include numeric month/year (`9/26`, `09/2026`), spaced English month/year (`Sep 2026`), Chinese year/month, and compact English month/year (`JULY26`, `SEP26`, `JULY2026`).
+- A two-digit year in a compact English token maps to `2000 + year`.
+- An explicit year in the description always takes precedence over `transactionTime`; `transactionTime` is only a fallback for month-only references such as `JULY`.
+- The parser returns the first valid period in the combined description/reference text, preserving the existing matching precedence.
+
+#### 4. Validation & Error Matrix
+
+- Valid month and year -> return the first day of that month with `true`.
+- Invalid month/year token -> ignore that token and continue with other supported formats; if none match, return the existing month-only or no-period fallback.
+- Unknown description text -> return `false` without inventing a year.
+- Compact token such as `JULY26` with a transaction dated in 2027 -> return July 2026, never July 2027.
+
+#### 5. Good/Base/Bad Cases
+
+- Good: `REMAIN50 *MOBI RENT JULY26` on a 2027 transaction matches `2026-07-01`.
+- Base: `RENT 9/26` matches September 2026; `REMAIN 50 EURO *MOBI RENT 8/26` matches August 2026.
+- Bad: Treating `JULY26` as month-only and deriving 2027 from the transaction timestamp.
+
+#### 6. Tests Required
+
+- Unit-test compact English month/year tokens with a transaction timestamp in a different year; assert both `2026-07-01` and `2026-09-01` examples.
+- Retain tests for numeric, spaced English, Chinese, month-only, and no-period inputs.
+- Run the billing matching and full backend test suites after changing regex precedence or fallback behavior.
+
+#### 7. Wrong vs Correct
+
+Wrong:
+
+```go
+// JULY26 is reduced to JULY, then the transaction year is inferred.
+month := monthOnlyRegex.FindStringSubmatch(text)
+return time.Date(transactionTime.Year(), monthNumber(month), 1, 0, 0, 0, 0, time.UTC), true
+```
+
+Correct:
+
+```go
+if m := compactEnglishMonthYearRegex.FindStringSubmatch(text); len(m) == 3 {
+    year := parseCompactYear(m[2])
+    return time.Date(year, monthNames[strings.ToLower(m[1])], 1, 0, 0, 0, 0, time.UTC), true
+}
+```
+
 
 ---
 

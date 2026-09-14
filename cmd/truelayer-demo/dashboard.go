@@ -63,8 +63,8 @@ func (a *app) handleRentDashboard(w http.ResponseWriter, r *http.Request) {
 				data.CollectionPercent = 100
 			}
 		}
-		var pendingCount int64
-		if err := a.db.WithContext(r.Context()).Model(&paymentTransaction{}).Where("user_id = ? AND direction = ? AND match_status IN ?", userID, "income", []string{"candidate", "needs_review", "unmatched"}).Count(&pendingCount).Error; err != nil {
+		pendingCount, err := newTransactionService(a.db).countPendingTransactions(r.Context(), userID, data.Period)
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -72,8 +72,10 @@ func (a *app) handleRentDashboard(w http.ResponseWriter, r *http.Request) {
 	} else {
 		tenants, _ := a.loadTenants()
 		expenses, _ := a.loadExpenses()
+		result, _ := a.loadLatestDemoResult()
 		data.TenantCount = len(tenants)
 		data.ExpenseCount = len(expenses)
+		data.PendingCount = len(fallbackTransactionPageRows(result, transactionFilters{PeriodMonth: data.Period, PendingOnly: true}))
 		data.ExpenseTotal = formatMoney(sumExpenses(expenses), "EUR", 2)
 		data.ExpectedTotal = formatMoney(sumTenantRent(tenants), "EUR", 2)
 		data.PeriodLabel = fmt.Sprintf("%d年%d月", periodMonth.Year(), periodMonth.Month())
@@ -90,7 +92,7 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Parse(`
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RentOps Dashboard</title>
-  <style>` + workspacePageCSS + `
+  <style>` + workspacePageCSS + workspaceCalendarCSS + `
     .dashboard-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
     .dashboard-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
     .dashboard-toolbar form { display: flex; align-items: end; gap: 10px; }
@@ -112,6 +114,9 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Parse(`
     .review-link:hover { color: #fff; }
     .status.partial { color: #ffe0a7; background: rgba(233,184,114,0.10); }
     .status.paid { color: #cbffe1; background: rgba(125,211,168,0.10); }
+    .metric-link { display: block; color: inherit; text-decoration: none; }
+    .metric-link:hover { border-color: rgba(104,114,217,0.48); }
+    .metric-link:focus-visible { outline: 2px solid rgba(104,114,217,0.9); outline-offset: 3px; }
     .rent-row { cursor: pointer; }
     .rent-row:hover, .rent-row:focus { background: rgba(255,255,255,0.035); outline: none; }
     .rent-row td:first-child::after { content: " +"; margin-left: 6px; color: var(--foreground-muted); font: 700 12px var(--mono); }
@@ -126,6 +131,7 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Parse(`
     @media (max-width: 900px) { .dashboard-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 640px) { .dashboard-summary { grid-template-columns: 1fr; } .dashboard-toolbar { align-items: stretch; flex-direction: column; min-width: 0; } .dashboard-toolbar form { display: flex; width: 100%; max-width: 100%; min-width: 0; flex-wrap: wrap; align-items: stretch; gap: 8px; } .dashboard-toolbar form label { order: 1; width: 100%; flex: 1 1 100%; min-width: 0; } .dashboard-toolbar form input { min-width: 0; } .month-nav { order: 2; flex: 0 0 42px; } .dashboard-toolbar form > .btn:not(.subtle) { display: none; } .dashboard-toolbar form > .btn.subtle { order: 3; flex: 1 1 calc(100% - 50px); min-width: 0; } }
   </style>
+  <script>` + workspaceCalendarScript + `</script>
 </head>
 <body>
   <div class="app">
@@ -160,11 +166,11 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Parse(`
         <div class="panel metric metric-primary"><div class="label">本月应收</div><strong>{{.ExpectedTotal}}</strong><span>本月租金账单</span></div>
         <div class="panel metric metric-success"><div class="label">已收租金</div><strong>{{.PaidTotal}}</strong><span>{{.PaidCount}} 户已缴清</span></div>
         <div class="panel metric metric-warning"><div class="label">剩余未收</div><strong>{{.BalanceTotal}}</strong><span>{{.OpenCount}} 户未缴，{{.PartialCount}} 户部分缴纳</span></div>
-        <div class="panel metric"><div class="label">待处理</div><strong>{{.PendingCount}}</strong><span>笔流水需要关联或确认</span></div>
+        <a class="panel metric metric-link" href="/billing?period={{.Period}}&amp;pending=1" aria-label="查看{{.PeriodLabel}}待处理流水"><div class="label">待处理</div><strong>{{.PendingCount}}</strong><span>笔流水需要关联或确认 · 查看对应流水</span></a>
       </section>
       <section class="panel collection-panel" aria-label="收款进度"><div class="collection-head"><strong>收款进度</strong><span>{{.CollectionPercent}}%</span></div><div class="progress-track"><div class="progress-value" style="width: {{.CollectionPercent}}%"></div></div><div class="tiny">已收 {{.PaidTotal}}，本月还差 {{.BalanceTotal}}</div></section>
       <section class="panel surface" aria-labelledby="rent-status-title">
-        <div class="panel-head"><h2 id="rent-status-title">租客缴费情况</h2><a class="tiny review-link" href="/billing?match_status=needs_review">{{.ReviewCount}} 笔待确认</a></div>
+        <div class="panel-head"><h2 id="rent-status-title">租客缴费情况</h2><a class="tiny review-link" href="/billing?period={{.Period}}&amp;match_status=needs_review">{{.ReviewCount}} 笔待确认</a></div>
         {{if .Rows}}
         <div class="table-wrap"><table>
           <thead><tr><th>租客</th><th>房间</th><th>应缴日</th><th>应收</th><th>已收</th><th>未收</th><th>状态</th></tr></thead>

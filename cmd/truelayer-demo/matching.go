@@ -179,13 +179,14 @@ func normalizeMatchText(value string) string {
 }
 
 var (
-	yearMonthPattern      = regexp.MustCompile(`\b(20\d{2})[-/](0?[1-9]|1[0-2])\b`)
-	monthYearPattern      = regexp.MustCompile(`\b(0?[1-9]|1[0-2])/(20\d{2})\b`)
-	shortMonthYearPattern = regexp.MustCompile(`\b(0?[1-9]|1[0-2])/(\d{2})\b`)
-	chineseYearMonthRegex = regexp.MustCompile(`(20\d{2})年(1[0-2]|0?[1-9])月`)
-	chineseMonthRegex     = regexp.MustCompile(`(^|[^\d])(1[0-2]|0?[1-9])月`)
-	englishMonthYearRegex = regexp.MustCompile(`(?i)\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t)?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(20\d{2})\b`)
-	numericRentRegex      = regexp.MustCompile(`(?i)\brent\s+(0?[1-9]|1[0-2])\b`)
+	yearMonthPattern             = regexp.MustCompile(`\b(20\d{2})[-/](0?[1-9]|1[0-2])\b`)
+	monthYearPattern             = regexp.MustCompile(`\b(0?[1-9]|1[0-2])/(20\d{2})\b`)
+	shortMonthYearPattern        = regexp.MustCompile(`\b(0?[1-9]|1[0-2])/(\d{2})\b`)
+	chineseYearMonthRegex        = regexp.MustCompile(`(20\d{2})年(1[0-2]|0?[1-9])月`)
+	chineseMonthRegex            = regexp.MustCompile(`(^|[^\d])(1[0-2]|0?[1-9])月`)
+	compactEnglishMonthYearRegex = regexp.MustCompile(`(?i)\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t)?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(20\d{2}|\d{2})\b`)
+	englishMonthYearRegex        = regexp.MustCompile(`(?i)\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t)?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(20\d{2})\b`)
+	numericRentRegex             = regexp.MustCompile(`(?i)\brent\s+(0?[1-9]|1[0-2])\b`)
 )
 
 var monthNames = map[string]time.Month{
@@ -228,6 +229,18 @@ func parseReferencedPeriod(text string, transactionTime time.Time) (time.Time, b
 	}
 	if m := chineseYearMonthRegex.FindStringSubmatch(text); len(m) == 3 {
 		return periodFromParts(m[1], m[2])
+	}
+	if m := compactEnglishMonthYearRegex.FindStringSubmatch(text); len(m) == 3 {
+		month, ok := monthNames[strings.ToLower(m[1])]
+		if ok {
+			year, err := strconv.Atoi(m[2])
+			if err == nil {
+				if year < 100 {
+					year += 2000
+				}
+				return time.Date(year, month, 1, 0, 0, 0, 0, time.UTC), true
+			}
+		}
 	}
 	if m := englishMonthYearRegex.FindStringSubmatch(text); len(m) == 3 {
 		month, ok := monthNames[strings.ToLower(m[1])]

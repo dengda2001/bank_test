@@ -212,6 +212,89 @@ if err := a.saveTenants(tenants); err != nil {
   `RENTOPS_EXPENSE_FILE` so verification does not create untracked demo data in
   the repo.
 
+## Scenario: Tenant Billing History Projection
+
+### 1. Scope / Trigger
+
+- Trigger: Any tenant-facing or landlord-facing view that displays multiple
+  billing months and payment details together.
+- Applies to the database-backed `/tenants` history projection and similar
+  bounded rent-history views.
+
+### 2. Signatures
+
+- `obligationService.listTenantBillingHistory(ctx, userID, endMonth, monthCount)`
+  returns `map[tenantID][]tenantBillingMonth`.
+- `buildTenantBillingHistory(tenants, obligations, paymentRows, now)` owns the
+  typed in-memory grouping from monthly bills to confirmed payment details.
+- The persisted hierarchy is `rent_obligations` (parent) →
+  `payment_allocations` (zero or many children) → `payment_transactions`
+  (source detail).
+
+### 3. Contracts
+
+- A three-month request normalizes `endMonth` with `monthStart` and queries the
+  inclusive current month plus the preceding two months.
+- Each eligible tenant/month has at most one `rent_obligations` parent because
+  `(user_id, tenant_id, period_month)` is unique.
+- `tenantBillingMonth.PaidAmount` uses the existing obligation paid total,
+  which is maintained from confirmed allocations and must match the child
+  detail sum. Child rows are joined with the original transaction for amount,
+  time, description, reference, and confirmation source.
+- Only `payment_allocations.status = 'confirmed'` joined to income
+  `payment_transactions` contributes to actual rent received. Unmatched,
+  candidate, and needs-review transactions remain excluded.
+- History view models are typed presentation data; templates must not query or
+  expose GORM database structs directly.
+
+### 4. Validation & Error Matrix
+
+- `userID == 0` or `monthCount < 1` -> return a service error; do not query.
+- Cross-user tenant, obligation, allocation, or transaction -> exclude it from
+  the projection through ownership predicates and joins.
+- Tenant not active for a month, before billing/rent start, or after rent end ->
+  do not lazily create or display an obligation for that month.
+- Eligible month with no confirmed allocation -> display the obligation with
+  paid amount zero and an explicit empty detail state.
+- Repeated GET/refresh -> obligation generation remains idempotent through the
+  existing unique key; no payment allocation or transaction rows are written.
+
+### 5. Good/Base/Bad Cases
+
+- Good: Batch-fetch the bounded obligations and child detail rows, group in
+  memory, and render `tenant → month → payment` with both levels collapsed.
+- Base: A tenant with three confirmed transfers in one month gets one monthly
+  summary and three child detail rows.
+- Bad: Adding a separate monthly payment-group table, summing all bank income
+  regardless of confirmation, or querying one allocation list per tenant/month.
+
+### 6. Tests Required
+
+- Projection unit test asserts newest-first month order and one parent per
+  month, including three children under one month.
+- Projection unit test asserts zero-payment months remain visible and
+  obligations for other tenants are ignored.
+- Database/service tests should assert three-month bounds, active-date rules,
+  confirmed-status filtering, and user isolation.
+- Template/browser tests should assert collapsed `aria-expanded` toggles,
+  independent month expansion, and no nested-toggle event bubbling.
+
+### 7. Wrong vs Correct
+
+Wrong:
+
+```go
+// Rebuilds a second parent concept and counts every incoming bank transaction.
+monthlyGroup := groupTransactionsByCalendarMonth(allIncomeTransactions)
+```
+
+Correct:
+
+```go
+// Use the existing persisted bill as parent and confirmed allocations as children.
+history := buildTenantBillingHistory(tenants, obligations, confirmedPaymentRows, now)
+```
+
 ## Scenario: Remembered Payer Association and Explicit Rent Month
 
 ### 1. Scope / Trigger

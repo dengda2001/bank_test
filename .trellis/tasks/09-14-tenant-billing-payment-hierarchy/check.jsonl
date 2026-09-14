@@ -1,0 +1,2 @@
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Tenant billing history must use user-scoped obligations and confirmed allocations as the parent-child accounting projection."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Compact English month references must preserve explicit years instead of falling back to the transaction year."}

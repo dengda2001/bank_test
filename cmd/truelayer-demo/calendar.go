@@ -1,0 +1,409 @@
+package main
+
+const workspaceCalendarCSS = `
+    .calendar-control {
+      position: relative;
+      width: 100%;
+    }
+    .calendar-input {
+      min-height: 40px;
+      border-radius: 10px;
+      padding-right: 44px;
+      cursor: pointer;
+    }
+    .dashboard-toolbar .calendar-input {
+      min-height: 42px;
+      border-radius: 14px;
+    }
+    .calendar-input::placeholder {
+      color: var(--foreground-muted);
+      opacity: 0.78;
+    }
+    .calendar-trigger {
+      position: absolute;
+      top: 50%;
+      right: 7px;
+      width: 30px;
+      height: 30px;
+      transform: translateY(-50%);
+      border: 0;
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+      color: var(--foreground-muted);
+      background: rgba(255,255,255,0.06);
+      cursor: pointer;
+      transition: background 160ms ease, color 160ms ease;
+    }
+    .calendar-trigger::before {
+      content: "▦";
+      font-size: 16px;
+      line-height: 1;
+    }
+    .calendar-trigger:hover,
+    .calendar-control.is-open .calendar-trigger {
+      color: var(--foreground);
+      background: rgba(104,114,217,0.24);
+    }
+    .calendar-popover {
+      position: absolute;
+      z-index: 20;
+      top: calc(100% + 8px);
+      left: 0;
+      width: min(360px, calc(100vw - 28px));
+      padding: 16px;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 18px;
+      color: var(--foreground);
+      background: #292a31;
+      box-shadow: 0 18px 45px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-4px) scale(0.98);
+      transform-origin: top left;
+      transition: opacity 140ms ease, transform 140ms ease;
+    }
+    .calendar-control.is-open .calendar-popover {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0) scale(1);
+    }
+    .calendar-popover[data-calendar-kind="date"] {
+      width: min(340px, calc(100vw - 28px));
+    }
+    .calendar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 30px;
+    }
+    .calendar-title {
+      color: var(--foreground);
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .calendar-nav {
+      width: 30px;
+      height: 30px;
+      border: 0;
+      border-radius: 9px;
+      color: var(--foreground-subtle);
+      background: transparent;
+      cursor: pointer;
+      font-size: 20px;
+      line-height: 1;
+    }
+    .calendar-nav:hover {
+      color: var(--foreground);
+      background: rgba(255,255,255,0.08);
+    }
+    .calendar-divider {
+      height: 1px;
+      margin: 10px 0 12px;
+      background: rgba(255,255,255,0.78);
+    }
+    .calendar-month-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 7px;
+    }
+    .calendar-day-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 4px;
+    }
+    .calendar-weekday {
+      padding: 3px 0 7px;
+      color: var(--foreground-muted);
+      font: 700 10px var(--mono);
+      text-align: center;
+    }
+    .calendar-option {
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      color: var(--foreground);
+      background: transparent;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .calendar-option:hover {
+      border-color: rgba(147,197,253,0.72);
+      background: rgba(147,197,253,0.16);
+    }
+    .calendar-option.is-selected {
+      border-color: rgba(219,234,254,0.92);
+      color: #142238;
+      background: #93c5fd;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.38);
+    }
+    .calendar-option.is-today:not(.is-selected) {
+      border-color: rgba(147,197,253,0.65);
+      color: #bfdbfe;
+    }
+    .calendar-option.is-outside {
+      color: rgba(255,255,255,0.28);
+    }
+    .calendar-option:disabled {
+      cursor: not-allowed;
+      opacity: 0.28;
+    }
+    .calendar-footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 13px;
+      padding-top: 11px;
+      border-top: 1px solid rgba(255,255,255,0.10);
+    }
+    .calendar-action {
+      min-height: 30px;
+      padding: 0 8px;
+      border: 0;
+      border-radius: 8px;
+      color: #93c5fd;
+      background: transparent;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .calendar-action:hover {
+      background: rgba(147,197,253,0.12);
+    }
+    @media (max-width: 640px) {
+      .calendar-popover {
+        position: fixed;
+        top: auto;
+        right: 14px;
+        bottom: 14px;
+        left: 14px;
+        width: auto;
+        max-width: none;
+        transform-origin: bottom center;
+      }
+      .calendar-control.is-open .calendar-popover {
+        transform: translateY(0) scale(1);
+      }
+    }
+`
+
+const workspaceCalendarScript = `
+(function () {
+  const monthLabels = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+  const weekdayLabels = ['日', '一', '二', '三', '四', '五', '六'];
+
+  const pad = (value) => String(value).padStart(2, '0');
+  const today = () => {
+    const date = new Date();
+    return { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate() };
+  };
+  const parseValue = (kind, value) => {
+    const parts = String(value || '').split('-').map(Number);
+    if (parts.some((part) => !Number.isFinite(part))) return null;
+    if (kind === 'month' && parts.length === 2 && parts[0] > 0 && parts[1] >= 1 && parts[1] <= 12) {
+      return { year: parts[0], month: parts[1], day: 1 };
+    }
+    if (kind === 'date' && parts.length === 3 && parts[0] > 0 && parts[1] >= 1 && parts[1] <= 12 && parts[2] >= 1 && parts[2] <= 31) {
+      return { year: parts[0], month: parts[1], day: parts[2] };
+    }
+    return null;
+  };
+  const formatValue = (kind, value) => {
+    if (!value) return '';
+    const month = pad(value.month);
+    return kind === 'month' ? value.year + '-' + month : value.year + '-' + month + '-' + pad(value.day);
+  };
+  const formatDisplay = (kind, value) => {
+    if (!value) return '';
+    const month = pad(value.month);
+    return kind === 'month'
+      ? value.year + '年' + month + '月'
+      : value.year + '年' + month + '月' + pad(value.day) + '日';
+  };
+  const sameValue = (left, right, kind) => left && right && left.year === right.year && left.month === right.month && (kind === 'month' || left.day === right.day);
+  const daysInMonth = (year, month) => new Date(year, month, 0).getDate();
+  const moveMonth = (value, offset) => {
+    const date = new Date(value.year, value.month - 1 + offset, 1);
+    return { year: date.getFullYear(), month: date.getMonth() + 1, day: 1 };
+  };
+  const button = (className, text, label) => {
+    const element = document.createElement('button');
+    element.type = 'button';
+    element.className = className;
+    element.textContent = text;
+    if (label) element.setAttribute('aria-label', label);
+    return element;
+  };
+
+  function initCalendar(input) {
+    if (input.dataset.calendarReady) return;
+    const kind = input.type === 'month' ? 'month' : 'date';
+    const originalValue = input.value;
+    const originalName = input.name;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'calendar-control';
+    const hidden = document.createElement('input');
+    hidden.type = 'hidden';
+    hidden.name = originalName;
+    hidden.value = originalValue;
+    const trigger = button('calendar-trigger', '', '打开日期选择器');
+    const popover = document.createElement('div');
+    popover.className = 'calendar-popover';
+    popover.dataset.calendarKind = kind;
+    popover.setAttribute('role', 'dialog');
+    popover.setAttribute('aria-label', kind === 'month' ? '选择月份' : '选择日期');
+
+    input.dataset.calendarReady = 'true';
+    input.dataset.calendarKind = kind;
+    input.classList.add('calendar-input');
+    input.type = 'text';
+    input.name = '';
+    input.readOnly = true;
+    input.inputMode = 'none';
+    input.placeholder = kind === 'month' ? '----年--月' : '----年--月--日';
+    input.value = formatDisplay(kind, parseValue(kind, originalValue));
+    input.setAttribute('aria-haspopup', 'dialog');
+    input.setAttribute('aria-expanded', 'false');
+    input.parentNode.insertBefore(wrapper, input);
+    wrapper.appendChild(input);
+    wrapper.appendChild(hidden);
+    wrapper.appendChild(trigger);
+    wrapper.appendChild(popover);
+
+    const state = {
+      selected: parseValue(kind, originalValue),
+      view: parseValue(kind, originalValue) || today()
+    };
+
+    const close = () => {
+      wrapper.classList.remove('is-open');
+      input.setAttribute('aria-expanded', 'false');
+    };
+    const setValue = (value, notify) => {
+      hidden.value = formatValue(kind, value);
+      input.value = formatDisplay(kind, value);
+      state.selected = value;
+      if (notify) {
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    };
+    const isWithinRange = (value) => {
+      const formatted = formatValue(kind, value);
+      const min = input.getAttribute('min');
+      const max = input.getAttribute('max');
+      return (!min || formatted >= min) && (!max || formatted <= max);
+    };
+    const selectValue = (value) => {
+      if (!isWithinRange(value)) return;
+      setValue(value, true);
+      close();
+    };
+    const renderHeader = (title, previousLabel, nextLabel, onPrevious, onNext) => {
+      const header = document.createElement('div');
+      header.className = 'calendar-header';
+      const previous = button('calendar-nav', '‹', previousLabel);
+      const next = button('calendar-nav', '›', nextLabel);
+      previous.addEventListener('click', () => { onPrevious(); render(); });
+      next.addEventListener('click', () => { onNext(); render(); });
+      const heading = document.createElement('strong');
+      heading.className = 'calendar-title';
+      heading.textContent = title;
+      header.append(previous, heading, next);
+      return header;
+    };
+    const renderFooter = () => {
+      const footer = document.createElement('div');
+      footer.className = 'calendar-footer';
+      const clear = button('calendar-action', '清除');
+      const todayButton = button('calendar-action', kind === 'month' ? '本月' : '今天');
+      clear.addEventListener('click', () => { setValue(null, true); close(); });
+      todayButton.addEventListener('click', () => {
+        const current = today();
+        selectValue(kind === 'month' ? current : current);
+      });
+      footer.append(clear, todayButton);
+      return footer;
+    };
+    const renderMonth = () => {
+      const view = state.view;
+      popover.appendChild(renderHeader(view.year + '年', '上一年', '下一年', () => { state.view = { year: view.year - 1, month: view.month, day: 1 }; }, () => { state.view = { year: view.year + 1, month: view.month, day: 1 }; }));
+      const divider = document.createElement('div');
+      divider.className = 'calendar-divider';
+      popover.appendChild(divider);
+      const grid = document.createElement('div');
+      grid.className = 'calendar-month-grid';
+      for (let month = 1; month <= 12; month += 1) {
+        const value = { year: view.year, month, day: 1 };
+        const option = button('calendar-option', monthLabels[month - 1]);
+        if (sameValue(state.selected, value, kind)) option.classList.add('is-selected');
+        if (sameValue(today(), value, kind)) option.classList.add('is-today');
+        option.addEventListener('click', () => selectValue(value));
+        grid.appendChild(option);
+      }
+      popover.appendChild(grid);
+    };
+    const renderDate = () => {
+      const view = state.view;
+      const title = view.year + '年' + pad(view.month) + '月';
+      popover.appendChild(renderHeader(title, '上个月', '下个月', () => { state.view = moveMonth(view, -1); }, () => { state.view = moveMonth(view, 1); }));
+      const divider = document.createElement('div');
+      divider.className = 'calendar-divider';
+      popover.appendChild(divider);
+      const grid = document.createElement('div');
+      grid.className = 'calendar-day-grid';
+      weekdayLabels.forEach((label) => {
+        const weekday = document.createElement('span');
+        weekday.className = 'calendar-weekday';
+        weekday.textContent = label;
+        grid.appendChild(weekday);
+      });
+      const firstDay = new Date(view.year, view.month - 1, 1).getDay();
+      for (let index = 0; index < firstDay; index += 1) grid.appendChild(document.createElement('span'));
+      for (let day = 1; day <= daysInMonth(view.year, view.month); day += 1) {
+        const value = { year: view.year, month: view.month, day };
+        const option = button('calendar-option', String(day));
+        if (sameValue(state.selected, value, kind)) option.classList.add('is-selected');
+        if (sameValue(today(), value, kind)) option.classList.add('is-today');
+        if (!isWithinRange(value)) option.disabled = true;
+        option.addEventListener('click', () => selectValue(value));
+        grid.appendChild(option);
+      }
+      popover.appendChild(grid);
+    };
+    const render = () => {
+      popover.replaceChildren();
+      if (kind === 'month') renderMonth(); else renderDate();
+      popover.appendChild(renderFooter());
+    };
+
+    const open = () => {
+      document.querySelectorAll('.calendar-control.is-open').forEach((element) => {
+        if (element !== wrapper) element.classList.remove('is-open');
+      });
+      state.selected = parseValue(kind, hidden.value);
+      state.view = state.selected || today();
+      render();
+      wrapper.classList.add('is-open');
+      input.setAttribute('aria-expanded', 'true');
+    };
+    input.addEventListener('click', () => wrapper.classList.contains('is-open') ? close() : open());
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); }
+      if (event.key === 'Escape') close();
+    });
+    trigger.addEventListener('click', () => wrapper.classList.contains('is-open') ? close() : open());
+    document.addEventListener('click', (event) => {
+      if (!wrapper.contains(event.target)) close();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') close();
+    });
+  }
+
+  const initCalendars = () => document.querySelectorAll('input[type="date"], input[type="month"]').forEach(initCalendar);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initCalendars);
+  else initCalendars();
+})();
+`
