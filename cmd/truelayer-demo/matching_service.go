@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -61,25 +63,38 @@ func (s *transactionService) reconcileTransactions(ctx context.Context, userID u
 	}
 
 	for _, row := range transactions {
+		if row.MatchedTenantID != nil {
+			continue
+		}
 		decision := decideRentMatch(paymentTransactionInputFromModel(row), tenants, obligations)
-		switch decision.Status {
-		case "matched", "partial":
-			if decision.ConfirmationSource != "auto_id" {
+		if decision.Status == "matched" || decision.Status == "partial" {
+			if decision.ConfirmationSource != "auto_id" && decision.ConfirmationSource != "auto_name" {
 				if err := s.setMatchStatus(ctx, userID, row.ID, "candidate"); err != nil {
 					return err
 				}
 				continue
 			}
-			if err := s.applyAllocation(ctx, userID, row, decision, "auto_id"); err != nil {
-				return err
-			}
-		case "candidate", "needs_review", "unmatched":
-			if err := s.setMatchStatus(ctx, userID, row.ID, decision.Status); err != nil {
+		}
+		if decision.TenantID != 0 {
+			if err := s.setMatchedTenant(ctx, userID, row.ID, decision.TenantID); err != nil {
 				return err
 			}
 		}
+		if decision.Status == "matched" || decision.Status == "partial" {
+			if err := s.applyAllocation(ctx, userID, row, decision, decision.ConfirmationSource); err != nil {
+				return err
+			}
+		} else if err := s.setMatchStatus(ctx, userID, row.ID, decision.Status); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+func (s *transactionService) setMatchedTenant(ctx context.Context, userID, transactionID, tenantID uint64) error {
+	return s.db.WithContext(ctx).Model(&paymentTransaction{}).
+		Where("id = ? AND user_id = ?", transactionID, userID).
+		Update("matched_tenant_id", tenantID).Error
 }
 
 func (s *transactionService) setMatchStatus(ctx context.Context, userID, transactionID uint64, status string) error {
@@ -135,11 +150,14 @@ func (s *transactionService) applyAllocation(ctx context.Context, userID uint64,
 		if err := txdb.Model(&paymentTransaction{}).Where("id = ? AND user_id = ?", transaction.ID, userID).Update("match_status", "matched").Error; err != nil {
 			return err
 		}
+		if err := txdb.Model(&paymentTransaction{}).Where("id = ? AND user_id = ?", transaction.ID, userID).Update("matched_tenant_id", decision.TenantID).Error; err != nil {
+			return err
+		}
 		return nil
 	})
 }
 
-func (s *transactionService) confirmRentMatch(ctx context.Context, userID, transactionID, tenantID uint64) error {
+func (s *transactionService) confirmRentMatch(ctx context.Context, userID, transactionID, tenantID uint64, period *time.Time) error {
 	if userID == 0 || transactionID == 0 || tenantID == 0 {
 		return errors.New("transaction, tenant, and user are required")
 	}
@@ -158,7 +176,10 @@ func (s *transactionService) confirmRentMatch(ctx context.Context, userID, trans
 	if err := s.db.WithContext(ctx).Where("user_id = ? AND tenant_id = ?", userID, tenantID).Order("period_month ASC").Find(&obligations).Error; err != nil {
 		return err
 	}
-	decision := decideForTenant(paymentTransactionInputFromModel(transaction), tenantRow, obligations, "manual_name")
+	if period == nil {
+		return s.bindPayerAndBatch(ctx, userID, transaction, tenantRow, obligations)
+	}
+	decision := decideForTenantInPeriod(paymentTransactionInputFromModel(transaction), tenantRow, obligations, *period, "manual_month")
 	if decision.Status != "matched" && decision.Status != "partial" {
 		return errors.New("selected rent obligation needs review")
 	}
@@ -167,6 +188,54 @@ func (s *transactionService) confirmRentMatch(ctx context.Context, userID, trans
 	}
 	if stringValue(tenantRow.PayerID) == "" && stringValue(transaction.PayerID) != "" {
 		return s.db.WithContext(ctx).Model(&tenant{}).Where("id = ? AND user_id = ?", tenantID, userID).Update("payer_id", stringValue(transaction.PayerID)).Error
+	}
+	return nil
+}
+
+func (s *transactionService) bindPayerAndBatch(ctx context.Context, userID uint64, source paymentTransaction, tenantRow tenant, obligations []rentObligation) error {
+	if source.PayerName == nil || strings.TrimSpace(stringValue(source.PayerName)) == "" {
+		decision := decideForTenant(paymentTransactionInputFromModel(source), tenantRow, obligations, "manual_name")
+		if decision.Status != "matched" && decision.Status != "partial" {
+			if err := s.setMatchedTenant(ctx, userID, source.ID, tenantRow.ID); err != nil {
+				return err
+			}
+			return s.setMatchStatus(ctx, userID, source.ID, "needs_review")
+		}
+		return s.applyAllocation(ctx, userID, source, decision, "manual_name")
+	}
+
+	name := normalizeMatchText(stringValue(source.PayerName))
+	var rows []paymentTransaction
+	if err := s.db.WithContext(ctx).Where("user_id = ? AND direction = ?", userID, "income").Order("transaction_time ASC, id ASC").Find(&rows).Error; err != nil {
+		return err
+	}
+	if err := s.db.WithContext(ctx).Model(&tenant{}).Where("id = ? AND user_id = ?", tenantRow.ID, userID).Updates(map[string]any{
+		"payer_name_hint": stringValue(source.PayerName),
+		"payer_id":        firstNonEmpty(stringValue(tenantRow.PayerID), stringValue(source.PayerID)),
+	}).Error; err != nil {
+		return err
+	}
+	for _, row := range rows {
+		if normalizeMatchText(stringValue(row.PayerName)) != name || row.MatchStatus == "matched" {
+			continue
+		}
+		var freshObligations []rentObligation
+		if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Find(&freshObligations).Error; err != nil {
+			return err
+		}
+		decision := decideForTenant(paymentTransactionInputFromModel(row), tenantRow, freshObligations, "manual_name")
+		if decision.Status == "matched" || decision.Status == "partial" {
+			if err := s.applyAllocation(ctx, userID, row, decision, "manual_name"); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := s.setMatchedTenant(ctx, userID, row.ID, tenantRow.ID); err != nil {
+			return err
+		}
+		if err := s.setMatchStatus(ctx, userID, row.ID, "needs_review"); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -190,6 +259,22 @@ func (s *transactionService) listTransactionPageRows(ctx context.Context, userID
 	rows := make([]transactionPageRow, 0, len(transactions))
 	for _, transaction := range transactions {
 		row := transactionPageRowFromModel(transaction)
+		if row.TenantID != 0 && transaction.Direction == "income" && transaction.MatchStatus != "matched" {
+			row.NeedsMonthChoice = true
+			for _, obligation := range obligations {
+				if obligation.TenantID != row.TenantID || obligation.PaidAmountCents >= obligation.ExpectedAmountCents {
+					continue
+				}
+				currency := firstNonEmpty(obligation.Currency, transaction.Currency, "EUR")
+				row.MonthOptions = append(row.MonthOptions, billingMonthOption{
+					Period:    obligation.PeriodMonth.Format("2006-01"),
+					Label:     fmt.Sprintf("%d年%d月", obligation.PeriodMonth.Year(), obligation.PeriodMonth.Month()),
+					Expected:  formatMoney(centsToMoney(obligation.ExpectedAmountCents), currency, 2),
+					Paid:      formatMoney(centsToMoney(obligation.PaidAmountCents), currency, 2),
+					Remaining: formatMoney(centsToMoney(obligation.ExpectedAmountCents-obligation.PaidAmountCents), currency, 2),
+				})
+			}
+		}
 		if transaction.Direction == "income" && transaction.MatchStatus == "candidate" {
 			decision := decideRentMatch(paymentTransactionInputFromModel(transaction), tenants, obligations)
 			if decision.Status == "candidate" {

@@ -132,6 +132,7 @@ type billingPageData struct {
 	DirectionFilter   string
 	MatchStatusFilter string
 	PeriodFilter      string
+	PendingCount      int
 	IncomeCount       int
 	TenantCount       int
 	ExpenseCount      int
@@ -141,6 +142,14 @@ type billingPageData struct {
 type billingTenantOption struct {
 	ID   uint64
 	Name string
+}
+
+type billingMonthOption struct {
+	Period    string
+	Label     string
+	Expected  string
+	Paid      string
+	Remaining string
 }
 
 type tenantRecord struct {
@@ -213,24 +222,29 @@ type expensePageData struct {
 }
 
 type rentDashboardPageData struct {
-	Username      string
-	Environment   string
-	ActivePage    string
-	Period        string
-	Rows          []rentDashboardRow
-	ExpectedTotal string
-	PaidTotal     string
-	BalanceTotal  string
-	ExpenseTotal  string
-	OpenCount     int
-	PartialCount  int
-	PaidCount     int
-	ReviewCount   int
-	TenantCount   int
-	IncomeCount   int
-	ExpenseCount  int
-	Message       string
-	Error         string
+	Username          string
+	Environment       string
+	ActivePage        string
+	Period            string
+	PeriodLabel       string
+	PreviousPeriod    string
+	NextPeriod        string
+	Rows              []rentDashboardRow
+	ExpectedTotal     string
+	PaidTotal         string
+	BalanceTotal      string
+	ExpenseTotal      string
+	OpenCount         int
+	PartialCount      int
+	PaidCount         int
+	ReviewCount       int
+	TenantCount       int
+	IncomeCount       int
+	ExpenseCount      int
+	CollectionPercent int
+	PendingCount      int
+	Message           string
+	Error             string
 }
 
 type rentDashboardRow struct {
@@ -490,7 +504,7 @@ func (a *app) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.isAuthenticated(r) {
-		http.Redirect(w, r, "/billing", http.StatusFound)
+		http.Redirect(w, r, "/rent-dashboard", http.StatusFound)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -528,11 +542,11 @@ func (a *app) handleLocalLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		http.SetCookie(w, userSessionCookie(a.cfg, user.ID, user.Username, time.Now().Add(sessionTTL)))
-		http.Redirect(w, r, "/billing", http.StatusFound)
+		http.Redirect(w, r, "/rent-dashboard", http.StatusFound)
 		return
 	}
 	http.SetCookie(w, sessionCookie(a.cfg, time.Now().Add(sessionTTL)))
-	http.Redirect(w, r, "/billing", http.StatusFound)
+	http.Redirect(w, r, "/rent-dashboard", http.StatusFound)
 }
 
 func (a *app) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -557,6 +571,7 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 	var rows []transactionPageRow
 	var lastSync string
 	var tenantCount, expenseCount int
+	var pendingCount int
 	var tenantOptions []billingTenantOption
 	if userID, ok := a.currentUserID(r); ok && a.db != nil {
 		var err error
@@ -581,6 +596,11 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		expenseCount = int(count)
+		if err := a.db.WithContext(r.Context()).Model(&paymentTransaction{}).Where("user_id = ? AND direction = ? AND match_status IN ?", userID, "income", []string{"candidate", "needs_review", "unmatched"}).Count(&count).Error; err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		pendingCount = int(count)
 	} else {
 		result, _ := a.loadLatestDemoResult()
 		lastSync = result.FetchedAt
@@ -608,13 +628,14 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 		DirectionFilter:   filters.Direction,
 		MatchStatusFilter: filters.MatchStatus,
 		PeriodFilter:      filters.PeriodMonth,
+		PendingCount:      pendingCount,
 		IncomeCount:       len(rows),
 		TokenFile:         a.cfg.TokenFile,
 		TenantCount:       tenantCount,
 		ExpenseCount:      expenseCount,
 	}
 	if data.LastSync == "" {
-		data.LastSync = "No sync yet"
+		data.LastSync = "尚未同步"
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := billingTemplate.Execute(w, data); err != nil {
@@ -649,7 +670,16 @@ func (a *app) handleRentMatchConfirmation(w http.ResponseWriter, r *http.Request
 		http.Redirect(w, r, "/billing?error=invalid_confirmation", http.StatusFound)
 		return
 	}
-	if err := newTransactionService(a.db).confirmRentMatch(r.Context(), userID, transactionID, tenantID); err != nil {
+	var period *time.Time
+	if value := strings.TrimSpace(r.Form.Get("period")); value != "" {
+		parsed, err := parsePeriodMonth(value)
+		if err != nil {
+			http.Redirect(w, r, "/billing?error=invalid_confirmation", http.StatusFound)
+			return
+		}
+		period = &parsed
+	}
+	if err := newTransactionService(a.db).confirmRentMatch(r.Context(), userID, transactionID, tenantID, period); err != nil {
 		http.Redirect(w, r, "/billing?error=confirmation_failed", http.StatusFound)
 		return
 	}
@@ -1768,7 +1798,7 @@ func compactBody(body []byte) string {
 }
 
 var loginTemplate = template.Must(template.New("login").Parse(`<!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1822,18 +1852,18 @@ var loginTemplate = template.Must(template.New("login").Parse(`<!doctype html>
       <div class="mark">R</div>
       <div>
         <h1>RentOps</h1>
-        <p>Billing workspace</p>
+        <p>收租管理工作台</p>
       </div>
     </div>
-    {{if .Error}}<div class="error">Invalid username or password.</div>{{end}}
+    {{if .Error}}<div class="error">用户名或密码错误。</div>{{end}}
     <form method="post" action="/login-local">
-      <label for="username">Username</label>
+      <label for="username">用户名</label>
       <input id="username" name="username" autocomplete="username" value="{{.Username}}">
-      <label for="password">Password</label>
+      <label for="password">密码</label>
       <input id="password" name="password" type="password" autocomplete="current-password">
-      <button type="submit">Sign in</button>
+      <button type="submit">登录</button>
     </form>
-    <div class="hint">Demo login is configured with APP_ADMIN_USERNAME and APP_ADMIN_PASSWORD.</div>
+    <div class="hint">登录账号由 APP_ADMIN_USERNAME 和 APP_ADMIN_PASSWORD 配置。</div>
   </main>
 </body>
 </html>
@@ -2164,7 +2194,7 @@ const workspacePageCSS = `
 `
 
 var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -2176,88 +2206,88 @@ var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html
     <aside class="sidebar" aria-label="Main navigation">
       <div class="side-brand"><div class="mark">R</div><div><div class="brand-title">RentOps</div><div class="brand-meta">{{.Environment}} workspace</div></div></div>
       <nav class="nav">
-        <a href="/rent-dashboard"><span class="glyph">DB</span><span>Rent Dashboard</span><span class="nav-count">{{.TenantCount}}</span></a>
-        <a href="/billing"><span class="glyph">TX</span><span>Transactions</span><span class="nav-count">{{.IncomeCount}}</span></a>
-        <a href="/tenants" class="active"><span class="glyph">TN</span><span>Tenants</span><span class="nav-count">{{.TenantCount}}</span></a>
-        <a href="/expenses"><span class="glyph">EX</span><span>Expenses</span><span class="nav-count">{{.ExpenseCount}}</span></a>
+        <a href="/rent-dashboard"><span class="glyph">总</span><span>月度总览</span><span class="nav-count">{{.TenantCount}}</span></a>
+        <a href="/billing"><span class="glyph">流</span><span>银行流水</span><span class="nav-count">{{.IncomeCount}}</span></a>
+        <a href="/tenants" class="active"><span class="glyph">租</span><span>租客管理</span><span class="nav-count">{{.TenantCount}}</span></a>
+        <a href="/expenses"><span class="glyph">支</span><span>支出记录</span><span class="nav-count">{{.ExpenseCount}}</span></a>
       </nav>
-      <div class="side-foot">Signed in as {{.Username}}<br>Local file: {{.TenantFile}}</div>
+      <div class="side-foot">当前用户：{{.Username}}<br>租客资料：{{.TenantFile}}</div>
     </aside>
     <main class="content">
       <header class="topbar">
         <div>
-          <div class="brand-title">Tenant management</div>
-          <h1>Manual tenant ledger</h1>
+          <div class="brand-title">租客管理</div>
+          <h1>租客资料</h1>
         </div>
-        <div class="actions"><a class="btn primary" href="/tenants?add=1">Add tenant</a><form method="post" action="/logout"><button class="btn danger" type="submit">Sign out</button></form></div>
+        <div class="actions"><a class="btn primary" href="/tenants?add=1">添加租客</a><form method="post" action="/logout"><button class="btn danger" type="submit">退出登录</button></form></div>
       </header>
 
-      {{if eq .Message "tenant_added"}}<div class="notice ok">Tenant record saved.</div>{{end}}
-      {{if eq .Message "tenant_updated"}}<div class="notice ok">Tenant record updated.</div>{{end}}
-      {{if .Error}}<div class="notice error">Tenant name, monthly rent, and room address are required.</div>{{end}}
+      {{if eq .Message "tenant_added"}}<div class="notice ok">租客资料已保存。</div>{{end}}
+      {{if eq .Message "tenant_updated"}}<div class="notice ok">租客资料已更新。</div>{{end}}
+      {{if .Error}}<div class="notice error">租客姓名、月租金额和房间地址为必填项。</div>{{end}}
 
       <section class="summary" aria-label="Tenant summary">
-        <div class="panel metric"><div class="label">Tenants</div><strong>{{.TenantCount}}</strong><span>manually maintained records</span></div>
-        <div class="panel metric"><div class="label">Monthly rent roll</div><strong>{{.RentTotal}}</strong><span>expected rent from saved tenants</span></div>
+        <div class="panel metric"><div class="label">租客数量</div><strong>{{.TenantCount}}</strong><span>当前保存的租客</span></div>
+        <div class="panel metric"><div class="label">月租合计</div><strong>{{.RentTotal}}</strong><span>租客资料中的预期月租</span></div>
       </section>
 
       {{if .ShowForm}}<section class="panel form tenant-form" aria-labelledby="tenant-form-title">
-        <div class="panel-head"><h2 id="tenant-form-title">{{if .Editing}}Edit tenant{{else}}Add tenant{{end}}</h2><a class="btn subtle" href="/tenants">Cancel</a></div>
+        <div class="panel-head"><h2 id="tenant-form-title">{{if .Editing}}编辑租客{{else}}添加租客{{end}}</h2><a class="btn subtle" href="/tenants">取消</a></div>
         <form method="post" action="/tenants">
           {{if .Editing}}<input type="hidden" name="tenant_id" value="{{.Form.ID}}">{{end}}
-          <label for="name">Tenant name</label>
+          <label for="name">租客姓名</label>
           <input id="name" name="name" autocomplete="name" value="{{.Form.Name}}" required>
-          <label for="payer_id">Bank payer ID</label>
+          <label for="payer_id">银行付款人编号</label>
           <input id="payer_id" name="payer_id" value="{{.Form.PayerID}}">
-          <label for="payer_name_hint">Payer name hint</label>
+          <label for="payer_name_hint">付款人名称提示</label>
           <input id="payer_name_hint" name="payer_name_hint" value="{{.Form.PayerNameHint}}">
-          <label for="monthly_rent">Monthly rent</label>
+          <label for="monthly_rent">月租金额</label>
           <input id="monthly_rent" name="monthly_rent" type="number" min="0.01" step="0.01" inputmode="decimal" value="{{.Form.MonthlyRent}}" required>
-          <label for="currency">Currency</label>
+          <label for="currency">币种</label>
           <input id="currency" name="currency" value="{{.Form.Currency}}" maxlength="3">
           <input type="hidden" name="interval_unit" value="month">
           <input type="hidden" name="interval_count" value="1">
-          <label for="billing_start_date">Billing start date</label>
+          <label for="billing_start_date">计费开始日期</label>
           <input id="billing_start_date" name="billing_start_date" type="date" value="{{.Form.BillingStartDate}}" required>
-          <label for="due_day">Due day</label>
+          <label for="due_day">每月应缴日</label>
           <input id="due_day" name="due_day" type="number" min="1" max="31" value="{{.Form.DueDay}}" required>
-          <label for="rent_start_date">Rent start date</label>
+          <label for="rent_start_date">租期开始日期</label>
           <input id="rent_start_date" name="rent_start_date" type="date" value="{{.Form.RentStartDate}}" required>
-          <label for="rent_end_date">Rent end date</label>
+          <label for="rent_end_date">租期结束日期</label>
           <input id="rent_end_date" name="rent_end_date" type="date" value="{{.Form.RentEndDate}}">
-          <label for="status">Status</label>
-          <select id="status" name="status"><option value="active" {{if eq .Form.Status "active"}}selected{{end}}>Active</option><option value="inactive" {{if eq .Form.Status "inactive"}}selected{{end}}>Inactive</option></select>
-          <label for="room_label">Room label</label>
+          <label for="status">状态</label>
+          <select id="status" name="status"><option value="active" {{if eq .Form.Status "active"}}selected{{end}}>有效</option><option value="inactive" {{if eq .Form.Status "inactive"}}selected{{end}}>停用</option></select>
+          <label for="room_label">房间名称</label>
           <input id="room_label" name="room_label" value="{{.Form.RoomLabel}}">
-          <label for="room_address">Room address</label>
+          <label for="room_address">房间地址</label>
           <textarea id="room_address" name="room_address" rows="4" required>{{.Form.RoomAddress}}</textarea>
-          <label for="property_hint">Property hint</label>
+          <label for="property_hint">房产备注</label>
           <input id="property_hint" name="property_hint" value="{{.Form.PropertyHint}}">
-          <button class="btn primary" type="submit">{{if .Editing}}Save changes{{else}}Save tenant{{end}}</button>
+          <button class="btn primary" type="submit">{{if .Editing}}保存修改{{else}}保存租客{{end}}</button>
         </form>
       </section>{{end}}
       <section class="panel surface" aria-labelledby="tenant-list-title">
-        <div class="panel-head"><h2 id="tenant-list-title">Saved tenants</h2><span class="tiny">{{.TenantCount}} records</span></div>
+        <div class="panel-head"><h2 id="tenant-list-title">租客列表</h2><span class="tiny">{{.TenantCount}} 条记录</span></div>
         {{if .Rows}}
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Tenant</th><th>Payer</th><th>Rent</th><th>Schedule</th><th>Room</th><th>Created</th><th></th></tr></thead>
+            <thead><tr><th>租客</th><th>付款人</th><th>租金</th><th>账单安排</th><th>房间</th><th>创建时间</th><th></th></tr></thead>
             <tbody>
               {{range .Rows}}
               <tr>
                 <td><strong>{{.Name}}</strong><br><span class="mono">{{.ID}}</span></td>
-                <td>{{if .PayerNameHint}}{{.PayerNameHint}}{{else}}No alias{{end}}<br><span class="mono">ID: {{if .PayerID}}{{.PayerID}}{{else}}missing{{end}}</span></td>
+                <td>{{if .PayerNameHint}}{{.PayerNameHint}}{{else}}暂无付款人别名{{end}}<br><span class="mono">编号：{{if .PayerID}}{{.PayerID}}{{else}}暂无{{end}}</span></td>
                 <td class="amount">{{.RentDisplay}}</td>
-                <td>Monthly, day {{.DueDay}}<br><span class="mono">{{.RentStartDate}}{{if .RentEndDate}} to {{.RentEndDate}}{{end}}</span></td>
+                <td>每月 {{.DueDay}} 日<br><span class="mono">{{.RentStartDate}}{{if .RentEndDate}} 至 {{.RentEndDate}}{{end}}</span></td>
                 <td>{{if .RoomLabel}}{{.RoomLabel}}<br>{{end}}{{.RoomAddress}}{{if .PropertyHint}}<br><span class="mono">{{.PropertyHint}}</span>{{end}}</td>
                 <td class="mono">{{.CreatedAt}}</td>
-                <td><a class="btn subtle" href="/tenants?edit={{.ID}}">Edit</a></td>
+                <td><a class="btn subtle" href="/tenants?edit={{.ID}}">编辑</a></td>
               </tr>
               {{end}}
             </tbody>
           </table>
         </div>
-        {{else}}<div class="empty">No tenants yet. Use Add tenant to create the first record.</div>{{end}}
+        {{else}}<div class="empty">还没有租客，请点击“添加租客”创建第一条资料。</div>{{end}}
       </section>
     </main>
   </div>
@@ -2266,7 +2296,7 @@ var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html
 `))
 
 var expenseTemplate = template.Must(template.New("expenses").Parse(`<!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -2278,71 +2308,71 @@ var expenseTemplate = template.Must(template.New("expenses").Parse(`<!doctype ht
     <aside class="sidebar" aria-label="Main navigation">
       <div class="side-brand"><div class="mark">R</div><div><div class="brand-title">RentOps</div><div class="brand-meta">{{.Environment}} workspace</div></div></div>
       <nav class="nav">
-        <a href="/rent-dashboard"><span class="glyph">DB</span><span>Rent Dashboard</span><span class="nav-count">{{.TenantCount}}</span></a>
-        <a href="/billing"><span class="glyph">TX</span><span>Transactions</span><span class="nav-count">{{.IncomeCount}}</span></a>
-        <a href="/tenants"><span class="glyph">TN</span><span>Tenants</span><span class="nav-count">{{.TenantCount}}</span></a>
-        <a href="/expenses" class="active"><span class="glyph">EX</span><span>Expenses</span><span class="nav-count">{{.ExpenseCount}}</span></a>
+        <a href="/rent-dashboard"><span class="glyph">总</span><span>月度总览</span><span class="nav-count">{{.TenantCount}}</span></a>
+        <a href="/billing"><span class="glyph">流</span><span>银行流水</span><span class="nav-count">{{.IncomeCount}}</span></a>
+        <a href="/tenants"><span class="glyph">租</span><span>租客管理</span><span class="nav-count">{{.TenantCount}}</span></a>
+        <a href="/expenses" class="active"><span class="glyph">支</span><span>支出记录</span><span class="nav-count">{{.ExpenseCount}}</span></a>
       </nav>
-      <div class="side-foot">Signed in as {{.Username}}<br>Local file: {{.ExpenseFile}}</div>
+      <div class="side-foot">当前用户：{{.Username}}<br>支出资料：{{.ExpenseFile}}</div>
     </aside>
     <main class="content">
       <header class="topbar">
         <div>
-          <div class="brand-title">Expenses</div>
-          <h1>Property spending ledger</h1>
+          <div class="brand-title">支出记录</div>
+          <h1>房产支出</h1>
         </div>
-        <form method="post" action="/logout"><button class="btn danger" type="submit">Sign out</button></form>
+        <form method="post" action="/logout"><button class="btn danger" type="submit">退出登录</button></form>
       </header>
 
-      {{if eq .Message "expense_added"}}<div class="notice ok">Expense record saved.</div>{{end}}
-      {{if .Error}}<div class="notice error">Description and positive amount are required.</div>{{end}}
+      {{if eq .Message "expense_added"}}<div class="notice ok">支出记录已保存。</div>{{end}}
+      {{if .Error}}<div class="notice error">支出描述和正数金额为必填项。</div>{{end}}
 
       <section class="summary" aria-label="Expense summary">
-        <div class="panel metric"><div class="label">Expenses</div><strong>{{.ExpenseCount}}</strong><span>manual outgoing records</span></div>
-        <div class="panel metric"><div class="label">Expense total</div><strong>{{.ExpenseTotal}}</strong><span>all saved expenses</span></div>
+        <div class="panel metric"><div class="label">支出笔数</div><strong>{{.ExpenseCount}}</strong><span>手动记录的支出</span></div>
+        <div class="panel metric"><div class="label">支出合计</div><strong>{{.ExpenseTotal}}</strong><span>全部已保存支出</span></div>
       </section>
 
       <section class="grid-two">
         <form class="panel form" method="post" action="/expenses" aria-labelledby="expense-form-title">
-          <div class="panel-head"><h2 id="expense-form-title">Add expense</h2><span class="tiny">Manual entry</span></div>
-          <label for="description">Description</label>
+          <div class="panel-head"><h2 id="expense-form-title">添加支出</h2><span class="tiny">手动记录</span></div>
+          <label for="description">支出描述</label>
           <input id="description" name="description" required>
-          <label for="amount">Amount</label>
+          <label for="amount">金额</label>
           <input id="amount" name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required>
-          <label for="category">Category</label>
+          <label for="category">类别</label>
           <select id="category" name="category">
-            <option>Maintenance</option>
-            <option>Utilities</option>
-            <option>Cleaning</option>
-            <option>Insurance</option>
-            <option>General</option>
+            <option>维修</option>
+            <option>水电</option>
+            <option>清洁</option>
+            <option>保险</option>
+            <option>其他</option>
           </select>
-          <label for="expense_date">Date</label>
+          <label for="expense_date">日期</label>
           <input id="expense_date" name="expense_date" type="date">
-          <label for="payment_method">Payment method</label>
-          <input id="payment_method" name="payment_method" value="Manual">
-          <label for="room_hint">Room hint</label>
+          <label for="payment_method">付款方式</label>
+          <input id="payment_method" name="payment_method" value="手动">
+          <label for="room_hint">房间备注</label>
           <input id="room_hint" name="room_hint">
-          <label for="tenant_hint">Tenant hint</label>
+          <label for="tenant_hint">租客备注</label>
           <input id="tenant_hint" name="tenant_hint">
           <input type="hidden" name="currency" value="EUR">
-          <button class="btn primary" type="submit">Save expense</button>
+          <button class="btn primary" type="submit">保存支出</button>
         </form>
 
         <section class="panel surface" aria-labelledby="expense-list-title">
-          <div class="panel-head"><h2 id="expense-list-title">Saved expenses</h2><span class="tiny">{{.ExpenseCount}} records</span></div>
+          <div class="panel-head"><h2 id="expense-list-title">支出列表</h2><span class="tiny">{{.ExpenseCount}} 条记录</span></div>
           {{if .Rows}}
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Description</th><th>Amount</th><th>Category</th><th>Date</th><th>Hints</th><th>Method</th></tr></thead>
+              <thead><tr><th>描述</th><th>金额</th><th>类别</th><th>日期</th><th>备注</th><th>付款方式</th></tr></thead>
               <tbody>
                 {{range .Rows}}
-                <tr><td><strong>{{.Description}}</strong><br><span class="mono">{{.ID}}</span></td><td class="amount expense">{{.AmountDisplay}}</td><td>{{.Category}}</td><td>{{.DateDisplay}}</td><td>{{if .RoomHint}}Room: {{.RoomHint}}<br>{{end}}{{if .TenantHint}}Tenant: {{.TenantHint}}{{else if not .RoomHint}}No hints{{end}}</td><td>{{.PaymentMethod}}</td></tr>
+                <tr><td><strong>{{.Description}}</strong><br><span class="mono">{{.ID}}</span></td><td class="amount expense">{{.AmountDisplay}}</td><td>{{.Category}}</td><td>{{.DateDisplay}}</td><td>{{if .RoomHint}}房间：{{.RoomHint}}<br>{{end}}{{if .TenantHint}}租客：{{.TenantHint}}{{else if not .RoomHint}}暂无备注{{end}}</td><td>{{.PaymentMethod}}</td></tr>
                 {{end}}
               </tbody>
             </table>
           </div>
-          {{else}}<div class="empty">No expenses yet. Add the first outgoing record from the form.</div>{{end}}
+          {{else}}<div class="empty">还没有支出记录，请从左侧表单添加第一笔。</div>{{end}}
         </section>
       </section>
     </main>

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"sort"
 	"time"
 
 	"gorm.io/gorm"
@@ -227,6 +228,10 @@ func (s *obligationService) summarizeRentDashboard(ctx context.Context, userID u
 			Payments:       payments,
 		})
 	}
+	sort.SliceStable(summary.Rows, func(i, j int) bool {
+		priority := map[string]int{"overdue": 0, "needs_review": 1, "partial": 2, "open": 3, "paid": 4}
+		return priority[summary.Rows[i].Status] < priority[summary.Rows[j].Status]
+	})
 	start := periodMonth
 	end := start.AddDate(0, 1, 0)
 	var transactions []paymentTransaction
@@ -288,10 +293,10 @@ func maxInt64(value, minimum int64) int64 {
 
 func rentStatusLabel(status string) string {
 	return map[string]string{
-		"open":         "Open",
-		"overdue":      "Overdue",
-		"partial":      "Partial",
-		"paid":         "Paid",
-		"needs_review": "Needs review",
+		"open":         "未缴",
+		"overdue":      "已逾期",
+		"partial":      "部分缴纳",
+		"paid":         "已缴清",
+		"needs_review": "需处理",
 	}[status]
 }

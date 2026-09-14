@@ -33,6 +33,7 @@ type paymentTransaction struct {
 	PayerID               *string
 	PayerName             *string
 	PayerNameKind         string
+	MatchedTenantID       *uint64
 	MatchStatus           string
 	RawPayloadJSON        []byte `gorm:"column:raw_payload_json"`
 	CreatedAt             time.Time
@@ -257,6 +258,9 @@ type transactionPageRow struct {
 	CandidateTenantID   uint64
 	CandidateTenantName string
 	CanConfirm          bool
+	TenantID            uint64
+	NeedsMonthChoice    bool
+	MonthOptions        []billingMonthOption
 }
 
 func paymentTransactionInputFromModel(row paymentTransaction) paymentTransactionInput {
@@ -286,36 +290,41 @@ func transactionPageRowFromModel(row paymentTransaction) transactionPageRow {
 		dateDisplay = row.TransactionTime.UTC().Format("02 Jan 2006 15:04")
 	}
 	statusLabel := map[string]string{
-		"matched":      "Matched",
-		"candidate":    "Name candidate",
-		"needs_review": "Needs review",
-		"unmatched":    "Unmatched",
-		"ignored":      "Ignored",
+		"matched":      "已关联",
+		"candidate":    "待确认",
+		"needs_review": "需处理",
+		"unmatched":    "未关联",
+		"ignored":      "已忽略",
 	}[row.MatchStatus]
 	if statusLabel == "" {
-		statusLabel = "Unmatched"
+		statusLabel = "未关联"
 	}
-	directionLabel := "Expense"
+	directionLabel := "支出"
 	if row.Direction == "income" {
-		directionLabel = "Income"
+		directionLabel = "收入"
+	}
+	var tenantID uint64
+	if row.MatchedTenantID != nil {
+		tenantID = *row.MatchedTenantID
 	}
 	return transactionPageRow{
 		ID:               strconv.FormatUint(row.ID, 10),
 		Direction:        row.Direction,
 		DirectionLabel:   directionLabel,
-		PayerName:        firstNonEmpty(stringValue(row.PayerName), "Unknown payer"),
+		PayerName:        firstNonEmpty(stringValue(row.PayerName), "未知付款人"),
 		PayerNameKind:    firstNonEmpty(row.PayerNameKind, "unknown"),
-		PayerID:          firstNonEmpty(stringValue(row.PayerID), "Missing"),
+		PayerID:          firstNonEmpty(stringValue(row.PayerID), "无付款人编号"),
 		AmountDisplay:    formatMoney(centsToMoney(row.AmountCents), row.Currency, 2),
 		DateDisplay:      dateDisplay,
-		Description:      firstNonEmpty(row.Description, "No description"),
-		Reference:        firstNonEmpty(row.Reference, "No reference"),
-		AccountName:      firstNonEmpty(stringValue(row.AccountName), "Unknown account"),
+		Description:      firstNonEmpty(row.Description, "无描述"),
+		Reference:        firstNonEmpty(row.Reference, "无参考号"),
+		AccountName:      firstNonEmpty(stringValue(row.AccountName), "未知账户"),
 		AccountID:        stringValue(row.AccountID),
 		TransactionID:    firstNonEmpty(stringValue(row.ProviderTransactionID), "#"+strconv.FormatUint(row.ID, 10)),
 		Source:           row.Source,
 		MatchStatus:      row.MatchStatus,
 		MatchStatusLabel: statusLabel,
+		TenantID:         tenantID,
 	}
 }
 

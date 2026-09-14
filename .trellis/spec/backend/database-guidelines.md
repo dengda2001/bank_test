@@ -211,3 +211,84 @@ if err := a.saveTenants(tenants); err != nil {
   forms. Use temp files through `RENTOPS_TENANT_FILE` and
   `RENTOPS_EXPENSE_FILE` so verification does not create untracked demo data in
   the repo.
+
+## Scenario: Remembered Payer Association and Explicit Rent Month
+
+### 1. Scope / Trigger
+
+- Trigger: Manual income-to-tenant binding, automatic reconciliation, or any
+  change to monthly rent dashboard totals.
+- Applies to the database-backed `/billing` and `/rent-dashboard` flows.
+
+### 2. Signatures
+
+- `POST /billing/confirm` accepts `transaction_id`, `tenant_id`, and an optional
+  `period=YYYY-MM`.
+- `transactionService.confirmRentMatch(ctx, userID, transactionID, tenantID,
+  period)` keeps tenant identity association separate from rent allocation.
+- `payment_transactions.matched_tenant_id` stores a user-scoped remembered
+  tenant association; `tenants.payer_name_hint` stores the exact normalized
+  payer-name rule after confirmation.
+
+### 3. Contracts
+
+- A manual binding stores the payer name hint and associates all same-user,
+  exact-normalized-name, unconfirmed income transactions that have not already
+  been allocated. Existing confirmed allocations are never overwritten.
+- A unique remembered payer name may automatically identify future transactions.
+  It may allocate only when the transaction reference or transaction month
+  selects an unpaid obligation. The nearest-open-month fallback is forbidden.
+- If identity is known but month or amount cannot be safely allocated, the
+  transaction remains `needs_review` with `matched_tenant_id` set. The UI must
+  offer a month choice with expected, paid, and remaining amounts.
+- A submitted month is checked for user/tenant ownership, currency and current
+  remaining balance before allocation; allocation remains idempotent.
+
+### 4. Validation & Error Matrix
+
+- Missing or cross-user transaction/tenant -> safe confirmation error; no write.
+- Same payer name maps to multiple remembered tenants -> `needs_review`; no
+  automatic allocation.
+- Paid referenced month with another unpaid month -> retain tenant association
+  and require the user to select a month.
+- Amount greater than selected obligation balance or currency mismatch -> keep
+  pending review; do not increase paid amount.
+- Duplicate confirmation or refresh -> no duplicate allocation or amount.
+
+### 5. Good/Base/Bad Cases
+
+- Good: One binding remembers the payer name, allocates eligible same-name
+  payments, and exposes ambiguous payments for one-time month selection.
+- Base: A payer ID still has priority; exact payer-name confirmation remains the
+  fallback when the bank does not provide a stable ID.
+- Bad: Automatically assigning an ambiguous payment to the closest historical
+  unpaid month, or treating a name match as confirmed without user action.
+
+### 6. Tests Required
+
+- Matching unit tests assert remembered exact names use `auto_name` and paid
+  referenced months return no automatic obligation.
+- Service tests should assert batch association, sequential partial payments,
+  duplicate confirmation, user isolation, conflict handling and selected-month
+  validation against fresh balances.
+- Template tests assert Chinese labels and the month-choice form show expected,
+  paid and remaining values.
+
+### 7. Wrong vs Correct
+
+Wrong:
+
+```go
+// silently redirects a payment to the nearest unpaid month
+obligation, ok := selectNearestOpenObligation(transaction, tenantID)
+```
+
+Correct:
+
+```go
+// associate identity first; allocate only the explicit or eligible month
+if decisionNeedsReview {
+    setMatchedTenant(transactionID, tenantID)
+    setMatchStatus(transactionID, "needs_review")
+}
+```

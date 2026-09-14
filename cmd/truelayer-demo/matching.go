@@ -30,6 +30,15 @@ func decideRentMatch(tx paymentTransactionInput, tenants []tenant, obligations [
 			return matchDecision{Status: "needs_review", Reason: "multiple tenants for payer id"}
 		}
 	}
+	trustedNameMatches := tenantsByTrustedPayerName(tenants, tx.PayerName)
+	if len(trustedNameMatches) == 1 {
+		decision := decideForTenant(tx, trustedNameMatches[0], obligations, "auto_name")
+		decision.Reason = "remembered payer name"
+		return decision
+	}
+	if len(trustedNameMatches) > 1 {
+		return matchDecision{Status: "needs_review", Reason: "multiple remembered payer names"}
+	}
 	nameMatches := tenantsByName(tenants, tx.PayerName)
 	if len(nameMatches) == 1 {
 		decision := decideForTenant(tx, nameMatches[0], obligations, "manual_name")
@@ -48,6 +57,15 @@ func decideRentMatch(tx paymentTransactionInput, tenants []tenant, obligations [
 
 func decideForTenant(tx paymentTransactionInput, row tenant, obligations []rentObligation, source string) matchDecision {
 	obligation, ok := selectObligationForTransaction(tx, row.ID, obligations)
+	return decideForTenantWithObligation(tx, row, obligation, ok, source)
+}
+
+func decideForTenantInPeriod(tx paymentTransactionInput, row tenant, obligations []rentObligation, period time.Time, source string) matchDecision {
+	obligation, ok := selectObligationForPeriod(row.ID, period, obligations)
+	return decideForTenantWithObligation(tx, row, obligation, ok, source)
+}
+
+func decideForTenantWithObligation(tx paymentTransactionInput, row tenant, obligation rentObligation, ok bool, source string) matchDecision {
 	if !ok {
 		return matchDecision{Status: "needs_review", TenantID: row.ID, ConfirmationSource: source, Reason: "no open obligation"}
 	}
@@ -57,6 +75,11 @@ func decideForTenant(tx paymentTransactionInput, row tenant, obligations []rentO
 		RentObligationID:   obligation.ID,
 		PeriodMonth:        obligation.PeriodMonth,
 		ConfirmationSource: source,
+	}
+	if strings.ToUpper(strings.TrimSpace(tx.Currency)) != strings.ToUpper(strings.TrimSpace(obligation.Currency)) {
+		decision.Status = "needs_review"
+		decision.Reason = "currency mismatch"
+		return decision
 	}
 	if tx.AmountCents > remaining {
 		decision.Status = "needs_review"
@@ -83,6 +106,11 @@ func selectObligationForTransaction(tx paymentTransactionInput, tenantID uint64,
 	if period, ok := parseReferencedPeriod(text, transactionTime); ok {
 		targetPeriod = period
 	}
+	return selectObligationForPeriod(tenantID, targetPeriod, obligations)
+}
+
+func selectObligationForPeriod(tenantID uint64, targetPeriod time.Time, obligations []rentObligation) (rentObligation, bool) {
+	targetPeriod = monthStart(targetPeriod)
 	for _, obligation := range obligations {
 		if obligation.TenantID == tenantID &&
 			monthStart(obligation.PeriodMonth).Equal(targetPeriod) &&
@@ -91,21 +119,7 @@ func selectObligationForTransaction(tx paymentTransactionInput, tenantID uint64,
 		}
 	}
 
-	var selected rentObligation
-	selectedOffset := 0
-	found := false
-	for _, obligation := range obligations {
-		if obligation.TenantID != tenantID || obligation.PaidAmountCents >= obligation.ExpectedAmountCents {
-			continue
-		}
-		offset := monthOffset(targetPeriod, obligation.PeriodMonth)
-		if !found || absInt(offset) < absInt(selectedOffset) || (absInt(offset) == absInt(selectedOffset) && offset > selectedOffset) {
-			selected = obligation
-			selectedOffset = offset
-			found = true
-		}
-	}
-	return selected, found
+	return rentObligation{}, false
 }
 
 func monthOffset(from, to time.Time) int {
@@ -140,6 +154,20 @@ func tenantsByName(tenants []tenant, payerName string) []tenant {
 	var matches []tenant
 	for _, row := range tenants {
 		if normalizeMatchText(row.Name) == payerName || normalizeMatchText(stringValue(row.PayerNameHint)) == payerName {
+			matches = append(matches, row)
+		}
+	}
+	return matches
+}
+
+func tenantsByTrustedPayerName(tenants []tenant, payerName string) []tenant {
+	payerName = normalizeMatchText(payerName)
+	if payerName == "" {
+		return nil
+	}
+	var matches []tenant
+	for _, row := range tenants {
+		if hint := normalizeMatchText(stringValue(row.PayerNameHint)); hint != "" && hint == payerName {
 			matches = append(matches, row)
 		}
 	}

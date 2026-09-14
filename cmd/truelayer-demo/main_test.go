@@ -109,8 +109,8 @@ func TestLocalLoginSetsSessionCookie(t *testing.T) {
 	if rec.Code != http.StatusFound {
 		t.Fatalf("status=%d want %d", rec.Code, http.StatusFound)
 	}
-	if loc := rec.Header().Get("Location"); loc != "/billing" {
-		t.Fatalf("Location=%q want /billing", loc)
+	if loc := rec.Header().Get("Location"); loc != "/rent-dashboard" {
+		t.Fatalf("Location=%q want /rent-dashboard", loc)
 	}
 	if len(rec.Result().Cookies()) == 0 {
 		t.Fatal("expected a session cookie")
@@ -530,14 +530,14 @@ func TestBillingTemplateShowsDataFetchError(t *testing.T) {
 	err := billingTemplate.Execute(&body, billingPageData{
 		Username:    "ddrzh",
 		Environment: "sandbox",
-		LastSync:    "No sync yet",
+		LastSync:    "尚未同步",
 		Error:       "data_fetch_failed",
 		TokenFile:   "truelayer-token.json",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(body.String(), "Bank data refresh failed") {
+	if !strings.Contains(body.String(), "银行数据刷新失败") {
 		t.Fatalf("billing page did not render data fetch error notice: %s", body.String())
 	}
 }
@@ -552,7 +552,7 @@ func TestBillingTemplateRendersTransactionFilters(t *testing.T) {
 		PeriodFilter:      "2026-09",
 		TransactionRows: []transactionPageRow{{
 			Direction:        "expense",
-			DirectionLabel:   "Expense",
+			DirectionLabel:   "支出",
 			PayerName:        "Boiler repair",
 			AmountDisplay:    "EUR 125.50",
 			DateDisplay:      "09 Sep 2026",
@@ -560,15 +560,43 @@ func TestBillingTemplateRendersTransactionFilters(t *testing.T) {
 			Reference:        "Maintenance",
 			AccountName:      "Rent account",
 			MatchStatus:      "unmatched",
-			MatchStatusLabel: "Unmatched",
+			MatchStatusLabel: "未关联",
 		}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"name=\"period\"", "name=\"direction\"", "name=\"match_status\"", "Boiler repair", "Expense"} {
+	for _, expected := range []string{"name=\"period\"", "name=\"direction\"", "name=\"match_status\"", "Boiler repair", "支出"} {
 		if !strings.Contains(body.String(), expected) {
 			t.Fatalf("billing page missing %q: %s", expected, body.String())
+		}
+	}
+}
+
+func TestBillingTemplateShowsMonthChoiceForRememberedTenant(t *testing.T) {
+	var body strings.Builder
+	err := billingTemplate.Execute(&body, billingPageData{
+		TransactionRows: []transactionPageRow{{
+			Direction:        "income",
+			MatchStatus:      "needs_review",
+			MatchStatusLabel: "需处理",
+			TenantID:         7,
+			NeedsMonthChoice: true,
+			MonthOptions: []billingMonthOption{{
+				Period:    "2026-08",
+				Label:     "2026年8月",
+				Expected:  "EUR 950.00",
+				Paid:      "EUR 0.00",
+				Remaining: "EUR 950.00",
+			}},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"已关联：请确认租金月份", "选择月份...", "2026年8月", "应收 EUR 950.00", "确认月份"} {
+		if !strings.Contains(body.String(), expected) {
+			t.Fatalf("billing page missing month-choice text %q: %s", expected, body.String())
 		}
 	}
 }
@@ -579,6 +607,7 @@ func TestRentDashboardTemplateRendersMonthlyStatus(t *testing.T) {
 		Username:      "ddrzh",
 		Environment:   "sandbox",
 		Period:        "2026-09",
+		PeriodLabel:   "2026年9月",
 		ExpectedTotal: "EUR 950.00",
 		Rows: []rentDashboardRow{{
 			ObligationID:   11,
@@ -587,7 +616,7 @@ func TestRentDashboardTemplateRendersMonthlyStatus(t *testing.T) {
 			DueDate:        "2026-09-05",
 			ExpectedAmount: "EUR 950.00",
 			Status:         "paid",
-			StatusLabel:    "Paid",
+			StatusLabel:    "已缴清",
 			Payments: []rentPaymentDetail{{
 				AmountDisplay:      "EUR 950.00",
 				DateDisplay:        "04 Sep 2026 08:00",
@@ -600,7 +629,7 @@ func TestRentDashboardTemplateRendersMonthlyStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"2026-09", "Tenant rent status", "Aoife Murphy", "Rent Dashboard", "Transactions", `onchange="this.form.submit()"`, "Payment details", "September rent", "rent-2026-09"} {
+	for _, expected := range []string{"2026-09", "租客缴费情况", "Aoife Murphy", "月度总览", "银行流水", `onchange="this.form.submit()"`, "收款明细", "September rent", "rent-2026-09"} {
 		if !strings.Contains(body.String(), expected) {
 			t.Fatalf("dashboard missing %q: %s", expected, body.String())
 		}
@@ -1121,6 +1150,22 @@ func TestDecideRentMatchTreatsNameMatchAsCandidateWithBackfill(t *testing.T) {
 	}
 }
 
+func TestDecideRentMatchUsesRememberedPayerNameAutomatically(t *testing.T) {
+	tenantRow := tenant{ID: 7, Name: "张三", PayerNameHint: ptrString("ZHANG SAN")}
+	obligation := rentObligation{ID: 11, TenantID: 7, PeriodMonth: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), ExpectedAmountCents: 95000}
+	tx := paymentTransactionInput{
+		Direction:       "income",
+		AmountCents:     95000,
+		PayerName:       " zhang   san ",
+		TransactionTime: ptrTime(time.Date(2026, 9, 4, 8, 0, 0, 0, time.UTC)),
+	}
+
+	decision := decideRentMatch(tx, []tenant{tenantRow}, []rentObligation{obligation})
+	if decision.Status != "matched" || decision.ConfirmationSource != "auto_name" {
+		t.Fatalf("unexpected remembered-name decision: %+v", decision)
+	}
+}
+
 func TestDecideRentMatchOverpaymentNeedsReview(t *testing.T) {
 	payerID := "payer-123"
 	tenantRow := tenant{ID: 7, PayerID: &payerID}
@@ -1138,7 +1183,7 @@ func TestDecideRentMatchOverpaymentNeedsReview(t *testing.T) {
 	}
 }
 
-func TestSelectObligationPrefersNextMonthWhenReferencedMonthIsPaid(t *testing.T) {
+func TestSelectObligationRequiresUserChoiceWhenReferencedMonthIsPaid(t *testing.T) {
 	tenantID := uint64(7)
 	tx := paymentTransactionInput{
 		Direction:       "income",
@@ -1153,16 +1198,17 @@ func TestSelectObligationPrefersNextMonthWhenReferencedMonthIsPaid(t *testing.T)
 	}
 
 	got, ok := selectObligationForTransaction(tx, tenantID, obligations)
-	if !ok {
-		t.Fatal("expected an open obligation")
-	}
-	if got.ID != 51 {
-		t.Fatalf("obligation=%d (%s), want next-month obligation 51", got.ID, got.PeriodMonth.Format("2006-01"))
+	if ok {
+		t.Fatalf("unexpected automatic allocation to obligation %d (%s)", got.ID, got.PeriodMonth.Format("2006-01"))
 	}
 }
 
 func ptrTime(t time.Time) *time.Time {
 	return &t
+}
+
+func ptrString(value string) *string {
+	return &value
 }
 
 func TestCountUnknownPayersCountsUnknownNamesOnly(t *testing.T) {
