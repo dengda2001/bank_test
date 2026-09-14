@@ -1,40 +1,32 @@
 # 在 iTerm2 + zsh 中粘贴图片给 AI
 
-这套配置不会把图片二进制内容直接写入终端，而是把剪贴板图片保存到临时 PNG，再把 `@图片路径` 插入当前 AI 命令行。这样可以避免终端把图片当作乱码或普通文本处理。
+这套配置使用 iTerm2 全局快捷键和 Run Coprocess：Swift 工具读取剪贴板图片，保存为临时 PNG，再把图片绝对路径输入当前终端。这样不依赖 zsh 当前输入行，在 tmux 中也能工作。
 
 ## 安装
 
 在项目根目录执行：
 
 ```sh
-chmod +x scripts/paste-image-to-zsh.sh scripts/install-ai-image-paste.sh
+chmod +x scripts/install-ai-image-paste.sh
 ./scripts/install-ai-image-paste.sh
 ```
 
-脚本优先使用 `pngpaste`。如果没有安装，会自动尝试 macOS 自带的 `osascript`；如果系统权限或剪贴板格式不兼容，可以安装：
+安装器会使用 `swiftc` 编译 `scripts/codex-paste-image.swift` 到 `~/.local/bin/codex-paste-image`。它支持 PNG、TIFF，以及 Finder 复制的图片文件。
 
-```sh
-brew install pngpaste
-```
+## 配置 iTerm2 全局快捷键
 
-## 配置 iTerm2 快捷键
-
-打开 `Settings → Profiles → Keys → Key Mappings`，新增一条：
+安装器会自动配置 iTerm2 的全局快捷键。如果 iTerm2 没有及时刷新，也可以手动打开 `Settings → Keys → Key Mappings`，新增：
 
 - Keyboard Shortcut：`Command + Option + V`
-- Action：`Send Escape Sequence`
-- 输入：`[99~`
+- Action：`Run Coprocess`
+- Command：`/Users/你的用户名/.local/bin/codex-paste-image`
 
-然后新开一个 zsh 标签页，或执行：
-
-```sh
-source ~/.zshrc
-```
+如果你需要手动配置，运行 Coprocess 的命令输出会被 iTerm2 当作当前终端输入，因此不需要 zsh 或 tmux 额外绑定。
 
 复制图片后按 `Command + Option + V`，当前输入行会出现类似：
 
 ```text
-@/var/folders/.../ai-image-paste/image-Ab12Cd.png
+/var/folders/.../ai-image-paste/image-AB12CD34.png
 ```
 
 接着补充“请分析这张图片”等文字并提交即可。临时图片权限为当前用户可读写，文件会保留在 macOS 临时目录中，重启后通常会被系统清理。
