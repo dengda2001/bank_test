@@ -104,3 +104,36 @@ Added sidebar navigation plus manual tenant and expense ledger pages backed by l
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: Monthly rent dashboard and payer matching UX
+
+**Date**: 2026-09-14
+**Task**: Monthly rent dashboard and payer matching UX
+**Branch**: `main`
+
+### Summary
+
+Implemented the Chinese monthly rent dashboard with clear expected/paid/balance totals, progress and month navigation; unified rounded controls and mobile layout; remembered exact payer names and batch-associated same-name income transactions; ambiguous months remain tenant-associated for explicit user selection; added migration, regression coverage, and database spec.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5dd03a2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
