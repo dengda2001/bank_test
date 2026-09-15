@@ -458,6 +458,116 @@ func TestE2ELedgerScenarioRunsHTTPActionsAndChecksConservation(t *testing.T) {
 	}
 }
 
+func TestExtractE2ECashReceiptID(t *testing.T) {
+	id, err := extractE2ECashReceiptID([]byte(`<a href="/cash-receipts/void?receipt_id=501">作废</a>`))
+	if err != nil || id != 501 {
+		t.Fatalf("id=%d err=%v", id, err)
+	}
+	if _, err := extractE2ECashReceiptID([]byte(`<main>no receipt</main>`)); err == nil {
+		t.Fatal("missing receipt link unexpectedly parsed")
+	}
+}
+
+func TestE2ECashReceiptScenarioRunsPreviewIdempotencyVoidAndCorrection(t *testing.T) {
+	manifest, err := newE2EFixtureManifest("rentops-e2e-20260916-120000-a1b2c3d4", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cashPaid := int64(0)
+	receiptID := uint64(0)
+	voided := false
+	firstReceiptVoided := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/login-local" {
+			if _, cookieErr := r.Cookie("rentops_session"); cookieErr != nil {
+				http.Redirect(w, r, "/", http.StatusFound)
+				return
+			}
+		}
+		switch r.URL.Path {
+		case "/login-local":
+			if err := r.ParseForm(); err != nil || r.Form.Get("password") != "e2e-password" {
+				http.Redirect(w, r, "/?error=invalid_login", http.StatusFound)
+				return
+			}
+			http.SetCookie(w, &http.Cookie{Name: "rentops_session", Value: "session-secret", Path: "/"})
+			http.Redirect(w, r, "/rent-dashboard", http.StatusFound)
+		case "/billing":
+			w.WriteHeader(http.StatusOK)
+		case "/cash-receipts/new":
+			fmt.Fprint(w, `<form action="/cash-receipts/preview"><input value="EUR"><span>tenant 42</span></form>`)
+		case "/cash-receipts/preview":
+			_ = r.ParseForm()
+			if r.Form.Get("currency") != "EUR" {
+				http.Redirect(w, r, "/cash-receipts/new?error=cash_receipt_failed&period=2026-08&tenant_id=42", http.StatusFound)
+				return
+			}
+			if r.Form.Get("amount") == "1.00" && cashPaid == 350 {
+				http.Redirect(w, r, "/cash-receipts/new?error=cash_overbalance&period=2026-08&tenant_id=42", http.StatusFound)
+				return
+			}
+			if r.Form.Get("amount") == "300.00" {
+				fmt.Fprint(w, `<main>确认现金入账 EUR 600.00 EUR 50.00 <form action="/cash-receipts"></form></main>`)
+				return
+			}
+			fmt.Fprint(w, `<main>确认现金入账 EUR 600.00 EUR 350.00 EUR 0.00 <form action="/cash-receipts"></form></main>`)
+		case "/cash-receipts":
+			_ = r.ParseForm()
+			if r.Form.Get("amount") == "300.00" {
+				cashPaid = 300
+				receiptID = 501
+				voided = false
+			} else if r.Form.Get("amount") == "350.00" {
+				cashPaid = 350
+				receiptID = 502
+				voided = false
+			} else {
+				t.Errorf("unexpected cash amount: %v", r.Form)
+			}
+			http.Redirect(w, r, "/tenants/42?message=cash_receipt_saved&from_month=2026-08&to_month=2026-08", http.StatusFound)
+		case "/tenants/42":
+			w.WriteHeader(http.StatusOK)
+			switch {
+			case cashPaid == 300 && !voided:
+				fmt.Fprint(w, `<main>EUR 300.00 EUR 50.00 <a href="/cash-receipts/void?receipt_id=501">作废</a></main>`)
+			case cashPaid == 350 && !voided:
+				fmt.Fprint(w, `<main>EUR 350.00 EUR 0.00 <a href="/cash-receipts/void?receipt_id=502">作废</a></main>`)
+			default:
+				fmt.Fprint(w, `<main>EUR 600.00 EUR 350.00</main>`)
+			}
+		case "/cash-receipts/void":
+			if r.Method == http.MethodGet {
+				fmt.Fprintf(w, `<main>EUR 300.00 %d</main>`, receiptID)
+				return
+			}
+			_ = r.ParseForm()
+			if r.Form.Get("receipt_id") != "501" {
+				http.Redirect(w, r, "/cash-receipts/void?error=cash_void_failed", http.StatusFound)
+				return
+			}
+			cashPaid = 0
+			voided = true
+			firstReceiptVoided = true
+			http.Redirect(w, r, "/tenants/42?message=cash_receipt_voided&from_month=2026-08&to_month=2026-08", http.StatusFound)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client, err := newE2EHTTPClient(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authScenario := client.authenticationScenario(context.Background(), "e2e-user", "e2e-password")
+	if authScenario.Status != "passed" {
+		t.Fatalf("authentication scenario=%+v", authScenario)
+	}
+	scenario := client.cashReceiptScenario(context.Background(), manifest, 42)
+	if scenario.Status != "passed" || receiptID != 502 || !firstReceiptVoided || cashPaid != 350 {
+		t.Fatalf("cash scenario=%+v receiptID=%d firstVoided=%v cashPaid=%d", scenario, receiptID, firstReceiptVoided, cashPaid)
+	}
+}
+
 func TestNewE2EFixtureManifestUsesUniqueRunIDPrefixedIdentifiers(t *testing.T) {
 	runID := "rentops-e2e-20260916-120000-a1b2c3d4"
 	manifest, err := newE2EFixtureManifest(runID, time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC))
