@@ -285,3 +285,41 @@ Implemented the Chinese monthly rent dashboard with clear expected/paid/balance 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 9: 完成现金租金补录与作废更正
+
+**Date**: 2026-09-16
+**Task**: 完成现金租金补录与作废更正
+**Branch**: `main`
+
+### Summary
+
+完成独立现金收款账本、EUR integer-cent 校验、预览与原子入账、同月银行+现金投影、幂等与作废纠正、租客历史和月度总览来源展示；增加 MySQL 可选迁移幂等、预览无写入、用户隔离和并发余额竞争测试，并更新 backend database spec。全量 go test、go vet、git diff --check 通过；本机未配置 RENTOPS_MYSQL_TEST_DSN，MySQL 集成测试按约定跳过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c9d18df` | (see git log) |
+| `af143ea` | (see git log) |
+| `3eea6f3` | (see git log) |
+| `8e94cf2` | (see git log) |
+| `e4f9dc5` | (see git log) |
+| `3cce4e6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

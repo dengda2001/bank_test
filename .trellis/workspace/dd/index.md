@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 8
+- **Total Sessions**: 9
 - **Last Active**: 2026-09-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~287 | Active |
+| `journal-1.md` | ~325 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 9 | 2026-09-16 | 完成现金租金补录与作废更正 | `c9d18df`, `af143ea`, `3eea6f3`, `8e94cf2`, `e4f9dc5`, `3cce4e6` | `main` |
 | 8 | 2026-09-16 | 完成银行入账归类与纠错 | `91cac85`, `d233e72`, `ec51805`, `c5a65b5`, `8ac6917`, `1746fa8`, `4810dcd` | `main` |
 | 7 | 2026-09-16 | 完成租客档案与付款人关系 | `280e21a`, `e220702`, `860664f`, `fef32ce`, `40e554c`, `3347878`, `48ccd1a` | `main` |
 | 6 | 2026-09-16 | EUR 收租账本基础实现与测试 | `80c661b`, `052bebc`, `f3791e8`, `4a7fff2`, `342ceec` | `main` |
