@@ -24,7 +24,9 @@
     "09-15-bank-receipt-management",
     "09-15-cash-rent-receipts",
     "09-15-monthly-rent-dashboard",
-    "09-15-monthly-rent-dunning"
+    "09-15-monthly-rent-dunning",
+    "09-16-api-e2e-acceptance-cleanup",
+    "09-16-ui-consistency-flat-design"
   ],
   "parent": null,
   "relatedFiles": [],

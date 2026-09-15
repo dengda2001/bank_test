@@ -246,3 +246,42 @@ Implemented the Chinese monthly rent dashboard with clear expected/paid/balance 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 8: 完成银行入账归类与纠错
+
+**Date**: 2026-09-16
+**Task**: 完成银行入账归类与纠错
+**Branch**: `main`
+
+### Summary
+
+完成银行同步覆盖、严格付款人匹配、EUR 原子归类拆分、部分分配余款、忽略恢复撤销审计、筛选分页、撤销预览和历史付款人逐笔预览；通过 go test ./...、go vet ./...、git diff --check。临时 MySQL 8.4 初始化崩溃，opt-in 集成测试未执行；浏览器运行时不可用，页面契约由 Go 模板测试覆盖。代码已推送并归档任务。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `91cac85` | (see git log) |
+| `d233e72` | (see git log) |
+| `ec51805` | (see git log) |
+| `c5a65b5` | (see git log) |
+| `8ac6917` | (see git log) |
+| `1746fa8` | (see git log) |
+| `4810dcd` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
