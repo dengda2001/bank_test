@@ -130,9 +130,23 @@ type billingPageData struct {
 	Error             string
 	TransactionRows   []transactionPageRow
 	TenantOptions     []billingTenantOption
+	ArrivalFromFilter string
+	ArrivalToFilter   string
+	PayerFilter       string
+	TenantFilter      uint64
 	DirectionFilter   string
 	MatchStatusFilter string
 	PeriodFilter      string
+	RentPeriodFilter  string
+	AllocationFilter  string
+	SortFilter        string
+	Page              int
+	PageSize          int
+	TotalTransactions int64
+	TotalPages        int
+	PreviousPageURL   string
+	NextPageURL       string
+	PendingFilter     bool
 	PendingCount      int
 	IncomeCount       int
 	TenantCount       int
@@ -577,16 +591,17 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 	filterError := ""
 	if err := validateTransactionFilters(filters); err != nil {
 		filterError = "invalid_filter"
-		filters = transactionFilters{}
+		filters = transactionFilters{Page: 1, PageSize: 50}
 	}
 	var rows []transactionPageRow
 	var lastSync string
 	var tenantCount, expenseCount int
 	var pendingCount int
+	var totalTransactions int64
 	var tenantOptions []billingTenantOption
 	if userID, ok := a.currentUserID(r); ok && a.db != nil {
 		var err error
-		rows, err = newTransactionService(a.db).listTransactionPageRows(r.Context(), userID, filters)
+		rows, totalTransactions, err = newTransactionService(a.db).listTransactionPageRowsWithTotal(r.Context(), userID, filters)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -597,6 +612,12 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		tenantCount = len(tenantRows)
+		if coverage, coverageErr := latestBankSyncCoverage(r.Context(), a.db, userID); coverageErr != nil {
+			http.Error(w, coverageErr.Error(), http.StatusInternalServerError)
+			return
+		} else {
+			lastSync = coverage
+		}
 		tenantOptions = make([]billingTenantOption, 0, len(tenantRows))
 		for _, tenantRow := range tenantRows {
 			tenantOptions = append(tenantOptions, billingTenantOption{ID: tenantRow.ID, Name: tenantRow.Name})
@@ -607,19 +628,40 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		expenseCount = int(count)
-		if err := a.db.WithContext(r.Context()).Model(&paymentTransaction{}).Where("user_id = ? AND direction = ? AND match_status IN ?", userID, "income", pendingMatchStatuses).Count(&count).Error; err != nil {
+		if pendingCount64, err := newTransactionService(a.db).countPendingTransactionsWithFilters(r.Context(), userID, filters); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
+		} else {
+			pendingCount = int(pendingCount64)
 		}
-		pendingCount = int(count)
 	} else {
 		result, _ := a.loadLatestDemoResult()
 		lastSync = result.FetchedAt
 		rows = fallbackTransactionPageRows(result, filters)
+		totalTransactions = int64(len(rows))
 		tenants, _ := a.loadTenants()
 		expenses, _ := a.loadExpenses()
 		tenantCount = len(tenants)
 		expenseCount = len(expenses)
+	}
+	page := filters.Page
+	if page <= 0 {
+		page = 1
+	}
+	pageSize := filters.PageSize
+	if pageSize <= 0 {
+		pageSize = 50
+	}
+	totalPages := 0
+	if totalTransactions > 0 {
+		totalPages = int((totalTransactions + int64(pageSize) - 1) / int64(pageSize))
+	}
+	previousPageURL, nextPageURL := "", ""
+	if page > 1 {
+		previousPageURL = billingPageURL(r.URL.Query(), page-1)
+	}
+	if totalPages > 0 && page < totalPages {
+		nextPageURL = billingPageURL(r.URL.Query(), page+1)
 	}
 	connected := a.hasStoredToken()
 	if userID, ok := a.currentUserID(r); ok && a.bankConnections != nil {
@@ -636,11 +678,25 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 		Error:             firstNonEmpty(filterError, r.URL.Query().Get("error")),
 		TransactionRows:   rows,
 		TenantOptions:     tenantOptions,
+		ArrivalFromFilter: filters.ArrivalFrom,
+		ArrivalToFilter:   filters.ArrivalTo,
+		PayerFilter:       filters.Payer,
+		TenantFilter:      filters.TenantID,
 		DirectionFilter:   filters.Direction,
 		MatchStatusFilter: filters.MatchStatus,
 		PeriodFilter:      filters.PeriodMonth,
+		RentPeriodFilter:  filters.RentPeriod,
+		AllocationFilter:  filters.AllocationKind,
+		SortFilter:        filters.Sort,
+		Page:              page,
+		PageSize:          pageSize,
+		TotalTransactions: totalTransactions,
+		TotalPages:        totalPages,
+		PreviousPageURL:   previousPageURL,
+		NextPageURL:       nextPageURL,
+		PendingFilter:     filters.PendingOnly,
 		PendingCount:      pendingCount,
-		IncomeCount:       len(rows),
+		IncomeCount:       int(totalTransactions),
 		TokenFile:         a.cfg.TokenFile,
 		TenantCount:       tenantCount,
 		ExpenseCount:      expenseCount,
@@ -652,6 +708,15 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 	if err := billingTemplate.Execute(w, data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func billingPageURL(query url.Values, page int) string {
+	values := url.Values{}
+	for key, items := range query {
+		values[key] = append([]string(nil), items...)
+	}
+	values.Set("page", strconv.Itoa(page))
+	return "/billing?" + values.Encode()
 }
 
 func (a *app) handleRentMatchConfirmation(w http.ResponseWriter, r *http.Request) {

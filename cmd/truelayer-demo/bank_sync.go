@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -246,4 +247,68 @@ func syncResultHasSuccessfulAccount(result demoResult) bool {
 		}
 	}
 	return false
+}
+
+func formatBankSyncCoverage(run bankSyncRun, accounts []bankSyncRunAccount) string {
+	if run.ID == 0 {
+		return ""
+	}
+	statusLabel := map[string]string{
+		bankSyncStatusRunning:   "同步中",
+		bankSyncStatusSucceeded: "同步成功",
+		bankSyncStatusPartial:   "部分成功",
+		bankSyncStatusFailed:    "同步失败",
+	}[run.Status]
+	if statusLabel == "" {
+		statusLabel = run.Status
+	}
+	modeLabel := map[string]string{
+		bankSyncModeInitialYear: "初次同步一年",
+		bankSyncModeRefresh90d:  "刷新近 90 天",
+	}[run.Mode]
+	if modeLabel == "" {
+		modeLabel = run.Mode
+	}
+	succeeded := 0
+	var coveredFrom, coveredTo *time.Time
+	for _, account := range accounts {
+		if account.Status == bankSyncAccountSucceeded {
+			succeeded++
+		}
+		if account.CoveredFrom != nil && (coveredFrom == nil || account.CoveredFrom.Before(*coveredFrom)) {
+			value := *account.CoveredFrom
+			coveredFrom = &value
+		}
+		if account.CoveredTo != nil && (coveredTo == nil || account.CoveredTo.After(*coveredTo)) {
+			value := *account.CoveredTo
+			coveredTo = &value
+		}
+	}
+	coverageFrom := run.RequestedFrom.Format(dateLayout)
+	coverageTo := run.RequestedTo.UTC().Format(dateLayout)
+	if coveredFrom != nil {
+		coverageFrom = coveredFrom.Format(dateLayout)
+	}
+	if coveredTo != nil {
+		coverageTo = coveredTo.UTC().Format(dateLayout)
+	}
+	return fmt.Sprintf("%s · %s · 覆盖 %s 至 %s · 账户 %d/%d", statusLabel, modeLabel, coverageFrom, coverageTo, succeeded, len(accounts))
+}
+
+func latestBankSyncCoverage(ctx context.Context, db *gorm.DB, userID uint64) (string, error) {
+	if db == nil || userID == 0 {
+		return "", nil
+	}
+	var run bankSyncRun
+	if err := db.WithContext(ctx).Where("user_id = ?", userID).Order("started_at DESC, id DESC").First(&run).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", nil
+		}
+		return "", err
+	}
+	var accounts []bankSyncRunAccount
+	if err := db.WithContext(ctx).Where("user_id = ? AND bank_sync_run_id = ?", userID, run.ID).Find(&accounts).Error; err != nil {
+		return "", err
+	}
+	return formatBankSyncCoverage(run, accounts), nil
 }

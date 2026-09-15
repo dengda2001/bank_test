@@ -695,7 +695,7 @@ func TestBillingTemplateShowsMonthChoiceForRememberedTenant(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"已关联：请确认租金月份", "选择月份...", "2026年8月", "应收 EUR 950.00", "确认月份"} {
+	for _, expected := range []string{"已关联租客，请确认租金月份", "选择月份...", "2026年8月", "应收 EUR 950.00", "确认月份"} {
 		if !strings.Contains(body.String(), expected) {
 			t.Fatalf("billing page missing month-choice text %q: %s", expected, body.String())
 		}
@@ -934,6 +934,49 @@ func TestFiltersFromQuerySupportsPendingOnly(t *testing.T) {
 	filters := filtersFromQuery(query)
 	if filters.PeriodMonth != "2026-09" || !filters.PendingOnly {
 		t.Fatalf("unexpected pending filters: %+v", filters)
+	}
+}
+
+func TestFiltersFromQuerySeparatesArrivalAndRentPeriods(t *testing.T) {
+	query := url.Values{
+		"arrival_from": {"2026-08-01"},
+		"arrival_to":   {"2026-09-01"},
+		"payer":        {"Aoife"},
+		"tenant_id":    {"7"},
+		"rent_period":  {"2026-07"},
+		"allocation":   {allocationKindDeposit},
+		"sort":         {"amount_asc"},
+		"page":         {"2"},
+		"page_size":    {"25"},
+		"pending":      {"1"},
+	}
+	filters := filtersFromQuery(query)
+	if filters.ArrivalFrom != "2026-08-01" || filters.ArrivalTo != "2026-09-01" || filters.PeriodMonth != "" || filters.RentPeriod != "2026-07" || filters.Payer != "Aoife" || filters.TenantID != 7 || filters.AllocationKind != allocationKindDeposit || filters.Sort != "amount_asc" || filters.Page != 2 || filters.PageSize != 25 || !filters.PendingOnly {
+		t.Fatalf("filters=%+v want separate arrival/rent periods and all query controls", filters)
+	}
+	if err := validateTransactionFilters(filters); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestValidateTransactionFiltersRejectsUnsafeSortAndInvalidDateRange(t *testing.T) {
+	if err := validateTransactionFilters(transactionFilters{Sort: "amount desc; DROP TABLE payment_transactions"}); err == nil {
+		t.Fatal("unsafe sort should be rejected")
+	}
+	if err := validateTransactionFilters(transactionFilters{ArrivalFrom: "2026-09-02", ArrivalTo: "2026-09-01"}); err == nil {
+		t.Fatal("reversed arrival date range should be rejected")
+	}
+}
+
+func TestTransactionPageRowDisplaysInternalAndProviderIdentifiers(t *testing.T) {
+	providerID := "bank-tx-7"
+	parsed := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	row := transactionPageRowFromModel(paymentTransaction{
+		ID: 7, ProviderTransactionID: &providerID, Direction: "income", AmountCents: 95000, Currency: "EUR",
+		TransactionTime: &parsed, ParsedPeriodMonth: &parsed, MatchStatus: "partial",
+	})
+	if row.InternalID != "7" || row.ProviderTransactionID != providerID || row.ParsedPeriodDisplay != "2026-07" || row.MatchStatusLabel != "部分关联" {
+		t.Fatalf("page row=%+v want both identifiers and parsed period", row)
 	}
 }
 
@@ -1454,6 +1497,23 @@ func TestInitialSyncWindowDefaultsToOneYear(t *testing.T) {
 	}
 	if from != "2025-09-16" || !to.Equal(now) {
 		t.Fatalf("window=(%q,%s) want (2025-09-16,%s)", from, to, now)
+	}
+}
+
+func TestFormatBankSyncCoverageShowsActualAccountCoverage(t *testing.T) {
+	from := time.Date(2025, 9, 16, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)
+	coveredFrom := time.Date(2025, 10, 1, 0, 0, 0, 0, time.UTC)
+	coveredTo := time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
+	run := bankSyncRun{ID: 9, Mode: bankSyncModeInitialYear, Status: bankSyncStatusPartial, RequestedFrom: from, RequestedTo: to}
+	coverage := formatBankSyncCoverage(run, []bankSyncRunAccount{
+		{Status: bankSyncAccountSucceeded, CoveredFrom: &coveredFrom, CoveredTo: &coveredTo},
+		{Status: bankSyncAccountFailed},
+	})
+	for _, expected := range []string{"部分成功", "初次同步一年", "覆盖 2025-10-01 至 2026-09-15", "账户 1/2"} {
+		if !strings.Contains(coverage, expected) {
+			t.Fatalf("coverage=%q missing %q", coverage, expected)
+		}
 	}
 }
 

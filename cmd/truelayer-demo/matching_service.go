@@ -174,32 +174,51 @@ func (s *transactionService) confirmRentMatch(ctx context.Context, userID, trans
 }
 
 func (s *transactionService) listTransactionPageRows(ctx context.Context, userID uint64, filters transactionFilters) ([]transactionPageRow, error) {
+	rows, _, err := s.listTransactionPageRowsWithTotal(ctx, userID, filters)
+	return rows, err
+}
+
+func (s *transactionService) listTransactionPageRowsWithTotal(ctx context.Context, userID uint64, filters transactionFilters) ([]transactionPageRow, int64, error) {
 	if err := s.reconcileTransactions(ctx, userID); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	transactions, err := s.listTransactions(ctx, userID, filters)
+	transactions, total, err := s.listTransactionsPage(ctx, userID, filters)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	var tenants []tenant
 	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Find(&tenants).Error; err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	var obligations []rentObligation
 	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Find(&obligations).Error; err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	var payers []tenantPayer
 	if err := s.db.WithContext(ctx).Where("user_id = ? AND removed_at IS NULL", userID).Find(&payers).Error; err != nil {
-		return nil, err
+		return nil, 0, err
+	}
+	allocationsByTransaction := make(map[uint64][]paymentAllocation)
+	if len(transactions) > 0 {
+		ids := make([]uint64, 0, len(transactions))
+		for _, transaction := range transactions {
+			ids = append(ids, transaction.ID)
+		}
+		var allocations []paymentAllocation
+		if err := s.db.WithContext(ctx).Where("user_id = ? AND payment_transaction_id IN ?", userID, ids).Order("id ASC").Find(&allocations).Error; err != nil {
+			return nil, 0, err
+		}
+		for _, allocation := range allocations {
+			allocationsByTransaction[allocation.PaymentTransactionID] = append(allocationsByTransaction[allocation.PaymentTransactionID], allocation)
+		}
 	}
 	rows := make([]transactionPageRow, 0, len(transactions))
 	for _, transaction := range transactions {
-		row := transactionPageRowFromModel(transaction)
+		row := enrichTransactionPageRow(transactionPageRowFromModel(transaction), transaction, allocationsByTransaction[transaction.ID], obligations)
 		if row.TenantID != 0 && transaction.Direction == "income" && transaction.MatchStatus != "matched" {
 			row.NeedsMonthChoice = true
 			for _, obligation := range obligations {
-				if obligation.TenantID != row.TenantID || obligation.PaidAmountCents >= obligation.ExpectedAmountCents {
+				if obligation.TenantID != row.TenantID || obligation.RecordStatus == obligationRecordVoided || obligation.PaidAmountCents >= obligation.ExpectedAmountCents {
 					continue
 				}
 				currency := firstNonEmpty(obligation.Currency, transaction.Currency, "EUR")
@@ -227,7 +246,7 @@ func (s *transactionService) listTransactionPageRows(ctx context.Context, userID
 		}
 		rows = append(rows, row)
 	}
-	return rows, nil
+	return rows, total, nil
 }
 
 func transactionID(value string) (uint64, error) {

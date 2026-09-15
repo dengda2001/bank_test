@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
@@ -235,19 +236,52 @@ func mathAbs(value float64) float64 {
 }
 
 func filtersFromQuery(q url.Values) transactionFilters {
+	page := 1
+	if raw := strings.TrimSpace(q.Get("page")); raw != "" {
+		page, _ = strconv.Atoi(raw)
+	}
+	pageSize := 50
+	if raw := strings.TrimSpace(q.Get("page_size")); raw != "" {
+		pageSize, _ = strconv.Atoi(raw)
+	}
+	tenantIDRaw := strings.TrimSpace(q.Get("tenant_id"))
+	var tenantID uint64
+	if tenantIDRaw != "" {
+		tenantID, _ = strconv.ParseUint(tenantIDRaw, 10, 64)
+	}
 	return transactionFilters{
-		Direction:   strings.TrimSpace(q.Get("direction")),
-		MatchStatus: strings.TrimSpace(q.Get("match_status")),
-		PeriodMonth: strings.TrimSpace(q.Get("period")),
-		PendingOnly: strings.TrimSpace(q.Get("pending")) == "1",
+		ArrivalFrom:    strings.TrimSpace(q.Get("arrival_from")),
+		ArrivalTo:      strings.TrimSpace(q.Get("arrival_to")),
+		Payer:          strings.TrimSpace(q.Get("payer")),
+		TenantID:       tenantID,
+		TenantIDRaw:    tenantIDRaw,
+		Direction:      strings.TrimSpace(q.Get("direction")),
+		MatchStatus:    strings.TrimSpace(q.Get("match_status")),
+		PeriodMonth:    strings.TrimSpace(q.Get("period")),
+		RentPeriod:     strings.TrimSpace(q.Get("rent_period")),
+		AllocationKind: strings.TrimSpace(q.Get("allocation")),
+		Sort:           strings.TrimSpace(q.Get("sort")),
+		Page:           page,
+		PageSize:       pageSize,
+		PendingOnly:    strings.TrimSpace(q.Get("pending")) == "1",
 	}
 }
 
 type transactionFilters struct {
-	Direction   string
-	MatchStatus string
-	PeriodMonth string
-	PendingOnly bool
+	ArrivalFrom    string
+	ArrivalTo      string
+	Payer          string
+	TenantID       uint64
+	TenantIDRaw    string
+	Direction      string
+	MatchStatus    string
+	PeriodMonth    string
+	RentPeriod     string
+	AllocationKind string
+	Sort           string
+	Page           int
+	PageSize       int
+	PendingOnly    bool
 }
 
 func validateTransactionFilters(filters transactionFilters) error {
@@ -264,32 +298,87 @@ func validateTransactionFilters(filters transactionFilters) error {
 			return errors.New("period filter is invalid")
 		}
 	}
+	if filters.RentPeriod != "" {
+		if _, err := parsePeriodMonth(filters.RentPeriod); err != nil {
+			return errors.New("rent period filter is invalid")
+		}
+	}
+	var arrivalFrom, arrivalTo time.Time
+	var err error
+	if filters.ArrivalFrom != "" {
+		arrivalFrom, err = parseDate(filters.ArrivalFrom)
+		if err != nil {
+			return errors.New("arrival from filter is invalid")
+		}
+	}
+	if filters.ArrivalTo != "" {
+		arrivalTo, err = parseDate(filters.ArrivalTo)
+		if err != nil {
+			return errors.New("arrival to filter is invalid")
+		}
+	}
+	if !arrivalFrom.IsZero() && !arrivalTo.IsZero() && arrivalTo.Before(arrivalFrom) {
+		return errors.New("arrival date range is invalid")
+	}
+	if filters.TenantIDRaw != "" {
+		parsed, err := strconv.ParseUint(filters.TenantIDRaw, 10, 64)
+		if err != nil || parsed == 0 || parsed != filters.TenantID {
+			return errors.New("tenant filter is invalid")
+		}
+	}
+	if len([]rune(filters.Payer)) > 191 {
+		return errors.New("payer filter is too long")
+	}
+	switch filters.AllocationKind {
+	case "", allocationKindRent, allocationKindDeposit, allocationKindOther:
+	default:
+		return errors.New("allocation filter is invalid")
+	}
+	switch filters.Sort {
+	case "", "arrival_desc", "arrival_asc", "amount_desc", "amount_asc", "payer_asc":
+	default:
+		return errors.New("sort filter is invalid")
+	}
+	if filters.Page < 0 || filters.PageSize < 0 || filters.PageSize > 100 {
+		return errors.New("pagination filter is invalid")
+	}
 	return nil
 }
 
 type transactionPageRow struct {
-	ID                  string
-	Direction           string
-	DirectionLabel      string
-	PayerName           string
-	PayerNameKind       string
-	PayerID             string
-	AmountDisplay       string
-	DateDisplay         string
-	Description         string
-	Reference           string
-	AccountName         string
-	AccountID           string
-	TransactionID       string
-	Source              string
-	MatchStatus         string
-	MatchStatusLabel    string
-	CandidateTenantID   uint64
-	CandidateTenantName string
-	CanConfirm          bool
-	TenantID            uint64
-	NeedsMonthChoice    bool
-	MonthOptions        []billingMonthOption
+	ID                        string
+	InternalID                string
+	Direction                 string
+	DirectionLabel            string
+	PayerName                 string
+	PayerNameKind             string
+	PayerID                   string
+	AmountDisplay             string
+	AmountInput               string
+	AllocatedAmountDisplay    string
+	RemainingAmountDisplay    string
+	RemainingAmountInput      string
+	AllocationUseDisplay      string
+	DateDisplay               string
+	ParsedPeriodDisplay       string
+	ParsedPeriodSourceDisplay string
+	FinalPeriodDisplay        string
+	Description               string
+	Reference                 string
+	AccountName               string
+	AccountID                 string
+	TransactionID             string
+	ProviderTransactionID     string
+	Source                    string
+	MatchStatus               string
+	MatchStatusLabel          string
+	MatchReason               string
+	CandidateTenantID         uint64
+	CandidateTenantName       string
+	CanConfirm                bool
+	TenantID                  uint64
+	NeedsMonthChoice          bool
+	MonthOptions              []billingMonthOption
 }
 
 func paymentTransactionInputFromModel(row paymentTransaction) paymentTransactionInput {
@@ -341,62 +430,220 @@ func transactionPageRowFromModel(row paymentTransaction) transactionPageRow {
 	if row.MatchedTenantID != nil {
 		tenantID = *row.MatchedTenantID
 	}
-	return transactionPageRow{
-		ID:               strconv.FormatUint(row.ID, 10),
-		Direction:        row.Direction,
-		DirectionLabel:   directionLabel,
-		PayerName:        firstNonEmpty(stringValue(row.PayerName), "未知付款人"),
-		PayerNameKind:    firstNonEmpty(row.PayerNameKind, "unknown"),
-		PayerID:          firstNonEmpty(stringValue(row.PayerID), "无付款人编号"),
-		AmountDisplay:    formatMoney(centsToMoney(row.AmountCents), row.Currency, 2),
-		DateDisplay:      dateDisplay,
-		Description:      firstNonEmpty(row.Description, "无描述"),
-		Reference:        firstNonEmpty(row.Reference, "无参考号"),
-		AccountName:      firstNonEmpty(stringValue(row.AccountName), "未知账户"),
-		AccountID:        stringValue(row.AccountID),
-		TransactionID:    firstNonEmpty(stringValue(row.ProviderTransactionID), "#"+strconv.FormatUint(row.ID, 10)),
-		Source:           row.Source,
-		MatchStatus:      row.MatchStatus,
-		MatchStatusLabel: statusLabel,
-		TenantID:         tenantID,
+	parsedPeriod := ""
+	if row.ParsedPeriodMonth != nil {
+		parsedPeriod = monthStart(*row.ParsedPeriodMonth).Format("2006-01")
 	}
+	return transactionPageRow{
+		ID:                        strconv.FormatUint(row.ID, 10),
+		InternalID:                strconv.FormatUint(row.ID, 10),
+		Direction:                 row.Direction,
+		DirectionLabel:            directionLabel,
+		PayerName:                 firstNonEmpty(stringValue(row.PayerName), "未知付款人"),
+		PayerNameKind:             firstNonEmpty(row.PayerNameKind, "unknown"),
+		PayerID:                   firstNonEmpty(stringValue(row.PayerID), "无付款人编号"),
+		AmountDisplay:             formatMoney(centsToMoney(row.AmountCents), row.Currency, 2),
+		AmountInput:               strconv.FormatFloat(centsToMoney(row.AmountCents), 'f', 2, 64),
+		AllocatedAmountDisplay:    formatMoney(0, row.Currency, 2),
+		RemainingAmountDisplay:    formatMoney(centsToMoney(row.AmountCents), row.Currency, 2),
+		RemainingAmountInput:      strconv.FormatFloat(centsToMoney(row.AmountCents), 'f', 2, 64),
+		DateDisplay:               dateDisplay,
+		ParsedPeriodDisplay:       parsedPeriod,
+		ParsedPeriodSourceDisplay: row.ParsedPeriodSource,
+		Description:               firstNonEmpty(row.Description, "无描述"),
+		Reference:                 firstNonEmpty(row.Reference, "无参考号"),
+		AccountName:               firstNonEmpty(stringValue(row.AccountName), "未知账户"),
+		AccountID:                 stringValue(row.AccountID),
+		TransactionID:             firstNonEmpty(stringValue(row.ProviderTransactionID), "#"+strconv.FormatUint(row.ID, 10)),
+		ProviderTransactionID:     firstNonEmpty(stringValue(row.ProviderTransactionID), "无银行流水号"),
+		Source:                    row.Source,
+		MatchStatus:               row.MatchStatus,
+		MatchStatusLabel:          statusLabel,
+		MatchReason:               row.MatchReason,
+		TenantID:                  tenantID,
+	}
+}
+
+func enrichTransactionPageRow(row transactionPageRow, source paymentTransaction, allocations []paymentAllocation, obligations []rentObligation) transactionPageRow {
+	summary := summarizeTransactionAllocations(source, allocations)
+	row.AllocatedAmountDisplay = formatMoney(centsToMoney(summary.AllocatedCents), source.Currency, 2)
+	row.RemainingAmountDisplay = formatMoney(centsToMoney(summary.RemainingCents), source.Currency, 2)
+	row.RemainingAmountInput = strconv.FormatFloat(centsToMoney(summary.RemainingCents), 'f', 2, 64)
+	if summary.AllocatedCents == 0 {
+		row.AllocationUseDisplay = "未归类"
+	} else {
+		labels := make([]string, 0, 3)
+		for _, kind := range []string{allocationKindRent, allocationKindDeposit, allocationKindOther} {
+			if cents := summary.KindCents[kind]; cents > 0 {
+				label := map[string]string{allocationKindRent: "房租", allocationKindDeposit: "押金", allocationKindOther: "其他收入"}[kind]
+				labels = append(labels, fmt.Sprintf("%s %s", label, formatMoney(centsToMoney(cents), source.Currency, 2)))
+			}
+		}
+		row.AllocationUseDisplay = strings.Join(labels, " · ")
+	}
+	periods := make([]string, 0)
+	seenPeriods := make(map[string]struct{})
+	for _, allocation := range allocations {
+		if !ledgerAllocationIsEffective(allocation) {
+			continue
+		}
+		if row.TenantID == 0 && allocation.TenantID != nil && *allocation.TenantID != 0 {
+			row.TenantID = *allocation.TenantID
+		}
+		if ledgerAllocationKind(allocation) != allocationKindRent || allocation.RentObligationID == nil {
+			continue
+		}
+		for _, obligation := range obligations {
+			if obligation.ID != *allocation.RentObligationID {
+				continue
+			}
+			period := monthStart(obligation.PeriodMonth).Format("2006-01")
+			if _, seen := seenPeriods[period]; !seen {
+				seenPeriods[period] = struct{}{}
+				periods = append(periods, period)
+			}
+			break
+		}
+	}
+	row.FinalPeriodDisplay = strings.Join(periods, ", ")
+	return row
 }
 
 func (s *transactionService) listTransactions(ctx context.Context, userID uint64, filters transactionFilters) ([]paymentTransaction, error) {
-	q := s.db.WithContext(ctx).Where("user_id = ?", userID)
-	if filters.Direction != "" {
-		q = q.Where("direction = ?", filters.Direction)
+	rows, _, err := s.listTransactionsPage(ctx, userID, filters)
+	return rows, err
+}
+
+func (s *transactionService) listTransactionsPage(ctx context.Context, userID uint64, filters transactionFilters) ([]paymentTransaction, int64, error) {
+	if userID == 0 {
+		return nil, 0, errors.New("userID is required")
 	}
-	if filters.PendingOnly {
-		q = q.Where("direction = ?", "income").Where("match_status IN ?", pendingMatchStatuses)
+	q := s.db.WithContext(ctx).Model(&paymentTransaction{}).Where("payment_transactions.user_id = ?", userID)
+	var err error
+	q, err = applyTransactionFilters(q, userID, filters)
+	if err != nil {
+		return nil, 0, err
 	}
-	if filters.MatchStatus != "" {
-		q = q.Where("match_status = ?", filters.MatchStatus)
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
 	}
-	if filters.PeriodMonth != "" {
-		start, err := parseDate(filters.PeriodMonth + "-01")
-		if err == nil {
-			end := start.AddDate(0, 1, 0)
-			q = q.Where("transaction_time >= ? AND transaction_time < ?", start, end)
-		}
+	order := "payment_transactions.transaction_time DESC, payment_transactions.id DESC"
+	switch filters.Sort {
+	case "arrival_asc":
+		order = "payment_transactions.transaction_time ASC, payment_transactions.id ASC"
+	case "amount_desc":
+		order = "payment_transactions.amount_cents DESC, payment_transactions.id DESC"
+	case "amount_asc":
+		order = "payment_transactions.amount_cents ASC, payment_transactions.id ASC"
+	case "payer_asc":
+		order = "payment_transactions.payer_name ASC, payment_transactions.id DESC"
+	}
+	page := filters.Page
+	if page <= 0 {
+		page = 1
+	}
+	pageSize := filters.PageSize
+	if pageSize <= 0 {
+		pageSize = 50
 	}
 	var rows []paymentTransaction
-	if err := q.Order("transaction_time DESC, id DESC").Find(&rows).Error; err != nil {
-		return nil, err
+	if err := q.Order(order).Limit(pageSize).Offset((page - 1) * pageSize).Find(&rows).Error; err != nil {
+		return nil, 0, err
 	}
-	return rows, nil
+	return rows, total, nil
+}
+
+func applyTransactionFilters(q *gorm.DB, userID uint64, filters transactionFilters) (*gorm.DB, error) {
+	if filters.Direction != "" {
+		q = q.Where("payment_transactions.direction = ?", filters.Direction)
+	}
+	if filters.PendingOnly {
+		q = q.Where("payment_transactions.direction = ?", "income").Where("payment_transactions.match_status IN ?", pendingMatchStatuses)
+	}
+	if filters.MatchStatus != "" {
+		q = q.Where("payment_transactions.match_status = ?", filters.MatchStatus)
+	}
+	if filters.PeriodMonth != "" {
+		start, err := parsePeriodMonth(filters.PeriodMonth)
+		if err != nil {
+			return q, err
+		}
+		q = q.Where("payment_transactions.transaction_time >= ? AND payment_transactions.transaction_time < ?", start, start.AddDate(0, 1, 0))
+	}
+	if filters.ArrivalFrom != "" {
+		start, err := parseDate(filters.ArrivalFrom)
+		if err != nil {
+			return q, err
+		}
+		q = q.Where("payment_transactions.transaction_time >= ?", start)
+	}
+	if filters.ArrivalTo != "" {
+		end, err := parseDate(filters.ArrivalTo)
+		if err != nil {
+			return q, err
+		}
+		q = q.Where("payment_transactions.transaction_time < ?", end)
+	}
+	if filters.Payer != "" {
+		like := "%" + filters.Payer + "%"
+		q = q.Where("(payment_transactions.payer_name LIKE ? OR payment_transactions.payer_id LIKE ?)", like, like)
+	}
+	if filters.TenantID != 0 {
+		q = q.Where(`EXISTS (
+            SELECT 1 FROM payment_allocations AS pa
+            WHERE pa.user_id = payment_transactions.user_id
+              AND pa.payment_transaction_id = payment_transactions.id
+              AND pa.tenant_id = ?
+              AND pa.status = ?
+        )`, filters.TenantID, allocationStatusConfirmed)
+	}
+	if filters.RentPeriod != "" {
+		period, err := parsePeriodMonth(filters.RentPeriod)
+		if err != nil {
+			return q, err
+		}
+		q = q.Where(`EXISTS (
+            SELECT 1
+            FROM payment_allocations AS pa
+            INNER JOIN rent_obligations AS ro ON ro.id = pa.rent_obligation_id AND ro.user_id = pa.user_id
+            WHERE pa.user_id = payment_transactions.user_id
+              AND pa.payment_transaction_id = payment_transactions.id
+              AND pa.status = ?
+              AND pa.allocation_kind IN (?, '')
+              AND ro.period_month = ?
+        )`, allocationStatusConfirmed, allocationKindRent, period)
+	}
+	if filters.AllocationKind != "" {
+		kindCondition := "pa.allocation_kind = ?"
+		args := []any{allocationStatusConfirmed, filters.AllocationKind}
+		if filters.AllocationKind == allocationKindRent {
+			kindCondition = "pa.allocation_kind IN (?, '')"
+			args = []any{allocationStatusConfirmed, allocationKindRent}
+		}
+		q = q.Where(`EXISTS (
+            SELECT 1 FROM payment_allocations AS pa
+            WHERE pa.user_id = payment_transactions.user_id
+              AND pa.payment_transaction_id = payment_transactions.id
+              AND pa.status = ?
+              AND `+kindCondition+`
+        )`, args...)
+	}
+	return q, nil
 }
 
 func (s *transactionService) countPendingTransactions(ctx context.Context, userID uint64, periodMonth string) (int64, error) {
-	q := s.db.WithContext(ctx).
-		Model(&paymentTransaction{}).
-		Where("user_id = ? AND direction = ? AND match_status IN ?", userID, "income", pendingMatchStatuses)
-	if periodMonth != "" {
-		start, err := parsePeriodMonth(periodMonth)
-		if err != nil {
-			return 0, err
-		}
-		q = q.Where("transaction_time >= ? AND transaction_time < ?", start, start.AddDate(0, 1, 0))
+	return s.countPendingTransactionsWithFilters(ctx, userID, transactionFilters{PeriodMonth: periodMonth, PendingOnly: true})
+}
+
+func (s *transactionService) countPendingTransactionsWithFilters(ctx context.Context, userID uint64, filters transactionFilters) (int64, error) {
+	filters.PendingOnly = true
+	filters.MatchStatus = ""
+	q := s.db.WithContext(ctx).Model(&paymentTransaction{}).Where("payment_transactions.user_id = ?", userID)
+	var err error
+	q, err = applyTransactionFilters(q, userID, filters)
+	if err != nil {
+		return 0, err
 	}
 	var count int64
 	if err := q.Count(&count).Error; err != nil {
