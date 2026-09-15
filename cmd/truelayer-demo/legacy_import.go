@@ -149,6 +149,8 @@ func legacyTenantInput(record tenantRecord) (tenantInput, bool) {
 	rentStart := firstNonEmpty(record.RentStartDate, billingStart)
 	input := tenantInput{
 		Name:             strings.TrimSpace(record.Name),
+		DisplayAlias:     strings.TrimSpace(record.DisplayAlias),
+		Email:            strings.TrimSpace(record.Email),
 		PayerID:          strings.TrimSpace(record.PayerID),
 		PayerNameHint:    strings.TrimSpace(record.PayerNameHint),
 		MonthlyRent:      record.MonthlyRent,

@@ -155,6 +155,8 @@ type billingMonthOption struct {
 type tenantRecord struct {
 	ID               string  `json:"id"`
 	Name             string  `json:"name"`
+	DisplayAlias     string  `json:"display_alias,omitempty"`
+	Email            string  `json:"email,omitempty"`
 	PayerID          string  `json:"payer_id,omitempty"`
 	PayerNameHint    string  `json:"payer_name_hint,omitempty"`
 	MonthlyRent      float64 `json:"monthly_rent"`
