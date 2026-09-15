@@ -573,3 +573,113 @@ if err := validateLedgerAllocation(check); err != nil {
 }
 projected := projectLedgerObligation(obligation, allocations, now)
 ```
+
+## Scenario: Bank Receipt Allocation, Correction, and Coverage
+
+### 1. Scope / Trigger
+
+- Trigger: Any authenticated bank transaction query, matching, allocation,
+  ignore/restore action, revoke, or TrueLayer synchronization coverage view.
+- Applies to `payment_transactions`, `payment_allocations`,
+  `payment_transaction_actions`, `bank_sync_runs`, and
+  `bank_sync_run_accounts`.
+
+### 2. Signatures
+
+- `transactionService.allocateTransaction(ctx, userID, transactionID, drafts, idempotencyKey, confirmationSource)` is the single write entry point for rent, deposit, and other-income allocations.
+- `transactionService.ignoreTransaction`, `restoreTransaction`, and
+  `revokeTransactionAllocations` own correction actions and audit rows.
+- `transactionService.listTransactionsPage` and
+  `listTransactionPageRowsWithTotal` own filtered, paginated transaction reads.
+- `bankSyncStore.startRun` and `finishRun` persist requested and actual
+  account-level coverage; `latestBankSyncCoverage` is the authenticated page
+  read model.
+
+### 3. Contracts
+
+- `payment_transactions` preserves provider identifiers, arrival timestamp,
+  description, reference, payer fields, parsed period facts, and raw payload;
+  allocation state never overwrites this source record.
+- Every query and write is scoped by `user_id`; posted transaction, tenant,
+  obligation, and allocation IDs are reloaded with ownership predicates.
+- Effective allocations are confirmed rows with `rent`, `deposit`, or
+  `other_income`; legacy empty allocation kind is interpreted as rent.
+- One source transaction has one shared integer-cent budget. A request first
+  validates all drafts, then inserts them in one database transaction and
+  recomputes affected rent obligations from effective allocations.
+- Rent allocations require the same tenant as the obligation and an open
+  period; deposit and other-income allocations do not update rent paid totals.
+  Other income requires a non-empty note. Only EUR can become effective.
+- Ignore, restore, and revoke are separate append-only action records with a
+  required reason, operation ID, actor, and optional idempotency key. Revoke
+  voids current effective allocations but never deletes the source or audit.
+- Automatic matching reads active `tenant_payers`, requires an explicit parsed
+  rent period and balance/currency evidence, and never auto-selects a shared
+  payer. Arrival month is a query field, not a rent-period fallback.
+- Sync coverage is authoritative only from persisted run/account rows. A
+  partial or failed account result must not be shown as a complete yearly sync.
+
+### 4. Validation & Error Matrix
+
+- Missing or invalid user/transaction ownership -> no row or a safe domain
+  failure; never query by a posted ID alone.
+- Income allocation with non-positive amount, non-EUR currency, cross-tenant
+  drafts, over-budget source, closed/voided obligation, or overpaid obligation
+  -> reject the entire request and leave no new allocation rows.
+- Allocation from an ignored transaction -> reject until it is restored.
+- Ignore/restore/revoke without a trimmed reason -> reject; ignore/restore
+  with effective allocations -> require the revoke flow first.
+- Repeated allocation or action idempotency key -> return the original logical
+  result without creating a second effect; reuse for different facts -> reject.
+- Invalid filter date, month, status, direction, sort, tenant, or pagination
+  input -> render the safe invalid-filter state; sort values are allowlisted.
+- Non-EUR or ambiguous/shared-payer matches remain pending with a safe reason;
+  they are never silently converted, assigned to arrival month, or batch-applied.
+
+### 5. Good/Base/Bad Cases
+
+- Good: lock the source and relevant obligations in one transaction, validate a
+  €2,000 same-tenant split, insert all effective rows, then project both ledger
+  and transaction state.
+- Base: a €1,000 effective allocation leaves the source `partial` with a
+  remainder and later allocation consumes only that remainder.
+- Bad: trusting a hidden tenant/obligation ID, adding to `paid_amount_cents`
+  directly, treating a voided allocation as effective, or using arrival month
+  to infer an automatic rent month.
+
+### 6. Tests Required
+
+- Migration runner idempotence and presence of sync coverage, parsed-period,
+  allocation-note, and action-audit structures.
+- Allocation unit/integration tests for mixed uses, same-tenant split,
+  remainder continuation, EUR-only, over-budget rollback, idempotency, and
+  obligation projection.
+- Correction tests for reason validation, ignored/restored transitions,
+  revoke audit, affected-obligation recomputation, and old-revoke/new-match
+  isolation.
+- Matcher tests for payer ID/name precedence, shared payer conflicts, explicit
+  month requirement, `JULY26`, overpayment, and non-EUR handling.
+- Query/template tests for all filters, allowlisted sorting, pagination,
+  internal/provider IDs, coverage labels, revoke preview, historical
+  one-by-one preview, and unauthenticated mutation routes.
+- Run `go test ./... -count=1`, `go vet ./...`, and `git diff --check`; use a
+  disposable MySQL DSN for locking and migration integration tests.
+
+### 7. Wrong vs Correct
+
+Wrong:
+
+```go
+db.Model(&rentObligation{}).Where("id = ?", postedID).
+    Update("paid_amount_cents", gorm.Expr("paid_amount_cents + ?", amount))
+```
+
+Correct:
+
+```go
+service.allocateTransaction(ctx, userID, transactionID, drafts, requestKey, "manual")
+```
+
+The service reloads every fact with `user_id`, locks the source and
+obligations, validates the complete batch, inserts effective allocations
+atomically, and recomputes the ledger projection from those rows.

@@ -702,6 +702,118 @@ func TestBillingTemplateShowsMonthChoiceForRememberedTenant(t *testing.T) {
 	}
 }
 
+func TestBillingTemplateOffersHistoricalPayerPreview(t *testing.T) {
+	var body strings.Builder
+	if err := billingTemplate.Execute(&body, billingPageData{}); err != nil {
+		t.Fatal(err)
+	}
+	page := body.String()
+	for _, expected := range []string{"/billing/payer/preview", "添加拆分项", "allocation_kind[]"} {
+		if !strings.Contains(page, expected) {
+			t.Fatalf("billing page missing historical preview or split control %q", expected)
+		}
+	}
+}
+
+func TestBillingTemplateHidesAllocationForCompletedOrIgnoredIncome(t *testing.T) {
+	for _, status := range []string{"matched", "ignored"} {
+		var body strings.Builder
+		if err := billingTemplate.Execute(&body, billingPageData{TransactionRows: []transactionPageRow{{Direction: "income", MatchStatus: status}}}); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(body.String(), `<form class="allocation-form"`) {
+			t.Fatalf("status=%s should not offer a new allocation form", status)
+		}
+	}
+}
+
+func TestAllocationFormValuesSupportsRepeatedAndScalarFields(t *testing.T) {
+	repeated := url.Values{"amount[]": {"100.00", "50.00"}}
+	if got := allocationFormValues(repeated, "amount"); len(got) != 2 || got[1] != "50.00" {
+		t.Fatalf("repeated allocation values=%v", got)
+	}
+	scalar := url.Values{"amount": {"100.00"}}
+	if got := allocationFormValues(scalar, "amount"); len(got) != 1 || got[0] != "100.00" {
+		t.Fatalf("scalar allocation values=%v", got)
+	}
+}
+
+func TestBillingMutationRoutesRequireAuthentication(t *testing.T) {
+	routes := []struct {
+		path    string
+		handler func(*app) http.HandlerFunc
+	}{
+		{path: "/billing/allocate", handler: func(a *app) http.HandlerFunc { return a.handleTransactionAllocation }},
+		{path: "/billing/ignore", handler: func(a *app) http.HandlerFunc { return a.handleTransactionIgnore }},
+		{path: "/billing/restore", handler: func(a *app) http.HandlerFunc { return a.handleTransactionRestore }},
+		{path: "/billing/revoke", handler: func(a *app) http.HandlerFunc { return a.handleTransactionRevoke }},
+		{path: "/billing/payer/preview", handler: func(a *app) http.HandlerFunc { return a.handlePayerPreview }},
+		{path: "/billing/payer/confirm", handler: func(a *app) http.HandlerFunc { return a.handlePayerConfirm }},
+	}
+	for _, route := range routes {
+		a := testApp()
+		rec := httptest.NewRecorder()
+		route.handler(&a).ServeHTTP(rec, httptest.NewRequest(http.MethodPost, route.path, nil))
+		if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/" {
+			t.Fatalf("path=%s status=%d location=%q want unauthenticated redirect", route.path, rec.Code, rec.Header().Get("Location"))
+		}
+	}
+}
+
+func TestRevokePreviewTemplateShowsSourceAndEffectiveAllocations(t *testing.T) {
+	var body strings.Builder
+	err := revokePreviewTemplate.Execute(&body, transactionRevokePreviewData{
+		TransactionID:                 "7",
+		Description:                   "September rent",
+		AmountDisplay:                 "EUR 2,000.00",
+		AllocatedAmountDisplay:        "EUR 1,000.00",
+		CurrentRemainingAmountDisplay: "EUR 1,000.00",
+		RemainingAmountDisplay:        "EUR 2,000.00",
+		Allocations: []transactionRevokePreviewAllocation{{
+			Kind:          "房租",
+			AmountDisplay: "EUR 1,000.00",
+			TenantName:    "Aoife Murphy",
+			PeriodDisplay: "2026-09",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"September rent", "EUR 2,000.00", "EUR 1,000.00", "Aoife Murphy", "/billing/revoke"} {
+		if !strings.Contains(body.String(), expected) {
+			t.Fatalf("revoke preview missing %q: %s", expected, body.String())
+		}
+	}
+}
+
+func TestRevokePreviewDataShowsFullBalanceAfterRevoke(t *testing.T) {
+	tenantID := uint64(7)
+	preview := transactionRevokePreview{
+		Source:      paymentTransaction{ID: 7, AmountCents: 200000, Currency: "EUR", Description: "September rent"},
+		Allocations: []paymentAllocation{{TenantID: &tenantID, AmountCents: 100000, AllocationKind: allocationKindRent, Status: allocationStatusConfirmed}},
+		TenantNames: map[uint64]string{tenantID: "Aoife Murphy"},
+		Obligations: map[uint64]rentObligation{},
+	}
+	data := transactionRevokePreviewDataFromModel(preview)
+	if data.CurrentRemainingAmountDisplay != "EUR 1000.00" || data.RemainingAmountDisplay != "EUR 2000.00" {
+		t.Fatalf("preview balances current=%q after=%q", data.CurrentRemainingAmountDisplay, data.RemainingAmountDisplay)
+	}
+}
+
+func TestHistoricalPayerPreviewTemplateConfirmsOneRowAtATime(t *testing.T) {
+	var body strings.Builder
+	err := payerPreviewTemplate.Execute(&body, payerPreviewPageData{Rows: []payerPreviewRow{{
+		TransactionID: "7", PayerName: "Aoife Murphy", AmountDisplay: "EUR 950.00", ProposedTenantName: "Aoife Murphy", ProposedPeriod: "2026-09", CanConfirm: true,
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := body.String()
+	if !strings.Contains(page, "/billing/payer/confirm") || strings.Count(page, "/billing/payer/confirm") != 1 {
+		t.Fatalf("historical preview should render one confirm form per row: %s", page)
+	}
+}
+
 func TestRentDashboardTemplateRendersMonthlyStatus(t *testing.T) {
 	var body strings.Builder
 	err := rentDashboardTemplate.Execute(&body, rentDashboardPageData{

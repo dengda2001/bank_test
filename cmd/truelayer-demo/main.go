@@ -374,6 +374,8 @@ func main() {
 	mux.HandleFunc("/billing/ignore", a.handleTransactionIgnore)
 	mux.HandleFunc("/billing/restore", a.handleTransactionRestore)
 	mux.HandleFunc("/billing/revoke", a.handleTransactionRevoke)
+	mux.HandleFunc("/billing/payer/preview", a.handlePayerPreview)
+	mux.HandleFunc("/billing/payer/confirm", a.handlePayerConfirm)
 	mux.HandleFunc("/import-legacy", a.handleLegacyImport)
 	mux.HandleFunc("/tenants", a.handleTenants)
 	mux.HandleFunc("/tenants/", a.handleTenantSubroute)
