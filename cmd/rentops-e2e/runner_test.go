@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -175,6 +176,79 @@ func TestE2EHTTPClientRejectsOriginEscape(t *testing.T) {
 		if _, err := client.endpoint(path); err == nil {
 			t.Fatalf("path %q unexpectedly escaped endpoint validation", path)
 		}
+	}
+}
+
+func TestE2ETenantScenarioCreatesAndReadsTenantAndPayer(t *testing.T) {
+	manifest, err := newE2EFixtureManifest("rentops-e2e-20260916-120000-a1b2c3d4", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var createdTenant bool
+	var createdPayer bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/login-local" {
+			if _, err := r.Cookie("rentops_session"); err != nil {
+				http.Redirect(w, r, "/", http.StatusFound)
+				return
+			}
+		}
+		switch r.URL.Path {
+		case "/login-local":
+			if err := r.ParseForm(); err != nil || r.Form.Get("password") != "e2e-password" {
+				http.Redirect(w, r, "/?error=invalid_login", http.StatusFound)
+				return
+			}
+			http.SetCookie(w, &http.Cookie{Name: "rentops_session", Value: "session-secret", Path: "/"})
+			http.Redirect(w, r, "/rent-dashboard", http.StatusFound)
+		case "/billing":
+			w.WriteHeader(http.StatusOK)
+		case "/tenants":
+			if r.Method == http.MethodPost {
+				if err := r.ParseForm(); err != nil || r.Form.Get("name") != manifest.Tenant.Name || r.Form.Get("monthly_rent") != "950.00" {
+					t.Errorf("unexpected tenant form: %v", r.Form)
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				createdTenant = true
+				http.Redirect(w, r, "/tenants?message=tenant_added", http.StatusFound)
+				return
+			}
+			fmt.Fprintf(w, `<table><tr><td>%s</td><td><a href="/tenants/42">详情</a></td></tr></table>`, manifest.Tenant.Name)
+		case "/tenants/42/payers":
+			if r.Method != http.MethodPost {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				return
+			}
+			if err := r.ParseForm(); err != nil || r.Form.Get("payer_name") != manifest.Payer.Name || r.Form.Get("payer_id") != manifest.Payer.PayerID {
+				t.Errorf("unexpected payer form: %v", r.Form)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			createdPayer = true
+			http.Redirect(w, r, "/tenants/42?message=payer_added", http.StatusFound)
+		case "/tenants/42":
+			if !createdTenant {
+				t.Fatal("tenant detail read happened before tenant creation")
+			}
+			fmt.Fprintf(w, `<main>%s %s %s</main>`, manifest.Tenant.Name, manifest.Payer.Name, manifest.Payer.PayerID)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client, err := newE2EHTTPClient(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authScenario := client.authenticationScenario(context.Background(), "e2e-user", "e2e-password")
+	if authScenario.Status != "passed" {
+		t.Fatalf("authentication scenario=%+v", authScenario)
+	}
+	tenantScenario, tenantID := client.tenantScenario(context.Background(), manifest)
+	if tenantScenario.Status != "passed" || tenantID != 42 || !createdPayer {
+		t.Fatalf("tenant scenario=%+v tenantID=%d payer=%v", tenantScenario, tenantID, createdPayer)
 	}
 }
 
