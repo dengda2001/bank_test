@@ -48,6 +48,34 @@ func TestBuildTenantBillingHistoryIgnoresObligationsForOtherTenants(t *testing.T
 	}
 }
 
+func TestBuildTenantBillingHistoryLabelsCashReceiptRows(t *testing.T) {
+	when := ptrTime(time.Date(2026, 9, 12, 0, 0, 0, 0, time.UTC))
+	got := buildTenantBillingHistory(
+		[]tenant{{ID: 7, Currency: "EUR"}},
+		[]rentObligation{{ID: 71, TenantID: 7, PeriodMonth: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), ExpectedAmountCents: 100000, PaidAmountCents: 40000, Currency: "EUR"}},
+		[]tenantBillingPaymentRow{{TenantID: 7, ObligationID: 71, AmountCents: 40000, Currency: "EUR", Source: "cash", TransactionTime: when, Description: "现金租金补录", Reference: "cash-123", ConfirmationSource: "manual_cash"}},
+		time.Date(2026, 9, 13, 0, 0, 0, 0, time.UTC),
+	)[7][0]
+	if len(got.Payments) != 1 || got.Payments[0].Source != "现金" || got.Payments[0].Reference != "cash-123" || got.Payments[0].DateDisplay != "12 Sep 2026 00:00" {
+		t.Fatalf("cash payment=%+v", got.Payments)
+	}
+}
+
+func TestRentPaymentDetailLabelsCashSourceAndReceiptDate(t *testing.T) {
+	detail := rentPaymentDetailFromRow(rentPaymentDetailRow{
+		AmountCents:        40000,
+		Currency:           "EUR",
+		Source:             "cash",
+		TransactionTime:    ptrTime(time.Date(2026, 9, 12, 0, 0, 0, 0, time.UTC)),
+		Description:        "现金租金补录",
+		Reference:          "cash-123",
+		ConfirmationSource: "manual_cash",
+	})
+	if detail.Source != "现金" || detail.Reference != "cash-123" || detail.DateDisplay != "12 Sep 2026 00:00" || detail.ConfirmationSource != "manual_cash" {
+		t.Fatalf("cash detail=%+v", detail)
+	}
+}
+
 func TestTenantTemplateRendersNestedBillingHistoryToggles(t *testing.T) {
 	var body strings.Builder
 	err := tenantTemplate.Execute(&body, tenantPageData{Rows: []tenantRecord{{

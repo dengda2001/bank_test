@@ -60,6 +60,42 @@ type tenantBillingPaymentRow struct {
 	ConfirmationSource string     `gorm:"column:confirmation_source"`
 }
 
+func sortTenantBillingPaymentRows(rows []tenantBillingPaymentRow) {
+	sort.SliceStable(rows, func(i, j int) bool {
+		if rows[i].ObligationID != rows[j].ObligationID {
+			return rows[i].ObligationID < rows[j].ObligationID
+		}
+		if rows[i].TransactionTime == nil && rows[j].TransactionTime != nil {
+			return true
+		}
+		if rows[i].TransactionTime != nil && rows[j].TransactionTime == nil {
+			return false
+		}
+		if rows[i].TransactionTime != nil && !rows[i].TransactionTime.Equal(*rows[j].TransactionTime) {
+			return rows[i].TransactionTime.Before(*rows[j].TransactionTime)
+		}
+		if rows[i].Source != rows[j].Source {
+			return rows[i].Source < rows[j].Source
+		}
+		return rows[i].Reference < rows[j].Reference
+	})
+}
+
+func (s *obligationService) listCashBillingPaymentRows(ctx context.Context, userID, tenantID uint64, fromMonth, toMonth time.Time) ([]tenantBillingPaymentRow, error) {
+	query := s.db.WithContext(ctx).Table("cash_receipts AS cr").
+		Select("cr.tenant_id, cr.rent_obligation_id AS obligation_id, cr.amount_cents, cr.currency, 'cash' AS source, cr.received_at AS transaction_time, '现金租金补录' AS description, cr.receipt_number AS reference, 'manual_cash' AS confirmation_source").
+		Joins("JOIN rent_obligations AS ro ON ro.id = cr.rent_obligation_id AND ro.user_id = cr.user_id").
+		Where("cr.user_id = ? AND cr.status = ? AND ro.period_month >= ? AND ro.period_month < ?", userID, cashReceiptStatusConfirmed, fromMonth, toMonth.AddDate(0, 1, 0))
+	if tenantID != 0 {
+		query = query.Where("cr.tenant_id = ?", tenantID)
+	}
+	var rows []tenantBillingPaymentRow
+	if err := query.Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
 func newObligationService(db *gorm.DB) *obligationService {
 	return &obligationService{db: db}
 }
@@ -199,7 +235,7 @@ func (s *obligationService) listTenantBillingHistory(ctx context.Context, userID
 	}
 	var paymentRows []tenantBillingPaymentRow
 	if err := s.db.WithContext(ctx).Table("payment_allocations AS pa").
-		Select("pa.tenant_id, pa.rent_obligation_id AS obligation_id, pa.amount_cents, pt.currency, pt.transaction_time, pt.description, pt.reference, pa.confirmation_source").
+		Select("pa.tenant_id, pa.rent_obligation_id AS obligation_id, pa.amount_cents, pt.currency, pt.source, pt.transaction_time, pt.description, pt.reference, pa.confirmation_source").
 		Joins("JOIN rent_obligations AS ro ON ro.id = pa.rent_obligation_id AND ro.user_id = pa.user_id").
 		Joins("JOIN payment_transactions AS pt ON pt.id = pa.payment_transaction_id AND pt.user_id = pa.user_id").
 		Where("pa.user_id = ? AND pa.status = ? AND pa.allocation_kind = ? AND pt.direction = ? AND ro.period_month >= ? AND ro.period_month < ?", userID, allocationStatusConfirmed, allocationKindRent, "income", startMonth, endMonth.AddDate(0, 1, 0)).
@@ -207,6 +243,12 @@ func (s *obligationService) listTenantBillingHistory(ctx context.Context, userID
 		Scan(&paymentRows).Error; err != nil {
 		return nil, err
 	}
+	cashRows, err := s.listCashBillingPaymentRows(ctx, userID, 0, startMonth, endMonth)
+	if err != nil {
+		return nil, err
+	}
+	paymentRows = append(paymentRows, cashRows...)
+	sortTenantBillingPaymentRows(paymentRows)
 	return buildTenantBillingHistory(tenants, obligations, paymentRows, time.Now().UTC()), nil
 }
 
@@ -376,6 +418,35 @@ type rentPaymentDetailRow struct {
 	ConfirmationSource string     `gorm:"column:confirmation_source"`
 }
 
+func sortRentPaymentDetailRows(rows []rentPaymentDetailRow) {
+	sort.SliceStable(rows, func(i, j int) bool {
+		if rows[i].TransactionTime == nil && rows[j].TransactionTime != nil {
+			return true
+		}
+		if rows[i].TransactionTime != nil && rows[j].TransactionTime == nil {
+			return false
+		}
+		if rows[i].TransactionTime != nil && !rows[i].TransactionTime.Equal(*rows[j].TransactionTime) {
+			return rows[i].TransactionTime.Before(*rows[j].TransactionTime)
+		}
+		if rows[i].Source != rows[j].Source {
+			return rows[i].Source < rows[j].Source
+		}
+		return rows[i].Reference < rows[j].Reference
+	})
+}
+
+func (s *obligationService) listCashRentPaymentRows(ctx context.Context, userID, obligationID uint64) ([]rentPaymentDetailRow, error) {
+	var rows []rentPaymentDetailRow
+	if err := s.db.WithContext(ctx).Table("cash_receipts AS cr").
+		Select("cr.amount_cents, cr.currency, 'cash' AS source, cr.received_at AS transaction_time, '现金租金补录' AS description, cr.receipt_number AS reference, 'manual_cash' AS confirmation_source").
+		Where("cr.user_id = ? AND cr.rent_obligation_id = ? AND cr.status = ?", userID, obligationID, cashReceiptStatusConfirmed).
+		Order("cr.received_at ASC, cr.id ASC").Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
 func (s *obligationService) listRentPayments(ctx context.Context, userID, obligationID uint64) ([]rentPaymentDetail, error) {
 	var rows []rentPaymentDetailRow
 	if err := s.db.WithContext(ctx).Table("payment_allocations AS pa").
@@ -385,6 +456,12 @@ func (s *obligationService) listRentPayments(ctx context.Context, userID, obliga
 		Order("pt.transaction_time ASC, pa.id ASC").Scan(&rows).Error; err != nil {
 		return nil, err
 	}
+	cashRows, err := s.listCashRentPaymentRows(ctx, userID, obligationID)
+	if err != nil {
+		return nil, err
+	}
+	rows = append(rows, cashRows...)
+	sortRentPaymentDetailRows(rows)
 	payments := make([]rentPaymentDetail, 0, len(rows))
 	for _, row := range rows {
 		payments = append(payments, rentPaymentDetailFromRow(row))

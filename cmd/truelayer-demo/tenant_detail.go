@@ -142,6 +142,12 @@ func (s *obligationService) listTenantBillingHistoryPage(ctx context.Context, us
 		Order("ro.period_month DESC, pt.transaction_time ASC, pa.id ASC").Scan(&paymentRows).Error; err != nil {
 		return tenantBillingHistoryPage{}, err
 	}
+	cashRows, err := s.listCashBillingPaymentRows(ctx, userID, tenantID, fromMonth, toMonth)
+	if err != nil {
+		return tenantBillingHistoryPage{}, err
+	}
+	paymentRows = append(paymentRows, cashRows...)
+	sortTenantBillingPaymentRows(paymentRows)
 	history := buildTenantBillingHistory([]tenant{tenantRow}, obligations, paymentRows, time.Now().UTC())[tenantID]
 	rows, totalPages, err := paginateTenantBillingMonths(history, page, pageSize)
 	if err != nil {
