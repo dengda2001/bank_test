@@ -1,5 +1,6 @@
 ALTER TABLE payment_allocations
   MODIFY COLUMN rent_obligation_id bigint unsigned NULL,
+  MODIFY COLUMN tenant_id bigint unsigned NULL,
   ADD COLUMN allocation_kind varchar(32) NOT NULL DEFAULT 'rent' AFTER amount_cents,
   ADD COLUMN operation_id varchar(64) NULL AFTER allocation_kind,
   ADD COLUMN idempotency_key varchar(191) NULL AFTER operation_id,

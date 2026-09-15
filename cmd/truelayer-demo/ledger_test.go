@@ -63,6 +63,8 @@ func TestValidateLedgerAllocationEnforcesBudgetAndOwnership(t *testing.T) {
 		{name: "currency mismatch", mutate: func(v *ledgerAllocationCheck) { v.SourceCurrency = "GBP" }, want: "EUR"},
 		{name: "cross user", mutate: func(v *ledgerAllocationCheck) { v.SourceUserID = 8 }, want: "user"},
 		{name: "cross tenant", mutate: func(v *ledgerAllocationCheck) { v.ObligationTenantID = 12 }, want: "tenant"},
+		{name: "negative existing allocation", mutate: func(v *ledgerAllocationCheck) { v.ExistingAllocatedCents = -1 }, want: "budget"},
+		{name: "unknown kind", mutate: func(v *ledgerAllocationCheck) { v.Kind = "refund" }, want: "kind"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -71,6 +73,38 @@ func TestValidateLedgerAllocationEnforcesBudgetAndOwnership(t *testing.T) {
 			err := validateLedgerAllocation(input)
 			if err == nil || !strings.Contains(strings.ToLower(err.Error()), strings.ToLower(tc.want)) {
 				t.Fatalf("error = %v; want substring %q", err, tc.want)
+			}
+		})
+	}
+
+	deposit := base
+	deposit.Kind = allocationKindDeposit
+	deposit.TenantID = 0
+	deposit.ObligationTenantID = 0
+	deposit.ObligationExpectedCents = 0
+	deposit.ObligationPaidCents = 0
+	deposit.ObligationCurrency = ""
+	if err := validateLedgerAllocation(deposit); err != nil {
+		t.Fatalf("valid deposit allocation rejected without obligation: %v", err)
+	}
+}
+
+func TestLedgerAllocationEffectiveRecognizesLegacyAndExcludesVoidedOrUnknown(t *testing.T) {
+	cases := []struct {
+		name string
+		row  paymentAllocation
+		want bool
+	}{
+		{name: "legacy confirmed rent", row: paymentAllocation{Status: allocationStatusConfirmed}, want: true},
+		{name: "confirmed deposit", row: paymentAllocation{Status: allocationStatusConfirmed, AllocationKind: allocationKindDeposit}, want: true},
+		{name: "voided rent", row: paymentAllocation{Status: allocationStatusVoided, AllocationKind: allocationKindRent}, want: false},
+		{name: "pending rent", row: paymentAllocation{Status: "pending", AllocationKind: allocationKindRent}, want: false},
+		{name: "unknown kind", row: paymentAllocation{Status: allocationStatusConfirmed, AllocationKind: "refund"}, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ledgerAllocationIsEffective(tc.row); got != tc.want {
+				t.Fatalf("effective = %v; want %v", got, tc.want)
 			}
 		})
 	}
@@ -91,6 +125,12 @@ func TestLedgerPaidAmountSumsOnlyEffectiveRentAllocations(t *testing.T) {
 
 func TestLedgerObligationStatusUsesDublinCalendarDay(t *testing.T) {
 	due := time.Date(2026, 9, 5, 0, 0, 0, 0, time.UTC)
+	if got := ledgerObligationStatus(1000, 1000, due, time.Date(2026, 9, 20, 0, 0, 0, 0, time.UTC), obligationRecordActive); got != "paid" {
+		t.Fatalf("paid status = %q; want paid", got)
+	}
+	if got := ledgerObligationStatus(1000, 400, due, time.Date(2026, 9, 20, 0, 0, 0, 0, time.UTC), obligationRecordActive); got != "partial" {
+		t.Fatalf("partial status = %q; want partial", got)
+	}
 	for _, tc := range []struct {
 		name string
 		now  time.Time
@@ -107,6 +147,22 @@ func TestLedgerObligationStatusUsesDublinCalendarDay(t *testing.T) {
 	}
 	if got := ledgerObligationStatus(1000, 0, due, time.Now(), obligationRecordVoided); got != "voided" {
 		t.Fatalf("void status = %q; want voided", got)
+	}
+}
+
+func TestProjectLedgerObligationKeepsVoidedRecordOutOfPaymentStatuses(t *testing.T) {
+	obligation := rentObligation{
+		ExpectedAmountCents: 100000,
+		PaidAmountCents:     100000,
+		DueDate:             time.Date(2026, 9, 5, 0, 0, 0, 0, time.UTC),
+		RecordStatus:        obligationRecordVoided,
+		Status:              "paid",
+	}
+	projected := projectLedgerObligation(obligation, []paymentAllocation{
+		{AmountCents: 100000, AllocationKind: allocationKindRent, Status: allocationStatusConfirmed},
+	}, time.Date(2026, 9, 20, 0, 0, 0, 0, time.UTC))
+	if projected.PaidAmountCents != 100000 || projected.Status != obligationRecordVoided {
+		t.Fatalf("voided projection = %d/%q; want 100000/voided", projected.PaidAmountCents, projected.Status)
 	}
 }
 

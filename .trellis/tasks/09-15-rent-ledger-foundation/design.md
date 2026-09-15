@@ -15,7 +15,7 @@
 
 新增一个版本化 SQL migration（沿用 `db.go` 的文件排序和事务执行）：
 
-- `payment_allocations`：增加 `allocation_kind`（`rent`／`deposit`／`other_income`，默认 `rent`）、`operation_id`、`idempotency_key`、`voided_at`、`voided_by_user_id`、`void_reason`；删除旧的 transaction-obligation 唯一键，增加用户／来源／状态索引和非空幂等键唯一索引（NULL 允许旧数据）。
+- `payment_allocations`：增加 `allocation_kind`（`rent`／`deposit`／`other_income`，默认 `rent`）、`operation_id`、`idempotency_key`、`voided_at`、`voided_by_user_id`、`void_reason`；删除旧的 transaction-obligation 唯一键，增加用户／来源／状态索引和非空幂等键唯一索引（NULL 允许旧数据）。`rent_obligation_id` 和 `tenant_id` 对非房租用途允许为空，房租用途仍由服务层强制关联租客与账单。
 - `rent_obligations`：增加 `record_status`（`active`／`voided`，默认 `active`）、`voided_at`、`voided_by_user_id`、`void_reason`。保留现有 `status` 作为缴费进度，以免把作废和缴费状态混为一谈。
 - 为新增外键使用当前用户范围的外键约束；迁移先增加列、回填默认值和索引，再删除冲突唯一键，确保旧分配仍可读取。
 
@@ -27,7 +27,7 @@
 
 - `normalizeLedgerCurrency` 只接受非空 `EUR`（大小写归一化为 `EUR`）；非 EUR 返回可展示的拒绝错误。数据模型保留原始字段，未来扩展只需替换策略，不改金额单位。
 - `allocation_kind` 和 `allocation.status` 使用显式常量；只有 `status=confirmed` 且未被撤销的 `rent` 分配进入账单实收，`deposit`／`other_income` 不能改变账单 `paid_amount_cents`。
-- `validateAllocationBudget` 校验正金额、来源币种／账单币种为 EUR 且相同、来源累计有效分配加本次不超过原金额、房租加本次不超过账单未收、租客和用户边界一致。
+- `validateLedgerAllocation` 校验正金额、来源币种／账单币种为 EUR 且相同、来源累计有效分配加本次不超过原金额、房租加本次不超过账单未收、租客和用户边界一致。
 - `recomputeObligationPaid` 从有效 rent allocation 重新计算 `paid_amount_cents`，再用统一的 Dublin 日期函数重算缴费进度；撤销／作废调用同一投影，不做手工减法。
 - `operation_id` 标识一次原子分配／撤销操作，`idempotency_key` 标识可重试请求；重复 key 返回原结果或 no-op，不产生第二次金额变更。
 

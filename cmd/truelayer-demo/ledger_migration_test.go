@@ -19,6 +19,7 @@ func TestLedgerMigrationAddsAuditFieldsAndAllowsNonRentAllocations(t *testing.T)
 		"void_reason",
 		"drop index idx_payment_allocations_tx_obligation",
 		"modify column rent_obligation_id bigint unsigned null",
+		"modify column tenant_id bigint unsigned null",
 		"record_status",
 		"voided_by_user_id",
 	} {
