@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 10
+- **Total Sessions**: 11
 - **Last Active**: 2026-09-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~358 | Active |
+| `journal-1.md` | ~393 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 11 | 2026-09-16 | 完成单月邮件催缴 | `522b706`, `4c812db`, `b247ed9` | `main` |
 | 10 | 2026-09-16 | 完成月度收租 Dashboard | `997d199` | `main` |
 | 9 | 2026-09-16 | 完成现金租金补录与作废更正 | `c9d18df`, `af143ea`, `3eea6f3`, `8e94cf2`, `e4f9dc5`, `3cce4e6` | `main` |
 | 8 | 2026-09-16 | 完成银行入账归类与纠错 | `91cac85`, `d233e72`, `ec51805`, `c5a65b5`, `8ac6917`, `1746fa8`, `4810dcd` | `main` |

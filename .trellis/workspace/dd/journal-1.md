@@ -356,3 +356,38 @@ Implemented the Chinese monthly rent dashboard with clear expected/paid/balance 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 11: 完成单月邮件催缴
+
+**Date**: 2026-09-16
+**Task**: 完成单月邮件催缴
+**Branch**: `main`
+
+### Summary
+
+完成单月邮件催缴：新增租户隔离的候选读模型与 008 迁移、固定英文提醒/逾期模板、SMTP 边界和配置、预览纯读、逐人发送审计、请求幂等、并发重复点击保护、同日确认重发、失败单项重试；在月度 Dashboard 嵌入响应式抽屉与配置/预览/发送入口。全量 go test、go vet、git diff --check 通过；MySQL/真实浏览器验收因环境未提供 RENTOPS_MYSQL_TEST_DSN/DevTools 留待集成环境。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `522b706` | (see git log) |
+| `4c812db` | (see git log) |
+| `b247ed9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
