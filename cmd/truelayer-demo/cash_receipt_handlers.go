@@ -168,9 +168,6 @@ func (a *app) loadCashReceiptFormData(ctx context.Context, userID, tenantID uint
 		return cashReceiptFormData{}, err
 	}
 	data.TenantSelected = true
-	if err := newObligationService(a.db).ensureMonthlyObligations(ctx, userID, period); err != nil {
-		return cashReceiptFormData{}, err
-	}
 	var obligation rentObligation
 	if err := a.db.WithContext(ctx).Where("user_id = ? AND tenant_id = ? AND period_month = ?", userID, tenantID, period).First(&obligation).Error; err != nil {
 		return cashReceiptFormData{}, err
