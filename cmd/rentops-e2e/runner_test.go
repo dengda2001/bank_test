@@ -860,8 +860,38 @@ func TestNewE2EFixtureManifestUsesUniqueRunIDPrefixedIdentifiers(t *testing.T) {
 	if manifest.Tenant.Name == "" || !strings.HasPrefix(manifest.Tenant.Name, runID) || !strings.HasPrefix(manifest.Tenant.RoomAddress, runID) {
 		t.Fatalf("tenant fixture is not isolated: %+v", manifest.Tenant)
 	}
-	if manifest.Expected.EURIncomeCents != 170000 || manifest.Expected.GBPIncomeCents != 2500 || manifest.Expected.PendingIncomeCount != 2 {
+	if manifest.Expected.PayerCount != 2 || manifest.Expected.EURIncomeCents != 170000 || manifest.Expected.GBPIncomeCents != 2500 || manifest.Expected.PendingIncomeCount != 3 {
 		t.Fatalf("unexpected expected snapshot: %+v", manifest.Expected)
+	}
+}
+
+func TestValidateE2ECleanupOptionsRequiresRunScopedTargetAndConfirmation(t *testing.T) {
+	base := e2eOptions{
+		Execute:           true,
+		RunID:             "rentops-e2e-20260916-120000-a1b2c3d4",
+		TargetName:        "local-e2e",
+		TargetAllowlist:   "local-e2e",
+		DatabaseAllowlist: "rentops_e2e",
+		Username:          "rentops-e2e-20260916-120000-a1b2c3d4-owner",
+		MySQLDSN:          "root@tcp(127.0.0.1:3306)/rentops_e2e",
+		ConfirmCleanup:    e2eCleanupConfirmation,
+	}
+	if err := validateE2ECleanupOptions(base); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*e2eOptions){
+		"target":       func(options *e2eOptions) { options.TargetName = "shared" },
+		"database":     func(options *e2eOptions) { options.DatabaseAllowlist = "" },
+		"confirmation": func(options *e2eOptions) { options.ConfirmCleanup = "yes" },
+		"username":     func(options *e2eOptions) { options.Username = "owner" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			options := base
+			mutate(&options)
+			if err := validateE2ECleanupOptions(options); err == nil {
+				t.Fatal("unsafe cleanup options unexpectedly passed")
+			}
+		})
 	}
 }
 

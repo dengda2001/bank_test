@@ -127,7 +127,7 @@ func newE2EFixtureManifest(runID string, now time.Time) (e2eFixtureManifest, err
 				NormalisedProviderTransactionID: marker + "-stable-eur-full",
 				ProviderTransactionID:           marker + "-provider-eur-full",
 				Timestamp:                       "2026-09-03T10:00:00Z",
-				Description:                     marker + " rent 2026-09 full",
+				Description:                     marker + " rent full payment",
 				Amount:                          e2eMoney{Cents: 95000, Currency: "EUR"},
 				Direction:                       "income",
 				TransactionType:                 "CREDIT",
@@ -140,7 +140,7 @@ func newE2EFixtureManifest(runID string, now time.Time) (e2eFixtureManifest, err
 				NormalisedProviderTransactionID: marker + "-stable-eur-partial",
 				ProviderTransactionID:           marker + "-provider-eur-partial",
 				Timestamp:                       "2026-09-04T10:00:00Z",
-				Description:                     marker + " rent 2026-09 partial",
+				Description:                     marker + " rent partial payment",
 				Amount:                          e2eMoney{Cents: 40000, Currency: "EUR"},
 				Direction:                       "income",
 				TransactionType:                 "CREDIT",
@@ -169,8 +169,6 @@ func newE2EFixtureManifest(runID string, now time.Time) (e2eFixtureManifest, err
 				Direction:                       "income",
 				TransactionType:                 "CREDIT",
 				Reference:                       marker + "-reference-eur-cross-month",
-				PayerID:                         payer.PayerID,
-				PayerName:                       payer.Name,
 			},
 			{
 				TransactionID:                   marker + "-tx-eur-pending",
@@ -195,13 +193,13 @@ func newE2EFixtureManifest(runID string, now time.Time) (e2eFixtureManifest, err
 		Bank:          bank,
 		Expected: e2EExpectedSnapshot{
 			TenantCount:          2,
-			PayerCount:           1,
+			PayerCount:           2,
 			BankTransactionCount: len(bank.Transactions),
 			EURIncomeCents:       95000 + 40000 + 30000 + 5000,
 			GBPIncomeCents:       2500,
 			RentAllocationCents:  95000,
 			PartialRentCents:     40000,
-			PendingIncomeCount:   2,
+			PendingIncomeCount:   3,
 		},
 	}
 	if err := manifest.validate(); err != nil {
