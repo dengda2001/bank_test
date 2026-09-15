@@ -52,6 +52,7 @@ type tenantBillingPaymentRow struct {
 	ObligationID       uint64     `gorm:"column:obligation_id"`
 	AmountCents        int64      `gorm:"column:amount_cents"`
 	Currency           string     `gorm:"column:currency"`
+	Source             string     `gorm:"column:source"`
 	TransactionTime    *time.Time `gorm:"column:transaction_time"`
 	Description        string     `gorm:"column:description"`
 	Reference          string     `gorm:"column:reference"`
@@ -218,6 +219,7 @@ func buildTenantBillingHistory(tenants []tenant, obligations []rentObligation, p
 		paymentsByObligation[row.ObligationID] = append(paymentsByObligation[row.ObligationID], rentPaymentDetailFromRow(rentPaymentDetailRow{
 			AmountCents:        row.AmountCents,
 			Currency:           row.Currency,
+			Source:             row.Source,
 			TransactionTime:    row.TransactionTime,
 			Description:        row.Description,
 			Reference:          row.Reference,
@@ -366,6 +368,7 @@ func (s *obligationService) summarizeRentDashboard(ctx context.Context, userID u
 type rentPaymentDetailRow struct {
 	AmountCents        int64      `gorm:"column:amount_cents"`
 	Currency           string     `gorm:"column:currency"`
+	Source             string     `gorm:"column:source"`
 	TransactionTime    *time.Time `gorm:"column:transaction_time"`
 	Description        string     `gorm:"column:description"`
 	Reference          string     `gorm:"column:reference"`
@@ -375,7 +378,7 @@ type rentPaymentDetailRow struct {
 func (s *obligationService) listRentPayments(ctx context.Context, userID, obligationID uint64) ([]rentPaymentDetail, error) {
 	var rows []rentPaymentDetailRow
 	if err := s.db.WithContext(ctx).Table("payment_allocations AS pa").
-		Select("pa.amount_cents, pt.currency, pt.transaction_time, pt.description, pt.reference, pa.confirmation_source").
+		Select("pa.amount_cents, pt.currency, pt.source, pt.transaction_time, pt.description, pt.reference, pa.confirmation_source").
 		Joins("JOIN payment_transactions AS pt ON pt.id = pa.payment_transaction_id AND pt.user_id = pa.user_id").
 		Where("pa.user_id = ? AND pa.rent_obligation_id = ? AND pa.status = ? AND pa.allocation_kind = ?", userID, obligationID, allocationStatusConfirmed, allocationKindRent).
 		Order("pt.transaction_time ASC, pa.id ASC").Scan(&rows).Error; err != nil {
@@ -398,6 +401,7 @@ func rentPaymentDetailFromRow(row rentPaymentDetailRow) rentPaymentDetail {
 		DateDisplay:        dateDisplay,
 		Description:        firstNonEmpty(row.Description, "No description"),
 		Reference:          firstNonEmpty(row.Reference, "No reference"),
+		Source:             firstNonEmpty(row.Source, "bank"),
 		ConfirmationSource: firstNonEmpty(row.ConfirmationSource, "manual"),
 	}
 }

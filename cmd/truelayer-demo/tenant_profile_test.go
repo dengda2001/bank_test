@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNormalizeTenantPayerNameKeepsNameOnlyBankIdentity(t *testing.T) {
@@ -97,6 +98,65 @@ func TestClassifyTenantPayersMarksSharedNameWithoutStableID(t *testing.T) {
 		t.Fatalf("unshared payer row=%+v unexpectedly shared", rows[2])
 	}
 }
+
+func TestRentEndChangeOnlyAffectsMonthsAfterEndMonth(t *testing.T) {
+	end := time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC)
+	if !obligationIsAfterRentEnd(time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), &end) {
+		t.Fatal("November obligation should be affected")
+	}
+	if obligationIsAfterRentEnd(time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), &end) {
+		t.Fatal("end month obligation should remain applicable")
+	}
+}
+
+func TestPaginateTenantBillingMonthsReturnsStablePageAndTotal(t *testing.T) {
+	rows := []tenantBillingMonth{
+		{Period: "2026-05"}, {Period: "2026-04"}, {Period: "2026-03"},
+		{Period: "2026-02"}, {Period: "2026-01"},
+	}
+	page, totalPages, err := paginateTenantBillingMonths(rows, 2, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page) != 2 || page[0].Period != "2026-03" || page[1].Period != "2026-02" || totalPages != 3 {
+		t.Fatalf("page=%+v totalPages=%d want March/February and 3 pages", page, totalPages)
+	}
+}
+
+func TestParseTenantHistoryRangeDefaultsToTwelveMonths(t *testing.T) {
+	from, to, page, pageSize, err := parseTenantHistoryRange(testQueryValues{}, time.Date(2026, 9, 16, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if from.Format("2006-01") != "2025-10" || to.Format("2006-01") != "2026-09" || page != 1 || pageSize != 12 {
+		t.Fatalf("range=%s..%s page=%d size=%d", from.Format("2006-01"), to.Format("2006-01"), page, pageSize)
+	}
+}
+
+func TestTenantDetailTemplateShowsNameOnlyPayerAndHistoryControls(t *testing.T) {
+	var body strings.Builder
+	err := tenantDetailTemplate.Execute(&body, tenantDetailPageData{
+		Tenant:  tenantRecord{ID: "7", Name: "Aoife Murphy", DisplayAlias: "Aoife", Email: "aoife@example.test"},
+		Payers:  []tenantPayerRecord{{ID: "8", Name: "Mike", Shared: true}},
+		History: tenantBillingHistoryPage{FromPeriod: "2025-10", ToPeriod: "2026-09", Page: 1, PageSize: 12, TotalRows: 1, Rows: []tenantBillingMonth{{PeriodLabel: "2026年9月", StatusLabel: "已缴清"}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := body.String()
+	for _, expected := range []string{
+		"aoife@example.test", "Mike", "共享／冲突候选", "from_month", "to_month", "/tenants/7/payers",
+		"2026年9月", "租客详情",
+	} {
+		if !strings.Contains(page, expected) {
+			t.Fatalf("tenant detail template missing %q", expected)
+		}
+	}
+}
+
+type testQueryValues map[string]string
+
+func (v testQueryValues) Get(key string) string { return v[key] }
 
 type testFormValues map[string]string
 

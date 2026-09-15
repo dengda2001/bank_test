@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type tenant struct {
@@ -259,8 +260,12 @@ func isValidationError(err error) bool {
 	return strings.Contains(text, "required") ||
 		strings.Contains(text, "must be") ||
 		strings.Contains(text, "invalid") ||
-		strings.Contains(text, "supported")
+		strings.Contains(text, "supported") ||
+		strings.Contains(text, "too long") ||
+		strings.Contains(text, "effective rent payments")
 }
+
+var errTenantLifecycleConflict = errors.New("tenant has effective rent payments in future obligations")
 
 func (s *tenantService) createTenant(ctx context.Context, userID uint64, input tenantInput) (tenant, error) {
 	if userID == 0 {
@@ -338,35 +343,78 @@ func (s *tenantService) updateTenant(ctx context.Context, userID, tenantID uint6
 		rentEnd = &d
 	}
 	var row tenant
-	if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", tenantID, userID).First(&row).Error; err != nil {
-		return tenant{}, err
-	}
-	updates := map[string]any{
-		"name":               input.Name,
-		"display_alias":      input.DisplayAlias,
-		"email":              input.Email,
-		"payer_id":           nullableString(input.PayerID),
-		"payer_name_hint":    nullableString(input.PayerNameHint),
-		"monthly_rent_cents": moneyToCents(input.MonthlyRent),
-		"currency":           currency,
-		"interval_unit":      input.IntervalUnit,
-		"interval_count":     input.IntervalCount,
-		"billing_start_date": billingStart,
-		"due_day":            input.DueDay,
-		"rent_start_date":    rentStart,
-		"rent_end_date":      rentEnd,
-		"status":             input.Status,
-		"room_label":         input.RoomLabel,
-		"room_address":       input.RoomAddress,
-		"property_hint":      nullableString(input.PropertyHint),
-	}
-	if err := s.db.WithContext(ctx).Model(&row).Updates(updates).Error; err != nil {
+	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", tenantID, userID).First(&row).Error; err != nil {
+			return err
+		}
+		if err := voidFutureTenantObligations(tx.WithContext(ctx), userID, tenantID, row.RentEndDate, rentEnd, userID); err != nil {
+			return err
+		}
+		updates := map[string]any{
+			"name":               input.Name,
+			"display_alias":      input.DisplayAlias,
+			"email":              input.Email,
+			"payer_id":           nullableString(input.PayerID),
+			"payer_name_hint":    nullableString(input.PayerNameHint),
+			"monthly_rent_cents": moneyToCents(input.MonthlyRent),
+			"currency":           currency,
+			"interval_unit":      input.IntervalUnit,
+			"interval_count":     input.IntervalCount,
+			"billing_start_date": billingStart,
+			"due_day":            input.DueDay,
+			"rent_start_date":    rentStart,
+			"rent_end_date":      rentEnd,
+			"status":             input.Status,
+			"room_label":         input.RoomLabel,
+			"room_address":       input.RoomAddress,
+			"property_hint":      nullableString(input.PropertyHint),
+		}
+		return tx.WithContext(ctx).Model(&row).Updates(updates).Error
+	}); err != nil {
 		return tenant{}, err
 	}
 	if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", tenantID, userID).First(&row).Error; err != nil {
 		return tenant{}, err
 	}
 	return row, nil
+}
+
+func obligationIsAfterRentEnd(periodMonth time.Time, rentEnd *time.Time) bool {
+	return rentEnd != nil && monthStart(periodMonth).After(monthStart(*rentEnd))
+}
+
+func voidFutureTenantObligations(tx *gorm.DB, userID, tenantID uint64, previousEnd, newEnd *time.Time, voidedBy uint64) error {
+	shortened := newEnd != nil && (previousEnd == nil || newEnd.Before(*previousEnd))
+	if !shortened {
+		return nil
+	}
+	cutoff := monthStart(*newEnd).AddDate(0, 1, 0)
+	var obligations []rentObligation
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND tenant_id = ? AND period_month >= ? AND record_status = ?", userID, tenantID, cutoff, obligationRecordActive).Find(&obligations).Error; err != nil {
+		return err
+	}
+	for _, obligation := range obligations {
+		var count int64
+		if err := tx.Model(&paymentAllocation{}).
+			Where("user_id = ? AND rent_obligation_id = ? AND status = ?", userID, obligation.ID, allocationStatusConfirmed).
+			Where("(allocation_kind = ? OR allocation_kind IS NULL OR allocation_kind = '')", allocationKindRent).
+			Count(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			return errTenantLifecycleConflict
+		}
+	}
+	now := time.Now().UTC()
+	return tx.Model(&rentObligation{}).
+		Where("user_id = ? AND tenant_id = ? AND period_month >= ? AND record_status = ?", userID, tenantID, cutoff, obligationRecordActive).
+		Updates(map[string]any{
+			"status":            obligationRecordVoided,
+			"record_status":     obligationRecordVoided,
+			"voided_at":         now,
+			"voided_by_user_id": voidedBy,
+			"void_reason":       "tenant rent ended early",
+		}).Error
 }
 
 func (s *tenantService) listTenants(ctx context.Context, userID uint64) ([]tenantRecord, error) {

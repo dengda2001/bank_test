@@ -271,6 +271,7 @@ type rentPaymentDetail struct {
 	DateDisplay        string
 	Description        string
 	Reference          string
+	Source             string
 	ConfirmationSource string
 }
 
@@ -356,6 +357,7 @@ func main() {
 	mux.HandleFunc("/billing/confirm", a.handleRentMatchConfirmation)
 	mux.HandleFunc("/import-legacy", a.handleLegacyImport)
 	mux.HandleFunc("/tenants", a.handleTenants)
+	mux.HandleFunc("/tenants/", a.handleTenantSubroute)
 	mux.HandleFunc("/expenses", a.handleExpenses)
 	mux.HandleFunc("/login", a.handleLogin)
 	mux.HandleFunc("/callback", a.handleCallback)
@@ -2465,6 +2467,10 @@ var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html
           {{if .Editing}}<input type="hidden" name="tenant_id" value="{{.Form.ID}}">{{end}}
           <label for="name">租客姓名</label>
           <input id="name" name="name" autocomplete="name" value="{{.Form.Name}}" required>
+          <label for="display_alias">显示别名</label>
+          <input id="display_alias" name="display_alias" value="{{.Form.DisplayAlias}}" placeholder="列表优先显示的称呼">
+          <label for="email">邮箱</label>
+          <input id="email" name="email" type="email" autocomplete="email" value="{{.Form.Email}}" placeholder="tenant@example.com">
           <label for="payer_id">银行付款人编号</label>
           <input id="payer_id" name="payer_id" value="{{.Form.PayerID}}">
           <label for="payer_name_hint">付款人名称提示</label>
@@ -2476,7 +2482,7 @@ var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html
           <input type="hidden" name="interval_unit" value="month">
           <input type="hidden" name="interval_count" value="1">
           <label for="billing_start_date">计费开始日期</label>
-          <input id="billing_start_date" name="billing_start_date" type="date" value="{{.Form.BillingStartDate}}" required>
+          <input id="billing_start_date" name="billing_start_date" type="date" value="{{.Form.BillingStartDate}}"><span class="tiny">留空则使用租期开始日期；如需延后，请填写租期内日期。</span>
           <label for="due_day">每月应缴日</label>
           <input id="due_day" name="due_day" type="number" min="1" max="31" value="{{.Form.DueDay}}" required>
           <label for="rent_start_date">租期开始日期</label>
@@ -2503,13 +2509,13 @@ var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html
             <tbody>
               {{range .Rows}}
               <tr class="tenant-row" tabindex="0" role="button" aria-expanded="false" aria-controls="tenant-billing-{{.ID}}" data-tenant-target="tenant-billing-{{.ID}}">
-                <td><strong>{{.Name}}</strong><br><span class="mono">{{.ID}}</span></td>
+                <td><strong>{{if .DisplayAlias}}{{.DisplayAlias}}{{else}}{{.Name}}{{end}}</strong><br>{{if .DisplayAlias}}<span class="tiny">{{.Name}}</span><br>{{end}}<span class="mono">{{.ID}}</span></td>
                 <td>{{if .PayerNameHint}}{{.PayerNameHint}}{{else}}暂无付款人别名{{end}}<br><span class="mono">编号：{{if .PayerID}}{{.PayerID}}{{else}}暂无{{end}}</span></td>
                 <td class="amount">{{.RentDisplay}}</td>
                 <td>每月 {{.DueDay}} 日<br><span class="mono">{{.RentStartDate}}{{if .RentEndDate}} 至 {{.RentEndDate}}{{end}}</span></td>
                 <td>{{if .RoomLabel}}{{.RoomLabel}}<br>{{end}}{{.RoomAddress}}{{if .PropertyHint}}<br><span class="mono">{{.PropertyHint}}</span>{{end}}</td>
                 <td class="mono">{{.CreatedAt}}</td>
-                <td><a class="btn subtle" href="/tenants?edit={{.ID}}">编辑</a></td>
+                <td><a class="btn subtle" href="/tenants/{{.ID}}">详情</a><br><a class="btn subtle" href="/tenants?edit={{.ID}}">编辑</a></td>
               </tr>
               <tr id="tenant-billing-{{.ID}}" class="tenant-history-row" hidden><td colspan="7"><div class="tenant-history">
                 <div class="tenant-history-head"><h3>最近三个月缴费</h3><span class="tiny">应收账单 → 已确认流水</span></div>
