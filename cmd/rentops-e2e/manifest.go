@@ -146,7 +146,7 @@ func newE2EFixtureManifest(runID string, now time.Time) (e2eFixtureManifest, err
 				TransactionID:                   marker + "-tx-eur-cross-month",
 				NormalisedProviderTransactionID: marker + "-stable-eur-cross-month",
 				ProviderTransactionID:           marker + "-provider-eur-cross-month",
-				Timestamp:                       "2026-08-31T10:00:00Z",
+				Timestamp:                       "2026-09-01T10:00:00Z",
 				Description:                     marker + " rent 2026-08 cross-month",
 				Amount:                          e2eMoney{Cents: 30000, Currency: "EUR"},
 				Direction:                       "income",

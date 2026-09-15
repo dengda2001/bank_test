@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -315,6 +316,145 @@ func TestE2EBankImportScenarioVerifiesFactsAndIdempotency(t *testing.T) {
 	scenario := client.bankImportScenario(context.Background(), manifest)
 	if scenario.Status != "passed" || importCount != 2 {
 		t.Fatalf("scenario=%+v imports=%d", scenario, importCount)
+	}
+}
+
+func TestExtractE2ETransactionIDAndStatusFromBillingRow(t *testing.T) {
+	body := []byte(`<table><tr class="income"><td>stable-tx-1</td><td><span class="status status-link matched">已关联</span><form><input type="hidden" name="transaction_id" value="42"></form></td></tr></table>`)
+	id, err := extractE2ETransactionID(body, "stable-tx-1")
+	if err != nil || id != 42 {
+		t.Fatalf("id=%d err=%v", id, err)
+	}
+	row, err := e2eTransactionRow(body, "stable-tx-1")
+	if err != nil || e2eTransactionStatus(row) != "matched" {
+		t.Fatalf("row=%q err=%v status=%q", row, err, e2eTransactionStatus(row))
+	}
+	if _, err := extractE2ETransactionID(body, "missing"); err == nil {
+		t.Fatal("missing transaction unexpectedly extracted")
+	}
+}
+
+func TestE2ELedgerScenarioRunsHTTPActionsAndChecksConservation(t *testing.T) {
+	manifest, err := newE2EFixtureManifest("rentops-e2e-20260916-120000-a1b2c3d4", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	transactionIDs := map[string]uint64{
+		manifest.Bank.Transactions[0].ProviderTransactionID: 101,
+		manifest.Bank.Transactions[1].ProviderTransactionID: 102,
+		manifest.Bank.Transactions[2].ProviderTransactionID: 103,
+		manifest.Bank.Transactions[3].ProviderTransactionID: 104,
+		manifest.Bank.Transactions[4].ProviderTransactionID: 105,
+	}
+	statuses := map[uint64]string{101: "unmatched", 102: "unmatched", 103: "unmatched", 104: "unmatched", 105: "unmatched"}
+	allocated := map[uint64]string{101: "EUR 0.00", 102: "EUR 0.00", 103: "GBP 0.00", 104: "EUR 0.00", 105: "EUR 0.00"}
+	amounts := map[uint64]string{101: "EUR 950.00", 102: "EUR 400.00", 103: "GBP 25.00", 104: "EUR 300.00", 105: "EUR 50.00"}
+	providerForID := make(map[uint64]string, len(transactionIDs))
+	for providerID, transactionID := range transactionIDs {
+		providerForID[transactionID] = providerID
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/login-local" {
+			if _, cookieErr := r.Cookie("rentops_session"); cookieErr != nil {
+				http.Redirect(w, r, "/", http.StatusFound)
+				return
+			}
+		}
+		switch r.URL.Path {
+		case "/login-local":
+			if err := r.ParseForm(); err != nil || r.Form.Get("password") != "e2e-password" {
+				http.Redirect(w, r, "/?error=invalid_login", http.StatusFound)
+				return
+			}
+			http.SetCookie(w, &http.Cookie{Name: "rentops_session", Value: "session-secret", Path: "/"})
+			http.Redirect(w, r, "/rent-dashboard", http.StatusFound)
+		case "/billing":
+			w.WriteHeader(http.StatusOK)
+			for _, transaction := range manifest.Bank.Transactions {
+				id := transactionIDs[transaction.ProviderTransactionID]
+				remaining := amounts[id]
+				if allocated[id] == "EUR 950.00" {
+					remaining = "EUR 0.00"
+				} else if allocated[id] == "EUR 400.00" || allocated[id] == "EUR 300.00" || allocated[id] == "EUR 50.00" {
+					remaining = "EUR 0.00"
+				}
+				fmt.Fprintf(w, `<tr class="%s"><td>%s</td><td>%s</td><td><span class="status status-link %s">状态</span>已分配 %s 余款 %s</td><td><form><input type="hidden" name="transaction_id" value="%d"></form></td></tr>`, statuses[id], transaction.ProviderTransactionID, transaction.Description, statuses[id], allocated[id], remaining, id)
+			}
+		case "/billing/confirm":
+			_ = r.ParseForm()
+			id, _ := strconv.ParseUint(r.Form.Get("transaction_id"), 10, 64)
+			if id != 101 || r.Form.Get("tenant_id") != "42" || r.Form.Get("period") != "2026-09" {
+				http.Redirect(w, r, "/billing?error=confirmation_failed", http.StatusFound)
+				return
+			}
+			statuses[id] = "matched"
+			allocated[id] = "EUR 950.00"
+			http.Redirect(w, r, "/billing?message=rent_confirmed", http.StatusFound)
+		case "/billing/allocate":
+			_ = r.ParseForm()
+			id, _ := strconv.ParseUint(r.Form.Get("transaction_id"), 10, 64)
+			if id == 103 {
+				http.Redirect(w, r, "/billing?error=allocation_failed", http.StatusFound)
+				return
+			}
+			switch id {
+			case 102:
+				allocated[id] = "EUR 400.00"
+			case 104:
+				allocated[id] = "EUR 300.00"
+			case 105:
+				allocated[id] = "EUR 50.00"
+			default:
+				http.Redirect(w, r, "/billing?error=allocation_failed", http.StatusFound)
+				return
+			}
+			statuses[id] = "matched"
+			http.Redirect(w, r, "/billing?message=allocation_saved", http.StatusFound)
+		case "/billing/ignore":
+			_ = r.ParseForm()
+			id, _ := strconv.ParseUint(r.Form.Get("transaction_id"), 10, 64)
+			if id != 103 {
+				http.Redirect(w, r, "/billing?error=transaction_action_failed", http.StatusFound)
+				return
+			}
+			statuses[id] = "ignored"
+			http.Redirect(w, r, "/billing?message=transaction_action_saved", http.StatusFound)
+		case "/billing/revoke":
+			if r.Method == http.MethodGet {
+				_ = r.ParseForm()
+				id, _ := strconv.ParseUint(r.URL.Query().Get("transaction_id"), 10, 64)
+				if id != 101 {
+					http.NotFound(w, r)
+					return
+				}
+				fmt.Fprintf(w, `<main>%s %d</main>`, manifest.Bank.Transactions[0].Description, id)
+				return
+			}
+			_ = r.ParseForm()
+			id, _ := strconv.ParseUint(r.Form.Get("transaction_id"), 10, 64)
+			if id != 101 {
+				http.Redirect(w, r, "/billing?error=transaction_action_failed", http.StatusFound)
+				return
+			}
+			statuses[id] = "unmatched"
+			allocated[id] = "EUR 0.00"
+			http.Redirect(w, r, "/billing?message=transaction_action_saved", http.StatusFound)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client, err := newE2EHTTPClient(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authScenario := client.authenticationScenario(context.Background(), "e2e-user", "e2e-password")
+	if authScenario.Status != "passed" {
+		t.Fatalf("authentication scenario=%+v", authScenario)
+	}
+	scenario := client.ledgerScenario(context.Background(), manifest, 42)
+	if scenario.Status != "passed" || len(providerForID) != 5 {
+		t.Fatalf("ledger scenario=%+v providerIDs=%v", scenario, providerForID)
 	}
 }
 

@@ -117,11 +117,12 @@ func e2eHTTPResponseSummary(response e2eHTTPResponse) map[string]any {
 
 func e2eHTTPStep(method, path string, expected any, response e2eHTTPResponse, err error) e2eStepReport {
 	step := e2eStepReport{
-		Method:   method,
-		Path:     path,
-		Expected: expected,
-		Actual:   e2eHTTPResponseSummary(response),
-		Passed:   err == nil,
+		Method:     method,
+		Path:       path,
+		StatusCode: response.StatusCode,
+		Expected:   expected,
+		Actual:     e2eHTTPResponseSummary(response),
+		Passed:     err == nil,
 	}
 	if err != nil {
 		step.Passed = false
