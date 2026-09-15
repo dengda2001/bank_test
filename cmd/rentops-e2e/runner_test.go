@@ -667,6 +667,87 @@ func TestE2ECrossUserScenarioRejectsTenantLedgerAndCashAccess(t *testing.T) {
 	}
 }
 
+func TestRunE2EBusinessScenariosStopsAfterFirstFailureAndPersistsReport(t *testing.T) {
+	manifest, err := newE2EFixtureManifest("rentops-e2e-20260916-120000-a1b2c3d4", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tenantPosts, dunningPosts int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/login-local" {
+			if _, cookieErr := r.Cookie("rentops_session"); cookieErr != nil {
+				http.Redirect(w, r, "/", http.StatusFound)
+				return
+			}
+		}
+		switch r.URL.Path {
+		case "/login-local":
+			_ = r.ParseForm()
+			if r.Form.Get("password") != "e2e-password" {
+				http.Redirect(w, r, "/?error=invalid_login", http.StatusFound)
+				return
+			}
+			http.SetCookie(w, &http.Cookie{Name: "rentops_session", Value: "session", Path: "/"})
+			http.Redirect(w, r, "/rent-dashboard", http.StatusFound)
+		case "/billing":
+			w.WriteHeader(http.StatusOK)
+		case "/tenants":
+			if r.Method == http.MethodPost {
+				tenantPosts++
+			}
+			http.Error(w, "tenant failure", http.StatusInternalServerError)
+		case "/dunning/config", "/dunning/preview", "/dunning/send":
+			dunningPosts++
+			http.Error(w, "must not run after failure", http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	report := newE2EReport(e2ePreflight{Passed: true, Mode: "execute", RunID: manifest.RunID}, time.Now())
+	options := e2eOptions{BaseURL: server.URL, Username: "e2e-user", Password: "e2e-password"}
+	writes := make([]e2eReport, 0, 3)
+	err = runE2EBusinessScenarios(context.Background(), options, manifest, &report, func(snapshot e2eReport) error {
+		writes = append(writes, snapshot)
+		return nil
+	})
+	if err == nil || report.Status != "failed" {
+		t.Fatalf("err=%v report=%+v", err, report)
+	}
+	if tenantPosts != 1 || dunningPosts != 0 {
+		t.Fatalf("tenantPosts=%d dunningPosts=%d", tenantPosts, dunningPosts)
+	}
+	if len(report.Scenarios) != 2 || report.Scenarios[0].Name != "authentication" || report.Scenarios[1].Name != "tenant-and-payer" || report.Scenarios[1].Status != "failed" {
+		t.Fatalf("scenarios=%+v", report.Scenarios)
+	}
+	if len(writes) != 3 || writes[len(writes)-1].Status != "failed" {
+		t.Fatalf("progress writes=%+v", writes)
+	}
+}
+
+func TestE2EDiscoverCrossUserTransactionRequiresPositiveFixtureID(t *testing.T) {
+	manifest, err := newE2EFixtureManifest("rentops-e2e-20260916-120000-a1b2c3d4", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/billing" {
+			http.NotFound(w, r)
+			return
+		}
+		fmt.Fprintf(w, `<tr class="income"><form><input name="transaction_id" value="101"><span>%s</span></form></tr>`, manifest.Bank.Transactions[0].ProviderTransactionID)
+	}))
+	defer server.Close()
+	client, err := newE2EHTTPClient(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scenario, transactionID := client.discoverE2ECrossUserTransaction(context.Background(), manifest)
+	if scenario.Status != "passed" || transactionID != 101 {
+		t.Fatalf("scenario=%+v transactionID=%d", scenario, transactionID)
+	}
+}
+
 func TestE2ECashReceiptScenarioRunsPreviewIdempotencyVoidAndCorrection(t *testing.T) {
 	manifest, err := newE2EFixtureManifest("rentops-e2e-20260916-120000-a1b2c3d4", time.Now())
 	if err != nil {

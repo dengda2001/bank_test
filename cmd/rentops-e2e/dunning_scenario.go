@@ -19,7 +19,7 @@ func (c *e2eHTTPClient) dunningScenario(ctx context.Context, manifest e2eFixture
 	if obligationID == 0 {
 		return fail("dunning scenario requires an obligation ID")
 	}
-	period := "2026-08"
+	period := "2026-09"
 	baseForm := url.Values{
 		"period":    {period},
 		"status":    {"unpaid"},
