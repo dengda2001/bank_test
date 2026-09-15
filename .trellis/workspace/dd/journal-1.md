@@ -170,3 +170,40 @@ Implemented the Chinese monthly rent dashboard with clear expected/paid/balance 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 6: EUR 收租账本基础实现与测试
+
+**Date**: 2026-09-16
+**Task**: EUR 收租账本基础实现与测试
+**Branch**: `main`
+
+### Summary
+
+将收租工作台一期货币范围收敛为 EUR-only 并保留三位币种扩展口子；完成账本基础迁移、有效分配/作废投影、预算与归属校验，补充单元测试和可选真实 MySQL 迁移幂等测试。安全 rebase 远端改动后已推送 origin/main；归档 rent-ledger-foundation 子任务。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `80c661b` | (see git log) |
+| `052bebc` | (see git log) |
+| `f3791e8` | (see git log) |
+| `4a7fff2` | (see git log) |
+| `342ceec` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
