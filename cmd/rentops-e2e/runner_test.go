@@ -1,7 +1,10 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -106,6 +109,71 @@ func TestValidateE2ERunIDRequiresUniqueFormat(t *testing.T) {
 	for _, value := range []string{"", "test-run", "rentops-e2e-20260916-120000-zzzzzzzz", "rentops-e2e-20260916-120000-a1b2c3d4-extra"} {
 		if err := validateE2ERunID(value); err == nil {
 			t.Fatalf("run ID %q unexpectedly valid", value)
+		}
+	}
+}
+
+func TestE2EHTTPClientMaintainsCookieSessionAndRejectsUnauthorizedRequests(t *testing.T) {
+	var authenticatedRequest bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/login-local":
+			if r.Method != http.MethodPost {
+				t.Error("login endpoint received a non-POST request")
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				return
+			}
+			if err := r.ParseForm(); err != nil {
+				t.Errorf("parse login form: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			if r.Form.Get("username") != "e2e-user" || r.Form.Get("password") != "e2e-password" {
+				http.Redirect(w, r, "/?error=invalid_login", http.StatusFound)
+				return
+			}
+			http.SetCookie(w, &http.Cookie{Name: "rentops_session", Value: "session-secret", Path: "/", HttpOnly: true})
+			http.Redirect(w, r, "/rent-dashboard", http.StatusFound)
+		case "/billing":
+			if _, err := r.Cookie("rentops_session"); err != nil {
+				http.Redirect(w, r, "/", http.StatusFound)
+				return
+			}
+			authenticatedRequest = true
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("protected"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client, err := newE2EHTTPClient(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scenario := client.authenticationScenario(context.Background(), "e2e-user", "e2e-password")
+	if scenario.Status != "passed" || len(scenario.Steps) != 4 {
+		t.Fatalf("scenario=%+v", scenario)
+	}
+	if !authenticatedRequest {
+		t.Fatal("protected request did not receive the session cookie from login")
+	}
+	for _, step := range scenario.Steps {
+		if strings.Contains(step.Error, "e2e-password") {
+			t.Fatalf("password leaked into step error: %+v", step)
+		}
+	}
+}
+
+func TestE2EHTTPClientRejectsOriginEscape(t *testing.T) {
+	client, err := newE2EHTTPClient("http://127.0.0.1:8080")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"https://evil.example.test/", "//evil.example.test/", "billing"} {
+		if _, err := client.endpoint(path); err == nil {
+			t.Fatalf("path %q unexpectedly escaped endpoint validation", path)
 		}
 	}
 }
