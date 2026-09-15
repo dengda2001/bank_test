@@ -376,6 +376,109 @@ if decisionNeedsReview {
 }
 ```
 
+## Scenario: Tenant Profile, Name-Only Payers, and Lifecycle History
+
+### 1. Scope / Trigger
+
+- Trigger: Adding tenant profile fields, maintaining payer relationships,
+  changing rent validity dates, or rendering the independent tenant history
+  page.
+- Applies to database-backed `/tenants` and `/tenants/{id}` flows after
+  migration `004_tenant_profile_and_payers.sql`.
+
+### 2. Signatures
+
+- `tenantService.createTenant(ctx, userID, tenantInput)` creates the tenant
+  and any legacy-compatible initial payer relationship in one transaction.
+- `tenantService.updateTenant(ctx, userID, tenantID, tenantInput)` locks the
+  tenant and applies early-rent-end validation and future-obligation voiding.
+- `tenantService.addTenantPayer(ctx, userID, tenantID, tenantPayerInput)` and
+  `removeTenantPayer(ctx, userID, tenantID, payerID, removedBy, reason)` are
+  account-scoped and soft-delete relationships.
+- `obligationService.listTenantBillingHistoryPage(ctx, userID, tenantID,
+  fromMonth, toMonth, page, pageSize)` returns typed, paginated month rows.
+- `GET /tenants/{id}` accepts `from_month`, `to_month`, `page`, and
+  `page_size`; payer forms use `/tenants/{id}/payers` and
+  `/tenants/{id}/payers/remove`.
+
+### 3. Contracts
+
+- `tenant_payers.payer_name_original` is required and
+  `payer_name_normalized` is the lower-case, whitespace-collapsed lookup key;
+  `payer_id` is nullable. A bank payload containing only
+  `meta.counter_party_preferred_name` (for example `Mike`) is valid and must
+  not receive a fabricated ID.
+- `tenant_payers.removed_at` preserves relationship history. Active payer
+  sharing is detected by normalized name or stable payer ID across tenants;
+  shared/conflicting rows cannot auto-select a tenant.
+- `billing_start_date` defaults to `rent_start_date` only when omitted on
+  create. It must be on/after rent start and on/before rent end when an end
+  exists; editing must preserve the stored value unless explicitly changed.
+- An end-date month remains billable. Only active obligations after the end
+  month are candidates for voiding; any effective rent allocation blocks the
+  entire tenant update. Unpaid candidates are voided with actor, timestamp,
+  and reason in the same transaction.
+- Tenant history reads include applicable zero-payment months and use only
+  confirmed rent allocations joined to income transactions. All reads and
+  writes include `user_id` ownership predicates.
+
+### 4. Validation & Error Matrix
+
+- Empty payer name or a field longer than 191 runes -> validation error; no
+  relationship row is written.
+- Cross-user tenant, payer, obligation, or allocation -> safe not-found or
+  authorization-safe error; no data is changed.
+- Invalid email, date ordering, non-EUR currency, or non-positive rent ->
+  tenant form validation error.
+- Early end with an effective future rent allocation -> reject the whole
+  update and leave every obligation active.
+- Early end with only unpaid future obligations -> void all affected rows;
+  the end month remains active and historical rows stay queryable.
+- A page number beyond the available range returns an empty page without an
+  integer-overflow panic; history ranges over 120 months are rejected.
+
+### 5. Good/Base/Bad Cases
+
+- Good: Store `Mike` with a nullable payer ID, preserve its original spelling,
+  and mark two active tenants with normalized `mike` as shared.
+- Base: Existing `tenants.payer_name_hint` is backfilled into
+  `tenant_payers`; old bank JSON remains readable and historical allocations
+  are untouched.
+- Bad: Treat `counter_party_preferred_name` as a stable ID, physically delete
+  a removed relationship, hide old obligations when a tenant is inactive, or
+  void some future obligations before discovering a payment on another one.
+
+### 6. Tests Required
+
+- Unit tests for name normalization, name-only validation, shared name/ID
+  detection, date defaults, date boundaries, source labels, pagination, and
+  large page values.
+- Template/route tests for alias/email fields, independent history controls,
+  payer add/remove forms, authentication, and lifecycle conflict messaging.
+- Optional MySQL tests must run migration `004` twice, verify nullable payer
+  ID and required original name, and assert unpaid future voiding versus
+  paid-future all-or-nothing rejection.
+
+### 7. Wrong vs Correct
+
+Wrong:
+
+```go
+// Bank data has no stable payer ID here; inventing one makes future matching unsafe.
+payerID := "payer:" + normalizeTenantPayerName(bankName)
+```
+
+Correct:
+
+```go
+// Keep the observed name and leave the stable identity absent.
+tenantPayer{
+    PayerID:             nil,
+    PayerNameOriginal:   bankName,
+    PayerNameNormalized: normalizeTenantPayerName(bankName),
+}
+```
+
 ## Scenario: EUR-Only Audited Rent Ledger
 
 ### 1. Scope / Trigger

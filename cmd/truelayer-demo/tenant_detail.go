@@ -386,9 +386,6 @@ func (a *app) handleRemoveTenantPayer(w http.ResponseWriter, r *http.Request) {
 
 func classifyTenantPayersWithAllRows(rows, allRows []tenantPayer) []tenantPayerRecord {
 	classified := classifyTenantPayerSharing(allRows)
-	if len(rows) == len(allRows) {
-		return classified
-	}
 	byID := make(map[uint64]tenantPayerRecord, len(classified))
 	for _, row := range classified {
 		id, _ := strconv.ParseUint(row.ID, 10, 64)

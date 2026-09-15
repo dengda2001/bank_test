@@ -53,7 +53,13 @@
 
 ## 启动前检查
 
-- [ ] 用户审阅并批准 `prd.md`、`design.md`、`implement.md`。
-- [ ] 已确认使用 MySQL 模式作为本任务的实现目标，JSON 仅保留兼容路径。
-- [ ] 已确认付款人软删除和独立详情路由的实现取舍。
-- [ ] 规划通过后再执行 `task.py start`，将任务状态切换为 `in_progress`。
+- [x] 用户审阅并批准 `prd.md`、`design.md`、`implement.md`。
+- [x] 已确认使用 MySQL 模式作为本任务的实现目标，JSON 仅保留兼容路径。
+- [x] 已确认付款人软删除和独立详情路由的实现取舍。
+- [x] 已执行 `task.py start`，任务状态已切换为 `in_progress`。
+
+## 实施结果
+
+- [x] 已完成迁移、租客档案、付款人关系、历史查询、详情路由和兼容层实现。
+- [x] 已覆盖现有 JSON 的仅姓名付款人形态：稳定 ID 保持为空，不生成伪 ID。
+- [x] 已通过 `go test ./...`、`go vet ./...` 和 `task.py validate`；MySQL 集成测试因未配置 DSN 按预期跳过。
