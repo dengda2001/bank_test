@@ -59,6 +59,11 @@ type config struct {
 	AdminUsername          string
 	AdminPassword          string
 	SessionSecret          string
+	DunningSMTPHost        string
+	DunningSMTPPort        int
+	DunningSMTPUsername    string
+	DunningSMTPPassword    string
+	DunningSMTPFrom        string
 }
 
 type tokenResponse struct {
@@ -318,6 +323,7 @@ type app struct {
 	db              *gorm.DB
 	auth            *authService
 	bankConnections *bankConnectionStore
+	dunningMailer   dunningMailDelivery
 }
 
 // issuedStates tracks states this server has handed to TrueLayer so the
@@ -380,6 +386,7 @@ func main() {
 		db:              db,
 		auth:            newAuthService(db, cfg),
 		bankConnections: newBankConnectionStore(db, cfg),
+		dunningMailer:   newSMTPDunningDelivery(dunningSMTPConfigFromConfig(cfg)),
 	}
 	if err := a.auth.seedDefaultUser(context.Background()); err != nil {
 		log.Fatal(err)
@@ -417,6 +424,14 @@ func main() {
 
 func loadConfig() (config, error) {
 	env := strings.ToLower(strings.TrimSpace(getenv("TL_ENV", "sandbox")))
+	dunningSMTPPort := 587
+	if value := strings.TrimSpace(os.Getenv("DUNNING_SMTP_PORT")); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 || parsed > 65535 {
+			return config{}, errors.New("DUNNING_SMTP_PORT must be between 1 and 65535")
+		}
+		dunningSMTPPort = parsed
+	}
 	cfg := config{
 		Address:                getenv("TL_ADDR", ":8080"),
 		ClientID:               strings.TrimSpace(os.Getenv("TL_CLIENT_ID")),
@@ -440,6 +455,11 @@ func loadConfig() (config, error) {
 		AdminUsername:          strings.TrimSpace(getenv("APP_ADMIN_USERNAME", "ddrzh")),
 		AdminPassword:          getenv("APP_ADMIN_PASSWORD", "ddrzh512"),
 		SessionSecret:          strings.TrimSpace(os.Getenv("APP_SESSION_SECRET")),
+		DunningSMTPHost:        strings.TrimSpace(os.Getenv("DUNNING_SMTP_HOST")),
+		DunningSMTPPort:        dunningSMTPPort,
+		DunningSMTPUsername:    strings.TrimSpace(os.Getenv("DUNNING_SMTP_USERNAME")),
+		DunningSMTPPassword:    os.Getenv("DUNNING_SMTP_PASSWORD"),
+		DunningSMTPFrom:        strings.TrimSpace(os.Getenv("DUNNING_SMTP_FROM")),
 	}
 	if cfg.SessionSecret == "" {
 		secret, err := randomState()
