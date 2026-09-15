@@ -1,0 +1,33 @@
+{
+  "id": "landlord-rent-operations",
+  "name": "landlord-rent-operations",
+  "title": "房东收租工作台",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "dd",
+  "assignee": "dd",
+  "createdAt": "2026-09-15",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-15-rent-ledger-foundation",
+    "09-15-tenant-profile-and-history",
+    "09-15-bank-receipt-management",
+    "09-15-cash-rent-receipts",
+    "09-15-monthly-rent-dashboard",
+    "09-15-monthly-rent-dunning"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
