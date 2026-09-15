@@ -174,6 +174,9 @@ func (s *transactionService) allocateTransaction(ctx context.Context, userID, tr
 				return err
 			}
 		}
+		if source.MatchStatus == "ignored" {
+			return errors.New("restore ignored transaction before allocating it")
+		}
 
 		obligations := make(map[uint64]rentObligation)
 		for _, draft := range drafts {
@@ -253,14 +256,11 @@ func (s *transactionService) allocateTransaction(ctx context.Context, userID, tr
 			matchedTenantID = *allocation.TenantID
 			break
 		}
-		updates := map[string]any{
-			"match_status": summary.Status,
-			"match_reason": nil,
+		projection := projectTransactionMatch(source, existing, "", "")
+		if matchedTenantID != 0 && projection.MatchedTenantID == nil {
+			projection.MatchedTenantID = &matchedTenantID
 		}
-		if matchedTenantID != 0 {
-			updates["matched_tenant_id"] = matchedTenantID
-		}
-		return txdb.Model(&paymentTransaction{}).Where("id = ? AND user_id = ?", transactionID, userID).Updates(updates).Error
+		return updateTransactionProjection(txdb, userID, transactionID, projection)
 	})
 	return summary, err
 }

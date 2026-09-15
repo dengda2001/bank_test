@@ -690,7 +690,8 @@ func (a *app) handleRentMatchConfirmation(w http.ResponseWriter, r *http.Request
 		}
 		period = &parsed
 	}
-	if err := newTransactionService(a.db).confirmRentMatch(r.Context(), userID, transactionID, tenantID, period); err != nil {
+	rememberPayer := r.Form.Get("remember_payer") != "0"
+	if err := newTransactionService(a.db).confirmRentMatch(r.Context(), userID, transactionID, tenantID, period, rememberPayer); err != nil {
 		http.Redirect(w, r, "/billing?error=confirmation_failed", http.StatusFound)
 		return
 	}

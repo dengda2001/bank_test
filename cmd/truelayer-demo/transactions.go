@@ -326,6 +326,7 @@ func transactionPageRowFromModel(row paymentTransaction) transactionPageRow {
 		"matched":      "已关联",
 		"candidate":    "待确认",
 		"needs_review": "需处理",
+		"partial":      "部分关联",
 		"unmatched":    "未关联",
 		"ignored":      "已忽略",
 	}[row.MatchStatus]

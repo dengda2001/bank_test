@@ -55,6 +55,88 @@ func decideRentMatch(tx paymentTransactionInput, tenants []tenant, obligations [
 	return matchDecision{Status: "unmatched", Reason: "no tenant candidate"}
 }
 
+// decideStrictRentMatch is the only decision path used by background
+// reconciliation. It deliberately ignores the legacy tenant name fields:
+// active tenant_payers relations are the remembered identity boundary, and a
+// rent allocation is never inferred from the arrival month.
+func decideStrictRentMatch(tx paymentTransactionInput, payers []tenantPayer, tenants []tenant, obligations []rentObligation) matchDecision {
+	if tx.Direction != "income" {
+		return matchDecision{Status: "unmatched", Reason: "not income"}
+	}
+	tenantByID := make(map[uint64]tenant, len(tenants))
+	for _, row := range tenants {
+		tenantByID[row.ID] = row
+	}
+	var payerMatches []tenant
+	matchSource := "auto_name"
+	if payerID := normalizeMatchText(tx.PayerID); payerID != "" {
+		payerMatches = strictTenantsByPayerID(payers, tenantByID, payerID)
+		matchSource = "auto_id"
+		if len(payerMatches) > 1 {
+			return matchDecision{Status: "needs_review", Reason: "multiple tenants for payer id"}
+		}
+	}
+	if len(payerMatches) == 0 && normalizeMatchText(tx.PayerName) != "" {
+		payerMatches = strictTenantsByPayerName(payers, tenantByID, tx.PayerName)
+		matchSource = "auto_name"
+		if len(payerMatches) > 1 {
+			return matchDecision{Status: "needs_review", Reason: "multiple tenants for remembered payer name"}
+		}
+	}
+	if len(payerMatches) == 0 {
+		return matchDecision{Status: "unmatched", Reason: "no remembered payer relation"}
+	}
+	tenantRow := payerMatches[0]
+	if tx.AmountCents <= 0 {
+		return matchDecision{Status: "needs_review", TenantID: tenantRow.ID, ConfirmationSource: matchSource, Reason: "amount is invalid"}
+	}
+	if tx.ParsedPeriodMonth == nil || tx.ParsedPeriodMonth.IsZero() {
+		return matchDecision{Status: "candidate", TenantID: tenantRow.ID, ConfirmationSource: matchSource, Reason: "explicit rent period is missing"}
+	}
+	return decideForTenantInPeriod(tx, tenantRow, obligations, *tx.ParsedPeriodMonth, matchSource)
+}
+
+func strictTenantsByPayerID(payers []tenantPayer, tenants map[uint64]tenant, payerID string) []tenant {
+	seen := make(map[uint64]struct{})
+	result := make([]tenant, 0)
+	for _, payer := range payers {
+		if payer.RemovedAt != nil || normalizeMatchText(stringValue(payer.PayerID)) != payerID {
+			continue
+		}
+		row, ok := tenants[payer.TenantID]
+		if !ok {
+			continue
+		}
+		if _, ok := seen[row.ID]; ok {
+			continue
+		}
+		seen[row.ID] = struct{}{}
+		result = append(result, row)
+	}
+	return result
+}
+
+func strictTenantsByPayerName(payers []tenantPayer, tenants map[uint64]tenant, payerName string) []tenant {
+	name := normalizeMatchText(payerName)
+	seen := make(map[uint64]struct{})
+	result := make([]tenant, 0)
+	for _, payer := range payers {
+		if payer.RemovedAt != nil || payer.PayerNameNormalized != name {
+			continue
+		}
+		row, ok := tenants[payer.TenantID]
+		if !ok {
+			continue
+		}
+		if _, ok := seen[row.ID]; ok {
+			continue
+		}
+		seen[row.ID] = struct{}{}
+		result = append(result, row)
+	}
+	return result
+}
+
 func decideForTenant(tx paymentTransactionInput, row tenant, obligations []rentObligation, source string) matchDecision {
 	obligation, ok := selectObligationForTransaction(tx, row.ID, obligations)
 	return decideForTenantWithObligation(tx, row, obligation, ok, source)
@@ -114,6 +196,7 @@ func selectObligationForPeriod(tenantID uint64, targetPeriod time.Time, obligati
 	for _, obligation := range obligations {
 		if obligation.TenantID == tenantID &&
 			monthStart(obligation.PeriodMonth).Equal(targetPeriod) &&
+			obligation.RecordStatus != obligationRecordVoided &&
 			obligation.PaidAmountCents < obligation.ExpectedAmountCents {
 			return obligation, true
 		}

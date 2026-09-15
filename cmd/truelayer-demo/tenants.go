@@ -499,6 +499,54 @@ func (s *tenantService) addTenantPayer(ctx context.Context, userID, tenantID uin
 	return payerRow, nil
 }
 
+// rememberTenantPayer records the payer only after a manual allocation has
+// committed. A missing bank name is not enough to create a tenant_payers row;
+// the original transaction remains available for later manual review.
+func (s *tenantService) rememberTenantPayer(ctx context.Context, userID, tenantID uint64, payerID, payerName string) error {
+	payerName = strings.TrimSpace(payerName)
+	payerID = strings.TrimSpace(payerID)
+	if payerName == "" {
+		return nil
+	}
+	if err := validateTenantPayerInput(tenantPayerInput{Name: payerName, PayerID: payerID}); err != nil {
+		return err
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var tenantRow tenant
+		if err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", tenantID, userID).First(&tenantRow).Error; err != nil {
+			return err
+		}
+		normalized := normalizeTenantPayerName(payerName)
+		var rows []tenantPayer
+		if err := tx.WithContext(ctx).Where("user_id = ? AND tenant_id = ? AND payer_name_normalized = ? AND removed_at IS NULL", userID, tenantID, normalized).Find(&rows).Error; err != nil {
+			return err
+		}
+		now := time.Now().UTC()
+		for _, row := range rows {
+			if stringValue(row.PayerID) != payerID {
+				continue
+			}
+			return tx.WithContext(ctx).Model(&tenantPayer{}).Where("id = ? AND user_id = ?", row.ID, userID).Updates(map[string]any{
+				"last_matched_at":     now,
+				"payer_name_original": payerName,
+			}).Error
+		}
+		payerRow := tenantPayer{
+			UserID:              userID,
+			TenantID:            tenantID,
+			PayerID:             nullableString(payerID),
+			PayerNameOriginal:   payerName,
+			PayerNameNormalized: normalized,
+			Source:              "matched_transaction",
+			LastMatchedAt:       &now,
+		}
+		if err := tx.WithContext(ctx).Create(&payerRow).Error; err != nil {
+			return err
+		}
+		return syncLegacyPayerFields(tx.WithContext(ctx), userID, tenantID)
+	})
+}
+
 func (s *tenantService) removeTenantPayer(ctx context.Context, userID, tenantID, payerID, removedBy uint64, reason string) error {
 	if userID == 0 || tenantID == 0 || payerID == 0 || removedBy == 0 {
 		return errors.New("userID, tenantID, payerID, and removedBy are required")

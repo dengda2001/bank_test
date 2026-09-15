@@ -1345,6 +1345,69 @@ func TestDecideRentMatchOverpaymentNeedsReview(t *testing.T) {
 	}
 }
 
+func TestDecideStrictRentMatchUsesOnlyPayerRelationsAndExplicitPeriod(t *testing.T) {
+	payerID := "payer-123"
+	parsedPeriod := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	tenants := []tenant{{ID: 7, Name: "Aoife Murphy"}}
+	payers := []tenantPayer{{
+		TenantID:            7,
+		PayerID:             &payerID,
+		PayerNameOriginal:   "Aoife Murphy",
+		PayerNameNormalized: "aoife murphy",
+	}}
+	obligations := []rentObligation{{
+		ID:                  11,
+		TenantID:            7,
+		PeriodMonth:         parsedPeriod,
+		ExpectedAmountCents: 95000,
+		Currency:            "EUR",
+	}}
+	decision := decideStrictRentMatch(paymentTransactionInput{
+		Direction:         "income",
+		AmountCents:       95000,
+		Currency:          "EUR",
+		PayerID:           payerID,
+		PayerName:         "Aoife Murphy",
+		ParsedPeriodMonth: &parsedPeriod,
+	}, payers, tenants, obligations)
+	if decision.Status != "matched" || decision.ConfirmationSource != "auto_id" || decision.RentObligationID != 11 {
+		t.Fatalf("strict decision=%+v want exact payer-id match", decision)
+	}
+
+	withoutPeriod := paymentTransactionInput{
+		Direction:   "income",
+		AmountCents: 95000,
+		Currency:    "EUR",
+		PayerID:     payerID,
+		PayerName:   "Aoife Murphy",
+	}
+	decision = decideStrictRentMatch(withoutPeriod, payers, tenants, obligations)
+	if decision.Status != "candidate" || decision.TenantID != 7 || decision.Reason != "explicit rent period is missing" {
+		t.Fatalf("missing-period decision=%+v want candidate without auto allocation", decision)
+	}
+}
+
+func TestDecideStrictRentMatchRejectsSharedPayerAndNonEUR(t *testing.T) {
+	sharedID := "shared-payer"
+	payers := []tenantPayer{
+		{TenantID: 7, PayerID: &sharedID, PayerNameNormalized: "mike"},
+		{TenantID: 8, PayerID: &sharedID, PayerNameNormalized: "mike"},
+	}
+	tenants := []tenant{{ID: 7}, {ID: 8}}
+	period := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	tx := paymentTransactionInput{Direction: "income", AmountCents: 95000, Currency: "EUR", PayerID: sharedID, ParsedPeriodMonth: &period}
+	decision := decideStrictRentMatch(tx, payers, tenants, nil)
+	if decision.Status != "needs_review" || decision.Reason != "multiple tenants for payer id" {
+		t.Fatalf("shared payer decision=%+v want needs_review", decision)
+	}
+
+	uniqueID := "unique-payer"
+	decision = decideStrictRentMatch(paymentTransactionInput{Direction: "income", AmountCents: 95000, Currency: "GBP", PayerID: uniqueID, ParsedPeriodMonth: &period}, []tenantPayer{{TenantID: 7, PayerID: &uniqueID, PayerNameNormalized: "aoife"}}, tenants[:1], []rentObligation{{ID: 12, TenantID: 7, PeriodMonth: period, ExpectedAmountCents: 95000, Currency: "EUR"}})
+	if decision.Status != "needs_review" || decision.Reason != "currency mismatch" {
+		t.Fatalf("non-EUR decision=%+v want currency review", decision)
+	}
+}
+
 func TestSelectObligationRequiresUserChoiceWhenReferencedMonthIsPaid(t *testing.T) {
 	tenantID := uint64(7)
 	tx := paymentTransactionInput{
