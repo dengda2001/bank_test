@@ -15,19 +15,19 @@
 
 ## 数据模型与迁移
 
-新增 `migrations/006_cash_rent_receipts.sql`：
+新增 `migrations/006_cash_rent_receipts.sql`，并由 `007_cash_receipt_void_audit.sql` 补充作废操作号字段：
 
 ```text
 cash_receipts
   id, user_id, tenant_id, rent_obligation_id
   receipt_number, amount_cents, currency, received_at, note
-  status, operation_id, idempotency_key
+  status, operation_id, void_operation_id, idempotency_key
   recorded_by_user_id, recorded_at
   voided_at, voided_by_user_id, void_reason
   created_at, updated_at
 ```
 
-- `(user_id, receipt_number)` 唯一；`(user_id, idempotency_key)` 唯一（允许空值）。
+- `(user_id, receipt_number)` 唯一；`(user_id, idempotency_key)` 唯一，幂等键由服务层强制要求。
 - 外键均带用户范围查询：用户、租客、账单和操作者；删除租客／用户按账本既有级联规则处理。
 - `rent_obligation_id`、`tenant_id` 必填，`amount_cents` 为正整数，`currency` 保存原值但一期只接受 `EUR` 有效写入。
 - `received_at` 存实际现金收款日；`recorded_at` 存系统记录时间，两者不能混淆。
@@ -41,7 +41,7 @@ cash_receipts
 2. `recordCashReceipt` 开启数据库事务，按 `user_id` 锁定账单，重新加载租客、账单和当前有效银行／现金收款；校验金额、币种、账单状态和实时余额后创建一行现金记录。
 3. 在同一事务中重新读取该账单的有效银行房租分配与有效现金记录，调用共享投影函数更新 `paid_amount_cents` 和账单状态。有效现金只计入目标账单，不影响银行流水金额、笔数和待处理数。
 4. 幂等键已存在时返回原现金记录的逻辑结果；同一键携带不同租客、月份或金额时拒绝，不产生第二笔记录。
-5. `voidCashReceipt` 锁定现金行和目标账单，校验用户归属及当前状态，带原因将 `confirmed` 改为 `voided`，写操作者、时间、原因和新的 operation ID，再重算目标账单。重复作废幂等返回，不重复扣减。
+5. `voidCashReceipt` 按账单锁顺序锁定目标账单和现金行，校验用户归属及当前状态，带原因将 `confirmed` 改为 `voided`，写操作者、时间、原因和独立的 `void_operation_id`，保留原始 `operation_id`，再重算目标账单。重复作废幂等返回，不重复扣减。
 
 并发补录通过账单行锁串行化；第二个请求基于最新余额重新校验并失败时，事务回滚且不留下半套现金记录。银行分配服务仍锁同一账单并使用同一投影入口。
 
@@ -73,7 +73,7 @@ cash_receipts
 
 ## 兼容、回滚与风险
 
-- 旧数据库通过显式 `006` 迁移增加结构，迁移 runner 记录版本并支持重复启动；旧代码忽略新表时不会改变既有银行账本。
+- 旧数据库通过显式 `006` 和 `007` 迁移增加结构，迁移 runner 记录版本并支持重复启动；旧代码忽略新表时不会改变既有银行账本。
 - 回滚应用版本不删除现金表或审计行；后续版本仍可根据状态重算账单。
 - 现金与银行同时更新同一账单时依赖相同锁顺序（先账单，再收款行）避免超额写入。
 - 未完成真实 MySQL 时，必须至少保留服务层原子性、用户隔离、幂等和 EUR 校验的单元测试；可用隔离 DSN 时再运行迁移、并发和 HTTP 集成验收。

@@ -295,6 +295,103 @@ Correct:
 history := buildTenantBillingHistory(tenants, obligations, confirmedPaymentRows, now)
 ```
 
+## Scenario: Cash Rent Receipt Ledger and Projection
+
+### 1. Scope / Trigger
+
+- Trigger: Recording, previewing, voiding, correcting, or displaying a manual
+  cash rent receipt alongside bank rent for one tenant/month.
+- Applies to `cash_receipts`, `cashReceiptService`, the cash receipt HTTP
+  handlers, and all rent history/dashboard payment projections.
+
+### 2. Signatures
+
+- `cashReceiptService.previewCashReceipt(ctx, input)` is read-only and returns
+  expected, current paid, current remaining, after-paid, and after-remaining
+  cents.
+- `cashReceiptService.recordCashReceipt(ctx, input)` locks one
+  `rent_obligations` row, validates the live balance, inserts one
+  `cash_receipts` row, and updates the obligation projection atomically.
+- `cashReceiptService.voidCashReceipt(ctx, userID, receiptID, reason)` locks the
+  obligation before the receipt row, marks the receipt voided, records the
+  actor/time/reason and `void_operation_id`, and recomputes only that bill.
+- HTTP contracts: `GET /cash-receipts/new`, `POST /cash-receipts/preview`,
+  `POST /cash-receipts`, `GET|POST /cash-receipts/void`.
+
+### 3. Contracts
+
+- `cash_receipts` is a separate ledger table. It must not create a
+  `payment_transactions`, `payment_allocations`, or `tenant_payers` row.
+- Required receipt fields are user, tenant, obligation, positive integer
+  `amount_cents`, `currency=EUR`, `received_at`, `receipt_number`,
+  `operation_id`, required user-scoped `idempotency_key`, recorder, and audit
+  timestamps. A void stores `void_operation_id`, `voided_at`,
+  `voided_by_user_id`, and `void_reason` while preserving `operation_id`.
+- `(user_id, receipt_number)` and `(user_id, idempotency_key)` are unique.
+- `rent_obligations.paid_amount_cents` is always recomputed from effective bank
+  rent allocations plus confirmed cash receipts; deposit and other-income
+  allocations do not contribute.
+- Cash history rows use source `cash`, `received_at` as the display date, and
+  `receipt_number` as the reference. Bank history keeps its original source
+  fields.
+
+### 4. Validation & Error Matrix
+
+- Missing/zero user, tenant, obligation, amount, date, or idempotency key ->
+  reject before database write.
+- Currency other than EUR, tenant/obligation mismatch, voided obligation, or
+  amount above the live remaining balance -> reject and leave all projections
+  unchanged.
+- Existing idempotency key with identical facts -> return the existing receipt;
+  with different tenant, obligation, amount, date, currency, or note -> reject.
+- Cross-user receipt, tenant, or obligation lookup -> return no row or a safe
+  domain error; never reveal another account's data.
+- Repeated void of an already voided receipt -> no-op; original receipt and
+  audit fields remain queryable.
+- GET form and POST preview -> no payment/receipt/projection write. POST
+  confirmation must resolve the obligation again and revalidate all fields.
+
+### 5. Good/Base/Bad Cases
+
+- Good: A EUR 400 cash receipt on a EUR 1,000 bill projects alongside an
+  existing EUR 600 confirmed bank rent allocation and produces a cash history
+  row without changing bank transaction counts.
+- Base: Voiding the EUR 400 receipt preserves the original operation ID,
+  stores a distinct void operation ID and reason, and allows a new EUR 300
+  receipt with a new idempotency key.
+- Bad: Creating a synthetic bank transaction for cash, trusting a posted
+  obligation ID without a user predicate, or recomputing paid only from bank
+  allocations after a cash receipt exists.
+
+### 6. Tests Required
+
+- Unit tests assert positive integer cents, EUR-only validation, effective
+  confirmed/voided projection, cash source/date/reference mapping, and template
+  auth gates.
+- Opt-in MySQL tests assert migration idempotence, preview no-write behavior,
+  user isolation, duplicate idempotency, bank-plus-cash projection, void and
+  correction audit, history/dashboard source rows, and no synthetic bank row.
+- Opt-in MySQL concurrency test uses two receipts competing for one balance
+  and asserts exactly one succeeds and the cached paid amount remains within
+  the obligation amount.
+
+### 7. Wrong vs Correct
+
+Wrong:
+
+```go
+// Cash has no bank source, but this pollutes bank counts and payer matching.
+paymentTransaction{UserID: userID, AmountCents: cashCents}
+```
+
+Correct:
+
+```go
+// Keep cash independent, then project both effective rent sources.
+cashReceipt{UserID: userID, RentObligationID: obligationID, AmountCents: cents}
+projectRentObligation(obligation, bankAllocations, cashReceipts, now)
+```
+
 ## Scenario: Remembered Payer Association and Explicit Rent Month
 
 ### 1. Scope / Trigger
