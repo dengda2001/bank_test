@@ -135,6 +135,16 @@ func TestPaginateTenantBillingMonthsReturnsStablePageAndTotal(t *testing.T) {
 	}
 }
 
+func TestPaginateTenantBillingMonthsDoesNotOverflowOnLargePage(t *testing.T) {
+	rows, totalPages, err := paginateTenantBillingMonths([]tenantBillingMonth{{Period: "2026-05"}}, int(^uint(0)>>1), 12)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 0 || totalPages != 1 {
+		t.Fatalf("rows=%+v totalPages=%d want empty page and one total page", rows, totalPages)
+	}
+}
+
 func TestParseTenantHistoryRangeDefaultsToTwelveMonths(t *testing.T) {
 	from, to, page, pageSize, err := parseTenantHistoryRange(testQueryValues{}, time.Date(2026, 9, 16, 0, 0, 0, 0, time.UTC))
 	if err != nil {

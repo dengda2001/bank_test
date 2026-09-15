@@ -23,6 +23,8 @@ func parseTenantHistoryRange(values formValues, now time.Time) (time.Time, time.
 	current := monthStart(now)
 	from := current.AddDate(0, -(defaultTenantHistoryMonths - 1), 0)
 	to := current
+	hasFrom := strings.TrimSpace(values.Get("from_month")) != ""
+	hasTo := strings.TrimSpace(values.Get("to_month")) != ""
 	var err error
 	if value := strings.TrimSpace(values.Get("from_month")); value != "" {
 		from, err = parsePeriodMonth(value)
@@ -36,10 +38,10 @@ func parseTenantHistoryRange(values formValues, now time.Time) (time.Time, time.
 			return time.Time{}, time.Time{}, 0, 0, fmt.Errorf("invalid to_month: %w", err)
 		}
 	}
-	if values.Get("from_month") != "" && values.Get("to_month") == "" {
+	if hasFrom && !hasTo {
 		to = from.AddDate(0, defaultTenantHistoryMonths-1, 0)
 	}
-	if values.Get("from_month") == "" && values.Get("to_month") != "" {
+	if !hasFrom && hasTo {
 		from = to.AddDate(0, -(defaultTenantHistoryMonths - 1), 0)
 	}
 	if from.After(to) {
@@ -82,10 +84,10 @@ func paginateTenantBillingMonths(rows []tenantBillingMonth, page, pageSize int) 
 	if totalPages == 0 {
 		return []tenantBillingMonth{}, 0, nil
 	}
-	start := (page - 1) * pageSize
-	if start >= len(rows) {
+	if page > totalPages {
 		return []tenantBillingMonth{}, totalPages, nil
 	}
+	start := (page - 1) * pageSize
 	end := start + pageSize
 	if end > len(rows) {
 		end = len(rows)
@@ -380,10 +382,6 @@ func (a *app) handleRemoveTenantPayer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, fmt.Sprintf("/tenants/%d?message=payer_removed", tenantID), http.StatusFound)
-}
-
-func classifyTenantPayers(rows []tenantPayer) []tenantPayerRecord {
-	return classifyTenantPayersWithAllRows(rows, rows)
 }
 
 func classifyTenantPayersWithAllRows(rows, allRows []tenantPayer) []tenantPayerRecord {
