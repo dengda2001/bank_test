@@ -85,9 +85,10 @@ type e2eReport struct {
 }
 
 type e2eCleanupReport struct {
-	Status   string `json:"status"`
-	Verified bool   `json:"verified"`
-	Error    string `json:"error,omitempty"`
+	Status         string `json:"status"`
+	Verified       bool   `json:"verified"`
+	FixtureRemoved bool   `json:"fixture_removed"`
+	Error          string `json:"error,omitempty"`
 }
 
 func newRunID(now time.Time) (string, error) {

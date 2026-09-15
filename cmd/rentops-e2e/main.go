@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -37,9 +38,17 @@ func main() {
 	}
 	preflight := validateE2EOptions(options)
 	report := newE2EReport(preflight, time.Now().UTC())
-	if manifest, manifestErr := newE2EFixtureManifest(options.RunID, report.StartedAt); manifestErr == nil {
-		report.Fixture = &manifest
+	manifest, manifestErr := newE2EFixtureManifest(options.RunID, report.StartedAt)
+	if manifestErr != nil {
+		report.Status = "blocked"
+		report.Error = "E2E fixture manifest could not be generated"
+		if err := writeE2EReport(options.ReportPath, report); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
+		fmt.Fprintln(os.Stderr, report.Error)
+		os.Exit(1)
 	}
+	report.Fixture = &manifest
 	if !preflight.Passed {
 		report.Error = "E2E preflight failed; no network or data mutation was attempted"
 		if err := writeE2EReport(options.ReportPath, report); err != nil {
@@ -52,11 +61,16 @@ func main() {
 		os.Exit(1)
 	}
 	if options.Execute {
-		report.Status = "not_implemented"
-		report.Error = "write-enabled E2E scenarios are not implemented yet"
-		_ = writeE2EReport(options.ReportPath, report)
-		fmt.Fprintln(os.Stderr, report.Error)
-		os.Exit(1)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+		defer cancel()
+		if err := executeE2ERun(ctx, options, manifest, &report, func(snapshot e2eReport) error {
+			return writeE2EReport(options.ReportPath, snapshot)
+		}); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Println(options.ReportPath)
+		return
 	}
 	if err := writeE2EReport(options.ReportPath, report); err != nil {
 		fmt.Fprintln(os.Stderr, err)

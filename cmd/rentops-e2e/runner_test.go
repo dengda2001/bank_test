@@ -972,3 +972,47 @@ func TestMaterializeE2ELegacyFixturesCreatesExclusivePrivateInputs(t *testing.T)
 		t.Fatal("non-empty fixture directory was not rejected")
 	}
 }
+
+func TestRemoveE2ELegacyFixturesOnlyRemovesTheMaterializedSet(t *testing.T) {
+	manifest, err := newE2EFixtureManifest("rentops-e2e-20260916-120000-a1b2c3d4", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := filepath.Join(t.TempDir(), "fixtures")
+	paths, err := materializeE2ELegacyFixtures(manifest, directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := removeE2ELegacyFixtures(paths); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(directory); !os.IsNotExist(err) {
+		t.Fatalf("fixture directory still exists or returned unexpected error: %v", err)
+	}
+}
+
+func TestExecuteE2ERunProbesTargetBeforeMaterializingFixtures(t *testing.T) {
+	manifest, err := newE2EFixtureManifest("rentops-e2e-20260916-120000-a1b2c3d4", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := filepath.Join(t.TempDir(), "fixtures")
+	report := newE2EReport(e2ePreflight{Passed: true, Mode: "execute", RunID: manifest.RunID}, time.Now())
+	options := e2eOptions{
+		BaseURL:           "http://127.0.0.1:8080",
+		RunID:             manifest.RunID,
+		FixtureDir:        directory,
+		DatabaseAllowlist: "rentops_e2e",
+		MySQLDSN:          "root@tcp(127.0.0.1:3306)/another_database",
+		Execute:           true,
+	}
+	if err := executeE2ERun(context.Background(), options, manifest, &report, nil); err == nil {
+		t.Fatal("unsafe target unexpectedly passed the probe")
+	}
+	if report.Status != "failed" || len(report.Scenarios) != 1 || report.Scenarios[0].Name != "target-probe" {
+		t.Fatalf("report=%+v", report)
+	}
+	if _, err := os.Stat(directory); !os.IsNotExist(err) {
+		t.Fatalf("fixture directory was created before target probe completed: %v", err)
+	}
+}
