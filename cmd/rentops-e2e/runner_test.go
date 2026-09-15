@@ -186,6 +186,7 @@ func TestE2ETenantScenarioCreatesAndReadsTenantAndPayer(t *testing.T) {
 	}
 	var createdTenant bool
 	var createdPayer bool
+	var updatedTenant bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/login-local" {
 			if _, err := r.Cookie("rentops_session"); err != nil {
@@ -210,6 +211,16 @@ func TestE2ETenantScenarioCreatesAndReadsTenantAndPayer(t *testing.T) {
 					w.WriteHeader(http.StatusBadRequest)
 					return
 				}
+				if r.Form.Get("tenant_id") == "42" {
+					if r.Form.Get("display_alias") != manifest.Tenant.DisplayAlias+" updated" || r.Form.Get("room_address") != manifest.Tenant.RoomAddress+" updated" {
+						t.Errorf("unexpected tenant update form: %v", r.Form)
+						w.WriteHeader(http.StatusBadRequest)
+						return
+					}
+					updatedTenant = true
+					http.Redirect(w, r, "/tenants?message=tenant_updated", http.StatusFound)
+					return
+				}
 				createdTenant = true
 				http.Redirect(w, r, "/tenants?message=tenant_added", http.StatusFound)
 				return
@@ -231,6 +242,10 @@ func TestE2ETenantScenarioCreatesAndReadsTenantAndPayer(t *testing.T) {
 			if !createdTenant {
 				t.Fatal("tenant detail read happened before tenant creation")
 			}
+			if updatedTenant {
+				fmt.Fprintf(w, `<main>%s %s %s %s %s</main>`, manifest.Tenant.Name, manifest.Tenant.DisplayAlias+" updated", manifest.Tenant.RoomAddress+" updated", manifest.Payer.Name, manifest.Payer.PayerID)
+				return
+			}
 			fmt.Fprintf(w, `<main>%s %s %s</main>`, manifest.Tenant.Name, manifest.Payer.Name, manifest.Payer.PayerID)
 		default:
 			http.NotFound(w, r)
@@ -247,8 +262,8 @@ func TestE2ETenantScenarioCreatesAndReadsTenantAndPayer(t *testing.T) {
 		t.Fatalf("authentication scenario=%+v", authScenario)
 	}
 	tenantScenario, tenantID := client.tenantScenario(context.Background(), manifest)
-	if tenantScenario.Status != "passed" || tenantID != 42 || !createdPayer {
-		t.Fatalf("tenant scenario=%+v tenantID=%d payer=%v", tenantScenario, tenantID, createdPayer)
+	if tenantScenario.Status != "passed" || tenantID != 42 || !createdPayer || !updatedTenant {
+		t.Fatalf("tenant scenario=%+v tenantID=%d payer=%v updated=%v", tenantScenario, tenantID, createdPayer, updatedTenant)
 	}
 }
 

@@ -112,6 +112,45 @@ func (c *e2eHTTPClient) tenantScenario(ctx context.Context, manifest e2eFixtureM
 		return fail("payer relation could not be verified by a follow-up read")
 	}
 
+	updatedAlias := manifest.Tenant.DisplayAlias + " updated"
+	updatedAddress := manifest.Tenant.RoomAddress + " updated"
+	values.Set("tenant_id", strconv.FormatUint(tenantID, 10))
+	values.Set("display_alias", updatedAlias)
+	values.Set("room_address", updatedAddress)
+	updateResponse, err := c.do(ctx, http.MethodPost, "/tenants", values)
+	updateStep := e2eHTTPStep(http.MethodPost, "/tenants", map[string]any{
+		"status_code": http.StatusFound,
+		"location":    "/tenants?message=tenant_updated",
+	}, updateResponse, err)
+	if err == nil {
+		updateStep.Passed = updateResponse.StatusCode == http.StatusFound && updateResponse.Location == "/tenants?message=tenant_updated"
+		if !updateStep.Passed {
+			updateStep.Error = "tenant update did not return the expected success redirect"
+		}
+	}
+	scenario.Steps = append(scenario.Steps, updateStep)
+	if !updateStep.Passed {
+		return fail("tenant profile update failed")
+	}
+
+	updatedDetailResponse, err := c.do(ctx, http.MethodGet, detailPath, nil)
+	updatedDetailStep := e2eHTTPStep(http.MethodGet, detailPath, map[string]any{
+		"status_code":     http.StatusOK,
+		"updated_profile": true,
+	}, updatedDetailResponse, err)
+	if err == nil {
+		updatedProfile := strings.Contains(string(updatedDetailResponse.Body), updatedAlias) && strings.Contains(string(updatedDetailResponse.Body), updatedAddress)
+		updatedDetailStep.Actual.(map[string]any)["updated_profile"] = updatedProfile
+		updatedDetailStep.Passed = updatedDetailResponse.StatusCode == http.StatusOK && updatedProfile
+		if !updatedDetailStep.Passed {
+			updatedDetailStep.Error = "updated tenant profile was not visible in tenant detail"
+		}
+	}
+	scenario.Steps = append(scenario.Steps, updatedDetailStep)
+	if !updatedDetailStep.Passed {
+		return fail("tenant profile update could not be verified by a follow-up read")
+	}
+
 	scenario.Status = "passed"
 	return scenario, tenantID
 }
