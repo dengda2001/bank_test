@@ -57,6 +57,17 @@ func TestWorkspaceTemplatesIncludeSharedCalendarPicker(t *testing.T) {
 				".calendar-popover",
 				"calendar-input",
 				"input[type=\"date\"], input[type=\"month\"]",
+				// Three-level zoom: the header title is clickable (日→月→年) and the
+				// outermost level is a decade grid.
+				".calendar-title {\n",
+				".calendar-year-grid {",
+				"zoomTo('month', '选择月份')",
+				"zoomTo('year', '选择年份')",
+				"const renderYear = () => {",
+				// Outside-click detection must use the dispatch-time event path:
+				// render() detaches the clicked node, so a contains() check on the
+				// live DOM makes the picker close on its own inner clicks.
+				"event.composedPath().includes(wrapper)",
 			} {
 				if !strings.Contains(page, expected) {
 					t.Fatalf("expected shared calendar picker marker %q", expected)
@@ -490,9 +501,12 @@ func TestTxQueryDropsFutureFrom(t *testing.T) {
 func TestRefreshTransactionFromCapsOlderConfiguredDate(t *testing.T) {
 	now := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
 
+	// `to` is the current instant; a date-only `from` of today-90 (2026-06-10)
+	// would still be >90 days before now, which Irish providers reject with a
+	// 403 SCA Active check failed. The cutoff must be today-89.
 	got := refreshTransactionFrom("2026-01-01", now)
-	if got != "2026-06-10" {
-		t.Fatalf("refresh from=%q want 90-day cutoff 2026-06-10", got)
+	if got != "2026-06-11" {
+		t.Fatalf("refresh from=%q want 90-day cutoff 2026-06-11", got)
 	}
 }
 
@@ -502,6 +516,20 @@ func TestRefreshTransactionFromKeepsRecentConfiguredDate(t *testing.T) {
 	got := refreshTransactionFrom("2026-08-01", now)
 	if got != "2026-08-01" {
 		t.Fatalf("refresh from=%q want configured recent date 2026-08-01", got)
+	}
+}
+
+// TestRefreshTransactionFromStaysInsideLookbackLateInUtcDay locks the bug where
+// a refresh early in a +08 morning (late in the UTC day) used the UTC date to
+// subtract the lookback and produced a from one day too old, crossing the
+// bank's 90-day boundary.
+func TestRefreshTransactionFromStaysInsideLookbackLateInUtcDay(t *testing.T) {
+	// 2026-09-08 17:30 UTC == 2026-09-09 01:30 in +08.
+	now := time.Date(2026, 9, 8, 17, 30, 0, 0, time.UTC)
+
+	got := refreshTransactionFrom("2026-01-01", now)
+	if got != "2026-06-11" {
+		t.Fatalf("refresh from=%q want cutoff 2026-06-11 (naive today-90 would give 2026-06-10)", got)
 	}
 }
 

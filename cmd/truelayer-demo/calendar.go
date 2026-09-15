@@ -79,9 +79,28 @@ const workspaceCalendarCSS = `
       min-height: 30px;
     }
     .calendar-title {
+      margin: 0;
+      padding: 4px 8px;
+      border: 0;
+      border-radius: 8px;
       color: var(--foreground);
+      background: transparent;
+      cursor: pointer;
+      font-family: inherit;
       font-size: 16px;
       font-weight: 700;
+      line-height: 1.2;
+      transition: background 160ms ease, color 160ms ease;
+    }
+    .calendar-title:hover {
+      background: rgba(255,255,255,0.08);
+    }
+    .calendar-title.is-static {
+      padding: 4px 0;
+      cursor: default;
+    }
+    .calendar-title.is-static:hover {
+      background: transparent;
     }
     .calendar-nav {
       width: 30px;
@@ -106,6 +125,11 @@ const workspaceCalendarCSS = `
     .calendar-month-grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 7px;
+    }
+    .calendar-year-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 7px;
     }
     .calendar-day-grid {
@@ -222,6 +246,9 @@ const workspaceCalendarScript = `
       : value.year + '年' + month + '月' + pad(value.day) + '日';
   };
   const sameValue = (left, right, kind) => left && right && left.year === right.year && left.month === right.month && (kind === 'month' || left.day === right.day);
+  const sameMonth = (left, right) => left && right && left.year === right.year && left.month === right.month;
+  const sameYear = (left, right) => left && right && left.year === right.year;
+  const decadeStart = (year) => Math.floor(year / 10) * 10;
   const daysInMonth = (year, month) => new Date(year, month, 0).getDate();
   const moveMonth = (value, offset) => {
     const date = new Date(value.year, value.month - 1 + offset, 1);
@@ -271,9 +298,13 @@ const workspaceCalendarScript = `
     wrapper.appendChild(trigger);
     wrapper.appendChild(popover);
 
+    // baseLevel is the innermost view for this input: the day grid for a date
+    // picker, the month grid for a month picker. Every open starts there.
+    const baseLevel = kind === 'month' ? 'month' : 'day';
     const state = {
       selected: parseValue(kind, originalValue),
-      view: parseValue(kind, originalValue) || today()
+      view: parseValue(kind, originalValue) || today(),
+      level: baseLevel
     };
 
     const close = () => {
@@ -300,19 +331,29 @@ const workspaceCalendarScript = `
       setValue(value, true);
       close();
     };
-    const renderHeader = (title, previousLabel, nextLabel, onPrevious, onNext) => {
+    const renderHeader = (title, previousLabel, nextLabel, onPrevious, onNext, onTitle) => {
       const header = document.createElement('div');
       header.className = 'calendar-header';
       const previous = button('calendar-nav', '‹', previousLabel);
       const next = button('calendar-nav', '›', nextLabel);
       previous.addEventListener('click', () => { onPrevious(); render(); });
       next.addEventListener('click', () => { onNext(); render(); });
-      const heading = document.createElement('strong');
-      heading.className = 'calendar-title';
-      heading.textContent = title;
+      let heading;
+      if (onTitle) {
+        heading = button('calendar-title', title, onTitle.label);
+        heading.addEventListener('click', () => { onTitle.action(); render(); });
+      } else {
+        heading = document.createElement('strong');
+        heading.className = 'calendar-title is-static';
+        heading.textContent = title;
+      }
       header.append(previous, heading, next);
       return header;
     };
+    // Zooming out is always one step at a time: 日 → 月 → 年. The year level is
+    // the outermost, so renderHeader is called without onTitle there and the
+    // heading comes back inert.
+    const zoomTo = (level, label) => ({ label, action: () => { state.level = level; } });
     const renderFooter = () => {
       const footer = document.createElement('div');
       footer.className = 'calendar-footer';
@@ -326,9 +367,45 @@ const workspaceCalendarScript = `
       footer.append(clear, todayButton);
       return footer;
     };
+    const renderYear = () => {
+      const view = state.view;
+      const start = decadeStart(view.year);
+      popover.appendChild(renderHeader(
+        start + ' - ' + (start + 9),
+        '前十年',
+        '后十年',
+        () => { state.view = { year: view.year - 10, month: view.month, day: 1 }; },
+        () => { state.view = { year: view.year + 10, month: view.month, day: 1 }; }
+      ));
+      const divider = document.createElement('div');
+      divider.className = 'calendar-divider';
+      popover.appendChild(divider);
+      const grid = document.createElement('div');
+      grid.className = 'calendar-year-grid';
+      for (let offset = 0; offset < 10; offset += 1) {
+        const value = { year: start + offset, month: view.month, day: 1 };
+        const option = button('calendar-option', String(value.year));
+        if (sameYear(state.selected, value)) option.classList.add('is-selected');
+        if (sameYear(today(), value)) option.classList.add('is-today');
+        option.addEventListener('click', () => {
+          state.view = value;
+          state.level = 'month';
+          render();
+        });
+        grid.appendChild(option);
+      }
+      popover.appendChild(grid);
+    };
     const renderMonth = () => {
       const view = state.view;
-      popover.appendChild(renderHeader(view.year + '年', '上一年', '下一年', () => { state.view = { year: view.year - 1, month: view.month, day: 1 }; }, () => { state.view = { year: view.year + 1, month: view.month, day: 1 }; }));
+      popover.appendChild(renderHeader(
+        view.year + '年',
+        '上一年',
+        '下一年',
+        () => { state.view = { year: view.year - 1, month: view.month, day: 1 }; },
+        () => { state.view = { year: view.year + 1, month: view.month, day: 1 }; },
+        zoomTo('year', '选择年份')
+      ));
       const divider = document.createElement('div');
       divider.className = 'calendar-divider';
       popover.appendChild(divider);
@@ -337,9 +414,18 @@ const workspaceCalendarScript = `
       for (let month = 1; month <= 12; month += 1) {
         const value = { year: view.year, month, day: 1 };
         const option = button('calendar-option', monthLabels[month - 1]);
-        if (sameValue(state.selected, value, kind)) option.classList.add('is-selected');
-        if (sameValue(today(), value, kind)) option.classList.add('is-today');
-        option.addEventListener('click', () => selectValue(value));
+        if (sameMonth(state.selected, value)) option.classList.add('is-selected');
+        if (sameMonth(today(), value)) option.classList.add('is-today');
+        if (!isWithinRange(value)) option.disabled = true;
+        option.addEventListener('click', () => {
+          if (kind === 'month') {
+            selectValue(value);
+            return;
+          }
+          state.view = value;
+          state.level = 'day';
+          render();
+        });
         grid.appendChild(option);
       }
       popover.appendChild(grid);
@@ -347,7 +433,14 @@ const workspaceCalendarScript = `
     const renderDate = () => {
       const view = state.view;
       const title = view.year + '年' + pad(view.month) + '月';
-      popover.appendChild(renderHeader(title, '上个月', '下个月', () => { state.view = moveMonth(view, -1); }, () => { state.view = moveMonth(view, 1); }));
+      popover.appendChild(renderHeader(
+        title,
+        '上个月',
+        '下个月',
+        () => { state.view = moveMonth(view, -1); },
+        () => { state.view = moveMonth(view, 1); },
+        zoomTo('month', '选择月份')
+      ));
       const divider = document.createElement('div');
       divider.className = 'calendar-divider';
       popover.appendChild(divider);
@@ -374,7 +467,9 @@ const workspaceCalendarScript = `
     };
     const render = () => {
       popover.replaceChildren();
-      if (kind === 'month') renderMonth(); else renderDate();
+      if (state.level === 'year') renderYear();
+      else if (state.level === 'month') renderMonth();
+      else renderDate();
       popover.appendChild(renderFooter());
     };
 
@@ -384,6 +479,7 @@ const workspaceCalendarScript = `
       });
       state.selected = parseValue(kind, hidden.value);
       state.view = state.selected || today();
+      state.level = baseLevel;
       render();
       wrapper.classList.add('is-open');
       input.setAttribute('aria-expanded', 'true');
@@ -394,8 +490,17 @@ const workspaceCalendarScript = `
       if (event.key === 'Escape') close();
     });
     trigger.addEventListener('click', () => wrapper.classList.contains('is-open') ? close() : open());
+    // render() rebuilds the popover on every interaction, so the element a click
+    // started on is already detached by the time the event bubbles up here.
+    // wrapper.contains(event.target) would then be false and the picker would treat
+    // its own inner clicks as outside clicks, closing itself. The propagation path
+    // is snapshotted at dispatch time, so it still names the wrapper.
+    const isInside = (event) => {
+      if (typeof event.composedPath === 'function') return event.composedPath().includes(wrapper);
+      return wrapper.contains(event.target) || !event.target.isConnected;
+    };
     document.addEventListener('click', (event) => {
-      if (!wrapper.contains(event.target)) close();
+      if (!isInside(event)) close();
     });
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') close();

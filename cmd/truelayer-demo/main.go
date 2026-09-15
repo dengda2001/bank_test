@@ -1352,9 +1352,17 @@ func (a *app) fetchDemoResultWithOptions(ctx context.Context, accessToken, from 
 	return result, nil
 }
 
+// refreshTransactionFrom returns the earliest `from` date (inclusive) the bank
+// accepts for a refresh. `from` is date-only (start of UTC day) while `to` is
+// the current instant, and TrueLayer's Irish providers reject any window that
+// reaches further back than refreshLookbackDays from `now`. Cutting exactly
+// refreshLookbackDays from the start of `today` would still overshoot by the
+// time elapsed so far today (producing e.g. 91 days back and a 403 SCA Active
+// check failed), so we subtract one extra day to stay strictly inside the
+// allowed lookback for any time of day.
 func refreshTransactionFrom(configuredFrom string, now time.Time) string {
 	today := time.Date(now.UTC().Year(), now.UTC().Month(), now.UTC().Day(), 0, 0, 0, 0, time.UTC)
-	cutoff := today.AddDate(0, 0, -refreshLookbackDays)
+	cutoff := today.AddDate(0, 0, -(refreshLookbackDays - 1))
 	d, err := time.Parse(dateLayout, configuredFrom)
 	if configuredFrom == "" || err != nil || d.After(today) || d.Before(cutoff) {
 		return cutoff.Format(dateLayout)
@@ -1819,57 +1827,237 @@ var loginTemplate = template.Must(template.New("login").Parse(`<!doctype html>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RentOps Login</title>
   <style>
+    :root {
+      --background-deep: #020203;
+      --background-base: #050506;
+      --foreground: #ededef;
+      --foreground-muted: #8a8f98;
+      --foreground-subtle: rgba(255,255,255,0.62);
+      --accent: #5e6ad2;
+      --accent-bright: #6872d9;
+      --border: rgba(255,255,255,0.06);
+      --border-hover: rgba(255,255,255,0.12);
+      --shadow-card: 0 0 0 1px rgba(255,255,255,0.06), 0 20px 70px rgba(0,0,0,0.48), 0 0 70px rgba(94,106,210,0.08);
+      --shadow-button: 0 0 0 1px rgba(94,106,210,0.50), 0 8px 26px rgba(94,106,210,0.28), inset 0 1px 0 rgba(255,255,255,0.22);
+      --sans: "Inter", "Geist Sans", "Aptos", "Segoe UI", system-ui, sans-serif;
+      --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+      --ease: cubic-bezier(0.16, 1, 0.3, 1);
+    }
     * { box-sizing: border-box; }
+    html { background: var(--background-deep); }
     body {
       margin: 0;
       min-height: 100vh;
       display: grid;
       place-items: center;
-      background: #f7f8f5;
-      color: #1d2522;
-      font-family: "IBM Plex Sans", "Aptos", "Segoe UI", system-ui, sans-serif;
+      padding: 24px;
+      color: var(--foreground);
+      font-family: var(--sans);
+      background:
+        radial-gradient(ellipse at top, #111225 0%, var(--background-base) 48%, var(--background-deep) 100%);
+      overflow-x: hidden;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.022) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.022) 1px, transparent 1px);
+      background-size: 64px 64px;
+      mask-image: radial-gradient(circle at top, black, transparent 75%);
+      opacity: 0.55;
+    }
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.035;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.45'/%3E%3C/svg%3E");
+    }
+    button, input { font: inherit; }
+    .ambient {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .blob {
+      position: absolute;
+      border-radius: 999px;
+      filter: blur(130px);
+      opacity: 0.58;
+      animation: float 9s ease-in-out infinite;
+      transform: translateZ(0);
+    }
+    .blob.primary {
+      width: 820px;
+      height: 640px;
+      left: 12%;
+      top: -300px;
+      background: rgba(94,106,210,0.26);
+    }
+    .blob.secondary {
+      width: 480px;
+      height: 700px;
+      right: -200px;
+      top: 200px;
+      background: rgba(151,83,210,0.16);
+      animation-delay: -2s;
+    }
+    .blob.tertiary {
+      width: 560px;
+      height: 560px;
+      left: -220px;
+      bottom: -140px;
+      background: rgba(74,112,255,0.13);
+      animation-delay: -4s;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-20px) rotate(1deg); }
     }
     .shell {
-      width: min(420px, calc(100vw - 32px));
-      background: #fff;
-      border: 1px solid #d9dfd9;
-      border-radius: 8px;
-      box-shadow: 0 18px 45px rgba(26, 39, 34, 0.10);
-      padding: 28px;
+      position: relative;
+      z-index: 1;
+      width: min(424px, 100%);
+      padding: 30px;
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.075), rgba(255,255,255,0.026));
+      box-shadow: var(--shadow-card);
+      backdrop-filter: blur(24px);
     }
-    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
+    .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 30px; }
     .mark {
-      width: 36px; height: 36px; display: grid; place-items: center;
-      background: #17201d; color: #fff; font: 700 21px Georgia, serif;
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      color: white;
+      font: 700 17px var(--mono);
+      background: linear-gradient(145deg, rgba(104,114,217,0.95), rgba(94,106,210,0.55));
+      box-shadow: var(--shadow-button);
     }
-    h1 { margin: 0; font: 700 28px Georgia, serif; }
-    p { margin: 8px 0 22px; color: #66736e; }
-    label { display: block; margin: 14px 0 6px; font-size: 13px; font-weight: 700; }
+    .brand-title { font-weight: 650; letter-spacing: -0.01em; }
+    .brand-meta {
+      color: var(--foreground-muted);
+      font: 500 11px var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-top: 2px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 650;
+      letter-spacing: -0.03em;
+    }
+    .sub {
+      margin: 10px 0 0;
+      color: var(--foreground-muted);
+      font-size: 13.5px;
+      line-height: 1.6;
+    }
+    label {
+      display: block;
+      margin: 18px 0 7px;
+      color: var(--foreground-muted);
+      font: 700 11px var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
     input {
-      width: 100%; height: 42px; border: 1px solid #b9c4bd; border-radius: 6px;
-      padding: 0 11px; font: inherit; background: #fbfcfa;
+      width: 100%;
+      height: 44px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0 13px;
+      color: var(--foreground);
+      background: rgba(255,255,255,0.05);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+      outline: none;
+      transition: border-color 200ms var(--ease), box-shadow 200ms var(--ease), background 200ms var(--ease);
+    }
+    input::placeholder { color: var(--foreground-subtle); }
+    input:hover { border-color: var(--border-hover); }
+    input:focus {
+      border-color: rgba(104,114,217,0.85);
+      background: rgba(255,255,255,0.07);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 0 0 3px rgba(94,106,210,0.22);
+    }
+    input:-webkit-autofill,
+    input:-webkit-autofill:hover,
+    input:-webkit-autofill:focus {
+      -webkit-text-fill-color: var(--foreground);
+      -webkit-box-shadow: 0 0 0 1000px #0a0a0c inset;
+      caret-color: var(--foreground);
     }
     button {
-      width: 100%; height: 42px; margin-top: 18px; border: 1px solid #0f665f;
-      border-radius: 6px; background: #0f766e; color: #fff; font: inherit;
-      font-weight: 700; cursor: pointer;
+      width: 100%;
+      height: 44px;
+      margin-top: 22px;
+      border: 0;
+      border-radius: 12px;
+      background: var(--accent);
+      color: #fff;
+      font: inherit;
+      font-weight: 650;
+      box-shadow: var(--shadow-button);
+      cursor: pointer;
+      transition: background 220ms var(--ease), transform 220ms var(--ease), box-shadow 220ms var(--ease);
     }
+    button:hover {
+      background: var(--accent-bright);
+      box-shadow: 0 0 0 1px rgba(104,114,217,0.65), 0 12px 34px rgba(94,106,210,0.36), inset 0 1px 0 rgba(255,255,255,0.24);
+      transform: translateY(-1px);
+    }
+    button:active { transform: scale(0.99); }
+    button:focus-visible { outline: 2px solid rgba(104,114,217,0.9); outline-offset: 3px; }
     .error {
-      border: 1px solid #e9aaa5; background: #fff5f3; color: #af3333;
-      border-radius: 6px; padding: 10px 12px; font-size: 13px; margin-bottom: 16px;
+      margin-top: 18px;
+      padding: 12px 14px;
+      border: 1px solid rgba(255,139,134,0.24);
+      border-radius: 14px;
+      background: rgba(255,139,134,0.08);
+      color: #ffd0ce;
+      font-size: 13px;
+      line-height: 1.6;
     }
-    .hint { margin-top: 16px; color: #66736e; font-size: 12px; }
+    .hint {
+      margin-top: 18px;
+      color: var(--foreground-muted);
+      font: 500 11px/1.7 var(--mono);
+    }
+    @media (max-width: 520px) {
+      body { padding: 16px; }
+      .shell { padding: 24px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+    }
   </style>
 </head>
 <body>
+  <div class="ambient" aria-hidden="true">
+    <div class="blob primary"></div>
+    <div class="blob secondary"></div>
+    <div class="blob tertiary"></div>
+  </div>
   <main class="shell">
     <div class="brand">
       <div class="mark">R</div>
       <div>
-        <h1>RentOps</h1>
-        <p>收租管理工作台</p>
+        <div class="brand-title">RentOps</div>
+        <div class="brand-meta">Bank income workspace</div>
       </div>
     </div>
+    <h1>登录</h1>
+    <p class="sub">使用演示管理员账号进入银行收入工作台。</p>
     {{if .Error}}<div class="error">用户名或密码错误。</div>{{end}}
     <form method="post" action="/login-local">
       <label for="username">用户名</label>
