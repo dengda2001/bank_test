@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"io"
@@ -588,6 +589,39 @@ func TestHandleRefreshRedirectsOnTransactionFetchFailure(t *testing.T) {
 		t.Fatal("refresh failure should not append a bank data log entry")
 	} else if !os.IsNotExist(err) {
 		t.Fatal(err)
+	}
+}
+
+func TestFetchDemoResultKeepsSuccessfulAccountsWhenAnotherTransactionFetchFails(t *testing.T) {
+	a := testApp()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/data/v1/accounts":
+			io.WriteString(w, `{"results":[{"account_id":"acct-ok","display_name":"Rent account","currency":"EUR"},{"account_id":"acct-failed","display_name":"Reserve account","currency":"EUR"}]}`)
+		case "/data/v1/accounts/acct-ok/balance", "/data/v1/accounts/acct-failed/balance":
+			io.WriteString(w, `{"results":[]}`)
+		case "/data/v1/accounts/acct-ok/transactions":
+			io.WriteString(w, `{"results":[{"transaction_id":"tx-ok","timestamp":"2026-09-01T00:00:00Z","amount":950,"currency":"EUR","transaction_type":"CREDIT"}]}`)
+		case "/data/v1/accounts/acct-failed/transactions":
+			http.Error(w, `{"error":"access_denied"}`, http.StatusForbidden)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	a.cfg.APIBaseURL = server.URL
+	a.httpClient = server.Client()
+
+	result, err := a.fetchDemoResultWithOptions(context.Background(), "access-token", "2026-09-01", true)
+	if err != nil {
+		t.Fatalf("partial fetch returned error: %v", err)
+	}
+	if len(result.Accounts) != 2 {
+		t.Fatalf("account count=%d want 2", len(result.Accounts))
+	}
+	if len(result.Accounts[0].Transactions) == 0 || len(result.Accounts[1].Errors) == 0 {
+		t.Fatalf("partial account results not preserved: %+v", result.Accounts)
 	}
 }
 
@@ -1333,6 +1367,58 @@ func TestSelectObligationRequiresUserChoiceWhenReferencedMonthIsPaid(t *testing.
 
 func ptrTime(t time.Time) *time.Time {
 	return &t
+}
+
+func TestSummarizeBankSyncAccountsMarksPartialWhenOneAccountFails(t *testing.T) {
+	status := summarizeBankSyncAccounts([]bankSyncAccountResult{
+		{Status: bankSyncAccountSucceeded},
+		{Status: bankSyncAccountFailed, ErrorMessage: "transactions unavailable"},
+	})
+	if status != bankSyncStatusPartial {
+		t.Fatalf("status=%q want %q", status, bankSyncStatusPartial)
+	}
+}
+
+func TestInitialSyncWindowDefaultsToOneYear(t *testing.T) {
+	now := time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)
+	from, to, err := syncRequestWindow(bankSyncModeInitialYear, "", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if from != "2025-09-16" || !to.Equal(now) {
+		t.Fatalf("window=(%q,%s) want (2025-09-16,%s)", from, to, now)
+	}
+}
+
+func TestRefreshSyncWindowUsesProviderSafeLookback(t *testing.T) {
+	now := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
+	from, to, err := syncRequestWindow(bankSyncModeRefresh90d, "2026-01-01", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if from != "2026-06-11" || !to.Equal(now) {
+		t.Fatalf("window=(%q,%s) want (2026-06-11,%s)", from, to, now)
+	}
+}
+
+func TestPaymentTransactionFromInputPreservesParsedPeriodFacts(t *testing.T) {
+	parsed := time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)
+	input := paymentTransactionInput{
+		Direction:          "income",
+		AmountCents:        200000,
+		Currency:           "EUR",
+		ParsedPeriodMonth:  &parsed,
+		ParsedPeriodSource: "description",
+		ParsedPeriodNote:   "JULY26",
+	}
+
+	row := paymentTransactionFromInput(7, input)
+	if row.ParsedPeriodMonth == nil || !row.ParsedPeriodMonth.Equal(parsed) {
+		t.Fatalf("parsed period=%v want %s", row.ParsedPeriodMonth, parsed.Format(dateLayout))
+	}
+	if row.ParsedPeriodSource != "description" || row.ParsedPeriodNote != "JULY26" {
+		t.Fatalf("parsed facts not preserved: source=%q note=%q", row.ParsedPeriodSource, row.ParsedPeriodNote)
+	}
 }
 
 func ptrString(value string) *string {

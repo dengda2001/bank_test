@@ -96,6 +96,7 @@ type demoAccount struct {
 type demoResult struct {
 	Environment string        `json:"environment"`
 	FetchedAt   string        `json:"fetched_at"`
+	SyncRunID   string        `json:"sync_run_id,omitempty"`
 	Accounts    []demoAccount `json:"accounts"`
 }
 
@@ -1044,7 +1045,30 @@ func (a *app) handleCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	result, err := a.fetchDemoResult(ctx, token.AccessToken)
+	now := time.Now().UTC()
+	from, _, err := syncRequestWindow(bankSyncModeInitialYear, a.cfg.From, now)
+	if err != nil {
+		http.Error(w, "sync window failed", http.StatusInternalServerError)
+		return
+	}
+	userID, hasUser := a.currentUserID(r)
+	var syncStore *bankSyncStore
+	var syncRun bankSyncRun
+	if hasUser && a.db != nil {
+		syncStore, syncRun, err = a.startUserBankSync(ctx, userID, bankSyncModeInitialYear, a.cfg.From, now)
+		if err != nil {
+			http.Error(w, "sync start failed", http.StatusInternalServerError)
+			return
+		}
+	}
+	result, err := a.fetchDemoResultWithOptions(ctx, token.AccessToken, from, false)
+	if syncRun.ID != 0 {
+		result.SyncRunID = strconv.FormatUint(syncRun.ID, 10)
+		if finishErr := syncStore.finishRun(ctx, userID, syncRun.ID, result, err); finishErr != nil {
+			http.Error(w, "sync status save failed", http.StatusInternalServerError)
+			return
+		}
+	}
 	if err != nil {
 		http.Error(w, "data fetch failed: "+err.Error(), http.StatusBadGateway)
 		return
@@ -1053,12 +1077,12 @@ func (a *app) handleCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "log write failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if userID, ok := a.currentUserID(r); ok && a.db != nil {
+	if hasUser && a.db != nil {
 		if err := newTransactionService(a.db).ingestDemoResult(ctx, userID, result); err != nil {
 			http.Error(w, "transaction ingest failed: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if a.bankConnections != nil {
+		if a.bankConnections != nil && syncResultHasSuccessfulAccount(result) {
 			_ = a.bankConnections.markLastSync(ctx, userID)
 		}
 	}
@@ -1108,8 +1132,30 @@ func (a *app) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	from := refreshTransactionFrom(a.cfg.From, time.Now())
+	now := time.Now().UTC()
+	from, _, err := syncRequestWindow(bankSyncModeRefresh90d, a.cfg.From, now)
+	if err != nil {
+		http.Redirect(w, r, "/billing?error=data_fetch_failed", http.StatusFound)
+		return
+	}
+	userID, hasUser := a.currentUserID(r)
+	var syncStore *bankSyncStore
+	var syncRun bankSyncRun
+	if hasUser && a.db != nil {
+		syncStore, syncRun, err = a.startUserBankSync(r.Context(), userID, bankSyncModeRefresh90d, a.cfg.From, now)
+		if err != nil {
+			http.Error(w, "sync start failed", http.StatusInternalServerError)
+			return
+		}
+	}
 	result, err := a.fetchDemoResultWithOptions(r.Context(), token.AccessToken, from, true)
+	if syncRun.ID != 0 {
+		result.SyncRunID = strconv.FormatUint(syncRun.ID, 10)
+		if finishErr := syncStore.finishRun(r.Context(), userID, syncRun.ID, result, err); finishErr != nil {
+			http.Error(w, "sync status save failed", http.StatusInternalServerError)
+			return
+		}
+	}
 	if err != nil {
 		http.Redirect(w, r, "/billing?error=data_fetch_failed", http.StatusFound)
 		return
@@ -1118,12 +1164,12 @@ func (a *app) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "log write failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if userID, ok := a.currentUserID(r); ok && a.db != nil {
+	if hasUser && a.db != nil {
 		if err := newTransactionService(a.db).ingestDemoResult(r.Context(), userID, result); err != nil {
 			http.Redirect(w, r, "/billing?error=data_fetch_failed", http.StatusFound)
 			return
 		}
-		if a.bankConnections != nil {
+		if a.bankConnections != nil && syncResultHasSuccessfulAccount(result) {
 			_ = a.bankConnections.markLastSync(r.Context(), userID)
 		}
 	}
@@ -1334,6 +1380,7 @@ func (a *app) fetchDemoResultWithOptions(ctx context.Context, accessToken, from 
 		FetchedAt:   time.Now().UTC().Format(time.RFC3339),
 		Accounts:    make([]demoAccount, 0, len(accounts.Results)),
 	}
+	successfulTransactionAccounts := 0
 	for _, acct := range accounts.Results {
 		item := demoAccount{Account: acct}
 
@@ -1348,14 +1395,15 @@ func (a *app) fetchDemoResultWithOptions(ctx context.Context, accessToken, from 
 		var txs json.RawMessage
 		if err := a.getJSON(ctx, accessToken, "/data/v1/accounts/"+url.PathEscape(acct.AccountID)+"/transactions", q, &txs); err != nil {
 			item.Errors = append(item.Errors, "transactions: "+err.Error())
-			if failOnTransactionError {
-				return demoResult{}, fmt.Errorf("transactions fetch failed")
-			}
 		} else {
 			item.Transactions = txs
+			successfulTransactionAccounts++
 		}
 
 		result.Accounts = append(result.Accounts, item)
+	}
+	if failOnTransactionError && len(result.Accounts) > 0 && successfulTransactionAccounts == 0 {
+		return result, fmt.Errorf("transactions fetch failed")
 	}
 	return result, nil
 }

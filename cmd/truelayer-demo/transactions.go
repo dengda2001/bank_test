@@ -33,6 +33,10 @@ type paymentTransaction struct {
 	PayerID               *string
 	PayerName             *string
 	PayerNameKind         string
+	ParsedPeriodMonth     *time.Time
+	ParsedPeriodSource    string
+	ParsedPeriodNote      string
+	MatchReason           string
 	MatchedTenantID       *uint64
 	MatchStatus           string
 	RawPayloadJSON        []byte `gorm:"column:raw_payload_json"`
@@ -56,6 +60,10 @@ type paymentTransactionInput struct {
 	PayerID               string
 	PayerName             string
 	PayerNameKind         string
+	ParsedPeriodMonth     *time.Time
+	ParsedPeriodSource    string
+	ParsedPeriodNote      string
+	MatchReason           string
 	MatchStatus           string
 	RawPayloadJSON        []byte
 }
@@ -100,9 +108,10 @@ func normalizePaymentTransactions(result demoResult) []paymentTransactionInput {
 			payerID := firstNonEmpty(tx.PayerID, tx.RemitterID, tx.CounterpartyID, metaString(tx.Meta, "payer_id"), metaString(tx.Meta, "remitter_id"), metaString(tx.Meta, "counterparty_id"))
 			providerID := firstNonEmpty(tx.NormalisedProviderTransactionID, tx.ProviderTransactionID, metaString(tx.Meta, "normalised_provider_transaction_id"), metaString(tx.Meta, "provider_transaction_id"), metaString(tx.Meta, "bank_transaction_id"))
 			reference := firstNonEmpty(tx.Reference, metaString(tx.Meta, "payment_reference"), metaString(tx.Meta, "reference"), metaString(tx.Meta, "provider_reference"), metaString(tx.Meta, "remittance_information"), metaString(tx.Meta, "remittanceInformation"))
+			parsedPeriod, parsed := parseReferencedPeriod(tx.Description+" "+reference, firstNonZeroTime(ts))
 			input := paymentTransactionInput{
 				Source:                "truelayer",
-				SourceBatchID:         result.FetchedAt,
+				SourceBatchID:         firstNonEmpty(result.SyncRunID, result.FetchedAt),
 				ProviderTransactionID: providerID,
 				AccountID:             acct.Account.AccountID,
 				AccountName:           firstNonEmpty(acct.Account.DisplayName, acct.Account.AccountID),
@@ -115,6 +124,9 @@ func normalizePaymentTransactions(result demoResult) []paymentTransactionInput {
 				PayerID:               payerID,
 				PayerName:             payerName,
 				PayerNameKind:         firstNonEmpty(payerNameKind, "unknown"),
+				ParsedPeriodMonth:     optionalTime(parsedPeriod, parsed),
+				ParsedPeriodSource:    parsedPeriodSource(parsed),
+				ParsedPeriodNote:      parsedPeriodNote(tx.Description, reference, parsed),
 				MatchStatus:           "unmatched",
 				RawPayloadJSON:        raw,
 			}
@@ -156,6 +168,10 @@ func paymentTransactionFromInput(userID uint64, input paymentTransactionInput) p
 		PayerID:               nullableString(input.PayerID),
 		PayerName:             nullableString(input.PayerName),
 		PayerNameKind:         input.PayerNameKind,
+		ParsedPeriodMonth:     input.ParsedPeriodMonth,
+		ParsedPeriodSource:    input.ParsedPeriodSource,
+		ParsedPeriodNote:      input.ParsedPeriodNote,
+		MatchReason:           input.MatchReason,
 		MatchStatus:           input.MatchStatus,
 		RawPayloadJSON:        input.RawPayloadJSON,
 	}
@@ -292,6 +308,10 @@ func paymentTransactionInputFromModel(row paymentTransaction) paymentTransaction
 		PayerID:               stringValue(row.PayerID),
 		PayerName:             stringValue(row.PayerName),
 		PayerNameKind:         row.PayerNameKind,
+		ParsedPeriodMonth:     row.ParsedPeriodMonth,
+		ParsedPeriodSource:    row.ParsedPeriodSource,
+		ParsedPeriodNote:      row.ParsedPeriodNote,
+		MatchReason:           row.MatchReason,
 		MatchStatus:           row.MatchStatus,
 		RawPayloadJSON:        row.RawPayloadJSON,
 	}
@@ -406,4 +426,37 @@ func fallbackTransactionPageRows(result demoResult, filters transactionFilters) 
 		pageRows = append(pageRows, transactionPageRowFromModel(paymentTransactionFromInput(0, input)))
 	}
 	return pageRows
+}
+
+func firstNonZeroTime(value *time.Time) time.Time {
+	if value != nil {
+		return *value
+	}
+	return time.Now().UTC()
+}
+
+func optionalTime(value time.Time, ok bool) *time.Time {
+	if !ok {
+		return nil
+	}
+	return &value
+}
+
+func parsedPeriodSource(ok bool) string {
+	if ok {
+		return "description_reference"
+	}
+	return ""
+}
+
+func parsedPeriodNote(description, reference string, ok bool) string {
+	if !ok {
+		return ""
+	}
+	note := strings.TrimSpace(strings.Join([]string{description, reference}, " "))
+	runes := []rune(note)
+	if len(runes) > 512 {
+		return string(runes[:512])
+	}
+	return note
 }
