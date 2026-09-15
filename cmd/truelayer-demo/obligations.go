@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -401,8 +402,19 @@ func rentPaymentDetailFromRow(row rentPaymentDetailRow) rentPaymentDetail {
 		DateDisplay:        dateDisplay,
 		Description:        firstNonEmpty(row.Description, "No description"),
 		Reference:          firstNonEmpty(row.Reference, "No reference"),
-		Source:             firstNonEmpty(row.Source, "bank"),
+		Source:             paymentSourceLabel(row.Source),
 		ConfirmationSource: firstNonEmpty(row.ConfirmationSource, "manual"),
+	}
+}
+
+func paymentSourceLabel(source string) string {
+	switch strings.ToLower(strings.TrimSpace(source)) {
+	case "cash", "manual_cash":
+		return "现金"
+	case "bank", "truelayer", "legacy", "":
+		return "银行"
+	default:
+		return source
 	}
 }
 

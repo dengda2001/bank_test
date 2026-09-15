@@ -796,6 +796,10 @@ func (a *app) createTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.persistTenantRecord(r.Context(), r, r.Form); err != nil {
+		if errors.Is(err, errTenantLifecycleConflict) {
+			http.Redirect(w, r, "/tenants?error=tenant_has_payments", http.StatusFound)
+			return
+		}
 		if errors.Is(err, errInvalidTenantInput) {
 			http.Redirect(w, r, "/tenants?error=invalid_tenant", http.StatusFound)
 			return
@@ -2454,7 +2458,7 @@ var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html
 
       {{if eq .Message "tenant_added"}}<div class="notice ok">租客资料已保存。</div>{{end}}
       {{if eq .Message "tenant_updated"}}<div class="notice ok">租客资料已更新。</div>{{end}}
-      {{if .Error}}<div class="notice error">租客姓名、月租金额和房间地址为必填项。</div>{{end}}
+		{{if eq .Error "tenant_has_payments"}}<div class="notice error">无法提前结束租期：结束月之后的账单已有有效收款，请先更正或撤销相关收款。</div>{{else if .Error}}<div class="notice error">请检查租客姓名、邮箱格式、日期关系、月租金额和房间地址。</div>{{end}}
 
       <section class="summary" aria-label="Tenant summary">
         <div class="panel metric"><div class="label">租客数量</div><strong>{{.TenantCount}}</strong><span>当前保存的租客</span></div>

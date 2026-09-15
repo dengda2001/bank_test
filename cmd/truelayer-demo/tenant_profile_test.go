@@ -185,6 +185,15 @@ func TestTenantDetailRequiresAuthenticatedDatabaseSession(t *testing.T) {
 	}
 }
 
+func TestPaymentSourceLabelDistinguishesBankAndCash(t *testing.T) {
+	if got := paymentSourceLabel("truelayer"); got != "银行" {
+		t.Fatalf("truelayer source=%q want 银行", got)
+	}
+	if got := paymentSourceLabel("cash"); got != "现金" {
+		t.Fatalf("cash source=%q want 现金", got)
+	}
+}
+
 type testQueryValues map[string]string
 
 func (v testQueryValues) Get(key string) string { return v[key] }
