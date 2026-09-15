@@ -375,3 +375,98 @@ if decisionNeedsReview {
     setMatchStatus(transactionID, "needs_review")
 }
 ```
+
+## Scenario: EUR-Only Audited Rent Ledger
+
+### 1. Scope / Trigger
+
+- Trigger: Creating or changing a rent obligation, confirming a bank
+  allocation, projecting paid/status totals, or applying migration `003`.
+- Phase 1 accepts EUR only. Currency columns remain three-character fields so
+  a later multi-currency implementation can add policy and FX without
+  changing the ledger shape.
+
+### 2. Signatures
+
+- `normalizeLedgerCurrency(value string) (string, error)` canonicalizes the
+  only supported phase-1 currency to `EUR`.
+- `validateLedgerAllocation(ledgerAllocationCheck) error` validates ownership,
+  source budget, obligation balance, kind, and currency before a write.
+- `ledgerPaidAmount([]paymentAllocation) int64` sums effective rent
+  allocations only; legacy rows with an empty kind are treated as rent.
+- `projectLedgerObligation(rentObligation, []paymentAllocation, now)` derives
+  the cached paid amount and Dublin-local status from effective allocations.
+- `migrations/003_rent_ledger_foundation.sql` adds allocation kind, operation
+  and idempotency metadata, void/audit fields, nullable obligation linkage for
+  non-rent allocations, and obligation record status.
+
+### 3. Contracts
+
+- Valid allocation kinds are `rent`, `deposit`, and `other_income`; only
+  `status = confirmed` rows are effective. Voided rows remain queryable audit
+  history and never contribute to totals.
+- Rent allocations require the same user and tenant as the target obligation,
+  EUR on both source and obligation, and an amount no greater than the fresh
+  obligation balance. Every allocation kind consumes the source transaction's
+  remaining amount budget.
+- `payment_allocations.rent_obligation_id` is nullable for deposit/other rows;
+  migrated rows default to `rent` and retain their original bank transaction.
+- `rent_obligations.record_status = voided` excludes the obligation from active
+  dashboard totals while preserving the row and void metadata for history.
+- Monetary values are integer cents. No EUR/non-EUR conversion or mixed-currency
+  aggregate is permitted in phase 1.
+
+### 4. Validation & Error Matrix
+
+- Empty, non-EUR, or conflicting currencies -> reject the write with an
+  EUR-only/currency-mismatch error; do not coerce or silently convert.
+- Zero/negative amount, invalid source budget, or source over-allocation ->
+  reject the entire operation.
+- Cross-user or cross-tenant allocation -> reject without revealing or
+  changing another user's rows.
+- Rent amount greater than the freshly loaded obligation balance or allocation
+  against a voided obligation -> reject and leave prior allocations intact.
+- Duplicate operation retry -> use the idempotency key/operation boundary and
+  do not add another effective allocation.
+
+### 5. Good/Base/Bad Cases
+
+- Good: Load current source and obligation balances inside one write
+  transaction, validate EUR and ownership, insert an auditable allocation, and
+  recompute the obligation projection from effective children.
+- Base: Pre-migration confirmed allocations have an empty kind; migration
+  defaults them to rent and projection still counts them exactly once.
+- Bad: Add a second allocation without checking source balance, sum deposits in
+  rent paid totals, overwrite a confirmed row to correct it, or convert GBP to
+  EUR for display/aggregation.
+
+### 6. Tests Required
+
+- Unit tests for EUR normalization, non-EUR rejection, ownership and both
+  source/obligation budget limits.
+- Projection tests for legacy, confirmed, deposit/other, and voided rows plus
+  Dublin due-day/next-day status behavior.
+- Migration contract test covering nullable non-rent linkage, audit fields,
+  dropped legacy uniqueness, and record status.
+- Database tests should execute migration `003` against MySQL and verify
+  duplicate/idempotent retries and concurrent over-allocation protection before
+  production rollout.
+
+### 7. Wrong vs Correct
+
+Wrong:
+
+```go
+// A payer match alone changes paid rent and ignores currency and remaining balance.
+obligation.PaidAmountCents += transaction.AmountCents
+```
+
+Correct:
+
+```go
+// Validate a fresh EUR allocation, then derive the projection from effective rows.
+if err := validateLedgerAllocation(check); err != nil {
+    return err
+}
+projected := projectLedgerObligation(obligation, allocations, now)
+```

@@ -109,8 +109,8 @@ func validateTenantInput(input tenantInput) error {
 	if input.MonthlyRent <= 0 {
 		return errors.New("monthly rent must be positive")
 	}
-	if input.Currency == "" || len(input.Currency) != 3 {
-		return errors.New("currency must be a 3-letter code")
+	if _, err := normalizeLedgerCurrency(input.Currency); err != nil {
+		return err
 	}
 	if input.IntervalUnit != "month" {
 		return errors.New("only monthly rent interval is supported in phase 1")
@@ -165,6 +165,7 @@ func (s *tenantService) createTenant(ctx context.Context, userID uint64, input t
 	if err := validateTenantInput(input); err != nil {
 		return tenant{}, err
 	}
+	currency, _ := normalizeLedgerCurrency(input.Currency)
 	billingStart, _ := parseDate(input.BillingStartDate)
 	rentStart, _ := parseDate(input.RentStartDate)
 	var rentEnd *time.Time
@@ -178,7 +179,7 @@ func (s *tenantService) createTenant(ctx context.Context, userID uint64, input t
 		PayerID:          nullableString(input.PayerID),
 		PayerNameHint:    nullableString(input.PayerNameHint),
 		MonthlyRentCents: moneyToCents(input.MonthlyRent),
-		Currency:         input.Currency,
+		Currency:         currency,
 		IntervalUnit:     input.IntervalUnit,
 		IntervalCount:    input.IntervalCount,
 		BillingStartDate: billingStart,
@@ -203,6 +204,7 @@ func (s *tenantService) updateTenant(ctx context.Context, userID, tenantID uint6
 	if err := validateTenantInput(input); err != nil {
 		return tenant{}, err
 	}
+	currency, _ := normalizeLedgerCurrency(input.Currency)
 	billingStart, _ := parseDate(input.BillingStartDate)
 	rentStart, _ := parseDate(input.RentStartDate)
 	var rentEnd *time.Time
@@ -219,7 +221,7 @@ func (s *tenantService) updateTenant(ctx context.Context, userID, tenantID uint6
 		"payer_id":           nullableString(input.PayerID),
 		"payer_name_hint":    nullableString(input.PayerNameHint),
 		"monthly_rent_cents": moneyToCents(input.MonthlyRent),
-		"currency":           input.Currency,
+		"currency":           currency,
 		"interval_unit":      input.IntervalUnit,
 		"interval_count":     input.IntervalCount,
 		"billing_start_date": billingStart,

@@ -21,6 +21,10 @@ type rentObligation struct {
 	PaidAmountCents     int64
 	Currency            string
 	Status              string
+	RecordStatus        string
+	VoidedAt            *time.Time
+	VoidedByUserID      *uint64
+	VoidReason          *string
 	GeneratedBy         string
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
@@ -115,16 +119,7 @@ func obligationStatus(expected, paid int64, dueDate, now time.Time, needsReview 
 	if needsReview {
 		return "needs_review"
 	}
-	if paid >= expected {
-		return "paid"
-	}
-	if paid > 0 {
-		return "partial"
-	}
-	if now.After(dueDate) {
-		return "overdue"
-	}
-	return "open"
+	return ledgerObligationStatus(expected, paid, dueDate, now, obligationRecordActive)
 }
 
 func (s *obligationService) ensureMonthlyObligations(ctx context.Context, userID uint64, periodMonth time.Time) error {
@@ -140,6 +135,10 @@ func (s *obligationService) ensureMonthlyObligations(ctx context.Context, userID
 		if !tenantActiveInMonth(row, periodMonth) {
 			continue
 		}
+		currency, err := normalizeLedgerCurrency(row.Currency)
+		if err != nil {
+			return fmt.Errorf("tenant %d: %w", row.ID, err)
+		}
 		obligation := rentObligation{
 			UserID:              userID,
 			TenantID:            row.ID,
@@ -147,8 +146,9 @@ func (s *obligationService) ensureMonthlyObligations(ctx context.Context, userID
 			DueDate:             dueDateForMonth(periodMonth, row.DueDay),
 			ExpectedAmountCents: row.MonthlyRentCents,
 			PaidAmountCents:     0,
-			Currency:            row.Currency,
+			Currency:            currency,
 			Status:              "open",
+			RecordStatus:        obligationRecordActive,
 			GeneratedBy:         "lazy",
 		}
 		if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
@@ -200,7 +200,7 @@ func (s *obligationService) listTenantBillingHistory(ctx context.Context, userID
 		Select("pa.tenant_id, pa.rent_obligation_id AS obligation_id, pa.amount_cents, pt.currency, pt.transaction_time, pt.description, pt.reference, pa.confirmation_source").
 		Joins("JOIN rent_obligations AS ro ON ro.id = pa.rent_obligation_id AND ro.user_id = pa.user_id").
 		Joins("JOIN payment_transactions AS pt ON pt.id = pa.payment_transaction_id AND pt.user_id = pa.user_id").
-		Where("pa.user_id = ? AND pa.status = ? AND pt.direction = ? AND ro.period_month >= ? AND ro.period_month < ?", userID, "confirmed", "income", startMonth, endMonth.AddDate(0, 1, 0)).
+		Where("pa.user_id = ? AND pa.status = ? AND pa.allocation_kind = ? AND pt.direction = ? AND ro.period_month >= ? AND ro.period_month < ?", userID, allocationStatusConfirmed, allocationKindRent, "income", startMonth, endMonth.AddDate(0, 1, 0)).
 		Order("pa.tenant_id ASC, ro.period_month DESC, pt.transaction_time ASC, pa.id ASC").
 		Scan(&paymentRows).Error; err != nil {
 		return nil, err
@@ -231,6 +231,9 @@ func buildTenantBillingHistory(tenants []tenant, obligations []rentObligation, p
 		}
 		currency := firstNonEmpty(obligation.Currency, tenantCurrency[obligation.TenantID], "EUR")
 		status := obligationStatus(obligation.ExpectedAmountCents, obligation.PaidAmountCents, obligation.DueDate, now, obligation.Status == "needs_review")
+		if obligation.RecordStatus == obligationRecordVoided {
+			status = obligationRecordVoided
+		}
 		period := monthStart(obligation.PeriodMonth)
 		history[obligation.TenantID] = append(history[obligation.TenantID], tenantBillingMonth{
 			ObligationID:   obligation.ID,
@@ -275,7 +278,7 @@ func (s *obligationService) summarizeRentDashboard(ctx context.Context, userID u
 		return rentDashboardSummary{}, err
 	}
 	var obligations []rentObligation
-	if err := s.db.WithContext(ctx).Where("user_id = ? AND period_month = ?", userID, periodMonth).Order("tenant_id ASC").Find(&obligations).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("user_id = ? AND period_month = ? AND record_status = ?", userID, periodMonth, obligationRecordActive).Order("tenant_id ASC").Find(&obligations).Error; err != nil {
 		return rentDashboardSummary{}, err
 	}
 	var tenants []tenant
@@ -374,7 +377,7 @@ func (s *obligationService) listRentPayments(ctx context.Context, userID, obliga
 	if err := s.db.WithContext(ctx).Table("payment_allocations AS pa").
 		Select("pa.amount_cents, pt.currency, pt.transaction_time, pt.description, pt.reference, pa.confirmation_source").
 		Joins("JOIN payment_transactions AS pt ON pt.id = pa.payment_transaction_id AND pt.user_id = pa.user_id").
-		Where("pa.user_id = ? AND pa.rent_obligation_id = ?", userID, obligationID).
+		Where("pa.user_id = ? AND pa.rent_obligation_id = ? AND pa.status = ? AND pa.allocation_kind = ?", userID, obligationID, allocationStatusConfirmed, allocationKindRent).
 		Order("pt.transaction_time ASC, pa.id ASC").Scan(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -413,5 +416,6 @@ func rentStatusLabel(status string) string {
 		"partial":      "部分缴纳",
 		"paid":         "已缴清",
 		"needs_review": "需处理",
+		"voided":       "已作废",
 	}[status]
 }

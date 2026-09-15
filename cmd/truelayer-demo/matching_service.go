@@ -18,9 +18,15 @@ type paymentAllocation struct {
 	RentObligationID     uint64
 	TenantID             uint64
 	AmountCents          int64
+	AllocationKind       string
 	Status               string
+	OperationID          *string
+	IdempotencyKey       *string
 	ConfirmedByUserID    uint64
 	ConfirmedAt          time.Time
+	VoidedAt             *time.Time
+	VoidedByUserID       *uint64
+	VoidReason           *string
 	ConfirmationSource   string
 	CreatedAt            time.Time
 }
@@ -121,9 +127,30 @@ func (s *transactionService) applyAllocation(ctx context.Context, userID uint64,
 		if err := txdb.Where("id = ? AND user_id = ? AND tenant_id = ?", decision.RentObligationID, userID, decision.TenantID).First(&obligation).Error; err != nil {
 			return err
 		}
-		remaining := obligation.ExpectedAmountCents - obligation.PaidAmountCents
-		if transaction.AmountCents <= 0 || transaction.AmountCents > remaining {
-			return errors.New("rent transaction amount needs review")
+		if obligation.RecordStatus == obligationRecordVoided {
+			return errors.New("rent obligation is voided")
+		}
+		var existingAllocatedCents int64
+		if err := txdb.Model(&paymentAllocation{}).
+			Where("user_id = ? AND payment_transaction_id = ? AND status = ?", userID, transaction.ID, allocationStatusConfirmed).
+			Select("COALESCE(SUM(amount_cents), 0)").Scan(&existingAllocatedCents).Error; err != nil {
+			return err
+		}
+		if err := validateLedgerAllocation(ledgerAllocationCheck{
+			UserID:                  userID,
+			SourceUserID:            transaction.UserID,
+			TenantID:                decision.TenantID,
+			ObligationTenantID:      obligation.TenantID,
+			SourceAmountCents:       transaction.AmountCents,
+			ExistingAllocatedCents:  existingAllocatedCents,
+			AmountCents:             transaction.AmountCents,
+			ObligationExpectedCents: obligation.ExpectedAmountCents,
+			ObligationPaidCents:     obligation.PaidAmountCents,
+			SourceCurrency:          transaction.Currency,
+			ObligationCurrency:      obligation.Currency,
+			Kind:                    allocationKindRent,
+		}); err != nil {
+			return err
 		}
 		allocation := paymentAllocation{
 			UserID:               userID,
@@ -131,7 +158,8 @@ func (s *transactionService) applyAllocation(ctx context.Context, userID uint64,
 			RentObligationID:     obligation.ID,
 			TenantID:             decision.TenantID,
 			AmountCents:          transaction.AmountCents,
-			Status:               "confirmed",
+			AllocationKind:       allocationKindRent,
+			Status:               allocationStatusConfirmed,
 			ConfirmedByUserID:    userID,
 			ConfirmedAt:          time.Now().UTC(),
 			ConfirmationSource:   source,
@@ -139,11 +167,14 @@ func (s *transactionService) applyAllocation(ctx context.Context, userID uint64,
 		if err := txdb.Create(&allocation).Error; err != nil {
 			return err
 		}
-		paid := obligation.PaidAmountCents + allocation.AmountCents
-		status := obligationStatus(obligation.ExpectedAmountCents, paid, obligation.DueDate, time.Now().UTC(), false)
+		var allocations []paymentAllocation
+		if err := txdb.Where("user_id = ? AND rent_obligation_id = ?", userID, obligation.ID).Find(&allocations).Error; err != nil {
+			return err
+		}
+		projected := projectLedgerObligation(obligation, allocations, time.Now().UTC())
 		if err := txdb.Model(&rentObligation{}).Where("id = ? AND user_id = ?", obligation.ID, userID).Updates(map[string]any{
-			"paid_amount_cents": paid,
-			"status":            status,
+			"paid_amount_cents": projected.PaidAmountCents,
+			"status":            projected.Status,
 		}).Error; err != nil {
 			return err
 		}
