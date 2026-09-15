@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 )
+
+var e2EDashboardMetricPattern = regexp.MustCompile(`<div class="label">([^<]+)</div><strong>([^<]+)</strong>`)
 
 func (c *e2eHTTPClient) dashboardScenario(ctx context.Context, manifest e2eFixtureManifest, tenantID uint64) e2eScenarioReport {
 	scenario := e2eScenarioReport{Name: "dashboard-and-history", Status: "running", Steps: []e2eStepReport{}}
@@ -20,20 +23,34 @@ func (c *e2eHTTPClient) dashboardScenario(ctx context.Context, manifest e2eFixtu
 	dashboardPath := "/rent-dashboard?period=" + url.QueryEscape(period)
 	dashboardResponse, err := c.do(ctx, http.MethodGet, dashboardPath, nil)
 	dashboardStep := e2eHTTPStep(http.MethodGet, dashboardPath, map[string]any{
-		"status_code":    http.StatusOK,
-		"tenant_visible": true,
-		"monthly_rent":   "EUR 950.00",
+		"status_code":         http.StatusOK,
+		"tenant_visible":      true,
+		"monthly_rent":        "EUR 950.00",
+		"paid_rent":           "EUR 950.00",
+		"remaining_rent":      "EUR 0.00",
+		"pending_income":      "EUR 0.00",
+		"other_income":        "EUR 50.00",
+		"amount_conservation": true,
 	}, dashboardResponse, err)
 	if err == nil {
 		body := string(dashboardResponse.Body)
 		tenantVisible := strings.Contains(body, manifest.Tenant.Name)
-		monthlyRent := strings.Contains(body, "EUR 950.00")
+		monthlyRent := e2EDashboardMetric(body, "本月应收") == "EUR 950.00"
+		paidRent := e2EDashboardMetric(body, "已收租金") == "EUR 950.00"
+		remainingRent := e2EDashboardMetric(body, "剩余未收") == "EUR 0.00"
+		pendingIncome := e2EDashboardMetric(body, "待分配金额") == "EUR 0.00"
+		otherIncome := e2EDashboardMetric(body, "其他收入") == "EUR 50.00"
 		actual := dashboardStep.Actual.(map[string]any)
 		actual["tenant_visible"] = tenantVisible
 		actual["monthly_rent"] = monthlyRent
-		dashboardStep.Passed = dashboardResponse.StatusCode == http.StatusOK && tenantVisible && monthlyRent
+		actual["paid_rent"] = paidRent
+		actual["remaining_rent"] = remainingRent
+		actual["pending_income"] = pendingIncome
+		actual["other_income"] = otherIncome
+		actual["amount_conservation"] = monthlyRent && paidRent && remainingRent && pendingIncome && otherIncome
+		dashboardStep.Passed = dashboardResponse.StatusCode == http.StatusOK && tenantVisible && actual["amount_conservation"] == true
 		if !dashboardStep.Passed {
-			dashboardStep.Error = "dashboard did not expose the isolated tenant and exact monthly rent"
+			dashboardStep.Error = "dashboard did not expose the isolated tenant and exact conserved EUR totals"
 		}
 	}
 	scenario.Steps = append(scenario.Steps, dashboardStep)
@@ -124,6 +141,15 @@ func (c *e2eHTTPClient) dashboardScenario(ctx context.Context, manifest e2eFixtu
 
 	scenario.Status = "passed"
 	return scenario
+}
+
+func e2EDashboardMetric(body, label string) string {
+	for _, match := range e2EDashboardMetricPattern.FindAllStringSubmatch(body, -1) {
+		if len(match) == 3 && strings.TrimSpace(match[1]) == label {
+			return strings.TrimSpace(match[2])
+		}
+	}
+	return ""
 }
 
 func extractE2EDunningObligationID(body []byte) (uint64, error) {

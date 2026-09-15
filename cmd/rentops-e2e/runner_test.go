@@ -565,7 +565,7 @@ func TestE2EDashboardAndDunningScenariosVerifyReadsAndDelivery(t *testing.T) {
 				fmt.Fprint(w, `<main>筛选条件无效 invalid_dashboard_filter</main>`)
 				return
 			}
-			fmt.Fprintf(w, `<main>%s %s EUR 950.00 已缴清 当前显示 1 户 <input type="checkbox" name="obligation_id" value="900"></main>`, manifest.Tenant.Name, manifest.DunningTenant.Name)
+			fmt.Fprintf(w, `<main><div class="label">本月应收</div><strong>EUR 950.00</strong><div class="label">已收租金</div><strong>EUR 950.00</strong><div class="label">剩余未收</div><strong>EUR 0.00</strong><div class="label">待分配金额</div><strong>EUR 0.00</strong><div class="label">其他收入</div><strong>EUR 50.00</strong>%s %s 已缴清 当前显示 1 户 <input type="checkbox" name="obligation_id" value="900"></main>`, manifest.Tenant.Name, manifest.DunningTenant.Name)
 		case "/tenants/42":
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprintf(w, `<main>%s 2026-08 2026-09</main>`, manifest.Tenant.Name)
