@@ -57,7 +57,7 @@ func (c *e2eHTTPClient) dunningScenario(ctx context.Context, manifest e2eFixture
 		"preview_visible": true,
 	}, previewResponse, err)
 	if err == nil {
-		previewVisible := strings.Contains(string(previewResponse.Body), "催缴") || strings.Contains(string(previewResponse.Body), "预览")
+		previewVisible := strings.Contains(string(previewResponse.Body), manifest.DunningTenant.Name) || strings.Contains(string(previewResponse.Body), "催缴") || strings.Contains(string(previewResponse.Body), "预览")
 		previewStep.Actual.(map[string]any)["preview_visible"] = previewVisible
 		previewStep.Passed = previewResponse.StatusCode == http.StatusOK && previewVisible
 		if !previewStep.Passed {
@@ -78,8 +78,10 @@ func (c *e2eHTTPClient) dunningScenario(ctx context.Context, manifest e2eFixture
 	}, sendResponse, err)
 	if err == nil {
 		outcome := e2eDunningOutcome(sendResponse.Body)
+		candidateVisible := strings.Contains(string(sendResponse.Body), manifest.DunningTenant.Name)
 		sendStep.Actual.(map[string]any)["delivery_outcome"] = outcome
-		sendStep.Passed = sendResponse.StatusCode == http.StatusOK && (outcome == "sent" || outcome == "queued")
+		sendStep.Actual.(map[string]any)["candidate_visible"] = candidateVisible
+		sendStep.Passed = sendResponse.StatusCode == http.StatusOK && candidateVisible && (outcome == "sent" || outcome == "queued")
 		if !sendStep.Passed {
 			sendStep.Error = "dunning send did not produce a sent or queued outcome"
 		}
@@ -96,8 +98,10 @@ func (c *e2eHTTPClient) dunningScenario(ctx context.Context, manifest e2eFixture
 	}, repeatResponse, err)
 	if err == nil {
 		outcome := e2eDunningOutcome(repeatResponse.Body)
+		candidateVisible := strings.Contains(string(repeatResponse.Body), manifest.DunningTenant.Name)
 		repeatStep.Actual.(map[string]any)["delivery_outcome"] = outcome
-		repeatStep.Passed = repeatResponse.StatusCode == http.StatusOK && (outcome == "sent" || outcome == "queued")
+		repeatStep.Actual.(map[string]any)["candidate_visible"] = candidateVisible
+		repeatStep.Passed = repeatResponse.StatusCode == http.StatusOK && candidateVisible && (outcome == "sent" || outcome == "queued")
 		if !repeatStep.Passed {
 			repeatStep.Error = "repeated dunning request did not preserve a safe delivery outcome"
 		}

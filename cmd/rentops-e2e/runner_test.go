@@ -45,6 +45,9 @@ func TestValidateE2EOptionsExecuteRequiresAllowlistAndExplicitConfirmations(t *t
 			t.Fatalf("missing failure %q in %+v", expected, preflight.Failures)
 		}
 	}
+	if !strings.Contains(strings.Join(preflight.Failures, "\n"), "database name allowlist") {
+		t.Fatalf("missing database allowlist failure in %+v", preflight)
+	}
 }
 
 func TestValidateE2EOptionsRejectsRemoteTargetWithoutOptIn(t *testing.T) {
@@ -562,7 +565,7 @@ func TestE2EDashboardAndDunningScenariosVerifyReadsAndDelivery(t *testing.T) {
 				fmt.Fprint(w, `<main>筛选条件无效 invalid_dashboard_filter</main>`)
 				return
 			}
-			fmt.Fprintf(w, `<main>%s EUR 950.00 已缴清 当前显示 1 户 预览 obligation_id=%s</main>`, manifest.Tenant.Name, "900")
+			fmt.Fprintf(w, `<main>%s %s EUR 950.00 已缴清 当前显示 1 户 <input type="checkbox" name="obligation_id" value="900"></main>`, manifest.Tenant.Name, manifest.DunningTenant.Name)
 		case "/tenants/42":
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprintf(w, `<main>%s 2026-08 2026-09</main>`, manifest.Tenant.Name)
@@ -571,11 +574,11 @@ func TestE2EDashboardAndDunningScenariosVerifyReadsAndDelivery(t *testing.T) {
 			fmt.Fprintf(w, `<main>发件配置已保存 %s landlord</main>`, manifest.RunID)
 		case "/dunning/preview":
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, `<main>邮件催缴预览</main>`)
+			fmt.Fprintf(w, `<main>%s 邮件催缴预览</main>`, manifest.DunningTenant.Name)
 		case "/dunning/send":
 			sendCount++
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, `<main>发送结果 已发送</main>`)
+			fmt.Fprintf(w, `<main>%s 发送结果 已发送</main>`, manifest.DunningTenant.Name)
 		default:
 			http.NotFound(w, r)
 		}
@@ -593,9 +596,74 @@ func TestE2EDashboardAndDunningScenariosVerifyReadsAndDelivery(t *testing.T) {
 	if dashboardScenario.Status != "passed" {
 		t.Fatalf("dashboard scenario=%+v", dashboardScenario)
 	}
+	candidateScenario, obligationID := client.dunningCandidateScenario(context.Background(), manifest)
+	if candidateScenario.Status != "passed" || obligationID != 900 {
+		t.Fatalf("candidate scenario=%+v obligationID=%d", candidateScenario, obligationID)
+	}
 	dunningScenario := client.dunningScenario(context.Background(), manifest, 900)
 	if dunningScenario.Status != "passed" || sendCount != 2 {
 		t.Fatalf("dunning scenario=%+v sendCount=%d", dunningScenario, sendCount)
+	}
+}
+
+func TestE2ECrossUserScenarioRejectsTenantLedgerAndCashAccess(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		isSecondUser := false
+		if cookie, cookieErr := r.Cookie("rentops_session"); cookieErr == nil && cookie.Value == "second" {
+			isSecondUser = true
+		}
+		if r.URL.Path == "/login-local" {
+			_ = r.ParseForm()
+			if r.Form.Get("username") == "second" && r.Form.Get("password") == "second-password" {
+				http.SetCookie(w, &http.Cookie{Name: "rentops_session", Value: "second", Path: "/"})
+				http.Redirect(w, r, "/rent-dashboard", http.StatusFound)
+				return
+			}
+			if r.Form.Get("password") == "first-password" {
+				http.SetCookie(w, &http.Cookie{Name: "rentops_session", Value: "first", Path: "/"})
+				http.Redirect(w, r, "/rent-dashboard", http.StatusFound)
+				return
+			}
+			http.Redirect(w, r, "/?error=invalid_login", http.StatusFound)
+			return
+		}
+		if r.URL.Path == "/billing" {
+			if !isSecondUser {
+				http.Redirect(w, r, "/", http.StatusFound)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if !isSecondUser {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+		switch r.URL.Path {
+		case "/tenants/42":
+			w.WriteHeader(http.StatusNotFound)
+		case "/billing/confirm":
+			http.Redirect(w, r, "/billing?error=confirmation_failed", http.StatusFound)
+		case "/billing/revoke":
+			http.Redirect(w, r, "/billing?error=transaction_action_failed", http.StatusFound)
+		case "/cash-receipts/preview":
+			http.Redirect(w, r, "/cash-receipts/new?error=cash_receipt_failed", http.StatusFound)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client, err := newE2EHTTPClient(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authScenario := client.authenticationScenario(context.Background(), "second", "second-password")
+	if authScenario.Status != "passed" {
+		t.Fatalf("second account authentication scenario=%+v", authScenario)
+	}
+	scenario := client.crossUserScenario(context.Background(), 42, 101)
+	if scenario.Status != "passed" {
+		t.Fatalf("cross-user scenario=%+v", scenario)
 	}
 }
 

@@ -130,6 +130,46 @@ func extractE2EDunningObligationID(body []byte) (uint64, error) {
 	return extractPositiveE2EID(body, `name="obligation_id" value="`)
 }
 
+func (c *e2eHTTPClient) dunningCandidateScenario(ctx context.Context, manifest e2eFixtureManifest) (e2eScenarioReport, uint64) {
+	scenario := e2eScenarioReport{Name: "dunning-candidate-discovery", Status: "running", Steps: []e2eStepReport{}}
+	fail := func(message string) (e2eScenarioReport, uint64) {
+		scenario.Status = "failed"
+		scenario.Error = message
+		return scenario, 0
+	}
+	values := url.Values{
+		"period":    {"2026-09"},
+		"search":    {manifest.DunningTenant.DisplayAlias},
+		"status":    {"unpaid"},
+		"sort":      {"due_asc"},
+		"page":      {"1"},
+		"page_size": {"12"},
+	}
+	path := "/rent-dashboard?" + values.Encode()
+	response, err := c.do(ctx, http.MethodGet, path, nil)
+	step := e2eHTTPStep(http.MethodGet, path, map[string]any{
+		"status_code":       http.StatusOK,
+		"candidate_visible": true,
+	}, response, err)
+	var obligationID uint64
+	if err == nil {
+		obligationID, err = extractE2EDunningObligationID(response.Body)
+		candidateVisible := response.StatusCode == http.StatusOK && strings.Contains(string(response.Body), manifest.DunningTenant.Name)
+		step.Actual.(map[string]any)["candidate_visible"] = candidateVisible
+		step.Actual.(map[string]any)["obligation_id"] = obligationID
+		step.Passed = candidateVisible && err == nil
+		if !step.Passed {
+			step.Error = "unpaid dunning tenant candidate or obligation ID was not visible"
+		}
+	}
+	scenario.Steps = append(scenario.Steps, step)
+	if !step.Passed {
+		return fail("dunning candidate discovery failed")
+	}
+	scenario.Status = "passed"
+	return scenario, obligationID
+}
+
 func extractPositiveE2EID(body []byte, prefix string) (uint64, error) {
 	text := string(body)
 	index := strings.Index(text, prefix)

@@ -22,22 +22,23 @@ const (
 var e2eRunIDPattern = regexp.MustCompile(`^rentops-e2e-[0-9]{8}-[0-9]{6}-[a-f0-9]{8}$`)
 
 type e2eOptions struct {
-	BaseURL         string
-	RunID           string
-	ReportPath      string
-	TargetName      string
-	TargetAllowlist string
-	MySQLDSN        string
-	FixtureDir      string
-	Username        string
-	Password        string
-	SecondUsername  string
-	SecondPassword  string
-	SMTPSink        string
-	Execute         bool
-	ConfirmWrites   string
-	ConfirmCleanup  string
-	AllowRemote     bool
+	BaseURL           string
+	RunID             string
+	ReportPath        string
+	TargetName        string
+	TargetAllowlist   string
+	DatabaseAllowlist string
+	MySQLDSN          string
+	FixtureDir        string
+	Username          string
+	Password          string
+	SecondUsername    string
+	SecondPassword    string
+	SMTPSink          string
+	Execute           bool
+	ConfirmWrites     string
+	ConfirmCleanup    string
+	AllowRemote       bool
 }
 
 type e2ePreflight struct {
@@ -106,21 +107,22 @@ func validateE2ERunID(value string) error {
 
 func e2eOptionsFromEnv() (e2eOptions, error) {
 	return e2eOptions{
-		BaseURL:         strings.TrimRight(strings.TrimSpace(os.Getenv("RENTOPS_E2E_BASE_URL")), "/"),
-		RunID:           strings.TrimSpace(os.Getenv("RENTOPS_E2E_RUN_ID")),
-		ReportPath:      strings.TrimSpace(os.Getenv("RENTOPS_E2E_REPORT_PATH")),
-		TargetName:      strings.TrimSpace(os.Getenv("RENTOPS_E2E_TARGET_NAME")),
-		TargetAllowlist: strings.TrimSpace(os.Getenv("RENTOPS_E2E_TARGET_ALLOWLIST")),
-		MySQLDSN:        strings.TrimSpace(firstE2EEnv("RENTOPS_E2E_MYSQL_DSN", "RENTOPS_MYSQL_TEST_DSN", "MYSQL_DSN")),
-		FixtureDir:      strings.TrimSpace(os.Getenv("RENTOPS_E2E_FIXTURE_DIR")),
-		Username:        os.Getenv("RENTOPS_E2E_USERNAME"),
-		Password:        os.Getenv("RENTOPS_E2E_PASSWORD"),
-		SecondUsername:  os.Getenv("RENTOPS_E2E_SECOND_USERNAME"),
-		SecondPassword:  os.Getenv("RENTOPS_E2E_SECOND_PASSWORD"),
-		SMTPSink:        strings.TrimSpace(os.Getenv("RENTOPS_E2E_SMTP_SINK")),
-		ConfirmWrites:   strings.TrimSpace(os.Getenv("RENTOPS_E2E_CONFIRM_WRITES")),
-		ConfirmCleanup:  strings.TrimSpace(os.Getenv("RENTOPS_E2E_CONFIRM_CLEANUP")),
-		AllowRemote:     os.Getenv("RENTOPS_E2E_ALLOW_REMOTE") == "1",
+		BaseURL:           strings.TrimRight(strings.TrimSpace(os.Getenv("RENTOPS_E2E_BASE_URL")), "/"),
+		RunID:             strings.TrimSpace(os.Getenv("RENTOPS_E2E_RUN_ID")),
+		ReportPath:        strings.TrimSpace(os.Getenv("RENTOPS_E2E_REPORT_PATH")),
+		TargetName:        strings.TrimSpace(os.Getenv("RENTOPS_E2E_TARGET_NAME")),
+		TargetAllowlist:   strings.TrimSpace(os.Getenv("RENTOPS_E2E_TARGET_ALLOWLIST")),
+		DatabaseAllowlist: strings.TrimSpace(os.Getenv("RENTOPS_E2E_DATABASE_ALLOWLIST")),
+		MySQLDSN:          strings.TrimSpace(firstE2EEnv("RENTOPS_E2E_MYSQL_DSN", "RENTOPS_MYSQL_TEST_DSN", "MYSQL_DSN")),
+		FixtureDir:        strings.TrimSpace(os.Getenv("RENTOPS_E2E_FIXTURE_DIR")),
+		Username:          os.Getenv("RENTOPS_E2E_USERNAME"),
+		Password:          os.Getenv("RENTOPS_E2E_PASSWORD"),
+		SecondUsername:    os.Getenv("RENTOPS_E2E_SECOND_USERNAME"),
+		SecondPassword:    os.Getenv("RENTOPS_E2E_SECOND_PASSWORD"),
+		SMTPSink:          strings.TrimSpace(os.Getenv("RENTOPS_E2E_SMTP_SINK")),
+		ConfirmWrites:     strings.TrimSpace(os.Getenv("RENTOPS_E2E_CONFIRM_WRITES")),
+		ConfirmCleanup:    strings.TrimSpace(os.Getenv("RENTOPS_E2E_CONFIRM_CLEANUP")),
+		AllowRemote:       os.Getenv("RENTOPS_E2E_ALLOW_REMOTE") == "1",
 	}, nil
 }
 
@@ -194,10 +196,22 @@ func validateE2EOptions(options e2eOptions) e2ePreflight {
 	} else {
 		preflight.Checks = append(preflight.Checks, "dedicated E2E login credentials are present")
 	}
+	if !strings.HasPrefix(options.Username, options.RunID) {
+		fail("primary E2E username must start with the run ID")
+	} else {
+		preflight.Checks = append(preflight.Checks, "primary E2E username is run-ID scoped")
+	}
 	if options.SecondUsername == "" || options.SecondPassword == "" {
 		fail("a dedicated second E2E account is required for cross-user checks")
+	} else if options.SecondUsername == options.Username {
+		fail("primary and second E2E accounts must be different")
 	} else {
 		preflight.Checks = append(preflight.Checks, "dedicated second E2E account credentials are present")
+	}
+	if options.DatabaseAllowlist == "" {
+		fail("an explicit non-production database name allowlist is required")
+	} else {
+		preflight.Checks = append(preflight.Checks, "an explicit non-production database name allowlist is present")
 	}
 	if options.SMTPSink == "" {
 		fail("an explicit SMTP sink identifier is required for dunning send checks")
