@@ -323,3 +323,36 @@ Implemented the Chinese monthly rent dashboard with clear expected/paid/balance 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 10: 完成月度收租 Dashboard
+
+**Date**: 2026-09-16
+**Task**: 完成月度收租 Dashboard
+**Branch**: `main`
+
+### Summary
+
+完成月度收租 Dashboard：全量月度汇总与状态计数、搜索筛选排序分页、银行到账月待分配与其他收入指标、同步成功/异常/无同步状态、现金与银行明细及租客历史入口；补充模板/HTTP/单元/MySQL 集成测试与 backend database spec，go test/go vet/git diff --check 通过；MySQL 集成因未配置 RENTOPS_MYSQL_TEST_DSN 跳过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `997d199` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
