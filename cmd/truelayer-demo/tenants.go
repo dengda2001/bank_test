@@ -111,14 +111,24 @@ func validateTenantPayerInput(input tenantPayerInput) error {
 
 func classifyTenantPayerSharing(rows []tenantPayer) []tenantPayerRecord {
 	activeNameTenants := make(map[string]map[uint64]struct{})
+	activeIDTenants := make(map[string]map[uint64]struct{})
 	for _, row := range rows {
-		if row.RemovedAt != nil || row.PayerNameNormalized == "" {
+		if row.RemovedAt != nil {
 			continue
 		}
-		if activeNameTenants[row.PayerNameNormalized] == nil {
+		if row.PayerNameNormalized != "" && activeNameTenants[row.PayerNameNormalized] == nil {
 			activeNameTenants[row.PayerNameNormalized] = make(map[uint64]struct{})
 		}
-		activeNameTenants[row.PayerNameNormalized][row.TenantID] = struct{}{}
+		if row.PayerNameNormalized != "" {
+			activeNameTenants[row.PayerNameNormalized][row.TenantID] = struct{}{}
+		}
+		payerID := stringValue(row.PayerID)
+		if payerID != "" && activeIDTenants[payerID] == nil {
+			activeIDTenants[payerID] = make(map[uint64]struct{})
+		}
+		if payerID != "" {
+			activeIDTenants[payerID][row.TenantID] = struct{}{}
+		}
 	}
 	result := make([]tenantPayerRecord, 0, len(rows))
 	for _, row := range rows {
@@ -127,7 +137,7 @@ func classifyTenantPayerSharing(rows []tenantPayer) []tenantPayerRecord {
 			PayerID: stringValue(row.PayerID),
 			Name:    row.PayerNameOriginal,
 			Source:  row.Source,
-			Shared:  len(activeNameTenants[row.PayerNameNormalized]) > 1,
+			Shared:  len(activeNameTenants[row.PayerNameNormalized]) > 1 || len(activeIDTenants[stringValue(row.PayerID)]) > 1,
 		}
 		if row.LastMatchedAt != nil {
 			record.LastMatchedAt = row.LastMatchedAt.Format(time.RFC3339)
@@ -453,29 +463,37 @@ func (s *tenantService) addTenantPayer(ctx context.Context, userID, tenantID uin
 	if err := validateTenantPayerInput(input); err != nil {
 		return tenantPayer{}, err
 	}
-	var row tenant
-	if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", tenantID, userID).First(&row).Error; err != nil {
-		return tenantPayer{}, err
-	}
-	name := normalizeTenantPayerName(input.Name)
-	var existing []tenantPayer
-	if err := s.db.WithContext(ctx).Where("user_id = ? AND tenant_id = ? AND payer_name_normalized = ? AND removed_at IS NULL", userID, tenantID, name).Find(&existing).Error; err != nil {
-		return tenantPayer{}, err
-	}
-	for _, candidate := range existing {
-		if stringValue(candidate.PayerID) == input.PayerID {
-			return candidate, nil
+	var payerRow tenantPayer
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row tenant
+		if err := tx.WithContext(ctx).Where("id = ? AND user_id = ?", tenantID, userID).First(&row).Error; err != nil {
+			return err
 		}
-	}
-	payerRow := tenantPayer{
-		UserID:              userID,
-		TenantID:            tenantID,
-		PayerID:             nullableString(input.PayerID),
-		PayerNameOriginal:   input.Name,
-		PayerNameNormalized: name,
-		Source:              "manual",
-	}
-	if err := s.db.WithContext(ctx).Create(&payerRow).Error; err != nil {
+		name := normalizeTenantPayerName(input.Name)
+		var existing []tenantPayer
+		if err := tx.WithContext(ctx).Where("user_id = ? AND tenant_id = ? AND payer_name_normalized = ? AND removed_at IS NULL", userID, tenantID, name).Find(&existing).Error; err != nil {
+			return err
+		}
+		for _, candidate := range existing {
+			if stringValue(candidate.PayerID) == input.PayerID {
+				payerRow = candidate
+				return syncLegacyPayerFields(tx.WithContext(ctx), userID, tenantID)
+			}
+		}
+		payerRow = tenantPayer{
+			UserID:              userID,
+			TenantID:            tenantID,
+			PayerID:             nullableString(input.PayerID),
+			PayerNameOriginal:   input.Name,
+			PayerNameNormalized: name,
+			Source:              "manual",
+		}
+		if err := tx.WithContext(ctx).Create(&payerRow).Error; err != nil {
+			return err
+		}
+		return syncLegacyPayerFields(tx.WithContext(ctx), userID, tenantID)
+	})
+	if err != nil {
 		return tenantPayer{}, err
 	}
 	return payerRow, nil
@@ -485,17 +503,32 @@ func (s *tenantService) removeTenantPayer(ctx context.Context, userID, tenantID,
 	if userID == 0 || tenantID == 0 || payerID == 0 || removedBy == 0 {
 		return errors.New("userID, tenantID, payerID, and removedBy are required")
 	}
-	now := time.Now().UTC()
-	result := s.db.WithContext(ctx).Model(&tenantPayer{}).
-		Where("id = ? AND user_id = ? AND tenant_id = ? AND removed_at IS NULL", payerID, userID, tenantID).
-		Updates(map[string]any{"removed_at": now, "removed_by_user_id": removedBy})
-	if result.Error != nil {
-		return result.Error
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		now := time.Now().UTC()
+		result := tx.Model(&tenantPayer{}).
+			Where("id = ? AND user_id = ? AND tenant_id = ? AND removed_at IS NULL", payerID, userID, tenantID).
+			Updates(map[string]any{"removed_at": now, "removed_by_user_id": removedBy})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		return syncLegacyPayerFields(tx, userID, tenantID)
+	})
+}
+
+func syncLegacyPayerFields(tx *gorm.DB, userID, tenantID uint64) error {
+	var rows []tenantPayer
+	if err := tx.Where("user_id = ? AND tenant_id = ? AND removed_at IS NULL", userID, tenantID).Order("created_at ASC, id ASC").Find(&rows).Error; err != nil {
+		return err
 	}
-	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
+	updates := map[string]any{"payer_id": nil, "payer_name_hint": nil}
+	if len(rows) > 0 {
+		updates["payer_id"] = rows[0].PayerID
+		updates["payer_name_hint"] = rows[0].PayerNameOriginal
 	}
-	return nil
+	return tx.Model(&tenant{}).Where("id = ? AND user_id = ?", tenantID, userID).Updates(updates).Error
 }
 
 func tenantRecordFromModel(row tenant) tenantRecord {

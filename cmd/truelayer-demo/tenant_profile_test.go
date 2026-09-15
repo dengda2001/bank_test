@@ -1,6 +1,8 @@
 package main
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -99,6 +101,16 @@ func TestClassifyTenantPayersMarksSharedNameWithoutStableID(t *testing.T) {
 	}
 }
 
+func TestClassifyTenantPayersMarksSharedStableIDAcrossDifferentNames(t *testing.T) {
+	rows := classifyTenantPayerSharing([]tenantPayer{
+		{ID: 1, TenantID: 10, PayerID: ptrString("payer-1"), PayerNameNormalized: "parent"},
+		{ID: 2, TenantID: 11, PayerID: ptrString("payer-1"), PayerNameNormalized: "guardian"},
+	})
+	if !rows[0].Shared || !rows[1].Shared {
+		t.Fatalf("shared stable id rows=%+v want both shared", rows)
+	}
+}
+
 func TestRentEndChangeOnlyAffectsMonthsAfterEndMonth(t *testing.T) {
 	end := time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC)
 	if !obligationIsAfterRentEnd(time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), &end) {
@@ -151,6 +163,15 @@ func TestTenantDetailTemplateShowsNameOnlyPayerAndHistoryControls(t *testing.T) 
 		if !strings.Contains(page, expected) {
 			t.Fatalf("tenant detail template missing %q", expected)
 		}
+	}
+}
+
+func TestTenantDetailRequiresAuthenticatedDatabaseSession(t *testing.T) {
+	a := testApp()
+	rec := httptest.NewRecorder()
+	a.handleTenantSubroute(rec, httptest.NewRequest(http.MethodGet, "/tenants/7", nil))
+	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/" {
+		t.Fatalf("status=%d location=%q want unauthenticated redirect", rec.Code, rec.Header().Get("Location"))
 	}
 }
 
