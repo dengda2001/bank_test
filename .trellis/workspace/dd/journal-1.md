@@ -207,3 +207,42 @@ Implemented the Chinese monthly rent dashboard with clear expected/paid/balance 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: 完成租客档案与付款人关系
+
+**Date**: 2026-09-16
+**Task**: 完成租客档案与付款人关系
+**Branch**: `main`
+
+### Summary
+
+完成租客档案别名与邮箱、付款人关系表及软删除、现有 JSON 仅姓名付款人兼容、租客缴费历史详情与分页、租期生命周期作废规则、银行/现金来源展示；通过 go test ./...、go vet ./... 和任务校验，MySQL 集成测试因未配置 DSN 跳过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `280e21a` | (see git log) |
+| `e220702` | (see git log) |
+| `860664f` | (see git log) |
+| `fef32ce` | (see git log) |
+| `40e554c` | (see git log) |
+| `3347878` | (see git log) |
+| `48ccd1a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
