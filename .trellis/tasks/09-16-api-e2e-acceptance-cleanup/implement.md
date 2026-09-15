@@ -62,6 +62,8 @@ runner 工程实现已完成，最近一次本地质量门禁为：
 
 运行命令为 `go run ./cmd/rentops-e2e -execute -report <report-path>`。目标探针失败时不会创建 fixture；业务断言失败时会保留 fixture 和报告且不会清理；数据库清理后还会用第二账户通过 HTTP 验证租客详情、租客列表和流水列表不再暴露本轮数据；只有数据库清理、HTTP 零残留验证及本地 fixture 删除都完成后报告才会是 `passed`。
 
+最近一次本机环境审计发现没有 Docker 或 MariaDB；Homebrew MySQL 8.4.11 的 `mysqld --initialize-insecure --no-defaults` 在初始化阶段即 SIGSEGV，已删除临时数据目录，未启动实例、未启动应用，也未产生任何业务写入。真实验收仍需外部提供可用的隔离 MySQL/应用/第二账户/SMTP sink。
+
 ## 回滚/停止点
 
 - 任何目标标识、账户前缀、外键关系或清理查询不匹配时立即停止，不扩大删除范围。
