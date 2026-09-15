@@ -179,6 +179,7 @@ func (s *transactionService) allocateTransaction(ctx context.Context, userID, tr
 		}
 
 		obligations := make(map[uint64]rentObligation)
+		now := time.Now().UTC()
 		for _, draft := range drafts {
 			if draft.Kind != allocationKindRent || draft.RentObligationID == 0 {
 				continue
@@ -194,14 +195,16 @@ func (s *transactionService) allocateTransaction(ctx context.Context, userID, tr
 			if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligation.ID, userID).Find(&obligationAllocations).Error; err != nil {
 				return err
 			}
-			obligation.PaidAmountCents = ledgerPaidAmount(obligationAllocations)
-			obligations[obligation.ID] = obligation
+			var cashReceipts []cashReceipt
+			if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligation.ID, userID).Find(&cashReceipts).Error; err != nil {
+				return err
+			}
+			obligations[obligation.ID] = projectRentObligation(obligation, obligationAllocations, cashReceipts, now)
 		}
 		if err := validateTransactionAllocationDrafts(source, existing, drafts, obligations); err != nil {
 			return err
 		}
 
-		now := time.Now().UTC()
 		operationID := recordID("allocation", now)
 		for index, draft := range drafts {
 			var rentObligationID *uint64
@@ -238,7 +241,11 @@ func (s *transactionService) allocateTransaction(ctx context.Context, userID, tr
 			if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligationID, userID).Find(&allocations).Error; err != nil {
 				return err
 			}
-			projected := projectLedgerObligation(obligation, allocations, now)
+			var cashReceipts []cashReceipt
+			if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligationID, userID).Find(&cashReceipts).Error; err != nil {
+				return err
+			}
+			projected := projectRentObligation(obligation, allocations, cashReceipts, now)
 			if err := txdb.Model(&rentObligation{}).Where("id = ? AND user_id = ?", obligationID, userID).Updates(map[string]any{
 				"paid_amount_cents": projected.PaidAmountCents,
 				"status":            projected.Status,

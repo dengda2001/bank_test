@@ -258,7 +258,11 @@ func (s *transactionService) revokeTransactionAllocations(ctx context.Context, u
 			if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligationID, userID).Find(&current).Error; err != nil {
 				return err
 			}
-			projected := projectLedgerObligation(obligation, current, now)
+			var cashReceipts []cashReceipt
+			if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligationID, userID).Find(&cashReceipts).Error; err != nil {
+				return err
+			}
+			projected := projectRentObligation(obligation, current, cashReceipts, now)
 			if err := txdb.Model(&rentObligation{}).Where("id = ? AND user_id = ?", obligationID, userID).Updates(map[string]any{
 				"paid_amount_cents": projected.PaidAmountCents,
 				"status":            projected.Status,

@@ -27,6 +27,13 @@ func TestCashReceiptMigrationDefinesAuditableUserScopedTable(t *testing.T) {
 			t.Fatalf("cash migration missing %q", fragment)
 		}
 	}
+	voidAudit, err := os.ReadFile(filepath.Join("..", "..", "migrations", "007_cash_receipt_void_audit.sql"))
+	if err != nil {
+		t.Fatalf("read cash void audit migration: %v", err)
+	}
+	if sql := strings.ToLower(string(voidAudit)); !strings.Contains(sql, "add column void_operation_id") {
+		t.Fatalf("cash void audit migration missing void operation column")
+	}
 }
 
 func TestValidateCashReceiptInputEnforcesEURPositiveAmountAndOwnership(t *testing.T) {

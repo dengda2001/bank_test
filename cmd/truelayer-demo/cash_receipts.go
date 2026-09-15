@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const (
@@ -27,6 +29,7 @@ type cashReceipt struct {
 	Note             string
 	Status           string
 	OperationID      string
+	VoidOperationID  *string
 	IdempotencyKey   *string
 	RecordedByUserID uint64
 	RecordedAt       time.Time
@@ -46,6 +49,16 @@ type cashReceiptInput struct {
 	ReceivedAt       time.Time
 	Note             string
 	IdempotencyKey   string
+}
+
+type cashReceiptPreview struct {
+	Tenant                tenant
+	Obligation            rentObligation
+	Input                 cashReceiptInput
+	CurrentPaidCents      int64
+	CurrentRemainingCents int64
+	AfterPaidCents        int64
+	AfterRemainingCents   int64
 }
 
 type cashReceiptService struct {
@@ -137,4 +150,203 @@ func (s *cashReceiptService) loadRentObligationSources(ctx context.Context, db *
 		return rentObligation{}, nil, nil, err
 	}
 	return obligation, bankAllocations, cashReceipts, nil
+}
+
+func (s *cashReceiptService) previewCashReceipt(ctx context.Context, input cashReceiptInput) (cashReceiptPreview, error) {
+	if err := validateCashReceiptInput(input); err != nil {
+		return cashReceiptPreview{}, err
+	}
+	if s == nil || s.db == nil {
+		return cashReceiptPreview{}, errors.New("database is required")
+	}
+	var tenantRow tenant
+	if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", input.TenantID, input.UserID).First(&tenantRow).Error; err != nil {
+		return cashReceiptPreview{}, err
+	}
+	obligation, bankAllocations, cashReceipts, err := s.loadRentObligationSources(ctx, s.db, input.UserID, input.RentObligationID)
+	if err != nil {
+		return cashReceiptPreview{}, err
+	}
+	if obligation.TenantID != input.TenantID {
+		return cashReceiptPreview{}, errors.New("cash receipt tenant does not match rent obligation")
+	}
+	if obligation.RecordStatus == obligationRecordVoided {
+		return cashReceiptPreview{}, errors.New("rent obligation is voided")
+	}
+	if _, err := normalizeLedgerCurrency(obligation.Currency); err != nil {
+		return cashReceiptPreview{}, err
+	}
+	projected := projectRentObligation(obligation, bankAllocations, cashReceipts, time.Now().UTC())
+	if projected.PaidAmountCents > obligation.ExpectedAmountCents {
+		return cashReceiptPreview{}, errors.New("rent obligation paid projection exceeds expected amount")
+	}
+	remaining := maxInt64(obligation.ExpectedAmountCents-projected.PaidAmountCents, 0)
+	if input.AmountCents > remaining {
+		return cashReceiptPreview{}, errors.New("cash receipt exceeds rent obligation balance")
+	}
+	return cashReceiptPreview{
+		Tenant:                tenantRow,
+		Obligation:            obligation,
+		Input:                 input,
+		CurrentPaidCents:      projected.PaidAmountCents,
+		CurrentRemainingCents: remaining,
+		AfterPaidCents:        projected.PaidAmountCents + input.AmountCents,
+		AfterRemainingCents:   remaining - input.AmountCents,
+	}, nil
+}
+
+func (s *cashReceiptService) recordCashReceipt(ctx context.Context, input cashReceiptInput) (cashReceipt, error) {
+	if err := validateCashReceiptInput(input); err != nil {
+		return cashReceipt{}, err
+	}
+	if s == nil || s.db == nil {
+		return cashReceipt{}, errors.New("database is required")
+	}
+	var receipt cashReceipt
+	err := s.db.WithContext(ctx).Transaction(func(txdb *gorm.DB) error {
+		var obligation rentObligation
+		if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ? AND tenant_id = ?", input.RentObligationID, input.UserID, input.TenantID).First(&obligation).Error; err != nil {
+			return err
+		}
+		if obligation.RecordStatus == obligationRecordVoided {
+			return errors.New("rent obligation is voided")
+		}
+		if _, err := normalizeLedgerCurrency(obligation.Currency); err != nil {
+			return err
+		}
+		if !strings.EqualFold(strings.TrimSpace(input.Currency), strings.TrimSpace(obligation.Currency)) {
+			return errors.New("cash receipt currency does not match rent obligation")
+		}
+
+		key := strings.TrimSpace(input.IdempotencyKey)
+		var previous cashReceipt
+		if err := txdb.Where("user_id = ? AND idempotency_key = ?", input.UserID, key).First(&previous).Error; err == nil {
+			if previous.TenantID != input.TenantID || previous.RentObligationID != input.RentObligationID || previous.AmountCents != input.AmountCents || !strings.EqualFold(previous.Currency, input.Currency) || !sameDate(previous.ReceivedAt, input.ReceivedAt) || strings.TrimSpace(previous.Note) != strings.TrimSpace(input.Note) {
+				return errors.New("cash receipt idempotency key was already used for different facts")
+			}
+			receipt = previous
+			return nil
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+
+		var bankAllocations []paymentAllocation
+		if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligation.ID, input.UserID).Find(&bankAllocations).Error; err != nil {
+			return err
+		}
+		var cashReceipts []cashReceipt
+		if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligation.ID, input.UserID).Find(&cashReceipts).Error; err != nil {
+			return err
+		}
+		projected := projectRentObligation(obligation, bankAllocations, cashReceipts, time.Now().UTC())
+		remaining := maxInt64(obligation.ExpectedAmountCents-projected.PaidAmountCents, 0)
+		if projected.PaidAmountCents > obligation.ExpectedAmountCents || input.AmountCents > remaining {
+			return errors.New("cash receipt exceeds rent obligation balance")
+		}
+		now := time.Now().UTC()
+		receivedAt := dateOnly(input.ReceivedAt)
+		receipt = cashReceipt{
+			UserID:           input.UserID,
+			TenantID:         input.TenantID,
+			RentObligationID: input.RentObligationID,
+			ReceiptNumber:    recordID("cash", now),
+			AmountCents:      input.AmountCents,
+			Currency:         ledgerCurrencyEUR,
+			ReceivedAt:       receivedAt,
+			Note:             strings.TrimSpace(input.Note),
+			Status:           cashReceiptStatusConfirmed,
+			OperationID:      recordID("cash-receipt", now),
+			IdempotencyKey:   nullableString(key),
+			RecordedByUserID: input.UserID,
+			RecordedAt:       now,
+		}
+		if err := txdb.Create(&receipt).Error; err != nil {
+			return err
+		}
+		cashReceipts = append(cashReceipts, receipt)
+		projected = projectRentObligation(obligation, bankAllocations, cashReceipts, now)
+		if err := txdb.Model(&rentObligation{}).Where("id = ? AND user_id = ?", obligation.ID, input.UserID).Updates(map[string]any{
+			"paid_amount_cents": projected.PaidAmountCents,
+			"status":            projected.Status,
+		}).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+	return receipt, err
+}
+
+func (s *cashReceiptService) voidCashReceipt(ctx context.Context, userID, receiptID uint64, reason string) (cashReceipt, error) {
+	if userID == 0 || receiptID == 0 {
+		return cashReceipt{}, errors.New("userID and receiptID are required")
+	}
+	reason, err := normalizeTransactionActionReason(reason)
+	if err != nil {
+		return cashReceipt{}, err
+	}
+	if s == nil || s.db == nil {
+		return cashReceipt{}, errors.New("database is required")
+	}
+	var receipt cashReceipt
+	err = s.db.WithContext(ctx).Transaction(func(txdb *gorm.DB) error {
+		var receiptRef cashReceipt
+		if err := txdb.Where("id = ? AND user_id = ?", receiptID, userID).First(&receiptRef).Error; err != nil {
+			return err
+		}
+		var obligation rentObligation
+		if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ? AND tenant_id = ?", receiptRef.RentObligationID, userID, receiptRef.TenantID).First(&obligation).Error; err != nil {
+			return err
+		}
+		if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", receiptID, userID).First(&receipt).Error; err != nil {
+			return err
+		}
+		if receipt.Status == cashReceiptStatusVoided {
+			return nil
+		}
+		if receipt.Status != cashReceiptStatusConfirmed {
+			return fmt.Errorf("cash receipt status %q cannot be voided", receipt.Status)
+		}
+		now := time.Now().UTC()
+		voidOperationID := recordID("cash-void", now)
+		if err := txdb.Model(&cashReceipt{}).Where("id = ? AND user_id = ? AND status = ?", receipt.ID, userID, cashReceiptStatusConfirmed).Updates(map[string]any{
+			"status":            cashReceiptStatusVoided,
+			"voided_at":         now,
+			"voided_by_user_id": userID,
+			"void_reason":       reason,
+			"void_operation_id": voidOperationID,
+		}).Error; err != nil {
+			return err
+		}
+		var bankAllocations []paymentAllocation
+		if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligation.ID, userID).Find(&bankAllocations).Error; err != nil {
+			return err
+		}
+		var cashReceipts []cashReceipt
+		if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligation.ID, userID).Find(&cashReceipts).Error; err != nil {
+			return err
+		}
+		projected := projectRentObligation(obligation, bankAllocations, cashReceipts, now)
+		if err := txdb.Model(&rentObligation{}).Where("id = ? AND user_id = ?", obligation.ID, userID).Updates(map[string]any{
+			"paid_amount_cents": projected.PaidAmountCents,
+			"status":            projected.Status,
+		}).Error; err != nil {
+			return err
+		}
+		receipt.Status = cashReceiptStatusVoided
+		receipt.VoidedAt = &now
+		receipt.VoidedByUserID = &userID
+		receipt.VoidReason = nullableString(reason)
+		receipt.VoidOperationID = &voidOperationID
+		return nil
+	})
+	return receipt, err
+}
+
+func sameDate(left, right time.Time) bool {
+	return dateOnly(left).Equal(dateOnly(right))
+}
+
+func dateOnly(value time.Time) time.Time {
+	utc := value.UTC()
+	return time.Date(utc.Year(), utc.Month(), utc.Day(), 0, 0, 0, 0, time.UTC)
 }
