@@ -267,6 +267,57 @@ func TestE2ETenantScenarioCreatesAndReadsTenantAndPayer(t *testing.T) {
 	}
 }
 
+func TestE2EBankImportScenarioVerifiesFactsAndIdempotency(t *testing.T) {
+	manifest, err := newE2EFixtureManifest("rentops-e2e-20260916-120000-a1b2c3d4", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	importCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/login-local" {
+			if _, err := r.Cookie("rentops_session"); err != nil {
+				http.Redirect(w, r, "/", http.StatusFound)
+				return
+			}
+		}
+		switch r.URL.Path {
+		case "/login-local":
+			if err := r.ParseForm(); err != nil || r.Form.Get("password") != "e2e-password" {
+				http.Redirect(w, r, "/?error=invalid_login", http.StatusFound)
+				return
+			}
+			http.SetCookie(w, &http.Cookie{Name: "rentops_session", Value: "session-secret", Path: "/"})
+			http.Redirect(w, r, "/rent-dashboard", http.StatusFound)
+		case "/billing":
+			w.WriteHeader(http.StatusOK)
+			if importCount > 0 {
+				for _, transaction := range manifest.Bank.Transactions {
+					fmt.Fprintf(w, `<tr class="income"><td>%s</td><td>%s</td><td>%s</td></tr>`, transaction.ProviderTransactionID, transaction.Description, formatE2EMoney(transaction.Amount))
+				}
+				fmt.Fprint(w, `<span>EUR 950.00</span><span>GBP 25.00</span>`)
+			}
+		case "/import-legacy":
+			importCount++
+			http.Redirect(w, r, "/billing?message=legacy_imported", http.StatusFound)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client, err := newE2EHTTPClient(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authScenario := client.authenticationScenario(context.Background(), "e2e-user", "e2e-password")
+	if authScenario.Status != "passed" {
+		t.Fatalf("authentication scenario=%+v", authScenario)
+	}
+	scenario := client.bankImportScenario(context.Background(), manifest)
+	if scenario.Status != "passed" || importCount != 2 {
+		t.Fatalf("scenario=%+v imports=%d", scenario, importCount)
+	}
+}
+
 func TestNewE2EFixtureManifestUsesUniqueRunIDPrefixedIdentifiers(t *testing.T) {
 	runID := "rentops-e2e-20260916-120000-a1b2c3d4"
 	manifest, err := newE2EFixtureManifest(runID, time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC))
