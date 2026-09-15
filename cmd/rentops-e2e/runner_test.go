@@ -201,6 +201,26 @@ func TestNewE2EFixtureManifestRejectsInvalidRunID(t *testing.T) {
 	}
 }
 
+func TestE2EFixtureManifestRejectsUnscopedOrMismatchedFacts(t *testing.T) {
+	runID := "rentops-e2e-20260916-120000-a1b2c3d4"
+	manifest, err := newE2EFixtureManifest(runID, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest.Bank.AccountID = "shared-account"
+	if err := manifest.validate(); err == nil || !strings.Contains(err.Error(), "run ID prefix") {
+		t.Fatalf("unscoped account was not rejected: %v", err)
+	}
+	manifest, err = newE2EFixtureManifest(runID, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest.Bank.Transactions[0].Amount.Cents++
+	if err := manifest.validate(); err == nil || !strings.Contains(err.Error(), "totals") {
+		t.Fatalf("mismatched amount was not rejected: %v", err)
+	}
+}
+
 func TestE2EReportCarriesFixtureWithoutCredentialFields(t *testing.T) {
 	runID := "rentops-e2e-20260916-120000-a1b2c3d4"
 	manifest, err := newE2EFixtureManifest(runID, time.Now())
@@ -220,5 +240,35 @@ func TestE2EReportCarriesFixtureWithoutCredentialFields(t *testing.T) {
 	text := string(body)
 	if !strings.Contains(text, runID+" tenant") || strings.Contains(text, "password") || strings.Contains(text, "dsn") || strings.Contains(text, "token") {
 		t.Fatalf("fixture report contains unexpected content: %s", body)
+	}
+}
+
+func TestMaterializeE2ELegacyFixturesCreatesExclusivePrivateInputs(t *testing.T) {
+	manifest, err := newE2EFixtureManifest("rentops-e2e-20260916-120000-a1b2c3d4", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths, err := materializeE2ELegacyFixtures(manifest, filepath.Join(t.TempDir(), "fixtures"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{paths.BankLogFile, paths.TenantFile, paths.ExpenseFile} {
+		info, statErr := os.Stat(path)
+		if statErr != nil {
+			t.Fatal(statErr)
+		}
+		if info.Mode().Perm() != 0o600 {
+			t.Fatalf("fixture %s permissions=%o", path, info.Mode().Perm())
+		}
+	}
+	body, err := os.ReadFile(paths.BankLogFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), manifest.RunID+"-tx-eur-full") || strings.Contains(string(body), "password") {
+		t.Fatalf("unexpected bank fixture content: %s", body)
+	}
+	if _, err := materializeE2ELegacyFixtures(manifest, filepath.Dir(paths.BankLogFile)); err == nil || !strings.Contains(err.Error(), "must be empty") {
+		t.Fatal("non-empty fixture directory was not rejected")
 	}
 }

@@ -28,6 +28,7 @@ type e2eOptions struct {
 	TargetName      string
 	TargetAllowlist string
 	MySQLDSN        string
+	FixtureDir      string
 	Username        string
 	Password        string
 	Execute         bool
@@ -108,6 +109,7 @@ func e2eOptionsFromEnv() (e2eOptions, error) {
 		TargetName:      strings.TrimSpace(os.Getenv("RENTOPS_E2E_TARGET_NAME")),
 		TargetAllowlist: strings.TrimSpace(os.Getenv("RENTOPS_E2E_TARGET_ALLOWLIST")),
 		MySQLDSN:        strings.TrimSpace(firstE2EEnv("RENTOPS_E2E_MYSQL_DSN", "RENTOPS_MYSQL_TEST_DSN", "MYSQL_DSN")),
+		FixtureDir:      strings.TrimSpace(os.Getenv("RENTOPS_E2E_FIXTURE_DIR")),
 		Username:        os.Getenv("RENTOPS_E2E_USERNAME"),
 		Password:        os.Getenv("RENTOPS_E2E_PASSWORD"),
 		ConfirmWrites:   strings.TrimSpace(os.Getenv("RENTOPS_E2E_CONFIRM_WRITES")),
@@ -175,6 +177,11 @@ func validateE2EOptions(options e2eOptions) e2ePreflight {
 		fail("an isolated MySQL DSN is required for execute mode")
 	} else {
 		preflight.Checks = append(preflight.Checks, "an isolated MySQL DSN is present")
+	}
+	if options.FixtureDir == "" {
+		fail("a dedicated empty legacy fixture directory is required")
+	} else {
+		preflight.Checks = append(preflight.Checks, "a dedicated legacy fixture directory is configured")
 	}
 	if options.Username == "" || options.Password == "" {
 		fail("dedicated E2E login credentials are required")

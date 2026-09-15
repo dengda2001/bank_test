@@ -12,6 +12,8 @@ RentOps 应用进行接口级验收。runner 只允许在显式配置的非生�
 - 应用以本轮唯一 `APP_ADMIN_USERNAME`、`APP_ADMIN_PASSWORD` 启动，启动时由现有
   `auth.seedDefaultUser` 在隔离库播种账户；账户创建并非通过不存在的用户注册路由。
 - `MYSQL_DSN`/`DATABASE_URL` 只从进程环境读取，不写入报告；报告保存脱敏目标标识。
+- legacy 输入使用 `RENTOPS_E2E_FIXTURE_DIR` 指定的专用空目录；runner 只独占创建
+  `bank-results.jsonl`、`tenants.json` 和 `expenses.json`，目录或文件已存在时停止。
 - `runID` 使用时间戳加随机后缀，并作为用户名、租客、付款人、稳定交易键、描述、
   幂等键、请求号和催缴配置的前缀。
 - 原始银行流水通过受控的 legacy JSONL 输入和 `/import-legacy` 进入应用；租客、

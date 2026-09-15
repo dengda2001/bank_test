@@ -57,6 +57,9 @@
   或 `DATABASE_URL` 提供；没有现成的 E2E runner 或按运行标识清理脚本。
 - 本任务可以复用现有真实 HTTP 路由和 MySQL 迁移，但必须先获得一个可丢弃的
   非生产数据库；本地单元／MySQL 集成测试在没有 `RENTOPS_MYSQL_TEST_DSN` 时会跳过。
+- legacy 原始流水输入需要由 `RENTOPS_E2E_FIXTURE_DIR` 指向的专用空目录承载；runner
+  不覆盖已有目录内容，应用启动时应将 `TL_LOG_FILE`、`TL_TENANT_FILE` 和
+  `TL_EXPENSE_FILE` 配置到本目录内的三个文件。
 - 代码仓库和历史会话没有提供可直接使用的隔离测试账户、测试数据库连接、认证凭据
   或受控数据查询入口。
 

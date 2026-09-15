@@ -202,10 +202,30 @@ func (manifest e2eFixtureManifest) validate() error {
 	if manifest.Tenant.PayerID != manifest.Payer.PayerID || manifest.Tenant.PayerNameHint != manifest.Payer.Name {
 		return errors.New("tenant and payer fixture identity mismatch")
 	}
+	for _, value := range []string{
+		manifest.Tenant.Name,
+		manifest.Tenant.DisplayAlias,
+		manifest.Tenant.Email,
+		manifest.Tenant.PayerID,
+		manifest.Tenant.PayerNameHint,
+		manifest.Tenant.RoomLabel,
+		manifest.Tenant.RoomAddress,
+		manifest.Payer.Name,
+		manifest.Payer.PayerID,
+		manifest.Bank.AccountID,
+		manifest.Bank.AccountName,
+		manifest.Bank.BatchID,
+	} {
+		if !strings.HasPrefix(value, manifest.RunID) {
+			return fmt.Errorf("fixture value %q is missing run ID prefix", value)
+		}
+	}
 	if len(manifest.Bank.Transactions) != manifest.Expected.BankTransactionCount {
 		return errors.New("bank fixture count does not match expected snapshot")
 	}
 	seen := make(map[string]struct{}, len(manifest.Bank.Transactions))
+	var eurIncomeCents, gbpIncomeCents int64
+	pendingIncomeCount := 0
 	for _, transaction := range manifest.Bank.Transactions {
 		if transaction.TransactionID == "" || transaction.NormalisedProviderTransactionID == "" || transaction.ProviderTransactionID == "" || transaction.Reference == "" {
 			return errors.New("bank fixture stable identifiers are required")
@@ -225,6 +245,20 @@ func (manifest e2eFixtureManifest) validate() error {
 		if !strings.HasPrefix(transaction.Description, manifest.RunID) {
 			return fmt.Errorf("transaction description %q is missing run ID prefix", transaction.Description)
 		}
+		if transaction.Direction == "income" {
+			switch transaction.Amount.Currency {
+			case "EUR":
+				eurIncomeCents += transaction.Amount.Cents
+			case "GBP":
+				gbpIncomeCents += transaction.Amount.Cents
+			}
+			if transaction.PayerID == "" && transaction.PayerName == "" {
+				pendingIncomeCount++
+			}
+		}
+	}
+	if eurIncomeCents != manifest.Expected.EURIncomeCents || gbpIncomeCents != manifest.Expected.GBPIncomeCents || pendingIncomeCount != manifest.Expected.PendingIncomeCount {
+		return errors.New("bank fixture totals do not match expected snapshot")
 	}
 	return nil
 }
