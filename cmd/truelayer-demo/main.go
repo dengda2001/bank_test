@@ -267,6 +267,7 @@ type rentDashboardPageData struct {
 }
 
 type rentDashboardRow struct {
+	TenantID       uint64
 	TenantName     string
 	RoomLabel      string
 	RoomAddress    string
@@ -282,6 +283,7 @@ type rentDashboardRow struct {
 }
 
 type rentPaymentDetail struct {
+	PaymentID          uint64
 	AmountDisplay      string
 	DateDisplay        string
 	Description        string
@@ -379,6 +381,10 @@ func main() {
 	mux.HandleFunc("/import-legacy", a.handleLegacyImport)
 	mux.HandleFunc("/tenants", a.handleTenants)
 	mux.HandleFunc("/tenants/", a.handleTenantSubroute)
+	mux.HandleFunc("/cash-receipts/new", a.handleCashReceiptNew)
+	mux.HandleFunc("/cash-receipts/preview", a.handleCashReceiptPreview)
+	mux.HandleFunc("/cash-receipts/void", a.handleCashReceiptVoid)
+	mux.HandleFunc("/cash-receipts", a.handleCashReceiptCreate)
 	mux.HandleFunc("/expenses", a.handleExpenses)
 	mux.HandleFunc("/login", a.handleLogin)
 	mux.HandleFunc("/callback", a.handleCallback)

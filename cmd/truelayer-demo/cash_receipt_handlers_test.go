@@ -1,0 +1,114 @@
+package main
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestParseCashReceiptFormNormalizesCentsCurrencyAndDate(t *testing.T) {
+	draft, err := parseCashReceiptForm(testFormValues{
+		"tenant_id":       "7",
+		"period":          "2026-09",
+		"amount":          "400.00",
+		"currency":        "eur",
+		"received_at":     "2026-09-12",
+		"note":            "  hand delivered  ",
+		"idempotency_key": "cash-request-1",
+	}, 42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if draft.TenantID != 7 || draft.Period != time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC) || draft.AmountCents != 40000 || draft.Currency != "EUR" || draft.ReceivedAt != time.Date(2026, 9, 12, 0, 0, 0, 0, time.UTC) || draft.Note != "hand delivered" {
+		t.Fatalf("cash form draft=%+v", draft)
+	}
+}
+
+func TestParseCashReceiptFormRejectsMissingPeriodDateAndCurrency(t *testing.T) {
+	base := testFormValues{
+		"tenant_id":       "7",
+		"period":          "2026-09",
+		"amount":          "400.00",
+		"currency":        "EUR",
+		"received_at":     "2026-09-12",
+		"idempotency_key": "cash-request-1",
+	}
+	for _, tc := range []struct {
+		name string
+		key  string
+		val  string
+		want string
+	}{
+		{name: "period", key: "period", want: "period"},
+		{name: "date", key: "received_at", val: "not-a-date", want: "received_at"},
+		{name: "currency", key: "currency", val: "GBP", want: "EUR"},
+		{name: "idempotency", key: "idempotency_key", want: "idempotency"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			values := testFormValues{}
+			for key, value := range base {
+				values[key] = value
+			}
+			values[tc.key] = tc.val
+			if _, err := parseCashReceiptForm(values, 42); err == nil || !strings.Contains(strings.ToLower(err.Error()), strings.ToLower(tc.want)) {
+				t.Fatalf("error=%v want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestCashReceiptTemplateRendersPreviewAndCorrectionActions(t *testing.T) {
+	var body strings.Builder
+	err := cashReceiptTemplate.Execute(&body, cashReceiptFormData{
+		Tenant:            tenant{ID: 7, Name: "Aoife Murphy"},
+		TenantID:          "7",
+		Period:            "2026-09",
+		Amount:            "400.00",
+		Currency:          "EUR",
+		ReceivedAt:        "2026-09-12",
+		IdempotencyKey:    "cash-request-1",
+		ExpectedAmount:    "EUR 1,000.00",
+		CurrentPaidAmount: "EUR 600.00",
+		AfterRemaining:    "EUR 0.00",
+		Preview:           true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := body.String()
+	for _, expected := range []string{"确认现金入账", "EUR 1,000.00", "EUR 600.00", "cash-request-1", `action="/cash-receipts"`, "/cash-receipts/new?tenant_id=7"} {
+		if !strings.Contains(page, expected) {
+			t.Fatalf("cash preview missing %q: %s", expected, page)
+		}
+	}
+}
+
+func TestCashReceiptVoidTemplateShowsReasonAndOriginalReceipt(t *testing.T) {
+	var body strings.Builder
+	err := cashReceiptVoidTemplate.Execute(&body, cashReceiptVoidPageData{
+		Receipt:       cashReceipt{ID: 9, ReceiptNumber: "cash-9", Note: "hand delivered", Status: cashReceiptStatusConfirmed},
+		Tenant:        tenant{Name: "Aoife Murphy"},
+		AmountDisplay: "EUR 400.00",
+		DateDisplay:   "2026-09-12",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := body.String()
+	for _, expected := range []string{"作废现金收款", "Aoife Murphy", "cash-9", "hand delivered", "void_reason", "原始收据与作废原因会保留"} {
+		if !strings.Contains(page, expected) {
+			t.Fatalf("cash void page missing %q: %s", expected, page)
+		}
+	}
+}
+
+func TestCashReceiptNewRequiresAuthenticatedDatabaseSession(t *testing.T) {
+	a := testApp()
+	rec := httptest.NewRecorder()
+	a.handleCashReceiptNew(rec, httptest.NewRequest(http.MethodGet, "/cash-receipts/new", nil))
+	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/" {
+		t.Fatalf("status=%d location=%q want unauthenticated redirect", rec.Code, rec.Header().Get("Location"))
+	}
+}

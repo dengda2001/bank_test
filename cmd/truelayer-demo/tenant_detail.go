@@ -171,13 +171,14 @@ func (s *obligationService) listTenantBillingHistoryPage(ctx context.Context, us
 }
 
 type tenantDetailPageData struct {
-	Username    string
-	Environment string
-	Message     string
-	Error       string
-	Tenant      tenantRecord
-	Payers      []tenantPayerRecord
-	History     tenantBillingHistoryPage
+	Username      string
+	Environment   string
+	CurrentPeriod string
+	Message       string
+	Error         string
+	Tenant        tenantRecord
+	Payers        []tenantPayerRecord
+	History       tenantBillingHistoryPage
 }
 
 var tenantDetailTemplate = template.Must(template.New("tenant-detail").Parse(`<!doctype html>
@@ -220,7 +221,9 @@ var tenantDetailTemplate = template.Must(template.New("tenant-detail").Parse(`<!
     <div class="side-foot">当前用户：{{.Username}}<br>租客缴费详情</div>
   </aside>
   <main class="content">
-    <header class="topbar"><div><div class="brand-title">租客详情</div><h1>{{if .Tenant.DisplayAlias}}{{.Tenant.DisplayAlias}}{{else}}{{.Tenant.Name}}{{end}}</h1><div class="tiny">正式姓名：{{.Tenant.Name}}</div></div><div class="actions"><a class="btn" href="/tenants">返回租客列表</a><a class="btn primary" href="/tenants?edit={{.Tenant.ID}}">编辑资料</a></div></header>
+	<header class="topbar"><div><div class="brand-title">租客详情</div><h1>{{if .Tenant.DisplayAlias}}{{.Tenant.DisplayAlias}}{{else}}{{.Tenant.Name}}{{end}}</h1><div class="tiny">正式姓名：{{.Tenant.Name}}</div></div><div class="actions"><a class="btn" href="/tenants">返回租客列表</a><a class="btn" href="/tenants?edit={{.Tenant.ID}}">编辑资料</a><a class="btn primary" href="/cash-receipts/new?tenant_id={{.Tenant.ID}}&amp;period={{.CurrentPeriod}}">现金补录</a></div></header>
+	{{if eq .Message "cash_receipt_saved"}}<div class="notice ok">现金收款已入账，并计入对应租金月份。</div>{{end}}
+	{{if eq .Message "cash_receipt_voided"}}<div class="notice ok">现金收款已作废，原始记录与作废原因已保留。</div>{{end}}
     {{if eq .Message "payer_added"}}<div class="notice ok">付款人关系已保存。</div>{{end}}
     {{if eq .Message "payer_removed"}}<div class="notice ok">付款人关系已移除，历史记录未改变。</div>{{end}}
     {{if eq .Error "invalid_payer"}}<div class="notice error">付款人名称不能为空，且字段长度必须有效。</div>{{end}}
@@ -230,7 +233,7 @@ var tenantDetailTemplate = template.Must(template.New("tenant-detail").Parse(`<!
     </div>
     <section class="panel surface" aria-labelledby="history-title"><div class="panel-head"><h2 id="history-title">缴费历史</h2><span class="tiny">{{.History.TotalRows}} 个适用月份</span></div>
       <form class="history-filter" method="get" action="/tenants/{{.Tenant.ID}}"><label for="from_month">起始月份<input id="from_month" name="from_month" type="month" value="{{.History.FromPeriod}}" required></label><label for="to_month">结束月份<input id="to_month" name="to_month" type="month" value="{{.History.ToPeriod}}" required></label><input type="hidden" name="page_size" value="{{.History.PageSize}}"><button class="btn" type="submit">查询历史</button></form>
-      {{if .History.Rows}}<div class="table-wrap"><table class="history-table"><thead><tr><th>月份</th><th>应缴日</th><th>应收</th><th>实收</th><th>未收</th><th>状态／来源</th></tr></thead><tbody>{{range .History.Rows}}<tr><td><strong>{{.PeriodLabel}}</strong></td><td class="mono">{{.DueDate}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span>{{if .Payments}}<div class="payment-list">{{range .Payments}}<div class="payment-item"><span class="amount">{{.AmountDisplay}}</span><span class="mono">{{.DateDisplay}}</span><span>{{.Source}}</span><span class="mono">{{.Reference}}</span></div>{{end}}</div>{{else}}<div class="tiny">暂无有效收款</div>{{end}}</td></tr>{{end}}</tbody></table></div>{{else}}<div class="empty">所选期间没有适用账单。</div>{{end}}
+      {{if .History.Rows}}<div class="table-wrap"><table class="history-table"><thead><tr><th>月份</th><th>应缴日</th><th>应收</th><th>实收</th><th>未收</th><th>状态／来源</th></tr></thead><tbody>{{range .History.Rows}}<tr><td><strong>{{.PeriodLabel}}</strong></td><td class="mono">{{.DueDate}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span>{{if .Payments}}<div class="payment-list">{{range .Payments}}<div class="payment-item"><span class="amount">{{.AmountDisplay}}</span><span class="mono">{{.DateDisplay}}</span><span>{{.Source}}</span><span class="mono">{{.Reference}}</span>{{if eq .Source "现金"}}<a class="void-link" href="/cash-receipts/void?receipt_id={{.PaymentID}}">作废</a>{{end}}</div>{{end}}</div>{{else}}<div class="tiny">暂无有效收款</div>{{end}}</td></tr>{{end}}</tbody></table></div>{{else}}<div class="empty">所选期间没有适用账单。</div>{{end}}
       {{if gt .History.TotalPages 1}}<div class="pagination">{{if .History.HasPrev}}<a class="btn subtle" href="/tenants/{{.Tenant.ID}}?from_month={{.History.FromPeriod}}&amp;to_month={{.History.ToPeriod}}&amp;page={{.History.PrevPage}}&amp;page_size={{.History.PageSize}}">上一页</a>{{end}}<span class="tiny">第 {{.History.Page}} / {{.History.TotalPages}} 页</span>{{if .History.HasNext}}<a class="btn subtle" href="/tenants/{{.Tenant.ID}}?from_month={{.History.FromPeriod}}&amp;to_month={{.History.ToPeriod}}&amp;page={{.History.NextPage}}&amp;page_size={{.History.PageSize}}">下一页</a>{{end}}</div>{{end}}
     </section>
   </main>
@@ -281,13 +284,14 @@ func (a *app) handleTenantDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := tenantDetailPageData{
-		Username:    a.cfg.AdminUsername,
-		Environment: a.cfg.Environment,
-		Message:     r.URL.Query().Get("message"),
-		Error:       r.URL.Query().Get("error"),
-		Tenant:      tenantRecordFromModel(tenantRow),
-		Payers:      classifyTenantPayersWithAllRows(payers, allPayers),
-		History:     history,
+		Username:      a.cfg.AdminUsername,
+		Environment:   a.cfg.Environment,
+		CurrentPeriod: monthStart(time.Now().UTC()).Format("2006-01"),
+		Message:       r.URL.Query().Get("message"),
+		Error:         r.URL.Query().Get("error"),
+		Tenant:        tenantRecordFromModel(tenantRow),
+		Payers:        classifyTenantPayersWithAllRows(payers, allPayers),
+		History:       history,
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tenantDetailTemplate.Execute(w, data); err != nil {

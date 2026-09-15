@@ -49,6 +49,7 @@ type tenantBillingMonth struct {
 }
 
 type tenantBillingPaymentRow struct {
+	PaymentID          uint64     `gorm:"column:payment_id"`
 	TenantID           uint64     `gorm:"column:tenant_id"`
 	ObligationID       uint64     `gorm:"column:obligation_id"`
 	AmountCents        int64      `gorm:"column:amount_cents"`
@@ -83,7 +84,7 @@ func sortTenantBillingPaymentRows(rows []tenantBillingPaymentRow) {
 
 func (s *obligationService) listCashBillingPaymentRows(ctx context.Context, userID, tenantID uint64, fromMonth, toMonth time.Time) ([]tenantBillingPaymentRow, error) {
 	query := s.db.WithContext(ctx).Table("cash_receipts AS cr").
-		Select("cr.tenant_id, cr.rent_obligation_id AS obligation_id, cr.amount_cents, cr.currency, 'cash' AS source, cr.received_at AS transaction_time, '现金租金补录' AS description, cr.receipt_number AS reference, 'manual_cash' AS confirmation_source").
+		Select("cr.id AS payment_id, cr.tenant_id, cr.rent_obligation_id AS obligation_id, cr.amount_cents, cr.currency, 'cash' AS source, cr.received_at AS transaction_time, '现金租金补录' AS description, cr.receipt_number AS reference, 'manual_cash' AS confirmation_source").
 		Joins("JOIN rent_obligations AS ro ON ro.id = cr.rent_obligation_id AND ro.user_id = cr.user_id").
 		Where("cr.user_id = ? AND cr.status = ? AND ro.period_month >= ? AND ro.period_month < ?", userID, cashReceiptStatusConfirmed, fromMonth, toMonth.AddDate(0, 1, 0))
 	if tenantID != 0 {
@@ -260,6 +261,7 @@ func buildTenantBillingHistory(tenants []tenant, obligations []rentObligation, p
 	paymentsByObligation := make(map[uint64][]rentPaymentDetail)
 	for _, row := range paymentRows {
 		paymentsByObligation[row.ObligationID] = append(paymentsByObligation[row.ObligationID], rentPaymentDetailFromRow(rentPaymentDetailRow{
+			PaymentID:          row.PaymentID,
 			AmountCents:        row.AmountCents,
 			Currency:           row.Currency,
 			Source:             row.Source,
@@ -373,6 +375,7 @@ func (s *obligationService) summarizeRentDashboard(ctx context.Context, userID u
 			return rentDashboardSummary{}, err
 		}
 		summary.Rows = append(summary.Rows, rentDashboardRow{
+			TenantID:       tenantRow.ID,
 			TenantName:     tenantRow.Name,
 			RoomLabel:      tenantRow.RoomLabel,
 			RoomAddress:    tenantRow.RoomAddress,
@@ -409,6 +412,7 @@ func (s *obligationService) summarizeRentDashboard(ctx context.Context, userID u
 }
 
 type rentPaymentDetailRow struct {
+	PaymentID          uint64     `gorm:"column:payment_id"`
 	AmountCents        int64      `gorm:"column:amount_cents"`
 	Currency           string     `gorm:"column:currency"`
 	Source             string     `gorm:"column:source"`
@@ -439,7 +443,7 @@ func sortRentPaymentDetailRows(rows []rentPaymentDetailRow) {
 func (s *obligationService) listCashRentPaymentRows(ctx context.Context, userID, obligationID uint64) ([]rentPaymentDetailRow, error) {
 	var rows []rentPaymentDetailRow
 	if err := s.db.WithContext(ctx).Table("cash_receipts AS cr").
-		Select("cr.amount_cents, cr.currency, 'cash' AS source, cr.received_at AS transaction_time, '现金租金补录' AS description, cr.receipt_number AS reference, 'manual_cash' AS confirmation_source").
+		Select("cr.id AS payment_id, cr.amount_cents, cr.currency, 'cash' AS source, cr.received_at AS transaction_time, '现金租金补录' AS description, cr.receipt_number AS reference, 'manual_cash' AS confirmation_source").
 		Where("cr.user_id = ? AND cr.rent_obligation_id = ? AND cr.status = ?", userID, obligationID, cashReceiptStatusConfirmed).
 		Order("cr.received_at ASC, cr.id ASC").Scan(&rows).Error; err != nil {
 		return nil, err
@@ -475,6 +479,7 @@ func rentPaymentDetailFromRow(row rentPaymentDetailRow) rentPaymentDetail {
 		dateDisplay = row.TransactionTime.UTC().Format("02 Jan 2006 15:04")
 	}
 	return rentPaymentDetail{
+		PaymentID:          row.PaymentID,
 		AmountDisplay:      formatMoney(centsToMoney(row.AmountCents), firstNonEmpty(row.Currency, "EUR"), 2),
 		DateDisplay:        dateDisplay,
 		Description:        firstNonEmpty(row.Description, "No description"),
