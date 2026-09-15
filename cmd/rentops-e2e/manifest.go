@@ -72,6 +72,7 @@ type e2eFixtureManifest struct {
 	RunID         string              `json:"run_id"`
 	GeneratedAt   time.Time           `json:"generated_at"`
 	Tenant        e2eTenantFixture    `json:"tenant"`
+	DunningTenant e2eTenantFixture    `json:"dunning_tenant"`
 	Payer         e2ePayerFixture     `json:"payer"`
 	Bank          e2EBankFixture      `json:"bank"`
 	Expected      e2EExpectedSnapshot `json:"expected"`
@@ -99,6 +100,22 @@ func newE2EFixtureManifest(runID string, now time.Time) (e2eFixtureManifest, err
 		RoomAddress:      marker + " address",
 	}
 	payer := e2ePayerFixture{Name: marker + " payer 1", PayerID: marker + "-payer-1"}
+	dunningTenant := e2eTenantFixture{
+		Name:             marker + " dunning tenant",
+		DisplayAlias:     marker + " dunning alias",
+		Email:            marker + "-dunning@invalid.test",
+		PayerID:          marker + "-dunning-payer-1",
+		PayerNameHint:    marker + " dunning payer 1",
+		MonthlyRent:      e2eMoney{Cents: 50000, Currency: "EUR"},
+		IntervalUnit:     "month",
+		IntervalCount:    1,
+		BillingStartDate: "2026-09-01",
+		DueDay:           5,
+		RentStartDate:    "2026-09-01",
+		Status:           "active",
+		RoomLabel:        marker + " dunning room",
+		RoomAddress:      marker + " dunning address",
+	}
 	bank := e2EBankFixture{
 		AccountID:   marker + "-account-eur",
 		AccountName: marker + " EUR account",
@@ -173,10 +190,11 @@ func newE2EFixtureManifest(runID string, now time.Time) (e2eFixtureManifest, err
 		RunID:         marker,
 		GeneratedAt:   now.UTC(),
 		Tenant:        tenant,
+		DunningTenant: dunningTenant,
 		Payer:         payer,
 		Bank:          bank,
 		Expected: e2EExpectedSnapshot{
-			TenantCount:          1,
+			TenantCount:          2,
 			PayerCount:           1,
 			BankTransactionCount: len(bank.Transactions),
 			EURIncomeCents:       95000 + 40000 + 30000 + 5000,
@@ -202,14 +220,22 @@ func (manifest e2eFixtureManifest) validate() error {
 	if manifest.Tenant.PayerID != manifest.Payer.PayerID || manifest.Tenant.PayerNameHint != manifest.Payer.Name {
 		return errors.New("tenant and payer fixture identity mismatch")
 	}
+	for _, tenant := range []e2eTenantFixture{manifest.Tenant, manifest.DunningTenant} {
+		for _, value := range []string{
+			tenant.Name,
+			tenant.DisplayAlias,
+			tenant.Email,
+			tenant.PayerID,
+			tenant.PayerNameHint,
+			tenant.RoomLabel,
+			tenant.RoomAddress,
+		} {
+			if !strings.HasPrefix(value, manifest.RunID) {
+				return fmt.Errorf("fixture value %q is missing run ID prefix", value)
+			}
+		}
+	}
 	for _, value := range []string{
-		manifest.Tenant.Name,
-		manifest.Tenant.DisplayAlias,
-		manifest.Tenant.Email,
-		manifest.Tenant.PayerID,
-		manifest.Tenant.PayerNameHint,
-		manifest.Tenant.RoomLabel,
-		manifest.Tenant.RoomAddress,
 		manifest.Payer.Name,
 		manifest.Payer.PayerID,
 		manifest.Bank.AccountID,

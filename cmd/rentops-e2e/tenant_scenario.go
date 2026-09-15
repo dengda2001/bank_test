@@ -20,23 +20,8 @@ func (c *e2eHTTPClient) tenantScenario(ctx context.Context, manifest e2eFixtureM
 		scenario.Error = message
 		return scenario, 0
 	}
-	values := url.Values{
-		"name":               {manifest.Tenant.Name},
-		"display_alias":      {manifest.Tenant.DisplayAlias},
-		"email":              {manifest.Tenant.Email},
-		"payer_id":           {manifest.Tenant.PayerID},
-		"payer_name_hint":    {manifest.Tenant.PayerNameHint},
-		"monthly_rent":       {formatE2EMoney(manifest.Tenant.MonthlyRent)},
-		"currency":           {manifest.Tenant.MonthlyRent.Currency},
-		"interval_unit":      {manifest.Tenant.IntervalUnit},
-		"interval_count":     {strconv.Itoa(manifest.Tenant.IntervalCount)},
-		"billing_start_date": {manifest.Tenant.BillingStartDate},
-		"due_day":            {strconv.Itoa(manifest.Tenant.DueDay)},
-		"rent_start_date":    {manifest.Tenant.RentStartDate},
-		"status":             {manifest.Tenant.Status},
-		"room_label":         {manifest.Tenant.RoomLabel},
-		"room_address":       {manifest.Tenant.RoomAddress},
-	}
+	values := e2eTenantFormValues(manifest.Tenant)
+	values.Set("property_hint", manifest.RunID+" property")
 	createResponse, err := c.do(ctx, http.MethodPost, "/tenants", values)
 	createStep := e2eHTTPStep(http.MethodPost, "/tenants", map[string]any{
 		"status_code": http.StatusFound,
@@ -153,6 +138,72 @@ func (c *e2eHTTPClient) tenantScenario(ctx context.Context, manifest e2eFixtureM
 
 	scenario.Status = "passed"
 	return scenario, tenantID
+}
+
+func (c *e2eHTTPClient) dunningTenantScenario(ctx context.Context, manifest e2eFixtureManifest) (e2eScenarioReport, uint64) {
+	scenario := e2eScenarioReport{Name: "dunning-tenant", Status: "running", Steps: []e2eStepReport{}}
+	fail := func(message string) (e2eScenarioReport, uint64) {
+		scenario.Status = "failed"
+		scenario.Error = message
+		return scenario, 0
+	}
+	createResponse, err := c.do(ctx, http.MethodPost, "/tenants", e2eTenantFormValues(manifest.DunningTenant))
+	createStep := e2eHTTPStep(http.MethodPost, "/tenants", map[string]any{
+		"status_code": http.StatusFound,
+		"location":    "/tenants?message=tenant_added",
+	}, createResponse, err)
+	if err == nil {
+		createStep.Passed = createResponse.StatusCode == http.StatusFound && createResponse.Location == "/tenants?message=tenant_added"
+		if !createStep.Passed {
+			createStep.Error = "dunning tenant creation did not return the expected success redirect"
+		}
+	}
+	scenario.Steps = append(scenario.Steps, createStep)
+	if !createStep.Passed {
+		return fail("dunning tenant creation failed")
+	}
+	listResponse, err := c.do(ctx, http.MethodGet, "/tenants", nil)
+	listStep := e2eHTTPStep(http.MethodGet, "/tenants", map[string]any{
+		"status_code":    http.StatusOK,
+		"tenant_visible": true,
+	}, listResponse, err)
+	var tenantID uint64
+	if err == nil {
+		tenantID, err = extractE2ETenantID(listResponse.Body, manifest.DunningTenant.Name)
+		listStep.Actual.(map[string]any)["tenant_visible"] = err == nil
+		listStep.Actual.(map[string]any)["tenant_id"] = tenantID
+		listStep.Passed = listResponse.StatusCode == http.StatusOK && err == nil
+		if !listStep.Passed {
+			listStep.Error = "dunning tenant was not visible with a concrete ID in the tenant list"
+		}
+	}
+	scenario.Steps = append(scenario.Steps, listStep)
+	if !listStep.Passed {
+		return fail("dunning tenant could not be verified by a follow-up read")
+	}
+	scenario.Status = "passed"
+	return scenario, tenantID
+}
+
+func e2eTenantFormValues(tenant e2eTenantFixture) url.Values {
+	return url.Values{
+		"name":               {tenant.Name},
+		"display_alias":      {tenant.DisplayAlias},
+		"email":              {tenant.Email},
+		"payer_id":           {tenant.PayerID},
+		"payer_name_hint":    {tenant.PayerNameHint},
+		"monthly_rent":       {formatE2EMoney(tenant.MonthlyRent)},
+		"currency":           {tenant.MonthlyRent.Currency},
+		"interval_unit":      {tenant.IntervalUnit},
+		"interval_count":     {strconv.Itoa(tenant.IntervalCount)},
+		"billing_start_date": {tenant.BillingStartDate},
+		"due_day":            {strconv.Itoa(tenant.DueDay)},
+		"rent_start_date":    {tenant.RentStartDate},
+		"status":             {tenant.Status},
+		"room_label":         {tenant.RoomLabel},
+		"room_address":       {tenant.RoomAddress},
+		"property_hint":      {tenant.RoomLabel + " property"},
+	}
 }
 
 func extractE2ETenantID(body []byte, tenantName string) (uint64, error) {

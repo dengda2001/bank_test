@@ -31,6 +31,9 @@ type e2eOptions struct {
 	FixtureDir      string
 	Username        string
 	Password        string
+	SecondUsername  string
+	SecondPassword  string
+	SMTPSink        string
 	Execute         bool
 	ConfirmWrites   string
 	ConfirmCleanup  string
@@ -112,6 +115,9 @@ func e2eOptionsFromEnv() (e2eOptions, error) {
 		FixtureDir:      strings.TrimSpace(os.Getenv("RENTOPS_E2E_FIXTURE_DIR")),
 		Username:        os.Getenv("RENTOPS_E2E_USERNAME"),
 		Password:        os.Getenv("RENTOPS_E2E_PASSWORD"),
+		SecondUsername:  os.Getenv("RENTOPS_E2E_SECOND_USERNAME"),
+		SecondPassword:  os.Getenv("RENTOPS_E2E_SECOND_PASSWORD"),
+		SMTPSink:        strings.TrimSpace(os.Getenv("RENTOPS_E2E_SMTP_SINK")),
 		ConfirmWrites:   strings.TrimSpace(os.Getenv("RENTOPS_E2E_CONFIRM_WRITES")),
 		ConfirmCleanup:  strings.TrimSpace(os.Getenv("RENTOPS_E2E_CONFIRM_CLEANUP")),
 		AllowRemote:     os.Getenv("RENTOPS_E2E_ALLOW_REMOTE") == "1",
@@ -187,6 +193,16 @@ func validateE2EOptions(options e2eOptions) e2ePreflight {
 		fail("dedicated E2E login credentials are required")
 	} else {
 		preflight.Checks = append(preflight.Checks, "dedicated E2E login credentials are present")
+	}
+	if options.SecondUsername == "" || options.SecondPassword == "" {
+		fail("a dedicated second E2E account is required for cross-user checks")
+	} else {
+		preflight.Checks = append(preflight.Checks, "dedicated second E2E account credentials are present")
+	}
+	if options.SMTPSink == "" {
+		fail("an explicit SMTP sink identifier is required for dunning send checks")
+	} else {
+		preflight.Checks = append(preflight.Checks, "an explicit SMTP sink identifier is present")
 	}
 	if options.ConfirmWrites != e2eWriteConfirmation {
 		fail("explicit non-production write confirmation is required")

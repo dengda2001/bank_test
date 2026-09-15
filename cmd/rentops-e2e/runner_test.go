@@ -33,7 +33,7 @@ func TestValidateE2EOptionsExecuteRequiresAllowlistAndExplicitConfirmations(t *t
 	if preflight.Passed || len(preflight.Failures) < 5 {
 		t.Fatalf("preflight=%+v", preflight)
 	}
-	for _, expected := range []string{"allowlist", "MySQL DSN", "credentials", "write confirmation", "cleanup confirmation"} {
+	for _, expected := range []string{"allowlist", "MySQL DSN", "credentials", "second E2E account", "SMTP sink", "write confirmation", "cleanup confirmation"} {
 		found := false
 		for _, failure := range preflight.Failures {
 			if strings.Contains(failure, expected) {
@@ -268,6 +268,61 @@ func TestE2ETenantScenarioCreatesAndReadsTenantAndPayer(t *testing.T) {
 	}
 }
 
+func TestE2EDunningTenantScenarioCreatesAnUnpaidTenant(t *testing.T) {
+	manifest, err := newE2EFixtureManifest("rentops-e2e-20260916-120000-a1b2c3d4", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var created bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/login-local" {
+			if _, cookieErr := r.Cookie("rentops_session"); cookieErr != nil {
+				http.Redirect(w, r, "/", http.StatusFound)
+				return
+			}
+		}
+		switch r.URL.Path {
+		case "/login-local":
+			if err := r.ParseForm(); err != nil || r.Form.Get("password") != "e2e-password" {
+				http.Redirect(w, r, "/?error=invalid_login", http.StatusFound)
+				return
+			}
+			http.SetCookie(w, &http.Cookie{Name: "rentops_session", Value: "session-secret", Path: "/"})
+			http.Redirect(w, r, "/rent-dashboard", http.StatusFound)
+		case "/billing":
+			w.WriteHeader(http.StatusOK)
+		case "/tenants":
+			if r.Method == http.MethodPost {
+				_ = r.ParseForm()
+				if r.Form.Get("name") != manifest.DunningTenant.Name || r.Form.Get("monthly_rent") != "500.00" {
+					t.Errorf("unexpected dunning tenant form: %v", r.Form)
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				created = true
+				http.Redirect(w, r, "/tenants?message=tenant_added", http.StatusFound)
+				return
+			}
+			fmt.Fprintf(w, `<table><tr><td>%s</td><td><a href="/tenants/43">详情</a></td></tr></table>`, manifest.DunningTenant.Name)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client, err := newE2EHTTPClient(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authScenario := client.authenticationScenario(context.Background(), "e2e-user", "e2e-password")
+	if authScenario.Status != "passed" {
+		t.Fatalf("authentication scenario=%+v", authScenario)
+	}
+	scenario, tenantID := client.dunningTenantScenario(context.Background(), manifest)
+	if scenario.Status != "passed" || tenantID != 43 || !created {
+		t.Fatalf("scenario=%+v tenantID=%d created=%v", scenario, tenantID, created)
+	}
+}
+
 func TestE2EBankImportScenarioVerifiesFactsAndIdempotency(t *testing.T) {
 	manifest, err := newE2EFixtureManifest("rentops-e2e-20260916-120000-a1b2c3d4", time.Now())
 	if err != nil {
@@ -465,6 +520,82 @@ func TestExtractE2ECashReceiptID(t *testing.T) {
 	}
 	if _, err := extractE2ECashReceiptID([]byte(`<main>no receipt</main>`)); err == nil {
 		t.Fatal("missing receipt link unexpectedly parsed")
+	}
+}
+
+func TestExtractE2EDunningObligationID(t *testing.T) {
+	id, err := extractE2EDunningObligationID([]byte(`<input type="checkbox" name="obligation_id" value="900">`))
+	if err != nil || id != 900 {
+		t.Fatalf("id=%d err=%v", id, err)
+	}
+	if _, err := extractE2EDunningObligationID([]byte(`<main>no candidate</main>`)); err == nil {
+		t.Fatal("missing obligation unexpectedly parsed")
+	}
+}
+
+func TestE2EDashboardAndDunningScenariosVerifyReadsAndDelivery(t *testing.T) {
+	manifest, err := newE2EFixtureManifest("rentops-e2e-20260916-120000-a1b2c3d4", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sendCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/login-local" {
+			if _, cookieErr := r.Cookie("rentops_session"); cookieErr != nil {
+				http.Redirect(w, r, "/", http.StatusFound)
+				return
+			}
+		}
+		switch r.URL.Path {
+		case "/login-local":
+			if err := r.ParseForm(); err != nil || r.Form.Get("password") != "e2e-password" {
+				http.Redirect(w, r, "/?error=invalid_login", http.StatusFound)
+				return
+			}
+			http.SetCookie(w, &http.Cookie{Name: "rentops_session", Value: "session-secret", Path: "/"})
+			http.Redirect(w, r, "/rent-dashboard", http.StatusFound)
+		case "/billing":
+			w.WriteHeader(http.StatusOK)
+		case "/rent-dashboard":
+			w.WriteHeader(http.StatusOK)
+			if r.URL.Query().Get("status") == "not-a-status" {
+				fmt.Fprint(w, `<main>筛选条件无效 invalid_dashboard_filter</main>`)
+				return
+			}
+			fmt.Fprintf(w, `<main>%s EUR 950.00 已缴清 当前显示 1 户 预览 obligation_id=%s</main>`, manifest.Tenant.Name, "900")
+		case "/tenants/42":
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintf(w, `<main>%s 2026-08 2026-09</main>`, manifest.Tenant.Name)
+		case "/dunning/config":
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintf(w, `<main>发件配置已保存 %s landlord</main>`, manifest.RunID)
+		case "/dunning/preview":
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, `<main>邮件催缴预览</main>`)
+		case "/dunning/send":
+			sendCount++
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, `<main>发送结果 已发送</main>`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client, err := newE2EHTTPClient(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authScenario := client.authenticationScenario(context.Background(), "e2e-user", "e2e-password")
+	if authScenario.Status != "passed" {
+		t.Fatalf("authentication scenario=%+v", authScenario)
+	}
+	dashboardScenario := client.dashboardScenario(context.Background(), manifest, 42)
+	if dashboardScenario.Status != "passed" {
+		t.Fatalf("dashboard scenario=%+v", dashboardScenario)
+	}
+	dunningScenario := client.dunningScenario(context.Background(), manifest, 900)
+	if dunningScenario.Status != "passed" || sendCount != 2 {
+		t.Fatalf("dunning scenario=%+v sendCount=%d", dunningScenario, sendCount)
 	}
 }
 

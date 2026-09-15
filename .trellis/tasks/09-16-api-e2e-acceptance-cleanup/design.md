@@ -11,6 +11,9 @@ RentOps 应用进行接口级验收。runner 只允许在显式配置的非生�
 - runner 使用标准库 HTTP client，维护同一 cookie 会话，从 `/login-local` 开始。
 - 应用以本轮唯一 `APP_ADMIN_USERNAME`、`APP_ADMIN_PASSWORD` 启动，启动时由现有
   `auth.seedDefaultUser` 在隔离库播种账户；账户创建并非通过不存在的用户注册路由。
+- 跨用户断言使用隔离库中预先播种的第二测试账户；runner 只通过 `/login-local` 登录它，
+  不通过直接改库创建或切换用户。
+- 催缴发送必须配置 `RENTOPS_E2E_SMTP_SINK` 标识，并由应用自身的 SMTP 配置指向该 sink。
 - `MYSQL_DSN`/`DATABASE_URL` 只从进程环境读取，不写入报告；报告保存脱敏目标标识。
 - legacy 输入使用 `RENTOPS_E2E_FIXTURE_DIR` 指定的专用空目录；runner 只独占创建
   `bank-results.jsonl`、`tenants.json` 和 `expenses.json`，目录或文件已存在时停止。
