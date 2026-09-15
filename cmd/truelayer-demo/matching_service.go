@@ -7,18 +7,17 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"gorm.io/gorm"
 )
 
 type paymentAllocation struct {
 	ID                   uint64 `gorm:"primaryKey"`
 	UserID               uint64
 	PaymentTransactionID uint64
-	RentObligationID     uint64
-	TenantID             uint64
+	RentObligationID     *uint64
+	TenantID             *uint64
 	AmountCents          int64
 	AllocationKind       string
+	Note                 string
 	Status               string
 	OperationID          *string
 	IdempotencyKey       *string
@@ -113,79 +112,13 @@ func (s *transactionService) applyAllocation(ctx context.Context, userID uint64,
 	if decision.RentObligationID == 0 || decision.TenantID == 0 {
 		return errors.New("rent match target is incomplete")
 	}
-	return s.db.WithContext(ctx).Transaction(func(txdb *gorm.DB) error {
-		var existing paymentAllocation
-		err := txdb.Where("user_id = ? AND payment_transaction_id = ? AND rent_obligation_id = ?", userID, transaction.ID, decision.RentObligationID).First(&existing).Error
-		if err == nil {
-			return nil
-		}
-		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return err
-		}
-
-		var obligation rentObligation
-		if err := txdb.Where("id = ? AND user_id = ? AND tenant_id = ?", decision.RentObligationID, userID, decision.TenantID).First(&obligation).Error; err != nil {
-			return err
-		}
-		if obligation.RecordStatus == obligationRecordVoided {
-			return errors.New("rent obligation is voided")
-		}
-		var existingAllocatedCents int64
-		if err := txdb.Model(&paymentAllocation{}).
-			Where("user_id = ? AND payment_transaction_id = ? AND status = ?", userID, transaction.ID, allocationStatusConfirmed).
-			Select("COALESCE(SUM(amount_cents), 0)").Scan(&existingAllocatedCents).Error; err != nil {
-			return err
-		}
-		if err := validateLedgerAllocation(ledgerAllocationCheck{
-			UserID:                  userID,
-			SourceUserID:            transaction.UserID,
-			TenantID:                decision.TenantID,
-			ObligationTenantID:      obligation.TenantID,
-			SourceAmountCents:       transaction.AmountCents,
-			ExistingAllocatedCents:  existingAllocatedCents,
-			AmountCents:             transaction.AmountCents,
-			ObligationExpectedCents: obligation.ExpectedAmountCents,
-			ObligationPaidCents:     obligation.PaidAmountCents,
-			SourceCurrency:          transaction.Currency,
-			ObligationCurrency:      obligation.Currency,
-			Kind:                    allocationKindRent,
-		}); err != nil {
-			return err
-		}
-		allocation := paymentAllocation{
-			UserID:               userID,
-			PaymentTransactionID: transaction.ID,
-			RentObligationID:     obligation.ID,
-			TenantID:             decision.TenantID,
-			AmountCents:          transaction.AmountCents,
-			AllocationKind:       allocationKindRent,
-			Status:               allocationStatusConfirmed,
-			ConfirmedByUserID:    userID,
-			ConfirmedAt:          time.Now().UTC(),
-			ConfirmationSource:   source,
-		}
-		if err := txdb.Create(&allocation).Error; err != nil {
-			return err
-		}
-		var allocations []paymentAllocation
-		if err := txdb.Where("user_id = ? AND rent_obligation_id = ?", userID, obligation.ID).Find(&allocations).Error; err != nil {
-			return err
-		}
-		projected := projectLedgerObligation(obligation, allocations, time.Now().UTC())
-		if err := txdb.Model(&rentObligation{}).Where("id = ? AND user_id = ?", obligation.ID, userID).Updates(map[string]any{
-			"paid_amount_cents": projected.PaidAmountCents,
-			"status":            projected.Status,
-		}).Error; err != nil {
-			return err
-		}
-		if err := txdb.Model(&paymentTransaction{}).Where("id = ? AND user_id = ?", transaction.ID, userID).Update("match_status", "matched").Error; err != nil {
-			return err
-		}
-		if err := txdb.Model(&paymentTransaction{}).Where("id = ? AND user_id = ?", transaction.ID, userID).Update("matched_tenant_id", decision.TenantID).Error; err != nil {
-			return err
-		}
-		return nil
-	})
+	_, err := s.allocateTransaction(ctx, userID, transaction.ID, []transactionAllocationDraft{{
+		TenantID:         decision.TenantID,
+		RentObligationID: decision.RentObligationID,
+		AmountCents:      transaction.AmountCents,
+		Kind:             allocationKindRent,
+	}}, "", source)
+	return err
 }
 
 func (s *transactionService) confirmRentMatch(ctx context.Context, userID, transactionID, tenantID uint64, period *time.Time) error {

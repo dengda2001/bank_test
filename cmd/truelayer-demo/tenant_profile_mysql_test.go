@@ -93,7 +93,7 @@ func TestTenantLifecycleVoidsUnpaidFutureBillsButRejectsPaidOnMySQL(t *testing.T
 	if err := db.Create(&transaction).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&paymentAllocation{UserID: owner.ID, PaymentTransactionID: transaction.ID, RentObligationID: future.ID, TenantID: paidTenant.ID, AmountCents: 95000, AllocationKind: allocationKindRent, Status: allocationStatusConfirmed, ConfirmedByUserID: owner.ID, ConfirmationSource: "manual"}).Error; err != nil {
+	if err := db.Create(&paymentAllocation{UserID: owner.ID, PaymentTransactionID: transaction.ID, RentObligationID: ptrUint64(future.ID), TenantID: ptrUint64(paidTenant.ID), AmountCents: 95000, AllocationKind: allocationKindRent, Status: allocationStatusConfirmed, ConfirmedByUserID: owner.ID, ConfirmationSource: "manual"}).Error; err != nil {
 		t.Fatal(err)
 	}
 	paidInput.RentEndDate = "2026-10-02"

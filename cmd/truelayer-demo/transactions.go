@@ -72,7 +72,7 @@ type transactionService struct {
 	db *gorm.DB
 }
 
-var pendingMatchStatuses = []string{"candidate", "needs_review", "unmatched"}
+var pendingMatchStatuses = []string{"candidate", "needs_review", "unmatched", "partial"}
 
 func isPendingMatchStatus(status string) bool {
 	for _, pendingStatus := range pendingMatchStatuses {

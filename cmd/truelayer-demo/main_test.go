@@ -1369,6 +1369,10 @@ func ptrTime(t time.Time) *time.Time {
 	return &t
 }
 
+func ptrUint64(value uint64) *uint64 {
+	return &value
+}
+
 func TestSummarizeBankSyncAccountsMarksPartialWhenOneAccountFails(t *testing.T) {
 	status := summarizeBankSyncAccounts([]bankSyncAccountResult{
 		{Status: bankSyncAccountSucceeded},
@@ -1418,6 +1422,55 @@ func TestPaymentTransactionFromInputPreservesParsedPeriodFacts(t *testing.T) {
 	}
 	if row.ParsedPeriodSource != "description" || row.ParsedPeriodNote != "JULY26" {
 		t.Fatalf("parsed facts not preserved: source=%q note=%q", row.ParsedPeriodSource, row.ParsedPeriodNote)
+	}
+}
+
+func TestValidateTransactionAllocationDraftsAcceptsMixedUsesWithinSourceBudget(t *testing.T) {
+	source := paymentTransaction{UserID: 7, Direction: "income", AmountCents: 200000, Currency: "EUR"}
+	tenantID := uint64(11)
+	obligation := rentObligation{
+		ID:                  21,
+		UserID:              7,
+		TenantID:            tenantID,
+		ExpectedAmountCents: 100000,
+		Currency:            "EUR",
+	}
+	drafts := []transactionAllocationDraft{
+		{TenantID: tenantID, RentObligationID: obligation.ID, AmountCents: 100000, Kind: allocationKindRent},
+		{TenantID: tenantID, AmountCents: 60000, Kind: allocationKindDeposit},
+		{TenantID: tenantID, AmountCents: 40000, Kind: allocationKindOther, Note: "cleaning fee"},
+	}
+
+	if err := validateTransactionAllocationDrafts(source, nil, drafts, map[uint64]rentObligation{obligation.ID: obligation}); err != nil {
+		t.Fatalf("mixed allocation drafts rejected: %v", err)
+	}
+}
+
+func TestValidateTransactionAllocationDraftsRejectsOverBudgetAsOneBatch(t *testing.T) {
+	source := paymentTransaction{UserID: 7, Direction: "income", AmountCents: 120000, Currency: "EUR"}
+	tenantID := uint64(11)
+	drafts := []transactionAllocationDraft{
+		{TenantID: tenantID, AmountCents: 100000, Kind: allocationKindDeposit},
+		{TenantID: tenantID, AmountCents: 30000, Kind: allocationKindOther, Note: "fee"},
+	}
+
+	if err := validateTransactionAllocationDrafts(source, nil, drafts, nil); err == nil {
+		t.Fatal("over-budget allocation batch should be rejected")
+	}
+}
+
+func TestSummarizeTransactionAllocationsReportsPartialRemainderAndKinds(t *testing.T) {
+	source := paymentTransaction{AmountCents: 120000}
+	allocations := []paymentAllocation{
+		{AmountCents: 100000, AllocationKind: allocationKindRent, Status: allocationStatusConfirmed},
+	}
+
+	summary := summarizeTransactionAllocations(source, allocations)
+	if summary.AllocatedCents != 100000 || summary.RemainingCents != 20000 {
+		t.Fatalf("summary amounts=(%d,%d) want (100000,20000)", summary.AllocatedCents, summary.RemainingCents)
+	}
+	if summary.Status != "partial" || summary.KindCents[allocationKindRent] != 100000 {
+		t.Fatalf("summary=%+v want partial rent projection", summary)
 	}
 }
 
