@@ -50,7 +50,8 @@ func executeE2ERun(ctx context.Context, options e2eOptions, manifest e2eFixtureM
 		return err
 	}
 
-	if err := runE2EBusinessScenarios(ctx, options, manifest, report, writeReport); err != nil {
+	artifacts := e2EBusinessArtifacts{}
+	if err := runE2EBusinessScenarios(ctx, options, manifest, report, writeReport, &artifacts); err != nil {
 		setE2ECleanupNotRun(report, "cleanup was not run because a business scenario failed")
 		_ = persistE2EProgress(report, writeReport)
 		return err
@@ -65,6 +66,14 @@ func executeE2ERun(ctx context.Context, options e2eOptions, manifest e2eFixtureM
 		_ = persistE2EProgress(report, writeReport)
 		return errors.New(report.Error)
 	}
+	postCleanup := verifyE2EHTTPNoResidue(ctx, options, manifest, artifacts)
+	if err := recordE2EScenario(report, postCleanup, writeReport); err != nil {
+		report.Cleanup.HTTPVerified = false
+		report.Error = firstE2EError(postCleanup.Error, "post-cleanup HTTP verification failed")
+		_ = persistE2EProgress(report, writeReport)
+		return err
+	}
+	report.Cleanup.HTTPVerified = true
 	if err := removeE2ELegacyFixtures(paths); err != nil {
 		report.Status = "failed"
 		report.Error = "successful database cleanup left local fixture files"

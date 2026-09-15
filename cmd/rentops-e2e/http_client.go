@@ -25,6 +25,7 @@ type e2eHTTPResponse struct {
 	Location    string
 	Body        []byte
 	CookieNames []string
+	Request     map[string]any
 }
 
 func newE2EHTTPClient(baseURL string) (*e2eHTTPClient, error) {
@@ -68,9 +69,10 @@ func (c *e2eHTTPClient) endpoint(path string) (*url.URL, error) {
 }
 
 func (c *e2eHTTPClient) do(ctx context.Context, method, path string, form url.Values) (e2eHTTPResponse, error) {
+	requestSummary := e2eHTTPRequestSummary(method, path, form)
 	endpoint, err := c.endpoint(path)
 	if err != nil {
-		return e2eHTTPResponse{}, err
+		return e2eHTTPResponse{Request: requestSummary}, err
 	}
 	var body io.Reader
 	if form != nil {
@@ -78,22 +80,22 @@ func (c *e2eHTTPClient) do(ctx context.Context, method, path string, form url.Va
 	}
 	req, err := http.NewRequestWithContext(ctx, method, endpoint.String(), body)
 	if err != nil {
-		return e2eHTTPResponse{}, fmt.Errorf("create HTTP request: %w", err)
+		return e2eHTTPResponse{Request: requestSummary}, fmt.Errorf("create HTTP request: %w", err)
 	}
 	if form != nil {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	}
 	response, err := c.httpClient.Do(req)
 	if err != nil {
-		return e2eHTTPResponse{}, fmt.Errorf("HTTP %s %s: %w", method, endpoint.Path, err)
+		return e2eHTTPResponse{Request: requestSummary}, fmt.Errorf("HTTP %s %s: %w", method, endpoint.Path, err)
 	}
 	defer response.Body.Close()
 	responseBody, err := io.ReadAll(io.LimitReader(response.Body, e2eMaxResponseBytes+1))
 	if err != nil {
-		return e2eHTTPResponse{}, fmt.Errorf("read HTTP %s %s response: %w", method, endpoint.Path, err)
+		return e2eHTTPResponse{Request: requestSummary}, fmt.Errorf("read HTTP %s %s response: %w", method, endpoint.Path, err)
 	}
 	if len(responseBody) > e2eMaxResponseBytes {
-		return e2eHTTPResponse{}, fmt.Errorf("HTTP %s %s response exceeded %d bytes", method, endpoint.Path, e2eMaxResponseBytes)
+		return e2eHTTPResponse{Request: requestSummary}, fmt.Errorf("HTTP %s %s response exceeded %d bytes", method, endpoint.Path, e2eMaxResponseBytes)
 	}
 	cookieNames := make([]string, 0, len(response.Cookies()))
 	for _, cookie := range response.Cookies() {
@@ -104,7 +106,32 @@ func (c *e2eHTTPClient) do(ctx context.Context, method, path string, form url.Va
 		Location:    response.Header.Get("Location"),
 		Body:        responseBody,
 		CookieNames: cookieNames,
+		Request:     requestSummary,
 	}, nil
+}
+
+func e2eHTTPRequestSummary(method, path string, form url.Values) map[string]any {
+	return map[string]any{
+		"method": strings.ToUpper(method),
+		"path":   path,
+		"form":   e2eFormSummary(form),
+	}
+}
+
+func e2eFormSummary(form url.Values) map[string]any {
+	result := make(map[string]any, len(form))
+	for key, values := range form {
+		if isSensitiveE2EKey(key) {
+			result[key] = "[REDACTED]"
+			continue
+		}
+		if len(values) == 1 {
+			result[key] = values[0]
+			continue
+		}
+		result[key] = append([]string(nil), values...)
+	}
+	return result
 }
 
 func e2eHTTPResponseSummary(response e2eHTTPResponse) map[string]any {
@@ -112,16 +139,21 @@ func e2eHTTPResponseSummary(response e2eHTTPResponse) map[string]any {
 		"status_code":        response.StatusCode,
 		"location":           response.Location,
 		"session_cookie_set": containsString(response.CookieNames, "rentops_session"),
+		"request":            response.Request,
 	}
 }
 
 func e2eHTTPStep(method, path string, expected any, response e2eHTTPResponse, err error) e2eStepReport {
+	actual := e2eHTTPResponseSummary(response)
+	if response.Request == nil {
+		actual["request"] = e2eHTTPRequestSummary(method, path, nil)
+	}
 	step := e2eStepReport{
 		Method:     method,
 		Path:       path,
 		StatusCode: response.StatusCode,
 		Expected:   expected,
-		Actual:     e2eHTTPResponseSummary(response),
+		Actual:     actual,
 		Passed:     err == nil,
 	}
 	if err != nil {

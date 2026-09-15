@@ -11,7 +11,13 @@ import (
 
 type e2EReportWriter func(e2eReport) error
 
-func runE2EBusinessScenarios(ctx context.Context, options e2eOptions, manifest e2eFixtureManifest, report *e2eReport, writeReport e2EReportWriter) error {
+type e2EBusinessArtifacts struct {
+	MainTenantID    uint64
+	DunningTenantID uint64
+	TransactionID   uint64
+}
+
+func runE2EBusinessScenarios(ctx context.Context, options e2eOptions, manifest e2eFixtureManifest, report *e2eReport, writeReport e2EReportWriter, artifacts *e2EBusinessArtifacts) error {
 	if report == nil {
 		return errors.New("E2E report is required")
 	}
@@ -32,10 +38,16 @@ func runE2EBusinessScenarios(ctx context.Context, options e2eOptions, manifest e
 		return err
 	}
 	tenantScenario, tenantID := client.tenantScenario(ctx, manifest)
+	if artifacts != nil {
+		artifacts.MainTenantID = tenantID
+	}
 	if err := recordE2EScenario(report, tenantScenario, writeReport); err != nil {
 		return err
 	}
-	dunningTenantScenario, _ := client.dunningTenantScenario(ctx, manifest)
+	dunningTenantScenario, dunningTenantID := client.dunningTenantScenario(ctx, manifest)
+	if artifacts != nil {
+		artifacts.DunningTenantID = dunningTenantID
+	}
 	if err := recordE2EScenario(report, dunningTenantScenario, writeReport); err != nil {
 		return err
 	}
@@ -65,6 +77,9 @@ func runE2EBusinessScenarios(ctx context.Context, options e2eOptions, manifest e
 	}
 
 	transactionDiscovery, transactionID := client.discoverE2ECrossUserTransaction(ctx, manifest)
+	if artifacts != nil {
+		artifacts.TransactionID = transactionID
+	}
 	if err := recordE2EScenario(report, transactionDiscovery, writeReport); err != nil {
 		return err
 	}

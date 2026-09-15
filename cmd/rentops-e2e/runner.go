@@ -87,6 +87,7 @@ type e2eReport struct {
 type e2eCleanupReport struct {
 	Status         string `json:"status"`
 	Verified       bool   `json:"verified"`
+	HTTPVerified   bool   `json:"http_verified"`
 	FixtureRemoved bool   `json:"fixture_removed"`
 	Error          string `json:"error,omitempty"`
 }

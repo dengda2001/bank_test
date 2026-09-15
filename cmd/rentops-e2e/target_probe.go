@@ -39,15 +39,15 @@ func probeE2ETarget(ctx context.Context, options e2eOptions) e2eScenarioReport {
 
 	db, err := sql.Open("mysql", options.MySQLDSN)
 	if err != nil {
-		return fail("open MySQL probe connection: " + err.Error())
+		return fail("open MySQL probe connection failed")
 	}
 	defer db.Close()
 	if err := db.PingContext(ctx); err != nil {
-		return fail("ping MySQL probe connection: " + err.Error())
+		return fail("ping MySQL probe connection failed")
 	}
 	var actualDatabase string
 	if err := db.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&actualDatabase); err != nil {
-		return fail("query MySQL database identity: " + err.Error())
+		return fail("query MySQL database identity failed")
 	}
 	actualDatabase = strings.TrimSpace(actualDatabase)
 	identityStep := e2eStepReport{

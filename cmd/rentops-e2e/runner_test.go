@@ -169,6 +169,57 @@ func TestE2EHTTPClientMaintainsCookieSessionAndRejectsUnauthorizedRequests(t *te
 			t.Fatalf("password leaked into step error: %+v", step)
 		}
 	}
+	loginActual, ok := scenario.Steps[0].Actual.(map[string]any)
+	if !ok {
+		t.Fatalf("login actual summary type=%T", scenario.Steps[0].Actual)
+	}
+	loginRequest, ok := loginActual["request"].(map[string]any)
+	if !ok {
+		t.Fatalf("login request summary type=%T", loginActual["request"])
+	}
+	loginForm, ok := loginRequest["form"].(map[string]any)
+	if !ok || loginForm["password"] != "[REDACTED]" || loginForm["username"] != "e2e-user" {
+		t.Fatalf("unexpected redacted request summary=%+v", loginRequest)
+	}
+}
+
+func TestVerifyE2EHTTPNoResidueChecksDeletedDataThroughSecondAccount(t *testing.T) {
+	manifest, err := newE2EFixtureManifest("rentops-e2e-20260916-120000-a1b2c3d4", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/login-local":
+			if err := r.ParseForm(); err != nil || r.Form.Get("username") != "second" || r.Form.Get("password") != "second-password" {
+				http.Redirect(w, r, "/?error=invalid_login", http.StatusFound)
+				return
+			}
+			http.SetCookie(w, &http.Cookie{Name: "rentops_session", Value: "second-session", Path: "/"})
+			http.Redirect(w, r, "/rent-dashboard", http.StatusFound)
+		case "/tenants/42", "/tenants/43":
+			http.NotFound(w, r)
+		case "/tenants", "/billing":
+			if _, err := r.Cookie("rentops_session"); err != nil {
+				http.Redirect(w, r, "/", http.StatusFound)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("clean second-account response"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	scenario := verifyE2EHTTPNoResidue(context.Background(), e2eOptions{
+		BaseURL:        server.URL,
+		SecondUsername: "second",
+		SecondPassword: "second-password",
+	}, manifest, e2EBusinessArtifacts{MainTenantID: 42, DunningTenantID: 43, TransactionID: 101})
+	if scenario.Status != "passed" || len(scenario.Steps) != 5 {
+		t.Fatalf("scenario=%+v", scenario)
+	}
 }
 
 func TestE2EHTTPClientRejectsOriginEscape(t *testing.T) {
@@ -710,7 +761,7 @@ func TestRunE2EBusinessScenariosStopsAfterFirstFailureAndPersistsReport(t *testi
 	err = runE2EBusinessScenarios(context.Background(), options, manifest, &report, func(snapshot e2eReport) error {
 		writes = append(writes, snapshot)
 		return nil
-	})
+	}, nil)
 	if err == nil || report.Status != "failed" {
 		t.Fatalf("err=%v report=%+v", err, report)
 	}
