@@ -780,3 +780,103 @@ service.allocateTransaction(ctx, userID, transactionID, drafts, requestKey, "man
 The service reloads every fact with `user_id`, locks the source and
 obligations, validates the complete batch, inserts effective allocations
 atomically, and recomputes the ledger projection from those rows.
+
+## Scenario: Monthly Rent Dashboard Read Model
+
+### 1. Scope / Trigger
+
+- Trigger: Any authenticated `/rent-dashboard` monthly summary, bill-list
+  filter, pending-income entry point, other-income entry point, or sync-state
+  display.
+- Applies to the database-backed monthly obligations, effective rent/cash
+  payment projection, bank arrival transactions, allocations, and sync runs.
+
+### 2. Signatures
+
+- `rentDashboardFiltersFromQuery(url.Values)` parses and validates typed search,
+  status, sort, page, and page-size input.
+- `filterAndSortRentDashboardRows` and `paginateRentDashboardRows` own the
+  allowlisted in-memory list transformation; they never build SQL ordering.
+- `obligationService.summarizeRentDashboardWithFilters(ctx, userID,
+  periodMonth, filters)` returns full-month totals plus filtered/paged rows and
+  bank/sync metrics.
+- `summarizeRentDashboardBankMetrics` calculates pending remainder and
+  effective other-income metrics from typed transaction/allocation rows.
+
+### 3. Contracts
+
+- Full-month expected, paid, balance, and status counts are calculated before
+  search, status filtering, sorting, and pagination. A filtered page never
+  changes the cards or their denominators.
+- Dashboard rows are active, user-owned obligations for the requested
+  `period_month`; rent payment details reuse the effective bank allocation and
+  confirmed cash receipt projection.
+- Search covers tenant name, display alias, room label, and room address.
+  Status values and sort values are allowlisted; default page size is 12 and
+  the maximum is 50. “Unpaid” includes open, overdue, and partial bills.
+- Pending metrics use income `payment_transactions.transaction_time` for the
+  selected bank-arrival month and only a transaction's effective allocation
+  remainder. Other-income metrics use effective `other_income` allocations and
+  count each source transaction once. EUR is the only aggregated currency;
+  non-EUR rows are never silently converted.
+- Sync text comes from the current user's latest `bank_sync_runs` and account
+  coverage. Partial/failed latest runs remain visible, with the latest
+  successful coverage shown separately when available; no-run state is explicit.
+- All dashboard reads include `user_id`; URL links preserve the selected month,
+  filters, direction, and allocation/pending conditions where applicable.
+
+### 4. Validation & Error Matrix
+
+- Invalid status, sort, page, page size, or overlong search -> render the safe
+  invalid-filter state and use bounded default filters.
+- Invalid period -> render the current-month fallback with an explicit invalid
+  period notice; do not use an arbitrary persisted month.
+- No active obligations -> render the “no monthly bills” empty state; zero
+  filtered rows with obligations -> render a distinct “no matches” state.
+- Cross-user tenant, obligation, transaction, allocation, cash receipt, or sync
+  row -> exclude through ownership predicates; never trust URL IDs as access.
+- Missing latest sync, partial/failed sync, and complete sync -> show distinct
+  states; sync failure must not be presented as a clean zero-balance dashboard.
+
+### 5. Good/Base/Bad Cases
+
+- Good: load all monthly obligations, derive cards, then filter and paginate
+  typed rows; aggregate pending remainder and other income by arrival month.
+- Base: three €1,000 bills paid €1,000/€400/€0 yield €3,000 expected,
+  €1,400 paid, €1,600 remaining and one tenant in each status class.
+- Bad: summing only the current page, grouping a September arrival into its
+  September rent obligation without an explicit allocation, counting a mixed
+  transaction twice as bank income, or converting GBP into EUR.
+
+### 6. Tests Required
+
+- Filter unit tests for allowlists, alias/room search, unpaid semantics, stable
+  sorting, pagination, URL preservation, and invalid input.
+- Template tests for selected filters, card/status links, pending/other-income
+  entry points, sync warning/no-sync states, distinct empty states, and paging.
+- Database tests should cover the three-bill totals, cross-month arrival versus
+  rent period, partial remainder, effective other income, latest sync fallback,
+  and cross-user isolation with a disposable MySQL DSN.
+- Run `go test ./... -count=1`, `go vet ./...`, and `git diff --check` before
+  committing dashboard changes.
+
+### 7. Wrong vs Correct
+
+Wrong:
+
+```go
+// A filtered page accidentally becomes the monthly financial summary.
+summary.ExpectedCents = sumRows(pageRows)
+```
+
+Correct:
+
+```go
+allRows := loadActiveMonthlyObligations(userID, periodMonth)
+summary := summarizeFullMonth(allRows)
+filtered := filterAndSortRentDashboardRows(allRows, filters)
+summary.Rows, summary.TotalPages = paginateRentDashboardRows(filtered, filters.Page, filters.PageSize)
+```
+
+The monthly bill remains the source of rent-period truth; bank arrival month is
+used only for pending and other-income navigation.

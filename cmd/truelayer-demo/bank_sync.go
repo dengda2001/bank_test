@@ -312,3 +312,35 @@ func latestBankSyncCoverage(ctx context.Context, db *gorm.DB, userID uint64) (st
 	}
 	return formatBankSyncCoverage(run, accounts), nil
 }
+
+func latestBankSyncStatus(ctx context.Context, db *gorm.DB, userID uint64) (string, error) {
+	if db == nil || userID == 0 {
+		return "", nil
+	}
+	var run bankSyncRun
+	if err := db.WithContext(ctx).Where("user_id = ?", userID).Order("started_at DESC, id DESC").First(&run).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", nil
+		}
+		return "", err
+	}
+	return run.Status, nil
+}
+
+func latestSuccessfulBankSyncCoverage(ctx context.Context, db *gorm.DB, userID uint64) (string, error) {
+	if db == nil || userID == 0 {
+		return "", nil
+	}
+	var run bankSyncRun
+	if err := db.WithContext(ctx).Where("user_id = ? AND status = ?", userID, bankSyncStatusSucceeded).Order("started_at DESC, id DESC").First(&run).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", nil
+		}
+		return "", err
+	}
+	var accounts []bankSyncRunAccount
+	if err := db.WithContext(ctx).Where("user_id = ? AND bank_sync_run_id = ?", userID, run.ID).Find(&accounts).Error; err != nil {
+		return "", err
+	}
+	return formatBankSyncCoverage(run, accounts), nil
+}

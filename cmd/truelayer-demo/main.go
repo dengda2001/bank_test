@@ -241,29 +241,45 @@ type expensePageData struct {
 }
 
 type rentDashboardPageData struct {
-	Username          string
-	Environment       string
-	ActivePage        string
-	Period            string
-	PeriodLabel       string
-	PreviousPeriod    string
-	NextPeriod        string
-	Rows              []rentDashboardRow
-	ExpectedTotal     string
-	PaidTotal         string
-	BalanceTotal      string
-	ExpenseTotal      string
-	OpenCount         int
-	PartialCount      int
-	PaidCount         int
-	ReviewCount       int
-	TenantCount       int
-	IncomeCount       int
-	ExpenseCount      int
-	CollectionPercent int
-	PendingCount      int
-	Message           string
-	Error             string
+	Username                   string
+	Environment                string
+	ActivePage                 string
+	Period                     string
+	PeriodLabel                string
+	PreviousPeriod             string
+	NextPeriod                 string
+	Rows                       []rentDashboardRow
+	SearchFilter               string
+	StatusFilter               string
+	SortFilter                 string
+	Page                       int
+	PageSize                   int
+	FilteredCount              int
+	TotalRows                  int
+	TotalPages                 int
+	ExpectedTotal              string
+	PaidTotal                  string
+	BalanceTotal               string
+	ExpenseTotal               string
+	OpenCount                  int
+	OverdueCount               int
+	UnpaidCount                int
+	PartialCount               int
+	PaidCount                  int
+	ReviewCount                int
+	TenantCount                int
+	IncomeCount                int
+	ExpenseCount               int
+	CollectionPercent          int
+	PendingCount               int
+	PendingTotal               string
+	OtherIncomeTotal           string
+	OtherIncomeCount           int
+	SyncCoverage               string
+	SyncStatus                 string
+	LastSuccessfulSyncCoverage string
+	Message                    string
+	Error                      string
 }
 
 type rentDashboardRow struct {
@@ -280,6 +296,10 @@ type rentDashboardRow struct {
 	StatusLabel    string
 	ObligationID   uint64
 	Payments       []rentPaymentDetail
+	TenantAlias    string
+	ExpectedCents  int64
+	PaidCents      int64
+	DueDateValue   time.Time
 }
 
 type rentPaymentDetail struct {

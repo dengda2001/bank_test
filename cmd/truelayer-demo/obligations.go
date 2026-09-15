@@ -304,22 +304,43 @@ func buildTenantBillingHistory(tenants []tenant, obligations []rentObligation, p
 }
 
 type rentDashboardSummary struct {
-	Rows          []rentDashboardRow
-	ExpectedCents int64
-	PaidCents     int64
-	BalanceCents  int64
-	ExpenseCents  int64
-	OpenCount     int
-	PartialCount  int
-	PaidCount     int
-	ReviewCount   int
-	TenantCount   int
-	IncomeCount   int
-	ExpenseCount  int
-	Currency      string
+	Rows                       []rentDashboardRow
+	TotalRows                  int
+	FilteredCount              int
+	TotalPages                 int
+	Page                       int
+	PageSize                   int
+	ExpectedCents              int64
+	PaidCents                  int64
+	BalanceCents               int64
+	ExpenseCents               int64
+	OpenCount                  int
+	OverdueCount               int
+	UnpaidCount                int
+	PartialCount               int
+	PaidCount                  int
+	ReviewCount                int
+	TenantCount                int
+	IncomeCount                int
+	ExpenseCount               int
+	Currency                   string
+	PendingCents               int64
+	PendingCount               int
+	OtherIncomeCents           int64
+	OtherIncomeCount           int
+	SyncCoverage               string
+	SyncStatus                 string
+	LastSuccessfulSyncCoverage string
 }
 
 func (s *obligationService) summarizeRentDashboard(ctx context.Context, userID uint64, periodMonth time.Time) (rentDashboardSummary, error) {
+	return s.summarizeRentDashboardWithFilters(ctx, userID, periodMonth, defaultRentDashboardFilters())
+}
+
+func (s *obligationService) summarizeRentDashboardWithFilters(ctx context.Context, userID uint64, periodMonth time.Time, filters rentDashboardFilters) (rentDashboardSummary, error) {
+	if err := validateRentDashboardFilters(filters); err != nil {
+		return rentDashboardSummary{}, err
+	}
 	periodMonth = monthStart(periodMonth)
 	if err := s.ensureMonthlyObligations(ctx, userID, periodMonth); err != nil {
 		return rentDashboardSummary{}, err
@@ -340,12 +361,14 @@ func (s *obligationService) summarizeRentDashboard(ctx context.Context, userID u
 		Rows:        make([]rentDashboardRow, 0, len(obligations)),
 		TenantCount: len(tenants),
 	}
+	now := time.Now().UTC()
+	allRows := make([]rentDashboardRow, 0, len(obligations))
 	for _, obligation := range obligations {
 		tenantRow, ok := tenantByID[obligation.TenantID]
 		if !ok {
 			continue
 		}
-		status := obligationStatus(obligation.ExpectedAmountCents, obligation.PaidAmountCents, obligation.DueDate, time.Now().UTC(), obligation.Status == "needs_review")
+		status := obligationStatus(obligation.ExpectedAmountCents, obligation.PaidAmountCents, obligation.DueDate, now, obligation.Status == "needs_review")
 		if status != obligation.Status {
 			if err := s.db.WithContext(ctx).Model(&rentObligation{}).Where("id = ? AND user_id = ?", obligation.ID, userID).Update("status", status).Error; err != nil {
 				return rentDashboardSummary{}, err
@@ -367,6 +390,8 @@ func (s *obligationService) summarizeRentDashboard(ctx context.Context, userID u
 			summary.PartialCount++
 		case "needs_review":
 			summary.ReviewCount++
+		case "overdue":
+			summary.OverdueCount++
 		default:
 			summary.OpenCount++
 		}
@@ -374,9 +399,10 @@ func (s *obligationService) summarizeRentDashboard(ctx context.Context, userID u
 		if err != nil {
 			return rentDashboardSummary{}, err
 		}
-		summary.Rows = append(summary.Rows, rentDashboardRow{
+		allRows = append(allRows, rentDashboardRow{
 			TenantID:       tenantRow.ID,
 			TenantName:     tenantRow.Name,
+			TenantAlias:    tenantRow.DisplayAlias,
 			RoomLabel:      tenantRow.RoomLabel,
 			RoomAddress:    tenantRow.RoomAddress,
 			Period:         periodMonth.Format("2006-01"),
@@ -388,25 +414,69 @@ func (s *obligationService) summarizeRentDashboard(ctx context.Context, userID u
 			StatusLabel:    rentStatusLabel(status),
 			ObligationID:   obligation.ID,
 			Payments:       payments,
+			ExpectedCents:  obligation.ExpectedAmountCents,
+			PaidCents:      obligation.PaidAmountCents,
+			DueDateValue:   obligation.DueDate,
 		})
 	}
-	sort.SliceStable(summary.Rows, func(i, j int) bool {
-		priority := map[string]int{"overdue": 0, "needs_review": 1, "partial": 2, "open": 3, "paid": 4}
-		return priority[summary.Rows[i].Status] < priority[summary.Rows[j].Status]
-	})
+	summary.TotalRows = len(allRows)
+	summary.UnpaidCount = summary.OpenCount + summary.OverdueCount + summary.PartialCount
+	filteredRows := filterAndSortRentDashboardRows(allRows, filters)
+	pageRows, totalPages := paginateRentDashboardRows(filteredRows, filters.Page, filters.PageSize)
+	summary.Rows = pageRows
+	summary.FilteredCount = len(filteredRows)
+	summary.TotalPages = totalPages
+	summary.Page = filters.Page
+	summary.PageSize = filters.PageSize
 	start := periodMonth
 	end := start.AddDate(0, 1, 0)
 	var transactions []paymentTransaction
 	if err := s.db.WithContext(ctx).Where("user_id = ? AND transaction_time >= ? AND transaction_time < ?", userID, start, end).Find(&transactions).Error; err != nil {
 		return rentDashboardSummary{}, err
 	}
+	incomeTransactions := make([]paymentTransaction, 0, len(transactions))
 	for _, transaction := range transactions {
 		if transaction.Direction == "expense" {
 			summary.ExpenseCents += transaction.AmountCents
 			summary.ExpenseCount++
 		} else if transaction.Direction == "income" {
 			summary.IncomeCount++
+			incomeTransactions = append(incomeTransactions, transaction)
 		}
+	}
+	var incomeAllocations []paymentAllocation
+	if len(incomeTransactions) > 0 {
+		transactionIDs := make([]uint64, 0, len(incomeTransactions))
+		for _, transaction := range incomeTransactions {
+			transactionIDs = append(transactionIDs, transaction.ID)
+		}
+		if err := s.db.WithContext(ctx).Where("user_id = ? AND payment_transaction_id IN ?", userID, transactionIDs).Find(&incomeAllocations).Error; err != nil {
+			return rentDashboardSummary{}, err
+		}
+	}
+	bankMetrics := summarizeRentDashboardBankMetrics(incomeTransactions, incomeAllocations)
+	summary.PendingCents = bankMetrics.PendingCents
+	summary.PendingCount = bankMetrics.PendingCount
+	summary.OtherIncomeCents = bankMetrics.OtherIncomeCents
+	summary.OtherIncomeCount = bankMetrics.OtherIncomeCount
+	coverage, err := latestBankSyncCoverage(ctx, s.db, userID)
+	if err != nil {
+		return rentDashboardSummary{}, err
+	}
+	summary.SyncCoverage = coverage
+	status, err := latestBankSyncStatus(ctx, s.db, userID)
+	if err != nil {
+		return rentDashboardSummary{}, err
+	}
+	summary.SyncStatus = status
+	if summary.SyncStatus != bankSyncStatusSucceeded {
+		lastSuccessful, err := latestSuccessfulBankSyncCoverage(ctx, s.db, userID)
+		if err != nil {
+			return rentDashboardSummary{}, err
+		}
+		summary.LastSuccessfulSyncCoverage = lastSuccessful
+	} else {
+		summary.LastSuccessfulSyncCoverage = summary.SyncCoverage
 	}
 	return summary, nil
 }
