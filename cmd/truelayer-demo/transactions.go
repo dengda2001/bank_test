@@ -255,7 +255,7 @@ func validateTransactionFilters(filters transactionFilters) error {
 		return errors.New("direction filter is invalid")
 	}
 	switch filters.MatchStatus {
-	case "", "matched", "candidate", "unmatched", "needs_review", "ignored":
+	case "", "matched", "candidate", "unmatched", "needs_review", "partial", "ignored":
 	default:
 		return errors.New("match status filter is invalid")
 	}

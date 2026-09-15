@@ -24,6 +24,8 @@ var billingTemplate = template.Must(template.New("billing").Parse(`<!doctype htm
     .status.candidate { color: #ffe0a7; background: rgba(233,184,114,0.10); }
     .status.unmatched { color: #d8dcff; background: rgba(104,114,217,0.12); }
     .status.needs_review { color: #ffd0ce; background: rgba(255,139,134,0.10); }
+    .status.partial { color: #ffe0a7; background: rgba(233,184,114,0.10); }
+    .status.ignored { color: var(--foreground-muted); background: rgba(255,255,255,0.08); }
     .status-link { text-decoration: none; cursor: pointer; }
     .status-link:hover { border-color: currentColor; }
     .description { max-width: 260px; color: var(--foreground); overflow-wrap: anywhere; }
@@ -41,6 +43,9 @@ var billingTemplate = template.Must(template.New("billing").Parse(`<!doctype htm
     .month-choice-form select { min-height: 34px; font-size: 12px; }
     .month-choice-form .btn { min-height: 32px; padding: 0 9px; font-size: 12px; }
     .bind-empty { margin-top: 8px; }
+    .action-form { display: grid; gap: 6px; margin-top: 8px; min-width: 190px; }
+    .action-form input { min-height: 30px; padding: 5px 8px; font-size: 12px; }
+    .action-form .btn { min-height: 30px; padding: 0 9px; font-size: 12px; }
     @media (max-width: 820px) { .filterbar { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 480px) { .filterbar { grid-template-columns: 1fr; } }
   </style>
@@ -71,10 +76,16 @@ var billingTemplate = template.Must(template.New("billing").Parse(`<!doctype htm
       {{if eq .Error "data_fetch_failed"}}<div class="notice error">银行数据刷新失败，已有流水已保留。</div>{{end}}
       {{if eq .Error "confirmation_failed"}}<div class="notice error">这笔租金无法确认，请检查租客、金额和月份。</div>{{end}}
       {{if eq .Error "invalid_confirmation"}}<div class="notice error">关联请求无效。</div>{{end}}
+      {{if eq .Error "invalid_allocation"}}<div class="notice error">归类请求无效。</div>{{end}}
+      {{if eq .Error "allocation_failed"}}<div class="notice error">归类失败，请检查余额、币种、租客和租金月份。</div>{{end}}
+      {{if eq .Error "invalid_transaction_action"}}<div class="notice error">流水操作请求无效。</div>{{end}}
+      {{if eq .Error "transaction_action_failed"}}<div class="notice error">流水操作失败，请检查当前状态和操作原因。</div>{{end}}
       {{if eq .Error "invalid_filter"}}<div class="notice error">筛选条件无效。</div>{{end}}
       {{if eq .Message "bank_connected"}}<div class="notice ok">银行账户已连接，流水已导入。</div>{{end}}
       {{if eq .Message "refreshed"}}<div class="notice ok">银行数据已刷新。</div>{{end}}
       {{if eq .Message "rent_confirmed"}}<div class="notice ok">租金已确认，符合条件的同名流水也已关联。</div>{{end}}
+      {{if eq .Message "allocation_saved"}}<div class="notice ok">流水归类已保存。</div>{{end}}
+      {{if eq .Message "transaction_action_saved"}}<div class="notice ok">流水操作已保存。</div>{{end}}
       {{if eq .Message "legacy_imported"}}<div class="notice ok">旧版 JSON 和 JSONL 数据已导入。</div>{{end}}
       {{if eq .Error "legacy_import_failed"}}<div class="notice error">旧数据导入失败，请检查源文件。</div>{{end}}
       <form class="filterbar" method="get" action="/billing" aria-label="Transaction filters">
@@ -96,7 +107,7 @@ var billingTemplate = template.Must(template.New("billing").Parse(`<!doctype htm
               <td class="mono">{{.DateDisplay}}</td>
               <td><div class="description">{{.Description}}</div><div class="mono">REF: {{.Reference}}</div></td>
               <td>{{.AccountName}}<br><span class="mono">{{.AccountID}}</span></td>
-              <td><a class="status status-link {{.MatchStatus}}" href="/billing?match_status={{.MatchStatus}}" title="筛选：{{.MatchStatusLabel}}">{{.MatchStatusLabel}}</a>{{if .NeedsMonthChoice}}<div class="tiny">已关联：请确认租金月份</div><form class="month-choice-form" method="post" action="/billing/confirm"><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="tenant_id" value="{{.TenantID}}"><select name="period" aria-label="选择租金月份" required><option value="">选择月份...</option>{{range .MonthOptions}}<option value="{{.Period}}">{{.Label}} · 应收 {{.Expected}} · 已收 {{.Paid}} · 未收 {{.Remaining}}</option>{{end}}</select><button class="btn" type="submit">确认月份</button></form>{{else if .CanConfirm}}<div class="tiny">候选租客：{{.CandidateTenantName}}</div><form class="confirm-form" method="post" action="/billing/confirm"><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="tenant_id" value="{{.CandidateTenantID}}"><button class="btn" type="submit">关联并记住</button></form>{{else if and (eq .Direction "income") (ne .MatchStatus "matched")}}{{if $.TenantOptions}}<form class="bind-form" method="post" action="/billing/confirm"><input type="hidden" name="transaction_id" value="{{.ID}}"><select name="tenant_id" aria-label="关联流水到租客" required><option value="">选择租客...</option>{{range $.TenantOptions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select><button class="btn" type="submit">关联并记住</button></form>{{else}}<div class="tiny bind-empty">请先添加租客，再关联收入流水。</div>{{end}}{{end}}</td>
+              <td><a class="status status-link {{.MatchStatus}}" href="/billing?match_status={{.MatchStatus}}" title="筛选：{{.MatchStatusLabel}}">{{.MatchStatusLabel}}</a>{{if .NeedsMonthChoice}}<div class="tiny">已关联：请确认租金月份</div><form class="month-choice-form" method="post" action="/billing/confirm"><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="tenant_id" value="{{.TenantID}}"><select name="period" aria-label="选择租金月份" required><option value="">选择月份...</option>{{range .MonthOptions}}<option value="{{.Period}}">{{.Label}} · 应收 {{.Expected}} · 已收 {{.Paid}} · 未收 {{.Remaining}}</option>{{end}}</select><button class="btn" type="submit">确认月份</button></form>{{else if .CanConfirm}}<div class="tiny">候选租客：{{.CandidateTenantName}}</div><form class="confirm-form" method="post" action="/billing/confirm"><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="tenant_id" value="{{.CandidateTenantID}}"><button class="btn" type="submit">关联并记住</button></form>{{else if and (eq .Direction "income") (ne .MatchStatus "matched") (ne .MatchStatus "ignored")}}{{if $.TenantOptions}}<form class="bind-form" method="post" action="/billing/confirm"><input type="hidden" name="transaction_id" value="{{.ID}}"><select name="tenant_id" aria-label="关联流水到租客" required><option value="">选择租客...</option>{{range $.TenantOptions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select><button class="btn" type="submit">关联并记住</button></form>{{else}}<div class="tiny bind-empty">请先添加租客，再关联收入流水。</div>{{end}}{{end}}{{if eq .MatchStatus "ignored"}}<form class="action-form" method="post" action="/billing/restore"><input type="hidden" name="transaction_id" value="{{.ID}}"><input name="reason" aria-label="恢复原因" placeholder="恢复原因" required><button class="btn" type="submit">恢复处理</button></form>{{else if or (eq .MatchStatus "matched") (eq .MatchStatus "partial")}}<form class="action-form" method="post" action="/billing/revoke"><input type="hidden" name="transaction_id" value="{{.ID}}"><input name="reason" aria-label="撤销原因" placeholder="撤销原因" required><button class="btn danger" type="submit">撤销匹配</button></form>{{else if eq .Direction "income"}}<form class="action-form" method="post" action="/billing/ignore"><input type="hidden" name="transaction_id" value="{{.ID}}"><input name="reason" aria-label="忽略原因" placeholder="忽略原因" required><button class="btn" type="submit">无需匹配</button></form>{{end}}</td>
             </tr>
           {{end}}</tbody>
         </table></div>

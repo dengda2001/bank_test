@@ -1474,6 +1474,56 @@ func TestSummarizeTransactionAllocationsReportsPartialRemainderAndKinds(t *testi
 	}
 }
 
+func TestProjectTransactionMatchPreservesAllocationStateAndActionReason(t *testing.T) {
+	tenantID := uint64(17)
+	source := paymentTransaction{AmountCents: 120000}
+	allocations := []paymentAllocation{{
+		TenantID:       &tenantID,
+		AmountCents:    80000,
+		AllocationKind: allocationKindRent,
+		Status:         allocationStatusConfirmed,
+	}}
+
+	projected := projectTransactionMatch(source, allocations, "", "")
+	if projected.Status != "partial" || projected.MatchedTenantID == nil || *projected.MatchedTenantID != tenantID {
+		t.Fatalf("allocation projection=%+v want partial tenant %d", projected, tenantID)
+	}
+
+	ignored := projectTransactionMatch(source, nil, transactionActionIgnore, "duplicate payment")
+	if ignored.Status != "ignored" || ignored.MatchedTenantID != nil || ignored.Reason != "duplicate payment" {
+		t.Fatalf("ignore projection=%+v want ignored without tenant", ignored)
+	}
+
+	restored := projectTransactionMatch(source, nil, transactionActionRestore, "review again")
+	if restored.Status != "unmatched" || restored.MatchedTenantID != nil || restored.Reason != "review again" {
+		t.Fatalf("restore projection=%+v want unmatched", restored)
+	}
+
+	revoked := projectTransactionMatch(source, []paymentAllocation{{
+		TenantID:       &tenantID,
+		AmountCents:    120000,
+		AllocationKind: allocationKindRent,
+		Status:         allocationStatusVoided,
+	}}, transactionActionRevokeAllocations, "wrong month")
+	if revoked.Status != "unmatched" || revoked.MatchedTenantID != nil || revoked.Reason != "wrong month" {
+		t.Fatalf("revoke projection=%+v want unmatched", revoked)
+	}
+}
+
+func TestNormalizeTransactionActionReasonRejectsBlankAndTruncates(t *testing.T) {
+	if _, err := normalizeTransactionActionReason("  "); err == nil {
+		t.Fatal("blank action reason should be rejected")
+	}
+	longReason := strings.Repeat("字", 600)
+	reason, err := normalizeTransactionActionReason(longReason)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len([]rune(reason)) != 512 {
+		t.Fatalf("reason rune length=%d want 512", len([]rune(reason)))
+	}
+}
+
 func ptrString(value string) *string {
 	return &value
 }
