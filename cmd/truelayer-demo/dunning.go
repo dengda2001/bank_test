@@ -80,6 +80,7 @@ type dunningCandidate struct {
 	EmailError        string
 	Selectable        bool
 	DefaultSelected   bool
+	Selected          bool
 	LastDunningAt     *time.Time
 	LastDunningStatus string
 	SentToday         bool

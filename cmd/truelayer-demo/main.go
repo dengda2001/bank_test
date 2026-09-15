@@ -283,6 +283,7 @@ type rentDashboardPageData struct {
 	SyncCoverage               string
 	SyncStatus                 string
 	LastSuccessfulSyncCoverage string
+	Dunning                    dunningDrawerData
 	Message                    string
 	Error                      string
 }
@@ -397,6 +398,9 @@ func main() {
 	mux.HandleFunc("/login-local", a.handleLocalLogin)
 	mux.HandleFunc("/logout", a.handleLogout)
 	mux.HandleFunc("/rent-dashboard", a.handleRentDashboard)
+	mux.HandleFunc("/dunning/config", a.handleDunningConfig)
+	mux.HandleFunc("/dunning/preview", a.handleDunningPreview)
+	mux.HandleFunc("/dunning/send", a.handleDunningSend)
 	mux.HandleFunc("/billing", a.handleBilling)
 	mux.HandleFunc("/billing/confirm", a.handleRentMatchConfirmation)
 	mux.HandleFunc("/billing/allocate", a.handleTransactionAllocation)

@@ -295,6 +295,107 @@ Correct:
 history := buildTenantBillingHistory(tenants, obligations, confirmedPaymentRows, now)
 ```
 
+## Scenario: Dunning Mail Delivery and Attempt Audit
+
+### 1. Scope / Trigger
+
+- Trigger: Any monthly rent reminder or overdue email initiated from the
+  authenticated Dashboard.
+- The Dashboard may select only the currently rendered page of the selected
+  month; delivery is always one tenant per message.
+- `migrations/008_dunning_mail.sql` is the schema source for sender settings
+  and immutable delivery snapshots.
+
+### 2. Signatures
+
+- `dunningService.listCandidates(ctx, userID, periodMonth, filters)` returns
+  account-scoped candidates for the current Dashboard page.
+- `dunningService.preview(ctx, userID, periodMonth, obligationIDs, now)` is a
+  read-only operation that returns fixed-template messages.
+- `dunningService.send(ctx, userID, periodMonth, obligationIDs, requestKey,
+  forceResend, retryOfAttemptID, serviceFrom, delivery, now)` owns delivery
+  state, idempotency, retry linkage, and audit snapshots.
+- `POST /dunning/config`, `/dunning/preview`, and `/dunning/send` accept the
+  signed v2 session user and preserve the Dashboard month/filter/page context.
+
+### 3. Contracts
+
+- `dunning_sender_configs` is unique per `user_id`; it stores the landlord
+  display name and Reply-To address, never SMTP passwords.
+- `dunning_send_attempts` stores `user_id`, tenant/obligation/month ownership,
+  expected/paid/balance cents, currency, recipient, subject/body, sender
+  snapshots, status, request key, operation ID, and optional retry parent.
+- `(user_id, request_key, rent_obligation_id)` is unique. A repeated request
+  returns the existing attempt and must not call the mail delivery twice.
+- The account-scoped service re-reads effective bank allocations and confirmed
+  cash receipts immediately before sending. A paid or invalid recipient is
+  audited as skipped/failed without external delivery.
+- SMTP service-from is explicit `DUNNING_SMTP_FROM`; landlord Reply-To is a
+  separate persisted value. No Bcc/Cc recipient list is generated.
+- Templates are fixed English reminder/overdue messages. The overdue day
+  count and same-day resend guard use the Europe/Dublin calendar date.
+
+### 4. Validation & Error Matrix
+
+- Missing or invalid SMTP host, port, or service-from -> reject before any
+  network call; preview remains read-only.
+- Missing sender configuration -> preview explains the configuration gap and
+  send does not create an external delivery.
+- Empty selection, more than one Dashboard page, or an obligation outside the
+  current page -> reject with an authorization-safe error.
+- A successful send on the same Dublin calendar date -> skip by default;
+  resend requires an explicit confirmation flag.
+- Retry IDs must belong to the same user/obligation and have `failed` status;
+  retry creates a new attempt linked by `retry_of_attempt_id`.
+- Cross-user sender, tenant, obligation, or attempt lookup -> no data or
+  delivery; posted IDs are never trusted without ownership predicates.
+
+### 5. Good/Base/Bad Cases
+
+- Good: Render candidates from the current projected Dashboard rows, then
+  re-read the selected obligation before snapshotting and delivering one
+  RFC822 message addressed only to that tenant.
+- Base: Preview creates zero attempt rows; one send creates one accepted then
+  sent/failed snapshot, and a same-key retry creates no second delivery.
+- Bad: Sending from the landlord Reply-To address, putting multiple tenants in
+  To/Cc/Bcc, trusting stale paid totals, or recording only aggregate batch
+  status without per-recipient snapshots.
+
+### 6. Tests Required
+
+- Template and parser tests for sender fields, current-page context, preview,
+  same-day confirmation, failed retry, and accessible drawer controls.
+- MySQL tests run migrations twice, verify candidate and attempt ownership,
+  preview no-write behavior, per-recipient headers, request idempotency,
+  concurrent duplicate clicks, failed retry linkage, paid re-read, and
+  cross-user isolation.
+- SMTP unit tests must prove missing configuration fails before network access
+  and RFC822 output has exactly one To plus a separate Reply-To.
+
+### 7. Wrong vs Correct
+
+Wrong:
+
+```go
+smtp.SendMail(host, auth, landlordReplyTo, allTenantEmails, body)
+```
+
+Correct:
+
+```go
+attempt, existing, err := service.reserveDunningAttempt(ctx, snapshot)
+if err != nil || existing {
+    return attempt, err
+}
+err = delivery.Send(ctx, dunningEmail{
+    FromEmail: serviceFrom,
+    To:        snapshot.RecipientEmail,
+    ReplyTo:   snapshot.ReplyToEmail,
+    Subject:   snapshot.Subject,
+    Body:      snapshot.Body,
+})
+```
+
 ## Scenario: Cash Rent Receipt Ledger and Projection
 
 ### 1. Scope / Trigger

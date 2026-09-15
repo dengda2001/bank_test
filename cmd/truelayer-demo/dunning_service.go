@@ -25,10 +25,11 @@ type dunningPreviewBatch struct {
 }
 
 type dunningSendResult struct {
-	Candidate dunningCandidate
-	Attempt   *dunningSendAttempt
-	Error     string
-	Skipped   bool
+	Candidate       dunningCandidate
+	Attempt         *dunningSendAttempt
+	Error           string
+	Skipped         bool
+	RetryRequestKey string
 }
 
 func (s *dunningService) findDunningAttemptByRequest(ctx context.Context, userID, obligationID uint64, requestKey string) (dunningSendAttempt, bool, error) {
@@ -254,12 +255,16 @@ func (s *dunningService) send(ctx context.Context, userID uint64, periodMonth ti
 	if userID == 0 {
 		return nil, errors.New("userID is required")
 	}
-	if strings.TrimSpace(requestKey) == "" || len([]rune(requestKey)) > 191 || strings.ContainsAny(requestKey, "\r\n") {
-		return nil, errors.New("dunning request key is invalid")
+	requestKey = strings.TrimSpace(requestKey)
+	if err := validateDunningRequestKey(requestKey); err != nil {
+		return nil, err
 	}
 	ids := uniqueDunningIDs(obligationIDs)
 	if len(ids) == 0 || len(ids) > dashboardMaxPageSize {
 		return nil, errors.New("a current-page obligation selection is required")
+	}
+	if retryOfAttemptID != 0 && len(ids) != 1 {
+		return nil, errors.New("a retry must select exactly one obligation")
 	}
 	if delivery == nil {
 		return nil, errors.New("dunning delivery is not configured")
@@ -283,7 +288,7 @@ func (s *dunningService) send(ctx context.Context, userID uint64, periodMonth ti
 	results := make([]dunningSendResult, 0, len(ids))
 	for _, obligationID := range ids {
 		result := dunningSendResult{}
-		candidate, previous, found, err := s.loadDunningCandidate(ctx, userID, obligationID, periodMonth, now)
+		candidate, _, found, err := s.loadDunningCandidate(ctx, userID, obligationID, periodMonth, now)
 		if err != nil {
 			return nil, err
 		}
@@ -303,7 +308,6 @@ func (s *dunningService) send(ctx context.Context, userID uint64, periodMonth ti
 				}
 				return nil, err
 			}
-			_ = previous
 		}
 		if candidate.BalanceCents <= 0 {
 			result.Error = "账单已缴清，不能催缴"
@@ -384,6 +388,13 @@ func (s *dunningService) send(ctx context.Context, userID uint64, periodMonth ti
 		results = append(results, result)
 	}
 	return results, nil
+}
+
+func validateDunningRequestKey(value string) error {
+	if value == "" || len([]rune(value)) > 191 || strings.ContainsAny(value, "\r\n") {
+		return errors.New("dunning request key is invalid")
+	}
+	return nil
 }
 
 func (s *dunningService) updateDunningAttemptFailure(ctx context.Context, userID, attemptID uint64, reason string) error {

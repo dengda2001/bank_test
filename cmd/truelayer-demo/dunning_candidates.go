@@ -48,6 +48,20 @@ func (s *dunningService) listCandidatesForRows(ctx context.Context, userID uint6
 	if err := s.db.WithContext(ctx).Where("user_id = ? AND id IN ?", userID, obligationIDs).Find(&obligations).Error; err != nil {
 		return nil, err
 	}
+	var allocations []paymentAllocation
+	if err := s.db.WithContext(ctx).Where("user_id = ? AND rent_obligation_id IN ?", userID, obligationIDs).Find(&allocations).Error; err != nil {
+		return nil, err
+	}
+	var cashReceipts []cashReceipt
+	if err := s.db.WithContext(ctx).Where("user_id = ? AND rent_obligation_id IN ?", userID, obligationIDs).Find(&cashReceipts).Error; err != nil {
+		return nil, err
+	}
+	var attempts []dunningSendAttempt
+	if err := s.db.WithContext(ctx).
+		Where("user_id = ? AND rent_obligation_id IN ?", userID, obligationIDs).
+		Order("created_at DESC, id DESC").Find(&attempts).Error; err != nil {
+		return nil, err
+	}
 	tenantByID := make(map[uint64]tenant, len(tenants))
 	for _, row := range tenants {
 		tenantByID[row.ID] = row
@@ -56,11 +70,15 @@ func (s *dunningService) listCandidatesForRows(ctx context.Context, userID uint6
 	for _, row := range obligations {
 		obligationByID[row.ID] = row
 	}
-	var attempts []dunningSendAttempt
-	if err := s.db.WithContext(ctx).
-		Where("user_id = ? AND rent_obligation_id IN ?", userID, obligationIDs).
-		Order("created_at DESC, id DESC").Find(&attempts).Error; err != nil {
-		return nil, err
+	allocationsByObligation := make(map[uint64][]paymentAllocation, len(obligationIDs))
+	for _, allocation := range allocations {
+		if allocation.RentObligationID != nil {
+			allocationsByObligation[*allocation.RentObligationID] = append(allocationsByObligation[*allocation.RentObligationID], allocation)
+		}
+	}
+	cashReceiptsByObligation := make(map[uint64][]cashReceipt, len(obligationIDs))
+	for _, receipt := range cashReceipts {
+		cashReceiptsByObligation[receipt.RentObligationID] = append(cashReceiptsByObligation[receipt.RentObligationID], receipt)
 	}
 	latestByObligation := make(map[uint64]*dunningSendAttempt)
 	sentTodayByObligation := make(map[uint64]bool)
@@ -77,9 +95,10 @@ func (s *dunningService) listCandidatesForRows(ctx context.Context, userID uint6
 	for _, row := range rows {
 		tenantRow, tenantOK := tenantByID[row.TenantID]
 		obligation, obligationOK := obligationByID[row.ObligationID]
-		if !tenantOK || !obligationOK {
+		if !tenantOK || !obligationOK || obligation.TenantID != row.TenantID {
 			continue
 		}
+		obligation = projectRentObligation(obligation, allocationsByObligation[obligation.ID], cashReceiptsByObligation[obligation.ID], now)
 		candidate := buildDunningCandidate(obligation, tenantRow, now, latestByObligation[obligation.ID])
 		candidate.SentToday = sentTodayByObligation[obligation.ID]
 		candidate.DefaultSelected = candidate.Selectable && !candidate.SentToday

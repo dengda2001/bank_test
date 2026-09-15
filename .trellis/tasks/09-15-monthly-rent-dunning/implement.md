@@ -25,19 +25,19 @@
 
 ### 切片 3：Dashboard 抽屉和配置入口
 
-- [ ] 在 Dashboard 当前页增加催缴入口、单月选择、候选勾选、预览和逐人结果。
-- [ ] 搜索／状态／月份／页码变化清空选择与预览；只允许当前页选择。
-- [ ] 展示缺配置、无效邮箱、已发送、失败、已缴清和成功状态，并提供单项重试。
-- [ ] 更新 HTTP／模板测试；在有可控 SMTP sink 和数据库时执行浏览器验收。
+- [x] 在 Dashboard 当前页增加催缴入口、单月选择、候选勾选、预览和逐人结果。
+- [x] 搜索／状态／月份／页码变化清空选择与预览；只允许当前页选择。
+- [x] 展示缺配置、无效邮箱、已发送、失败、已缴清和成功状态，并提供单项重试。
+- [x] 更新 HTTP／模板测试；当前环境无可用 MySQL DSN／DevTools MCP，浏览器数据库路径留待集成环境复核。
 
 ## 检查点
 
-- [ ] `go test ./cmd/truelayer-demo -count=1`、`go test ./... -count=1`、`go vet ./...` 和 `git diff --check` 通过。
-- [ ] `dunning_send_attempts` 每条记录都有 user、账单月、金额和邮件快照；没有真实 SMTP 配置时测试不会联网。
-- [ ] 所有 dunning 查询／写入严格按 user ID；Dashboard 原有银行／现金明细无回归。
+- [x] `go test ./cmd/truelayer-demo -count=1`、`go test ./... -count=1`、`go vet ./...` 和 `git diff --check` 通过。
+- [x] `dunning_send_attempts` 每条记录都有 user、账单月、金额和邮件快照；没有真实 SMTP 配置时测试不会联网。
+- [x] 所有 dunning 查询／写入严格按 user ID；Dashboard 原有银行／现金明细无回归。
 
 ## 完成门槛
 
-- [ ] PRD 六条验收标准都有单元、数据库或 HTTP 证据。
-- [ ] 更新 backend database spec，完成 Trellis quality check。
+- [x] PRD 六条验收标准都有单元、数据库或 HTTP 证据；MySQL／浏览器验收受当前环境缺少 DSN 与 DevTools 的限制，保留为可执行集成测试。
+- [x] 更新 backend database spec，完成 Trellis quality check。
 - [ ] 独立提交、推送、归档并记录 journal；之后再启动 API E2E 子任务。

@@ -11,6 +11,10 @@ func (a *app) handleRentDashboard(w http.ResponseWriter, r *http.Request) {
 	if !a.requireAuth(w, r) {
 		return
 	}
+	a.renderRentDashboard(w, r, nil)
+}
+
+func (a *app) renderRentDashboard(w http.ResponseWriter, r *http.Request, action *dunningDashboardAction) {
 	period := r.URL.Query().Get("period")
 	filters, filtersErr := rentDashboardFiltersFromQuery(r.URL.Query())
 	if filtersErr != nil {
@@ -19,6 +23,12 @@ func (a *app) handleRentDashboard(w http.ResponseWriter, r *http.Request) {
 	periodMonth, err := parsePeriodMonth(period)
 	if err != nil {
 		periodMonth = monthStart(time.Now().UTC())
+	}
+	if action != nil {
+		periodMonth = monthStart(action.Period)
+		filters = action.Filters
+		filtersErr = nil
+		period = periodMonth.Format("2006-01")
 	}
 	data := rentDashboardPageData{
 		Username:       a.cfg.AdminUsername,
@@ -89,6 +99,12 @@ func (a *app) handleRentDashboard(w http.ResponseWriter, r *http.Request) {
 				data.CollectionPercent = 100
 			}
 		}
+		dunningView, err := a.dunningDrawerForDashboard(r.Context(), userID, periodMonth, filters, summary.Rows, action)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		data.Dunning = dunningView
 	} else {
 		tenants, _ := a.loadTenants()
 		expenses, _ := a.loadExpenses()
@@ -125,6 +141,20 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Funcs(t
 			return totalPages
 		}
 		return page + 1
+	},
+	"dunningDeliveryLabel": func(status string) string {
+		switch status {
+		case dunningDeliveryAccepted:
+			return "排队中"
+		case dunningDeliverySent:
+			return "已发送"
+		case dunningDeliveryFailed:
+			return "发送失败"
+		case dunningDeliverySkipped:
+			return "已跳过"
+		default:
+			return "未发送"
+		}
 	},
 }).Parse(`<!doctype html>
 <html lang="zh-CN">
@@ -179,9 +209,39 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Funcs(t
     .payment-item { display: grid; grid-template-columns: 140px 170px minmax(180px, 1fr) minmax(160px, 1fr) 100px; gap: 12px; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.04); color: var(--foreground-subtle); font-size: 12px; }
     .payment-item:last-child { border-bottom: 0; }
     .payment-item .amount { font-size: 13px; }
-    .tenant-link, .void-link { color: inherit; text-decoration: none; border-bottom: 1px dashed rgba(255,255,255,.35); }
-    .tenant-link:hover, .void-link:hover { color: #fff; border-color: currentColor; }
-    @media (max-width: 760px) { .payment-item { grid-template-columns: 1fr 1fr; } .payment-item .payment-description { grid-column: 1 / -1; } }
+	    .tenant-link, .void-link { color: inherit; text-decoration: none; border-bottom: 1px dashed rgba(255,255,255,.35); }
+	    .tenant-link:hover, .void-link:hover { color: #fff; border-color: currentColor; }
+	    .dunning-launch { white-space: nowrap; }
+	    .dunning-drawer { margin: 18px 0; padding: 20px; border-color: rgba(104,114,217,.42); }
+	    .dunning-drawer[hidden] { display: none; }
+	    .dunning-drawer .panel-head { align-items: flex-start; }
+	    .dunning-drawer h2 { margin: 0 0 5px; }
+	    .dunning-grid { display: grid; grid-template-columns: minmax(220px, .75fr) minmax(0, 1.25fr); gap: 20px; }
+	    .dunning-config, .dunning-selection { min-width: 0; }
+	    .dunning-config { padding-right: 20px; border-right: 1px solid rgba(255,255,255,.08); }
+	    .dunning-config form, .dunning-selection form { display: grid; gap: 10px; }
+	    .dunning-config label { display: grid; gap: 6px; }
+	    .dunning-config input { min-height: 40px; border-radius: 12px; padding: 8px 11px; background: rgba(255,255,255,.06); }
+	    .dunning-selection { display: grid; gap: 12px; }
+	    .dunning-candidates { display: grid; gap: 7px; }
+	    .dunning-candidate { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: rgba(255,255,255,.025); }
+	    .dunning-candidate:has(input:checked) { border-color: rgba(104,114,217,.56); background: rgba(104,114,217,.08); }
+	    .dunning-candidate.is-disabled { opacity: .58; }
+	    .dunning-candidate strong { display: block; }
+	    .dunning-candidate .amount { white-space: nowrap; }
+	    .dunning-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+	    .dunning-actions label { color: var(--foreground-subtle); font-size: 12px; }
+	    .dunning-notice { margin: 0; }
+	    .dunning-preview, .dunning-results { display: grid; gap: 8px; margin-top: 12px; }
+	    .dunning-preview-row, .dunning-result-row { padding: 12px; border-left: 3px solid rgba(104,114,217,.72); background: rgba(255,255,255,.035); }
+	    .dunning-preview-row pre { max-height: 170px; overflow: auto; margin: 8px 0 0; white-space: pre-wrap; color: var(--foreground-subtle); font: 12px/1.6 var(--mono); }
+	    .dunning-result-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; border-left-color: var(--positive); }
+	    .dunning-result-row.failed { border-left-color: var(--negative); }
+	    .dunning-result-row.skipped { border-left-color: var(--foreground-muted); }
+	    .dunning-result-row .result-error { color: #ffd0ce; }
+	    .dunning-retry { margin-left: auto; }
+	    @media (max-width: 760px) { .dunning-grid { grid-template-columns: 1fr; } .dunning-config { padding-right: 0; padding-bottom: 16px; border-right: 0; border-bottom: 1px solid rgba(255,255,255,.08); } .dunning-result-row { align-items: flex-start; } .dunning-retry { width: 100%; margin-left: 0; } }
+	    @media (max-width: 760px) { .payment-item { grid-template-columns: 1fr 1fr; } .payment-item .payment-description { grid-column: 1 / -1; } }
     @media (max-width: 900px) { .dashboard-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 	    @media (max-width: 640px) { .dashboard-summary, .dashboard-secondary { grid-template-columns: 1fr; } .dashboard-toolbar { align-items: stretch; flex-direction: column; min-width: 0; } .dashboard-toolbar form { display: flex; width: 100%; max-width: 100%; min-width: 0; flex-wrap: wrap; align-items: stretch; gap: 8px; } .dashboard-toolbar form label { width: 100%; flex: 1 1 100%; min-width: 0; } .dashboard-toolbar form input, .dashboard-toolbar form select { min-width: 0; width: 100%; } .month-nav { flex: 0 0 42px; } .dashboard-filter .month-nav { flex: 0 0 42px; } .dashboard-filter .btn { flex: 1 1 auto; } }
   </style>
@@ -210,6 +270,7 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Funcs(t
 	  {{if .SyncCoverage}}{{if or (eq .SyncStatus "partial") (eq .SyncStatus "failed")}}<div class="notice error sync-status">最近一次银行同步异常：{{.SyncCoverage}}{{if .LastSuccessfulSyncCoverage}}<br>最近一次成功同步：{{.LastSuccessfulSyncCoverage}}{{end}}</div>{{else}}<div class="notice sync-status">银行流水状态：{{.SyncCoverage}}</div>{{end}}{{else}}<div class="notice sync-status">尚未完成银行同步，待处理金额可能不完整。</div>{{end}}
 	  <div class="dashboard-toolbar">
 	    <div><div class="label">月度收租情况</div><div class="tiny">查看本月应收、已收、未收和需要处理的流水。</div></div>
+	    {{if .Dunning.Enabled}}<button class="btn dunning-launch" type="button" data-dunning-open aria-controls="dunning-drawer" aria-expanded="{{if .Dunning.Open}}true{{else}}false{{end}}">邮件催缴</button>{{end}}
 	    <form class="dashboard-filter" method="get" action="/rent-dashboard">
 	      <a class="month-nav previous" href="{{rentDashboardURL .PreviousPeriod .SearchFilter .StatusFilter .SortFilter 1 .PageSize}}" aria-label="查看上个月">‹</a>
 	      <label for="period">选择月份<input id="period" name="period" type="month" value="{{.Period}}" onchange="this.form.submit()"></label>
@@ -249,10 +310,41 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Funcs(t
 	    {{else}}<div class="empty">本月还没有租金账单。请先添加租客并设置租金开始日期。</div>{{end}}
 	    {{if gt .TotalPages 1}}<nav class="dashboard-pagination" aria-label="租客账单分页"><a class="btn subtle{{if eq .Page 1}} disabled{{end}}" href="{{rentDashboardURL .Period .SearchFilter .StatusFilter .SortFilter (dashboardPreviousPage .Page) .PageSize}}">上一页</a><span class="tiny">第 {{.Page}} / {{.TotalPages}} 页 · 共 {{.FilteredCount}} 户</span><a class="btn subtle{{if eq .Page .TotalPages}} disabled{{end}}" href="{{rentDashboardURL .Period .SearchFilter .StatusFilter .SortFilter (dashboardNextPage .Page .TotalPages) .PageSize}}">下一页</a></nav>{{end}}
 	  </section>
-    </main>
+	  {{if .Dunning.Enabled}}
+	  <section id="dunning-drawer" class="panel dunning-drawer" aria-labelledby="dunning-title"{{if not .Dunning.Open}} hidden{{end}}>
+	    <div class="panel-head"><div><h2 id="dunning-title">邮件催缴</h2><div class="tiny">仅操作当前页未缴账单；每位租客单独发送，不共享收件人。</div></div><button class="btn subtle" type="button" data-dunning-close aria-controls="dunning-drawer">收起</button></div>
+	    {{if .Dunning.Error}}<div class="notice error dunning-notice" role="alert">{{.Dunning.Error}}</div>{{end}}
+	    {{if .Dunning.Notice}}<div class="notice ok dunning-notice" role="status">{{.Dunning.Notice}}</div>{{end}}
+	    <div class="dunning-grid">
+	      <section class="dunning-config" aria-labelledby="dunning-config-title">
+	        <div class="label" id="dunning-config-title">房东发件配置</div>
+	        <p class="tiny">邮件由 SMTP 服务地址发出，租客回复会回到这里。</p>
+	        <form method="post" action="/dunning/config">
+	          <input type="hidden" name="period" value="{{.Dunning.Period}}"><input type="hidden" name="search" value="{{.Dunning.SearchFilter}}"><input type="hidden" name="status" value="{{.Dunning.StatusFilter}}"><input type="hidden" name="sort" value="{{.Dunning.SortFilter}}"><input type="hidden" name="page" value="{{.Dunning.Page}}"><input type="hidden" name="page_size" value="{{.Dunning.PageSize}}">
+	          <label for="dunning-display-name">显示名称<input id="dunning-display-name" name="display_name" value="{{.Dunning.Sender.DisplayName}}" autocomplete="organization" required></label>
+	          <label for="dunning-reply-to">回复邮箱<input id="dunning-reply-to" name="reply_to_email" type="email" value="{{.Dunning.Sender.ReplyToEmail}}" autocomplete="email" required></label>
+	          <button class="btn" type="submit">保存发件配置</button>
+	        </form>
+	      </section>
+	      <section class="dunning-selection" aria-labelledby="dunning-selection-title">
+	        <div><div class="label" id="dunning-selection-title">{{.Dunning.Period}} 当前页候选</div>{{if .Dunning.ConfigurationError}}<div class="tiny">{{.Dunning.ConfigurationError}}</div>{{end}}</div>
+	        <form id="dunning-send-form" method="post" action="/dunning/preview">
+	          <input type="hidden" name="period" value="{{.Dunning.Period}}"><input type="hidden" name="search" value="{{.Dunning.SearchFilter}}"><input type="hidden" name="status" value="{{.Dunning.StatusFilter}}"><input type="hidden" name="sort" value="{{.Dunning.SortFilter}}"><input type="hidden" name="page" value="{{.Dunning.Page}}"><input type="hidden" name="page_size" value="{{.Dunning.PageSize}}"><input type="hidden" name="request_key" value="{{.Dunning.RequestKey}}">
+	          <div class="dunning-candidates">
+	            {{if .Dunning.Candidates}}{{range .Dunning.Candidates}}<label class="dunning-candidate{{if not .Selectable}} is-disabled{{end}}"><input type="checkbox" name="obligation_id" value="{{.ObligationID}}"{{if .Selected}} checked{{end}}{{if not .Selectable}} disabled{{end}}><span><strong>{{.TenantName}}</strong><span class="tiny">{{.Email}}{{if not .EmailValid}} · {{.EmailError}}{{else if .SentToday}} · 今天已发送{{else if .LastDunningStatus}} · 最近：{{dunningDeliveryLabel .LastDunningStatus}}{{end}}</span></span><span class="amount">{{.BalanceAmount}}</span></label>{{end}}{{else}}<div class="empty">当前页没有可催缴账单。</div>{{end}}
+	          </div>
+	          <div class="dunning-actions"><button class="btn subtle" type="submit" formaction="/dunning/preview">预览邮件</button><label><input type="checkbox" name="confirm_resend" value="1">确认同日重发</label><button class="btn" type="submit" formaction="/dunning/send">发送已选</button></div>
+	        </form>
+	        {{if .Dunning.PreviewRows}}<div class="dunning-preview" aria-live="polite"><div class="label">发送前预览</div>{{range .Dunning.PreviewRows}}<article class="dunning-preview-row"><strong>{{.Candidate.TenantName}}</strong>{{if .Message}}<div>{{.Message.Subject}} · {{.Message.RecipientEmail}}</div><pre>{{.Message.Body}}</pre>{{else}}<div class="result-error">{{.Error}}</div>{{end}}</article>{{end}}</div>{{end}}
+	        {{if .Dunning.Results}}<div class="dunning-results" aria-live="polite"><div class="label">发送结果</div>{{range .Dunning.Results}}<article class="dunning-result-row{{if .Attempt}}{{if eq .Attempt.DeliveryStatus "failed"}} failed{{else if eq .Attempt.DeliveryStatus "skipped"}} skipped{{end}}{{end}}"><strong>{{.Candidate.TenantName}}</strong>{{if .Attempt}}<span>{{dunningDeliveryLabel .Attempt.DeliveryStatus}}</span>{{end}}{{if .Error}}<span class="result-error">{{.Error}}</span>{{end}}{{if and .Attempt (eq .Attempt.DeliveryStatus "failed")}}<form class="dunning-retry" method="post" action="/dunning/send"><input type="hidden" name="period" value="{{$.Dunning.Period}}"><input type="hidden" name="search" value="{{$.Dunning.SearchFilter}}"><input type="hidden" name="status" value="{{$.Dunning.StatusFilter}}"><input type="hidden" name="sort" value="{{$.Dunning.SortFilter}}"><input type="hidden" name="page" value="{{$.Dunning.Page}}"><input type="hidden" name="page_size" value="{{$.Dunning.PageSize}}"><input type="hidden" name="request_key" value="{{.RetryRequestKey}}"><input type="hidden" name="obligation_id" value="{{.Candidate.ObligationID}}"><input type="hidden" name="retry_of_attempt_id" value="{{.Attempt.ID}}"><button class="btn subtle" type="submit">重试此人</button></form>{{end}}</article>{{end}}</div>{{end}}
+	      </section>
+	    </div>
+	  </section>
+	  {{end}}
+	    </main>
   </div>
   <script>
-    for (const row of document.querySelectorAll("[data-details-target]")) {
+	    for (const row of document.querySelectorAll("[data-details-target]")) {
       const details = document.getElementById(row.dataset.detailsTarget);
       const toggle = () => {
         const expanded = row.getAttribute("aria-expanded") === "true";
@@ -262,9 +354,20 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Funcs(t
       row.addEventListener("click", toggle);
       row.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggle(); }
-      });
-    }
-  </script>
+	      });
+	    }
+	    const dunningDrawer = document.getElementById("dunning-drawer");
+	    const dunningOpen = document.querySelector("[data-dunning-open]");
+	    const dunningClose = document.querySelector("[data-dunning-close]");
+	    const setDunningOpen = (open) => {
+	      if (!dunningDrawer || !dunningOpen) return;
+	      dunningDrawer.hidden = !open;
+	      dunningOpen.setAttribute("aria-expanded", String(open));
+	      if (open) dunningDrawer.scrollIntoView({behavior: "smooth", block: "start"});
+	    };
+	    dunningOpen?.addEventListener("click", () => setDunningOpen(true));
+	    dunningClose?.addEventListener("click", () => { setDunningOpen(false); dunningOpen?.focus(); });
+	  </script>
 </body>
 </html>
 `))
