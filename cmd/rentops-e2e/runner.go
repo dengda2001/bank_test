@@ -69,6 +69,7 @@ type e2eReport struct {
 	RunID      string              `json:"run_id"`
 	Mode       string              `json:"mode"`
 	TargetName string              `json:"target_name,omitempty"`
+	Fixture    *e2eFixtureManifest `json:"fixture,omitempty"`
 	StartedAt  time.Time           `json:"started_at"`
 	FinishedAt time.Time           `json:"finished_at"`
 	Status     string              `json:"status"`
@@ -264,6 +265,7 @@ func redactE2EValue(value any) any {
 	case e2eReport:
 		return e2eReport{
 			RunID: typed.RunID, Mode: typed.Mode, TargetName: typed.TargetName,
+			Fixture:   typed.Fixture,
 			StartedAt: typed.StartedAt, FinishedAt: typed.FinishedAt, Status: typed.Status,
 			Preflight: redactE2EValue(typed.Preflight).(e2ePreflight),
 			Scenarios: redactE2EValue(typed.Scenarios).([]e2eScenarioReport),

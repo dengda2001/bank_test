@@ -37,6 +37,9 @@ func main() {
 	}
 	preflight := validateE2EOptions(options)
 	report := newE2EReport(preflight, time.Now().UTC())
+	if manifest, manifestErr := newE2EFixtureManifest(options.RunID, report.StartedAt); manifestErr == nil {
+		report.Fixture = &manifest
+	}
 	if !preflight.Passed {
 		report.Error = "E2E preflight failed; no network or data mutation was attempted"
 		if err := writeE2EReport(options.ReportPath, report); err != nil {

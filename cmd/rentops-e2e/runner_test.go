@@ -177,3 +177,48 @@ func TestE2EHTTPClientRejectsOriginEscape(t *testing.T) {
 		}
 	}
 }
+
+func TestNewE2EFixtureManifestUsesUniqueRunIDPrefixedIdentifiers(t *testing.T) {
+	runID := "rentops-e2e-20260916-120000-a1b2c3d4"
+	manifest, err := newE2EFixtureManifest(runID, time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manifest.validate(); err != nil {
+		t.Fatal(err)
+	}
+	if manifest.Tenant.Name == "" || !strings.HasPrefix(manifest.Tenant.Name, runID) || !strings.HasPrefix(manifest.Tenant.RoomAddress, runID) {
+		t.Fatalf("tenant fixture is not isolated: %+v", manifest.Tenant)
+	}
+	if manifest.Expected.EURIncomeCents != 170000 || manifest.Expected.GBPIncomeCents != 2500 || manifest.Expected.PendingIncomeCount != 2 {
+		t.Fatalf("unexpected expected snapshot: %+v", manifest.Expected)
+	}
+}
+
+func TestNewE2EFixtureManifestRejectsInvalidRunID(t *testing.T) {
+	if _, err := newE2EFixtureManifest("shared-fixture", time.Now()); err == nil {
+		t.Fatal("invalid run ID unexpectedly generated a fixture")
+	}
+}
+
+func TestE2EReportCarriesFixtureWithoutCredentialFields(t *testing.T) {
+	runID := "rentops-e2e-20260916-120000-a1b2c3d4"
+	manifest, err := newE2EFixtureManifest(runID, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	report := newE2EReport(e2ePreflight{Passed: true, Mode: "dry-run", RunID: runID}, time.Now())
+	report.Fixture = &manifest
+	path := filepath.Join(t.TempDir(), "report.json")
+	if err := writeE2EReport(path, report); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	if !strings.Contains(text, runID+" tenant") || strings.Contains(text, "password") || strings.Contains(text, "dsn") || strings.Contains(text, "token") {
+		t.Fatalf("fixture report contains unexpected content: %s", body)
+	}
+}

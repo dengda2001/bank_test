@@ -14,7 +14,7 @@
 - [x] 实现运行标识、目标 allowlist 预检和脱敏机器报告；dry-run 不连接目标。
 - [x] 实现同一 HTTP cookie 会话；通过本地 HTTP 测试验证登录后的受保护请求复用 session。
 - [ ] 通过 `/login-local` 登录唯一隔离账户，断言 v2 session 和未授权拒绝。
-- [ ] 生成可复核的 fixture/expected manifest，不把密码、DSN 或 token 写入报告。
+- [x] 生成可复核的 runID 前缀 fixture/expected manifest，不把密码、DSN 或 token 写入报告。
 
 ### 切片 2：账本业务 HTTP 验收
 
