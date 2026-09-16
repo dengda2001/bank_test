@@ -274,12 +274,14 @@ func (s *transactionService) revokeTransactionAllocations(ctx context.Context, u
 		if err := s.writeTransactionAction(txdb, userID, transactionID, transactionActionRevokeAllocations, reason, idempotencyKey, operationID, now); err != nil {
 			return err
 		}
-		projection := projectTransactionMatch(source, allocations, transactionActionRevokeAllocations, reason)
-		if err := updateTransactionProjection(txdb, userID, transactionID, projection); err != nil {
-			return err
-		}
+		// The in-memory allocations were read before the void update above, so they
+		// still read as effective. Project from the persisted rows instead.
 		allocationsAfter := make([]paymentAllocation, 0, len(allocations))
 		if err := txdb.Where("payment_transaction_id = ? AND user_id = ?", transactionID, userID).Order("id ASC").Find(&allocationsAfter).Error; err != nil {
+			return err
+		}
+		projection := projectTransactionMatch(source, allocationsAfter, transactionActionRevokeAllocations, reason)
+		if err := updateTransactionProjection(txdb, userID, transactionID, projection); err != nil {
 			return err
 		}
 		summary = summarizeTransactionAllocations(source, allocationsAfter)
