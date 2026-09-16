@@ -880,6 +880,11 @@ func (a *app) requestCounts(ctx context.Context, r *http.Request) (tenantCount, 
 	return len(tenants), len(normalizePaymentTransactions(result)), len(expenses), nil
 }
 
+// tenantHistoryMonths is how far back the row expansion on the tenant list
+// looks. It includes the current month, so 6 covers this month plus the previous
+// five — enough to show a tenant who is behind across a quarter.
+const tenantHistoryMonths = 6
+
 func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 	if !a.requireAuth(w, r) {
 		return
@@ -898,7 +903,7 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if userID, ok := a.currentUserID(r); ok && a.db != nil {
-		history, err := newObligationService(a.db).listTenantBillingHistory(r.Context(), userID, monthStart(time.Now().UTC()), 3)
+		history, err := newObligationService(a.db).listTenantBillingHistory(r.Context(), userID, monthStart(time.Now().UTC()), tenantHistoryMonths)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -2406,6 +2411,11 @@ var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html
     .status.overdue, .status.needs_review { color: #991b1b; background: #fee2e2; }
     .status.partial { color: #92400e; background: #fef3c7; }
     .status.paid { color: #065f46; background: #d1fae5; }
+    /* 详情 and 编辑 used to be stacked with a <br>, which read as one broken
+       button. They sit side by side in their own cell, sized down so the pair
+       does not dominate the row. */
+    .row-actions { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+    .row-actions .btn { min-height: 32px; margin-top: 0; padding: 0 12px; font-size: 12px; }
     .tenant-history-row td, .tenant-month-details td { padding: 0; background: var(--surface-muted); }
     .tenant-history { padding: 14px 18px 16px 32px; border-top: 1px solid var(--border); }
     .tenant-history-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
@@ -2495,7 +2505,7 @@ var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html
         {{if .Rows}}
         <div class="table-wrap">
           <table>
-            <thead><tr><th>租客</th><th>付款人</th><th>租金</th><th>账单安排</th><th>房间</th><th>创建时间</th><th></th></tr></thead>
+            <thead><tr><th>租客</th><th>付款人</th><th>租金</th><th>账单安排</th><th>房间</th><th>创建时间</th><th>操作</th></tr></thead>
             <tbody>
               {{range .Rows}}
               <tr class="tenant-row" tabindex="0" role="button" aria-expanded="false" aria-controls="tenant-billing-{{.ID}}" data-tenant-target="tenant-billing-{{.ID}}">
@@ -2505,10 +2515,10 @@ var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html
                 <td>每月 {{.DueDay}} 日<br><span class="mono">{{.RentStartDate}}{{if .RentEndDate}} 至 {{.RentEndDate}}{{end}}</span></td>
                 <td>{{if .RoomLabel}}{{.RoomLabel}}<br>{{end}}{{.RoomAddress}}{{if .PropertyHint}}<br><span class="mono">{{.PropertyHint}}</span>{{end}}</td>
                 <td class="mono">{{.CreatedAt}}</td>
-                <td><a class="btn subtle" href="/tenants/{{.ID}}">详情</a><br><a class="btn subtle" href="/tenants?edit={{.ID}}">编辑</a></td>
+                <td><div class="row-actions"><a class="btn subtle" href="/tenants/{{.ID}}">详情</a><a class="btn subtle" href="/tenants?edit={{.ID}}">编辑</a></div></td>
               </tr>
               <tr id="tenant-billing-{{.ID}}" class="tenant-history-row" hidden><td colspan="7"><div class="tenant-history">
-                <div class="tenant-history-head"><h3>最近三个月缴费</h3><span class="tiny">应收账单 → 已确认流水</span></div>
+                <div class="tenant-history-head"><h3>最近六个月缴费</h3><span class="tiny">应收账单 → 已确认流水</span></div>
                 {{if .BillingHistory}}
                 <div class="table-wrap"><table class="tenant-history-table">
                   <thead><tr><th>月份</th><th>应收</th><th>实际收</th><th>未收</th><th>状态</th></tr></thead>
@@ -2517,7 +2527,7 @@ var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html
                     <tr id="tenant-month-{{.ObligationID}}" class="tenant-month-details" hidden><td colspan="5"><div class="payment-list"><h3>缴费流水明细</h3>{{if .Payments}}{{range .Payments}}<div class="payment-item"><span class="amount">{{.AmountDisplay}}</span><span class="mono">{{.DateDisplay}}</span><span class="payment-description">{{.Description}}</span><span class="mono">参考号：{{.Reference}}</span><span class="mono">{{.ConfirmationSource}}</span></div>{{end}}{{else}}<div class="tiny">该月暂无已确认缴费。</div>{{end}}</div></td></tr>
                   {{end}}</tbody>
                 </table></div>
-                {{else}}<div class="empty">最近三个月暂无适用账单。</div>{{end}}
+                {{else}}<div class="empty">最近六个月暂无适用账单。</div>{{end}}
               </div></td></tr>
               {{end}}
             </tbody>
