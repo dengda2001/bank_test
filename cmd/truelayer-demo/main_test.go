@@ -78,6 +78,20 @@ func TestWorkspaceTemplatesIncludeSharedCalendarPicker(t *testing.T) {
 	}
 }
 
+func TestWorkspaceUIPrimitivesHaveConsistentInteractionStates(t *testing.T) {
+	for _, expected := range []string{
+		".btn:focus-visible",
+		".btn:disabled",
+		".btn[aria-disabled=\"true\"]",
+		"input:focus-visible, select:focus-visible, textarea:focus-visible",
+		".btn {\n      min-height: 40px;",
+	} {
+		if !strings.Contains(workspacePageCSS, expected) {
+			t.Fatalf("workspace CSS missing interaction primitive %q", expected)
+		}
+	}
+}
+
 func TestAuthURLIncludesOAuthParameters(t *testing.T) {
 	a := app{cfg: config{
 		AuthBaseURL: "https://auth.truelayer-sandbox.com",

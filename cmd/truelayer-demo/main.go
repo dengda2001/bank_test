@@ -2277,7 +2277,16 @@ const workspacePageCSS = `
       background: radial-gradient(ellipse at top, #111225 0%, var(--background-base) 48%, var(--background-deep) 100%);
     }
     button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
     a { color: inherit; }
+    a:focus-visible,
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible {
+      outline: 2px solid var(--accent-bright);
+      outline-offset: 3px;
+    }
     .app {
       width: min(1480px, 100%);
       min-height: 100vh;
@@ -2397,7 +2406,7 @@ const workspacePageCSS = `
     }
     h2 { margin: 0; font-size: 17px; letter-spacing: 0; }
     .btn {
-      min-height: 38px;
+      min-height: 40px;
       border: 0;
       border-radius: 10px;
       padding: 0 14px;
@@ -2408,9 +2417,20 @@ const workspacePageCSS = `
       background: rgba(255,255,255,0.055);
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 0 0 1px rgba(255,255,255,0.08);
       cursor: pointer;
+      font-weight: 700;
+      transition: background 160ms ease, color 160ms ease, border-color 160ms ease, transform 160ms ease;
       text-decoration: none;
     }
-    .btn.primary { margin-top: 16px; background: var(--accent); color: white; }
+    .btn:hover { background: rgba(255,255,255,0.10); transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .btn:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 3px; }
+    .btn:disabled,
+    .btn[aria-disabled="true"] {
+      cursor: not-allowed;
+      opacity: 0.5;
+      transform: none;
+    }
+    .btn.primary { background: var(--accent); color: white; }
     .btn.danger { color: #ffd8d6; background: rgba(255,139,134,0.08); }
     .summary {
       display: grid;
@@ -2507,6 +2527,10 @@ const workspacePageCSS = `
     input:focus, select:focus, textarea:focus {
       border-color: rgba(104,114,217,0.85);
       box-shadow: 0 0 0 3px rgba(104,114,217,0.18);
+    }
+    input:focus-visible, select:focus-visible, textarea:focus-visible {
+      outline: 2px solid var(--accent-bright);
+      outline-offset: 2px;
     }
     .surface { overflow: hidden; }
     .surface .panel-head {
