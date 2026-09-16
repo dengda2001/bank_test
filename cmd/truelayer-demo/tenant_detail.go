@@ -188,10 +188,10 @@ var tenantDetailTemplate = template.Must(template.New("tenant-detail").Parse(`<!
   <title>RentOps Tenant Detail</title>
   <style>` + workspacePageCSS + `
     .detail-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(320px, .9fr); gap: 16px; margin-bottom: 16px; }
-    .profile-list { display: grid; grid-template-columns: 130px 1fr; gap: 10px 18px; margin: 0; }
+    .profile-list { display: grid; grid-template-columns: 130px 1fr; gap: 10px 18px; margin: 0; padding: 18px 20px; }
     .profile-list dt { color: var(--foreground-muted); }
     .profile-list dd { margin: 0; overflow-wrap: anywhere; }
-    .payer-list { display: grid; gap: 10px; }
+    .payer-list { display: grid; gap: 10px; padding: 18px 20px; }
     .payer-item { display: flex; justify-content: space-between; gap: 12px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--border); }
     .payer-item:last-child { border-bottom: 0; }
     .payer-meta { display: grid; gap: 4px; }
@@ -202,14 +202,14 @@ var tenantDetailTemplate = template.Must(template.New("tenant-detail").Parse(`<!
     .status.partial { color: #92400e; background: #fef3c7; }
     .status.paid { color: #065f46; background: #d1fae5; }
     .status.voided { color: var(--foreground-muted); background: #e5e7eb; }
-    .history-filter { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+    .history-filter { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; padding: 16px 20px 0; }
     .history-filter label { margin: 0; }
     .history-filter input { min-height: 40px; }
     .history-table { min-width: 760px; }
     .payment-list { display: grid; gap: 8px; margin-top: 10px; padding: 12px; background: var(--surface-muted); border-radius: 8px; }
     .payment-item { display: grid; grid-template-columns: 100px 145px 1fr 150px; gap: 10px; font-size: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
     .payment-item:last-child { border-bottom: 0; padding-bottom: 0; }
-    .pagination { display: flex; gap: 8px; align-items: center; margin-top: 16px; }
+    .pagination { display: flex; gap: 8px; align-items: center; margin-top: 16px; padding: 0 20px 18px; }
     @media (max-width: 900px) { .detail-grid { grid-template-columns: 1fr; } }
     @media (max-width: 680px) { .payment-item { grid-template-columns: 1fr 1fr; } }
   </style>
