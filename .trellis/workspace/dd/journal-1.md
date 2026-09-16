@@ -494,3 +494,36 @@ Removed technical transaction identifiers, kept only the confirmed rent month, r
 ### Next Steps
 
 - None - task complete
+
+
+## Session 15: Dashboard manual rent balance
+
+**Date**: 2026-09-16
+**Task**: Dashboard manual rent balance
+**Branch**: `main`
+
+### Summary
+
+Added a confirmed one-click Dashboard rent settlement that creates an auditable 手动平账 income transaction for the locked outstanding balance, with atomic allocation, concurrency and account guards, confirmation UI, regression coverage, and ledger-spec documentation.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ee5a5f6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
