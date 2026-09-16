@@ -50,6 +50,9 @@ func TestCashReceiptLifecycleOnMySQL(t *testing.T) {
 	t.Cleanup(func() { db.WithContext(ctx).Delete(&user{}, owner.ID) })
 
 	input := validTenantInputForProfile()
+	// This scenario asserts against a 100000-cent obligation, so pin the rent
+	// rather than inheriting whatever the shared profile fixture uses.
+	input.MonthlyRent = 1000
 	input.RentStartDate = "2026-01-01"
 	input.BillingStartDate = "2026-01-01"
 	tenantRow, err := newTenantService(db).createTenant(ctx, owner.ID, input)
@@ -112,7 +115,7 @@ func TestCashReceiptLifecycleOnMySQL(t *testing.T) {
 
 	transaction := paymentTransaction{
 		UserID:               owner.ID,
-		Source:               "test",
+		Source:               "truelayer",
 		StableTransactionKey: fmt.Sprintf("cash-bank-%d", time.Now().UnixNano()),
 		Direction:            "income",
 		AmountCents:          60000,

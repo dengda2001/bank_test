@@ -99,7 +99,7 @@ func TestRentDashboardSummaryFiltersAndArrivalMetricsOnMySQL(t *testing.T) {
 		t.Fatal(err)
 	}
 	otherIncome := createTransaction(owner.ID, fmt.Sprintf("dashboard-other-%d", time.Now().UnixNano()), 50000, time.Date(2026, 9, 10, 9, 0, 0, 0, time.UTC))
-	if _, err := newTransactionService(db).allocateTransaction(ctx, owner.ID, otherIncome.ID, []transactionAllocationDraft{{AmountCents: 30000, Kind: allocationKindOther}}, "dashboard-other-allocation", "manual"); err != nil {
+	if _, err := newTransactionService(db).allocateTransaction(ctx, owner.ID, otherIncome.ID, []transactionAllocationDraft{{AmountCents: 30000, Kind: allocationKindOther, Note: "parking fee"}}, "dashboard-other-allocation", "manual"); err != nil {
 		t.Fatal(err)
 	}
 	previousRent := createTransaction(owner.ID, fmt.Sprintf("dashboard-previous-rent-%d", time.Now().UnixNano()), 100000, time.Date(2026, 9, 20, 9, 0, 0, 0, time.UTC))
@@ -117,7 +117,7 @@ func TestRentDashboardSummaryFiltersAndArrivalMetricsOnMySQL(t *testing.T) {
 	if err := db.WithContext(ctx).Create(&run).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.WithContext(ctx).Create(&bankSyncRunAccount{UserID: owner.ID, BankSyncRunID: run.ID, AccountID: "account-1", Status: bankSyncAccountSucceeded, CoveredFrom: &coveredFrom, CoveredTo: &coveredTo}).Error; err != nil {
+	if err := db.WithContext(ctx).Create(&bankSyncRunAccount{UserID: owner.ID, BankSyncRunID: run.ID, AccountID: "account-1", Status: bankSyncAccountSucceeded, RequestedFrom: period, RequestedTo: coveredTo, CoveredFrom: &coveredFrom, CoveredTo: &coveredTo, StartedAt: startedAt}).Error; err != nil {
 		t.Fatal(err)
 	}
 
@@ -131,7 +131,10 @@ func TestRentDashboardSummaryFiltersAndArrivalMetricsOnMySQL(t *testing.T) {
 	if summary.TotalRows != 3 || summary.FilteredCount != 1 || len(summary.Rows) != 1 || summary.Rows[0].TenantID != ownerTenant.ID {
 		t.Fatalf("dashboard rows=%+v summary=%+v", summary.Rows, summary)
 	}
-	if summary.ExpectedCents != 300000 || summary.PaidCents != 140000 || summary.BalanceCents != 160000 || summary.PaidCount != 1 || summary.PartialCount != 1 || summary.OpenCount != 1 || summary.UnpaidCount != 2 {
+	// The third tenant's unpaid obligation falls in the open or overdue bucket
+	// depending on whether the wall clock has passed the 5th of the fixed 2026-09
+	// period, so assert the split rather than one bucket.
+	if summary.ExpectedCents != 300000 || summary.PaidCents != 140000 || summary.BalanceCents != 160000 || summary.PaidCount != 1 || summary.PartialCount != 1 || summary.OpenCount+summary.OverdueCount != 1 || summary.UnpaidCount != 2 {
 		t.Fatalf("dashboard rent totals=%+v", summary)
 	}
 	if summary.IncomeCount != 4 || summary.PendingCount != 2 || summary.PendingCents != 40000 || summary.OtherIncomeCount != 1 || summary.OtherIncomeCents != 30000 {
