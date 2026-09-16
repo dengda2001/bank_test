@@ -9,15 +9,18 @@ import (
 	"strings"
 )
 
-func (c *e2eHTTPClient) dunningScenario(ctx context.Context, manifest e2eFixtureManifest, obligationID uint64) e2eScenarioReport {
-	scenario := e2eScenarioReport{Name: "dunning", Status: "running", Steps: []e2eStepReport{}}
+// dunningConfigurationScenario exercises the dunning sender configuration and
+// preview routes. Neither of them contacts an SMTP server, so they stay in scope
+// even when mail delivery is excluded.
+func (c *e2eHTTPClient) dunningConfigurationScenario(ctx context.Context, manifest e2eFixtureManifest, obligationID uint64) e2eScenarioReport {
+	scenario := e2eScenarioReport{Name: "dunning-configuration-and-preview", Status: "running", Steps: []e2eStepReport{}}
 	fail := func(message string) e2eScenarioReport {
 		scenario.Status = "failed"
 		scenario.Error = message
 		return scenario
 	}
 	if obligationID == 0 {
-		return fail("dunning scenario requires an obligation ID")
+		return fail("dunning configuration scenario requires an obligation ID")
 	}
 	period := "2026-09"
 	baseForm := url.Values{
@@ -48,8 +51,7 @@ func (c *e2eHTTPClient) dunningScenario(ctx context.Context, manifest e2eFixture
 		return fail("dunning configuration failed")
 	}
 
-	previewForm := cloneE2EValues(baseForm)
-	previewForm.Set("obligation_id", strconv.FormatUint(obligationID, 10))
+	previewForm := e2eDunningSelectionForm(obligationID)
 	previewForm.Set("request_key", manifest.RunID+"-dunning-preview")
 	previewResponse, err := c.do(ctx, http.MethodPost, "/dunning/preview", previewForm)
 	previewStep := e2eHTTPStep(http.MethodPost, "/dunning/preview", map[string]any{
@@ -69,7 +71,23 @@ func (c *e2eHTTPClient) dunningScenario(ctx context.Context, manifest e2eFixture
 		return fail("dunning preview failed")
 	}
 
-	sendForm := cloneE2EValues(previewForm)
+	scenario.Status = "passed"
+	return scenario
+}
+
+// dunningDeliveryScenario covers the routes that hand a message to a mail
+// server. It is only run when a controlled SMTP sink is configured.
+func (c *e2eHTTPClient) dunningDeliveryScenario(ctx context.Context, manifest e2eFixtureManifest, obligationID uint64) e2eScenarioReport {
+	scenario := e2eScenarioReport{Name: "dunning-delivery", Status: "running", Steps: []e2eStepReport{}}
+	fail := func(message string) e2eScenarioReport {
+		scenario.Status = "failed"
+		scenario.Error = message
+		return scenario
+	}
+	if obligationID == 0 {
+		return fail("dunning delivery scenario requires an obligation ID")
+	}
+	sendForm := e2eDunningSelectionForm(obligationID)
 	sendForm.Set("request_key", manifest.RunID+"-dunning-send")
 	sendResponse, err := c.do(ctx, http.MethodPost, "/dunning/send", sendForm)
 	sendStep := e2eHTTPStep(http.MethodPost, "/dunning/send", map[string]any{
@@ -113,6 +131,19 @@ func (c *e2eHTTPClient) dunningScenario(ctx context.Context, manifest e2eFixture
 
 	scenario.Status = "passed"
 	return scenario
+}
+
+// e2eDunningSelectionForm is the current-page obligation selection that both the
+// preview and the send routes require. Callers add their own request_key.
+func e2eDunningSelectionForm(obligationID uint64) url.Values {
+	return url.Values{
+		"period":        {"2026-09"},
+		"status":        {"unpaid"},
+		"sort":          {"due_asc"},
+		"page":          {"1"},
+		"page_size":     {"12"},
+		"obligation_id": {strconv.FormatUint(obligationID, 10)},
+	}
 }
 
 func cloneE2EValues(values url.Values) url.Values {

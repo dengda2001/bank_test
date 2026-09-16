@@ -44,6 +44,10 @@ func verifyE2EHTTPNoResidue(ctx context.Context, options e2eOptions, manifest e2
 	}
 
 	markers := e2EFixtureHTTPMarkers(manifest)
+	// The application chrome renders the operator account name, which is itself
+	// derived from the run ID. Removing the account names keeps the scan focused
+	// on business data that must be gone after cleanup.
+	scrubAccountNames := strings.NewReplacer(options.Username, "", options.SecondUsername, "")
 	for _, check := range []struct {
 		name         string
 		path         string
@@ -61,7 +65,7 @@ func verifyE2EHTTPNoResidue(ctx context.Context, options e2eOptions, manifest e2
 		}, response, requestErr)
 		markersPresent := false
 		if requestErr == nil {
-			markersPresent = e2EBodyContainsAny(response.Body, markers)
+			markersPresent = e2EBodyContainsAny([]byte(scrubAccountNames.Replace(string(response.Body))), markers)
 			actual := step.Actual.(map[string]any)
 			actual["run_data_absent"] = !markersPresent
 			actual["response_body_bytes"] = len(response.Body)
@@ -105,7 +109,7 @@ func e2EFixtureHTTPMarkers(manifest e2eFixtureManifest) []string {
 		markers = append(markers,
 			transaction.TransactionID,
 			transaction.NormalisedProviderTransactionID,
-			transaction.ProviderTransactionID,
+			transaction.StoredProviderTransactionID(),
 			transaction.Description,
 			transaction.Reference,
 			transaction.PayerID,

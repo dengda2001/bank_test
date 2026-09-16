@@ -138,8 +138,10 @@ func cleanupE2ERun(ctx context.Context, options e2eOptions, manifest e2eFixtureM
 	if ok := verifyE2EDatabaseIdentity(ctx, tx, options.DatabaseAllowlist); !ok {
 		return failedE2ECleanup("cleanup database identity changed before deletion")
 	}
-	if err := validateE2ECleanupRecords(ctx, tx, userID, manifest); err != nil {
-		return failedE2ECleanup("cleanup ownership validation failed")
+	if err := validateE2ECleanupRecords(ctx, tx, userID, manifest, options.SkipDunning); err != nil {
+		// The cause stays in the report so an aborted cleanup is diagnosable
+		// without re-running the whole acceptance suite.
+		return failedE2ECleanup("cleanup ownership validation failed: " + err.Error())
 	}
 	if err := deleteE2ERunRows(ctx, tx, userID, username); err != nil {
 		return failedE2ECleanup("cleanup delete transaction failed")
@@ -205,7 +207,7 @@ func loadE2ECleanupUser(ctx context.Context, tx *sql.Tx, username string) (uint6
 	return userID, actualUsername, nil
 }
 
-func validateE2ECleanupRecords(ctx context.Context, tx *sql.Tx, userID uint64, manifest e2eFixtureManifest) error {
+func validateE2ECleanupRecords(ctx context.Context, tx *sql.Tx, userID uint64, manifest e2eFixtureManifest, skipDunningDelivery bool) error {
 	tenants, err := loadE2ECleanupTenants(ctx, tx, userID)
 	if err != nil {
 		return err
@@ -269,7 +271,7 @@ func validateE2ECleanupRecords(ctx context.Context, tx *sql.Tx, userID uint64, m
 	if err := validateE2ECleanupCashReceipts(ctx, tx, userID, tenantIDs, obligationIDs, manifest); err != nil {
 		return err
 	}
-	if err := validateE2ECleanupDunning(ctx, tx, userID, tenantIDs, obligationIDs, manifest); err != nil {
+	if err := validateE2ECleanupDunning(ctx, tx, userID, tenantIDs, obligationIDs, manifest, skipDunningDelivery); err != nil {
 		return err
 	}
 	if err := validateE2ECleanupEmptyTables(ctx, tx, userID); err != nil {
@@ -332,7 +334,7 @@ func validateE2ECleanupPayers(ctx context.Context, tx *sql.Tx, userID uint64, ma
 }
 
 func loadE2ECleanupObligations(ctx context.Context, tx *sql.Tx, userID uint64) ([]e2eCleanupObligationRow, error) {
-	rows, err := tx.QueryContext(ctx, "SELECT id, tenant_id, DATE_FORMAT(period_month, '%Y-%m-%d'), expected_amount_cents, currency FROM rent_obligations WHERE user_id = ? ORDER BY id", userID)
+	rows, err := tx.QueryContext(ctx, "SELECT id, tenant_id, DATE_FORMAT(period_month, '%Y-%m'), expected_amount_cents, currency FROM rent_obligations WHERE user_id = ? ORDER BY id", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -406,10 +408,10 @@ func validateE2ECleanupTransactions(rows []e2eCleanupTransactionRow, manifest e2
 				break
 			}
 		}
-		if fixture == nil || !row.ProviderTransactionID.Valid || row.ProviderTransactionID.String != fixture.ProviderTransactionID || !row.SourceBatchID.Valid || row.SourceBatchID.String != manifest.Bank.BatchID || !row.AccountID.Valid || row.AccountID.String != manifest.Bank.AccountID || !row.AccountName.Valid || row.AccountName.String != manifest.Bank.AccountName || !row.Description.Valid || row.Description.String != fixture.Description || !row.Reference.Valid || row.Reference.String != fixture.Reference {
+		if fixture == nil || !row.ProviderTransactionID.Valid || row.ProviderTransactionID.String != fixture.StoredProviderTransactionID() || !row.SourceBatchID.Valid || row.SourceBatchID.String != manifest.Bank.BatchID || !row.AccountID.Valid || row.AccountID.String != manifest.Bank.AccountID || !row.AccountName.Valid || row.AccountName.String != manifest.Bank.AccountName || !row.Description.Valid || row.Description.String != fixture.Description || !row.Reference.Valid || row.Reference.String != fixture.Reference {
 			return nil, errors.New("payment transaction row is outside the run manifest")
 		}
-		result[fixture.ProviderTransactionID] = row.ID
+		result[fixture.StoredProviderTransactionID()] = row.ID
 	}
 	if len(result) != len(manifest.Bank.Transactions) {
 		return nil, errors.New("not every manifest transaction was found")
@@ -427,11 +429,11 @@ func validateE2ECleanupAllocations(ctx context.Context, tx *sql.Tx, userID uint6
 	mainAugustID := obligationIDs[fmt.Sprintf("%d/2026-08", mainTenantID)]
 	mainSeptemberID := obligationIDs[fmt.Sprintf("%d/2026-09", mainTenantID)]
 	expected := map[string]map[string]int{
-		cleanupAllocationKey(transactionIDs[manifest.Bank.Transactions[0].ProviderTransactionID], mainSeptemberID, mainTenantID, 95000, "rent"): {"confirmed": 1, "voided": 1},
-		cleanupAllocationKey(transactionIDs[manifest.Bank.Transactions[1].ProviderTransactionID], mainAugustID, mainTenantID, 30000, "rent"):    {"confirmed": 1},
-		cleanupAllocationKey(transactionIDs[manifest.Bank.Transactions[1].ProviderTransactionID], 0, mainTenantID, 10000, "deposit"):            {"confirmed": 1},
-		cleanupAllocationKey(transactionIDs[manifest.Bank.Transactions[3].ProviderTransactionID], mainAugustID, mainTenantID, 30000, "rent"):    {"confirmed": 1},
-		cleanupAllocationKey(transactionIDs[manifest.Bank.Transactions[4].ProviderTransactionID], 0, 0, 5000, "other_income"):                   {"confirmed": 1},
+		cleanupAllocationKey(transactionIDs[manifest.Bank.Transactions[0].StoredProviderTransactionID()], mainSeptemberID, mainTenantID, 95000, "rent"): {"confirmed": 1, "voided": 1},
+		cleanupAllocationKey(transactionIDs[manifest.Bank.Transactions[1].StoredProviderTransactionID()], mainAugustID, mainTenantID, 30000, "rent"):    {"confirmed": 1},
+		cleanupAllocationKey(transactionIDs[manifest.Bank.Transactions[1].StoredProviderTransactionID()], 0, mainTenantID, 10000, "deposit"):            {"confirmed": 1},
+		cleanupAllocationKey(transactionIDs[manifest.Bank.Transactions[3].StoredProviderTransactionID()], mainAugustID, mainTenantID, 30000, "rent"):    {"confirmed": 1},
+		cleanupAllocationKey(transactionIDs[manifest.Bank.Transactions[4].StoredProviderTransactionID()], 0, 0, 5000, "other_income"):                   {"confirmed": 1},
 	}
 	seen := make(map[string]map[string]int, len(expected))
 	count := 0
@@ -494,8 +496,8 @@ func validateE2ECleanupActions(ctx context.Context, tx *sql.Tx, userID uint64, t
 		reason string
 		key    string
 	}{
-		fmt.Sprintf("%d", transactionIDs[manifest.Bank.Transactions[2].ProviderTransactionID]): {kind: "ignore", reason: manifest.RunID + " foreign currency does not match EUR ledger", key: manifest.RunID + "-ignore-foreign"},
-		fmt.Sprintf("%d", transactionIDs[manifest.Bank.Transactions[0].ProviderTransactionID]): {kind: "revoke_allocations", reason: manifest.RunID + " revoke and re-match", key: manifest.RunID + "-revoke-full"},
+		fmt.Sprintf("%d", transactionIDs[manifest.Bank.Transactions[2].StoredProviderTransactionID()]): {kind: "ignore", reason: manifest.RunID + " foreign currency does not match EUR ledger", key: manifest.RunID + "-ignore-foreign"},
+		fmt.Sprintf("%d", transactionIDs[manifest.Bank.Transactions[0].StoredProviderTransactionID()]): {kind: "revoke_allocations", reason: manifest.RunID + " revoke and re-match", key: manifest.RunID + "-revoke-full"},
 	}
 	seen := make(map[string]bool, len(expected))
 	count := 0
@@ -559,7 +561,7 @@ func validateE2ECleanupCashReceipts(ctx context.Context, tx *sql.Tx, userID uint
 	return nil
 }
 
-func validateE2ECleanupDunning(ctx context.Context, tx *sql.Tx, userID uint64, tenantIDs map[string]uint64, obligationIDs map[string]uint64, manifest e2eFixtureManifest) error {
+func validateE2ECleanupDunning(ctx context.Context, tx *sql.Tx, userID uint64, tenantIDs map[string]uint64, obligationIDs map[string]uint64, manifest e2eFixtureManifest, skipDunningDelivery bool) error {
 	var displayName, replyTo string
 	err := tx.QueryRowContext(ctx, "SELECT display_name, reply_to_email FROM dunning_sender_configs WHERE user_id = ?", userID).Scan(&displayName, &replyTo)
 	if err != nil || displayName != manifest.RunID+" landlord" || replyTo != manifest.RunID+"@invalid.test" {
@@ -586,7 +588,11 @@ func validateE2ECleanupDunning(ctx context.Context, tx *sql.Tx, userID uint64, t
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	if count != 1 {
+	expectedAttempts := 1
+	if skipDunningDelivery {
+		expectedAttempts = 0
+	}
+	if count != expectedAttempts {
 		return errors.New("unexpected dunning attempt count")
 	}
 	return nil

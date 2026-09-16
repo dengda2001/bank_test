@@ -35,6 +35,7 @@ type e2eOptions struct {
 	SecondUsername    string
 	SecondPassword    string
 	SMTPSink          string
+	SkipDunning       bool
 	Execute           bool
 	ConfirmWrites     string
 	ConfirmCleanup    string
@@ -42,15 +43,18 @@ type e2eOptions struct {
 }
 
 type e2ePreflight struct {
-	Passed         bool     `json:"passed"`
-	Mode           string   `json:"mode"`
-	TargetName     string   `json:"target_name,omitempty"`
-	BaseURL        string   `json:"base_url"`
-	RunID          string   `json:"run_id"`
-	WriteEnabled   bool     `json:"write_enabled"`
-	CleanupEnabled bool     `json:"cleanup_enabled"`
-	Checks         []string `json:"checks"`
-	Failures       []string `json:"failures,omitempty"`
+	Passed         bool   `json:"passed"`
+	Mode           string `json:"mode"`
+	TargetName     string `json:"target_name,omitempty"`
+	BaseURL        string `json:"base_url"`
+	RunID          string `json:"run_id"`
+	WriteEnabled   bool   `json:"write_enabled"`
+	CleanupEnabled bool   `json:"cleanup_enabled"`
+	// DunningDeliverySkipped records that mail delivery was excluded by explicit
+	// configuration, so the report never presents it as covered.
+	DunningDeliverySkipped bool     `json:"dunning_delivery_skipped,omitempty"`
+	Checks                 []string `json:"checks"`
+	Failures               []string `json:"failures,omitempty"`
 }
 
 type e2eStepReport struct {
@@ -68,6 +72,16 @@ type e2eScenarioReport struct {
 	Status string          `json:"status"`
 	Steps  []e2eStepReport `json:"steps,omitempty"`
 	Error  string          `json:"error,omitempty"`
+	// SkipReason explains why a scenario was excluded. A skipped scenario is
+	// never counted as a passed one.
+	SkipReason string `json:"skip_reason,omitempty"`
+}
+
+// e2eUnverifiedScenario makes the gap between "the run passed" and "everything
+// in the acceptance criteria was exercised" explicit and machine-readable.
+type e2eUnverifiedScenario struct {
+	Name   string `json:"name"`
+	Reason string `json:"reason"`
 }
 
 type e2eReport struct {
@@ -80,8 +94,11 @@ type e2eReport struct {
 	Status     string              `json:"status"`
 	Preflight  e2ePreflight        `json:"preflight"`
 	Scenarios  []e2eScenarioReport `json:"scenarios,omitempty"`
-	Cleanup    *e2eCleanupReport   `json:"cleanup,omitempty"`
-	Error      string              `json:"error,omitempty"`
+	// Unverified lists scenarios that did not run. Status "passed" only means
+	// every executed assertion passed.
+	Unverified []e2eUnverifiedScenario `json:"unverified,omitempty"`
+	Cleanup    *e2eCleanupReport       `json:"cleanup,omitempty"`
+	Error      string                  `json:"error,omitempty"`
 }
 
 type e2eCleanupReport struct {
@@ -122,6 +139,7 @@ func e2eOptionsFromEnv() (e2eOptions, error) {
 		SecondUsername:    os.Getenv("RENTOPS_E2E_SECOND_USERNAME"),
 		SecondPassword:    os.Getenv("RENTOPS_E2E_SECOND_PASSWORD"),
 		SMTPSink:          strings.TrimSpace(os.Getenv("RENTOPS_E2E_SMTP_SINK")),
+		SkipDunning:       os.Getenv("RENTOPS_E2E_SKIP_DUNNING_DELIVERY") == "1",
 		ConfirmWrites:     strings.TrimSpace(os.Getenv("RENTOPS_E2E_CONFIRM_WRITES")),
 		ConfirmCleanup:    strings.TrimSpace(os.Getenv("RENTOPS_E2E_CONFIRM_CLEANUP")),
 		AllowRemote:       os.Getenv("RENTOPS_E2E_ALLOW_REMOTE") == "1",
@@ -215,7 +233,10 @@ func validateE2EOptions(options e2eOptions) e2ePreflight {
 	} else {
 		preflight.Checks = append(preflight.Checks, "an explicit non-production database name allowlist is present")
 	}
-	if options.SMTPSink == "" {
+	if options.SkipDunning {
+		preflight.DunningDeliverySkipped = true
+		preflight.Checks = append(preflight.Checks, "dunning delivery is explicitly skipped; its scenarios stay unverified")
+	} else if options.SMTPSink == "" {
 		fail("an explicit SMTP sink identifier is required for dunning send checks")
 	} else {
 		preflight.Checks = append(preflight.Checks, "an explicit SMTP sink identifier is present")
@@ -306,10 +327,11 @@ func redactE2EValue(value any) any {
 			RunID: typed.RunID, Mode: typed.Mode, TargetName: typed.TargetName,
 			Fixture:   typed.Fixture,
 			StartedAt: typed.StartedAt, FinishedAt: typed.FinishedAt, Status: typed.Status,
-			Preflight: redactE2EValue(typed.Preflight).(e2ePreflight),
-			Scenarios: redactE2EValue(typed.Scenarios).([]e2eScenarioReport),
-			Cleanup:   typed.Cleanup,
-			Error:     typed.Error,
+			Preflight:  redactE2EValue(typed.Preflight).(e2ePreflight),
+			Scenarios:  redactE2EValue(typed.Scenarios).([]e2eScenarioReport),
+			Unverified: typed.Unverified,
+			Cleanup:    typed.Cleanup,
+			Error:      typed.Error,
 		}
 	case e2ePreflight:
 		return typed

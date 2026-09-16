@@ -6,9 +6,10 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 )
 
-func (c *e2eHTTPClient) crossUserScenario(ctx context.Context, tenantID, transactionID uint64) e2eScenarioReport {
+func (c *e2eHTTPClient) crossUserScenario(ctx context.Context, manifest e2eFixtureManifest, tenantID, transactionID uint64) e2eScenarioReport {
 	scenario := e2eScenarioReport{Name: "cross-user-isolation", Status: "running", Steps: []e2eStepReport{}}
 	fail := func(message string) e2eScenarioReport {
 		scenario.Status = "failed"
@@ -25,8 +26,16 @@ func (c *e2eHTTPClient) crossUserScenario(ctx context.Context, tenantID, transac
 		"data_hidden": true,
 	}, tenantResponse, err)
 	if err == nil {
-		dataHidden := tenantResponse.StatusCode == http.StatusNotFound && len(tenantResponse.Body) == 0
-		tenantStep.Actual.(map[string]any)["data_hidden"] = dataHidden
+		// A rejection page is allowed to carry an error body; what must never
+		// appear is any identifier belonging to the other account's fixture.
+		body := string(tenantResponse.Body)
+		leaked := strings.Contains(body, manifest.RunID) ||
+			strings.Contains(body, manifest.Tenant.Name) ||
+			strings.Contains(body, manifest.Tenant.DisplayAlias)
+		dataHidden := tenantResponse.StatusCode == http.StatusNotFound && !leaked
+		actual := tenantStep.Actual.(map[string]any)
+		actual["data_hidden"] = dataHidden
+		actual["fixture_data_absent"] = !leaked
 		tenantStep.Passed = dataHidden
 		if !tenantStep.Passed {
 			tenantStep.Error = "second account could read the first account tenant or received its page body"

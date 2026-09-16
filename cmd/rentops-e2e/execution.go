@@ -33,11 +33,13 @@ func executeE2ERun(ctx context.Context, options e2eOptions, manifest e2eFixtureM
 	if err != nil {
 		fixtureScenario.Status = "failed"
 		fixtureScenario.Error = "legacy fixture materialization failed"
-		fixtureScenario.Steps[0].Error = fixtureScenario.Error
+		// The step keeps the underlying cause so a failed run stays diagnosable;
+		// the scenario-level message stays generic for the report summary.
+		fixtureScenario.Steps[0].Error = err.Error()
 		if recordErr := recordE2EScenario(report, fixtureScenario, writeReport); recordErr != nil {
 			return recordErr
 		}
-		return errors.New(fixtureScenario.Error)
+		return fmt.Errorf("%s: %w", fixtureScenario.Error, err)
 	}
 	fixtureScenario.Status = "passed"
 	fixtureScenario.Steps[0].Passed = true

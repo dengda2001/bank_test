@@ -29,7 +29,7 @@ func (c *e2eHTTPClient) dashboardScenario(ctx context.Context, manifest e2eFixtu
 		"paid_rent":           "EUR 950.00",
 		"remaining_rent":      "EUR 0.00",
 		"pending_income":      "EUR 0.00",
-		"other_income":        "EUR 50.00",
+		"other_income":        "EUR 0.00",
 		"amount_conservation": true,
 	}, dashboardResponse, err)
 	if err == nil {
@@ -39,7 +39,9 @@ func (c *e2eHTTPClient) dashboardScenario(ctx context.Context, manifest e2eFixtu
 		paidRent := e2EDashboardMetric(body, "已收租金") == "EUR 950.00"
 		remainingRent := e2EDashboardMetric(body, "剩余未收") == "EUR 0.00"
 		pendingIncome := e2EDashboardMetric(body, "待分配金额") == "EUR 0.00"
-		otherIncome := e2EDashboardMetric(body, "其他收入") == "EUR 50.00"
+		// Bank metrics are scoped by transaction date, so the other-income
+		// allocation on a September transaction cannot appear in August.
+		otherIncome := e2EDashboardMetric(body, "其他收入") == "EUR 0.00"
 		actual := dashboardStep.Actual.(map[string]any)
 		actual["tenant_visible"] = tenantVisible
 		actual["monthly_rent"] = monthlyRent
@@ -56,6 +58,32 @@ func (c *e2eHTTPClient) dashboardScenario(ctx context.Context, manifest e2eFixtu
 	scenario.Steps = append(scenario.Steps, dashboardStep)
 	if !dashboardStep.Passed {
 		return fail("dashboard base read failed")
+	}
+
+	// The other-income allocation sits on a September bank transaction, so it
+	// must surface exactly once in the September period view.
+	septemberPath := "/rent-dashboard?period=" + url.QueryEscape("2026-09")
+	septemberResponse, err := c.do(ctx, http.MethodGet, septemberPath, nil)
+	septemberStep := e2eHTTPStep(http.MethodGet, septemberPath, map[string]any{
+		"status_code":        http.StatusOK,
+		"other_income":       "EUR 50.00",
+		"other_income_count": "1 笔已确认的非租金收入",
+	}, septemberResponse, err)
+	if err == nil {
+		body := string(septemberResponse.Body)
+		otherIncome := e2EDashboardMetric(body, "其他收入") == "EUR 50.00"
+		otherIncomeCount := strings.Contains(body, "1 笔已确认的非租金收入")
+		actual := septemberStep.Actual.(map[string]any)
+		actual["other_income"] = otherIncome
+		actual["other_income_count"] = otherIncomeCount
+		septemberStep.Passed = septemberResponse.StatusCode == http.StatusOK && otherIncome && otherIncomeCount
+		if !septemberStep.Passed {
+			septemberStep.Error = "the September dashboard did not expose the classified other income"
+		}
+	}
+	scenario.Steps = append(scenario.Steps, septemberStep)
+	if !septemberStep.Passed {
+		return fail("dashboard period scoping failed")
 	}
 
 	filterValues := url.Values{

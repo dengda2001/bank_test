@@ -50,6 +50,97 @@ func TestValidateE2EOptionsExecuteRequiresAllowlistAndExplicitConfirmations(t *t
 	}
 }
 
+func TestValidateE2EOptionsExcludesMailDeliveryOnlyOnExplicitOptIn(t *testing.T) {
+	base := e2eOptions{
+		BaseURL:           "http://127.0.0.1:8080",
+		RunID:             "rentops-e2e-20260916-120000-a1b2c3d4",
+		Execute:           true,
+		TargetName:        "rentops-e2e-local",
+		TargetAllowlist:   "rentops-e2e-local",
+		DatabaseAllowlist: "rentops_e2e_run",
+		MySQLDSN:          "rentops:secret@tcp(127.0.0.1:3306)/rentops_e2e_run",
+		FixtureDir:        "/tmp/rentops-e2e-fixture",
+		Username:          "rentops-e2e-20260916-120000-a1b2c3d4-primary",
+		Password:          "primary-password",
+		SecondUsername:    "rentops-e2e-second",
+		SecondPassword:    "second-password",
+		ConfirmWrites:     e2eWriteConfirmation,
+		ConfirmCleanup:    e2eCleanupConfirmation,
+	}
+	withSink := base
+	withSink.SMTPSink = "controlled-sink"
+	if preflight := validateE2EOptions(withSink); !preflight.Passed || preflight.DunningDeliverySkipped {
+		t.Fatalf("sink-configured preflight=%+v", preflight)
+	}
+	if preflight := validateE2EOptions(base); preflight.Passed {
+		t.Fatalf("preflight without a sink or an opt-in passed: %+v", preflight)
+	}
+	skipped := base
+	skipped.SkipDunning = true
+	preflight := validateE2EOptions(skipped)
+	if !preflight.Passed || !preflight.DunningDeliverySkipped {
+		t.Fatalf("skip opt-in preflight=%+v", preflight)
+	}
+	for _, check := range preflight.Checks {
+		if strings.Contains(check, "explicitly skipped") {
+			return
+		}
+	}
+	t.Fatalf("skip opt-in preflight did not record the excluded scope: %+v", preflight)
+}
+
+func TestRecordE2EScenarioKeepsSkippedScenariosUnverified(t *testing.T) {
+	report := newE2EReport(e2ePreflight{Passed: true, Mode: "execute", RunID: "rentops-e2e-20260916-120000-a1b2c3d4"}, time.Now())
+	report.Status = "running"
+	if err := recordE2EScenario(&report, e2eSkippedDunningDeliveryScenario(e2eOptions{SkipDunning: true}), nil); err != nil {
+		t.Fatalf("skipped scenario ended the run: %v", err)
+	}
+	if report.Status == "failed" || report.Error != "" {
+		t.Fatalf("report=%+v", report)
+	}
+	if len(report.Scenarios) != 1 || report.Scenarios[0].Status != "skipped" {
+		t.Fatalf("scenarios=%+v", report.Scenarios)
+	}
+	if len(report.Unverified) != 1 || report.Unverified[0].Name != "dunning-delivery" || report.Unverified[0].Reason == "" {
+		t.Fatalf("unverified=%+v", report.Unverified)
+	}
+}
+
+func TestWriteE2EReportPersistsUnverifiedScenarios(t *testing.T) {
+	report := newE2EReport(e2ePreflight{Passed: true, Mode: "execute", RunID: "rentops-e2e-20260916-120000-a1b2c3d4"}, time.Now())
+	if err := recordE2EScenario(&report, e2eSkippedDunningDeliveryScenario(e2eOptions{SkipDunning: true}), nil); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "e2e-report.json")
+	if err := writeE2EReport(path, report); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded struct {
+		Status     string `json:"status"`
+		Unverified []struct {
+			Name   string `json:"name"`
+			Reason string `json:"reason"`
+		} `json:"unverified"`
+		Scenarios []struct {
+			Name   string `json:"name"`
+			Status string `json:"status"`
+		} `json:"scenarios"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("decode report: %v", err)
+	}
+	if len(decoded.Unverified) != 1 || decoded.Unverified[0].Name != "dunning-delivery" || decoded.Unverified[0].Reason == "" {
+		t.Fatalf("persisted unverified=%+v", decoded.Unverified)
+	}
+	if len(decoded.Scenarios) != 1 || decoded.Scenarios[0].Status != "skipped" {
+		t.Fatalf("persisted scenarios=%+v", decoded.Scenarios)
+	}
+}
+
 func TestValidateE2EOptionsRejectsRemoteTargetWithoutOptIn(t *testing.T) {
 	preflight := validateE2EOptions(e2eOptions{
 		BaseURL: "https://staging.example.test",
@@ -219,6 +310,59 @@ func TestVerifyE2EHTTPNoResidueChecksDeletedDataThroughSecondAccount(t *testing.
 	}, manifest, e2EBusinessArtifacts{MainTenantID: 42, DunningTenantID: 43, TransactionID: 101})
 	if scenario.Status != "passed" || len(scenario.Steps) != 5 {
 		t.Fatalf("scenario=%+v", scenario)
+	}
+}
+
+func TestVerifyE2EHTTPNoResidueIgnoresOperatorAccountName(t *testing.T) {
+	runID := "rentops-e2e-20260916-120000-a1b2c3d4"
+	manifest, err := newE2EFixtureManifest(runID, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The tenant list renders the configured operator name, which carries the
+	// run ID prefix. That chrome is not residue; fixture business data is.
+	newServer := func(tenantListBody string) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/login-local" {
+				http.SetCookie(w, &http.Cookie{Name: "rentops_session", Value: "second", Path: "/"})
+				http.Redirect(w, r, "/rent-dashboard", http.StatusFound)
+				return
+			}
+			if _, cookieErr := r.Cookie("rentops_session"); cookieErr != nil {
+				http.Redirect(w, r, "/", http.StatusFound)
+				return
+			}
+			switch r.URL.Path {
+			case "/tenants/42", "/tenants/43":
+				http.NotFound(w, r)
+			case "/tenants", "/billing":
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprint(w, tenantListBody)
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+	}
+	options := e2eOptions{
+		SecondUsername: runID + "-second",
+		SecondPassword: "second-password",
+		Username:       runID + "-primary",
+	}
+	artifacts := e2EBusinessArtifacts{MainTenantID: 42, DunningTenantID: 43, TransactionID: 101}
+
+	chromeOnly := newServer("当前用户：" + runID + "-primary")
+	defer chromeOnly.Close()
+	options.BaseURL = chromeOnly.URL
+	if scenario := verifyE2EHTTPNoResidue(context.Background(), options, manifest, artifacts); scenario.Status != "passed" {
+		t.Fatalf("operator chrome was treated as residue: %+v", scenario)
+	}
+
+	withResidue := newServer("当前用户：" + runID + "-primary" + manifest.Tenant.Name)
+	defer withResidue.Close()
+	options.BaseURL = withResidue.URL
+	scenario := verifyE2EHTTPNoResidue(context.Background(), options, manifest, artifacts)
+	if scenario.Status != "failed" || scenario.Error != "post-cleanup HTTP residue verification failed" {
+		t.Fatalf("fixture residue was not detected: %+v", scenario)
 	}
 }
 
@@ -402,7 +546,7 @@ func TestE2EBankImportScenarioVerifiesFactsAndIdempotency(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			if importCount > 0 {
 				for _, transaction := range manifest.Bank.Transactions {
-					fmt.Fprintf(w, `<tr class="income"><td>%s</td><td>%s</td><td>%s</td></tr>`, transaction.ProviderTransactionID, transaction.Description, formatE2EMoney(transaction.Amount))
+					fmt.Fprintf(w, `<tr class="income"><td>%s</td><td>%s</td><td>%s</td></tr>`, transaction.StoredProviderTransactionID(), transaction.Description, formatE2EMoney(transaction.Amount))
 				}
 				fmt.Fprint(w, `<span>EUR 950.00</span><span>GBP 25.00</span>`)
 			}
@@ -449,11 +593,11 @@ func TestE2ELedgerScenarioRunsHTTPActionsAndChecksConservation(t *testing.T) {
 		t.Fatal(err)
 	}
 	transactionIDs := map[string]uint64{
-		manifest.Bank.Transactions[0].ProviderTransactionID: 101,
-		manifest.Bank.Transactions[1].ProviderTransactionID: 102,
-		manifest.Bank.Transactions[2].ProviderTransactionID: 103,
-		manifest.Bank.Transactions[3].ProviderTransactionID: 104,
-		manifest.Bank.Transactions[4].ProviderTransactionID: 105,
+		manifest.Bank.Transactions[0].StoredProviderTransactionID(): 101,
+		manifest.Bank.Transactions[1].StoredProviderTransactionID(): 102,
+		manifest.Bank.Transactions[2].StoredProviderTransactionID(): 103,
+		manifest.Bank.Transactions[3].StoredProviderTransactionID(): 104,
+		manifest.Bank.Transactions[4].StoredProviderTransactionID(): 105,
 	}
 	statuses := map[uint64]string{101: "unmatched", 102: "unmatched", 103: "unmatched", 104: "unmatched", 105: "unmatched"}
 	allocated := map[uint64]string{101: "EUR 0.00", 102: "EUR 0.00", 103: "GBP 0.00", 104: "EUR 0.00", 105: "EUR 0.00"}
@@ -480,14 +624,14 @@ func TestE2ELedgerScenarioRunsHTTPActionsAndChecksConservation(t *testing.T) {
 		case "/billing":
 			w.WriteHeader(http.StatusOK)
 			for _, transaction := range manifest.Bank.Transactions {
-				id := transactionIDs[transaction.ProviderTransactionID]
+				id := transactionIDs[transaction.StoredProviderTransactionID()]
 				remaining := amounts[id]
 				if allocated[id] == "EUR 950.00" {
 					remaining = "EUR 0.00"
 				} else if allocated[id] == "EUR 400.00" || allocated[id] == "EUR 300.00" || allocated[id] == "EUR 50.00" {
 					remaining = "EUR 0.00"
 				}
-				fmt.Fprintf(w, `<tr class="%s"><td>%s</td><td>%s</td><td><span class="status status-link %s">状态</span>已分配 %s 余款 %s</td><td><form><input type="hidden" name="transaction_id" value="%d"></form></td></tr>`, statuses[id], transaction.ProviderTransactionID, transaction.Description, statuses[id], allocated[id], remaining, id)
+				fmt.Fprintf(w, `<tr class="%s"><td>%s</td><td>%s</td><td><span class="status status-link %s">状态</span>已分配 %s 余款 %s</td><td><form><input type="hidden" name="transaction_id" value="%d"></form></td></tr>`, statuses[id], transaction.StoredProviderTransactionID(), transaction.Description, statuses[id], allocated[id], remaining, id)
 			}
 		case "/billing/confirm":
 			_ = r.ParseForm()
@@ -616,7 +760,13 @@ func TestE2EDashboardAndDunningScenariosVerifyReadsAndDelivery(t *testing.T) {
 				fmt.Fprint(w, `<main>筛选条件无效 invalid_dashboard_filter</main>`)
 				return
 			}
-			fmt.Fprintf(w, `<main><div class="label">本月应收</div><strong>EUR 950.00</strong><div class="label">已收租金</div><strong>EUR 950.00</strong><div class="label">剩余未收</div><strong>EUR 0.00</strong><div class="label">待分配金额</div><strong>EUR 0.00</strong><div class="label">其他收入</div><strong>EUR 50.00</strong>%s %s 已缴清 当前显示 1 户 <input type="checkbox" name="obligation_id" value="900"></main>`, manifest.Tenant.Name, manifest.DunningTenant.Name)
+			// Bank metrics follow the transaction date, so the other-income
+			// allocation only shows up in the September period view.
+			otherIncome, otherIncomeDetail := "EUR 0.00", "0 笔已确认的非租金收入"
+			if r.URL.Query().Get("period") == "2026-09" {
+				otherIncome, otherIncomeDetail = "EUR 50.00", "1 笔已确认的非租金收入"
+			}
+			fmt.Fprintf(w, `<main><div class="label">本月应收</div><strong>EUR 950.00</strong><div class="label">已收租金</div><strong>EUR 950.00</strong><div class="label">剩余未收</div><strong>EUR 0.00</strong><div class="label">待分配金额</div><strong>EUR 0.00</strong><div class="label">其他收入</div><strong>%s</strong>%s %s %s 已缴清 当前显示 1 户 <input type="checkbox" name="obligation_id" value="900"></main>`, otherIncome, manifest.Tenant.Name, manifest.DunningTenant.Name, otherIncomeDetail)
 		case "/tenants/42":
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprintf(w, `<main>%s 2026-08 2026-09</main>`, manifest.Tenant.Name)
@@ -651,7 +801,11 @@ func TestE2EDashboardAndDunningScenariosVerifyReadsAndDelivery(t *testing.T) {
 	if candidateScenario.Status != "passed" || obligationID != 900 {
 		t.Fatalf("candidate scenario=%+v obligationID=%d", candidateScenario, obligationID)
 	}
-	dunningScenario := client.dunningScenario(context.Background(), manifest, 900)
+	dunningConfigScenario := client.dunningConfigurationScenario(context.Background(), manifest, 900)
+	if dunningConfigScenario.Status != "passed" {
+		t.Fatalf("dunning configuration scenario=%+v", dunningConfigScenario)
+	}
+	dunningScenario := client.dunningDeliveryScenario(context.Background(), manifest, 900)
 	if dunningScenario.Status != "passed" || sendCount != 2 {
 		t.Fatalf("dunning scenario=%+v sendCount=%d", dunningScenario, sendCount)
 	}
@@ -693,6 +847,7 @@ func TestE2ECrossUserScenarioRejectsTenantLedgerAndCashAccess(t *testing.T) {
 		switch r.URL.Path {
 		case "/tenants/42":
 			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprint(w, "404 page not found\n")
 		case "/billing/confirm":
 			http.Redirect(w, r, "/billing?error=confirmation_failed", http.StatusFound)
 		case "/billing/revoke":
@@ -712,9 +867,64 @@ func TestE2ECrossUserScenarioRejectsTenantLedgerAndCashAccess(t *testing.T) {
 	if authScenario.Status != "passed" {
 		t.Fatalf("second account authentication scenario=%+v", authScenario)
 	}
-	scenario := client.crossUserScenario(context.Background(), 42, 101)
+	manifest, err := newE2EFixtureManifest("rentops-e2e-20260916-120000-a1b2c3d4", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	scenario := client.crossUserScenario(context.Background(), manifest, 42, 101)
 	if scenario.Status != "passed" {
 		t.Fatalf("cross-user scenario=%+v", scenario)
+	}
+}
+
+func TestE2ECrossUserScenarioFailsWhenRejectionLeaksForeignData(t *testing.T) {
+	manifest, err := newE2EFixtureManifest("rentops-e2e-20260916-120000-a1b2c3d4", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/login-local" {
+			if _, cookieErr := r.Cookie("rentops_session"); cookieErr != nil {
+				http.Redirect(w, r, "/", http.StatusFound)
+				return
+			}
+		}
+		switch r.URL.Path {
+		case "/login-local":
+			if err := r.ParseForm(); err != nil || r.Form.Get("password") != "second-password" {
+				http.Redirect(w, r, "/?error=invalid_login", http.StatusFound)
+				return
+			}
+			http.SetCookie(w, &http.Cookie{Name: "rentops_session", Value: "second", Path: "/"})
+			http.Redirect(w, r, "/rent-dashboard", http.StatusFound)
+		case "/billing":
+			w.WriteHeader(http.StatusOK)
+		case "/tenants/42":
+			// A 404 that still echoes the other account's tenant name is a leak.
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, "404 page not found: %s\n", manifest.Tenant.Name)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client, err := newE2EHTTPClient(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if auth := client.authenticationScenario(context.Background(), "second", "second-password"); auth.Status != "passed" {
+		t.Fatalf("authentication scenario=%+v", auth)
+	}
+	scenario := client.crossUserScenario(context.Background(), manifest, 42, 101)
+	if scenario.Status != "failed" || scenario.Error != "cross-user tenant isolation failed" {
+		t.Fatalf("leaking rejection was not rejected: %+v", scenario)
+	}
+	actual, ok := scenario.Steps[0].Actual.(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected step actual: %#v", scenario.Steps[0].Actual)
+	}
+	if actual["fixture_data_absent"] != false || actual["data_hidden"] != false {
+		t.Fatalf("leak was not reported: %#v", actual)
 	}
 }
 
@@ -786,7 +996,7 @@ func TestE2EDiscoverCrossUserTransactionRequiresPositiveFixtureID(t *testing.T) 
 			http.NotFound(w, r)
 			return
 		}
-		fmt.Fprintf(w, `<tr class="income"><form><input name="transaction_id" value="101"><span>%s</span></form></tr>`, manifest.Bank.Transactions[0].ProviderTransactionID)
+		fmt.Fprintf(w, `<tr class="income"><form><input name="transaction_id" value="101"><span>%s</span></form></tr>`, manifest.Bank.Transactions[0].StoredProviderTransactionID())
 	}))
 	defer server.Close()
 	client, err := newE2EHTTPClient(server.URL)

@@ -48,6 +48,15 @@ type e2eBankTransactionFixture struct {
 	PayerName                       string   `json:"payer_name,omitempty"`
 }
 
+// StoredProviderTransactionID is the identifier the application persists in
+// payment_transactions.provider_transaction_id and renders as the bank
+// statement number on /billing. The ingest path prefers the normalised provider
+// id over the raw one (cmd/truelayer-demo/transactions.go), so read-back
+// assertions must use this value rather than ProviderTransactionID.
+func (f e2eBankTransactionFixture) StoredProviderTransactionID() string {
+	return f.NormalisedProviderTransactionID
+}
+
 type e2EBankFixture struct {
 	AccountID    string                      `json:"account_id"`
 	AccountName  string                      `json:"account_name"`

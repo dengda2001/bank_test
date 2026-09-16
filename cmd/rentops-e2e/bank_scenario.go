@@ -38,7 +38,7 @@ func (c *e2eHTTPClient) bankImportScenario(ctx context.Context, manifest e2eFixt
 	if err == nil {
 		visible := billingResponse.StatusCode == http.StatusOK
 		for _, transaction := range manifest.Bank.Transactions {
-			visible = visible && strings.Contains(string(billingResponse.Body), transaction.ProviderTransactionID) && strings.Contains(string(billingResponse.Body), transaction.Description)
+			visible = visible && strings.Contains(string(billingResponse.Body), transaction.StoredProviderTransactionID()) && strings.Contains(string(billingResponse.Body), transaction.Description)
 		}
 		visible = visible && strings.Contains(string(billingResponse.Body), "EUR 950.00") && strings.Contains(string(billingResponse.Body), "GBP 25.00")
 		actual := billingStep.Actual.(map[string]any)
@@ -80,7 +80,7 @@ func (c *e2eHTTPClient) bankImportScenario(ctx context.Context, manifest e2eFixt
 		rowCount := countE2ETransactionRows(repeatedBillingResponse.Body, manifest)
 		duplicateRows := false
 		for _, transaction := range manifest.Bank.Transactions {
-			if strings.Count(string(repeatedBillingResponse.Body), transaction.ProviderTransactionID) != 1 {
+			if strings.Count(string(repeatedBillingResponse.Body), transaction.StoredProviderTransactionID()) != 1 {
 				duplicateRows = true
 				break
 			}

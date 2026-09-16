@@ -71,7 +71,14 @@ func runE2EBusinessScenarios(ctx context.Context, options e2eOptions, manifest e
 	if err := recordE2EScenario(report, dunningCandidateScenario, writeReport); err != nil {
 		return err
 	}
-	dunningScenario := client.dunningScenario(ctx, manifest, obligationID)
+	dunningConfigScenario := client.dunningConfigurationScenario(ctx, manifest, obligationID)
+	if err := recordE2EScenario(report, dunningConfigScenario, writeReport); err != nil {
+		return err
+	}
+	dunningScenario := e2eSkippedDunningDeliveryScenario(options)
+	if !options.SkipDunning {
+		dunningScenario = client.dunningDeliveryScenario(ctx, manifest, obligationID)
+	}
 	if err := recordE2EScenario(report, dunningScenario, writeReport); err != nil {
 		return err
 	}
@@ -91,7 +98,7 @@ func runE2EBusinessScenarios(ctx context.Context, options e2eOptions, manifest e
 	if err := recordE2EScenario(report, secondAuthentication, writeReport); err != nil {
 		return err
 	}
-	crossUserScenario := secondClient.crossUserScenario(ctx, tenantID, transactionID)
+	crossUserScenario := secondClient.crossUserScenario(ctx, manifest, tenantID, transactionID)
 	if err := recordE2EScenario(report, crossUserScenario, writeReport); err != nil {
 		return err
 	}
@@ -101,12 +108,30 @@ func runE2EBusinessScenarios(ctx context.Context, options e2eOptions, manifest e
 	return persistE2EProgress(report, writeReport)
 }
 
+// e2eSkippedDunningDeliveryScenario records an explicit gap. The scenario is
+// reported as skipped and listed under the report's unverified entries so that a
+// passing run is never read as "mail delivery was verified".
+func e2eSkippedDunningDeliveryScenario(options e2eOptions) e2eScenarioReport {
+	return e2eScenarioReport{
+		Name:       "dunning-delivery",
+		Status:     "skipped",
+		SkipReason: "mail delivery was excluded by RENTOPS_E2E_SKIP_DUNNING_DELIVERY=1",
+	}
+}
+
 func recordE2EScenario(report *e2eReport, scenario e2eScenarioReport, writeReport e2EReportWriter) error {
 	if report == nil {
 		return errors.New("E2E report is required")
 	}
 	report.Scenarios = append(report.Scenarios, scenario)
 	report.FinishedAt = time.Now().UTC()
+	if scenario.Status == "skipped" {
+		report.Unverified = append(report.Unverified, e2eUnverifiedScenario{
+			Name:   scenario.Name,
+			Reason: firstE2EError(scenario.SkipReason, "scenario was explicitly skipped"),
+		})
+		return persistE2EProgress(report, writeReport)
+	}
 	if scenario.Status != "passed" {
 		report.Status = "failed"
 		report.Error = firstE2EError(scenario.Error, "E2E scenario failed: "+scenario.Name)
@@ -142,7 +167,7 @@ func (c *e2eHTTPClient) discoverE2ECrossUserTransaction(ctx context.Context, man
 		scenario.Error = message
 		return scenario, 0
 	}
-	providerID := manifest.Bank.Transactions[0].ProviderTransactionID
+	providerID := manifest.Bank.Transactions[0].StoredProviderTransactionID()
 	response, err := c.do(ctx, http.MethodGet, "/billing", nil)
 	step := e2eHTTPStep(http.MethodGet, "/billing", map[string]any{
 		"status_code":             http.StatusOK,

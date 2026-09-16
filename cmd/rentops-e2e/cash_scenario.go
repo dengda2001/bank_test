@@ -211,12 +211,19 @@ func (c *e2eHTTPClient) cashReceiptScenario(ctx context.Context, manifest e2eFix
 	correctionPreviewResponse, err := c.do(ctx, http.MethodPost, previewPath, correctionForm)
 	correctionPreviewStep := e2eHTTPStep(http.MethodPost, previewPath, map[string]any{
 		"status_code":     http.StatusOK,
+		"cash_amount":     "350.00 EUR",
 		"after_remaining": "EUR 0.00",
 	}, correctionPreviewResponse, err)
 	if err == nil {
 		body := string(correctionPreviewResponse.Body)
-		correctionPreviewStep.Actual.(map[string]any)["after_remaining"] = strings.Contains(body, "EUR 0.00")
-		correctionPreviewStep.Passed = correctionPreviewResponse.StatusCode == http.StatusOK && strings.Contains(body, "EUR 350.00") && strings.Contains(body, "EUR 0.00")
+		// The preview renders the entered cash amount as "<amount> <currency>"
+		// while the balance cards use "<currency> <amount>".
+		cashAmount := strings.Contains(body, "350.00 EUR")
+		afterRemaining := strings.Contains(body, "EUR 0.00")
+		actual := correctionPreviewStep.Actual.(map[string]any)
+		actual["cash_amount"] = cashAmount
+		actual["after_remaining"] = afterRemaining
+		correctionPreviewStep.Passed = correctionPreviewResponse.StatusCode == http.StatusOK && cashAmount && afterRemaining
 		if !correctionPreviewStep.Passed {
 			correctionPreviewStep.Error = "cash correction preview did not restore the exact remaining balance"
 		}

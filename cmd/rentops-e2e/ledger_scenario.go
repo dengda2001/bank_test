@@ -33,12 +33,12 @@ func (c *e2eHTTPClient) ledgerScenario(ctx context.Context, manifest e2eFixtureM
 	transactionIDs := map[string]uint64{}
 	if err == nil {
 		for _, transaction := range manifest.Bank.Transactions {
-			id, extractErr := extractE2ETransactionID(initialResponse.Body, transaction.ProviderTransactionID)
+			id, extractErr := extractE2ETransactionID(initialResponse.Body, transaction.StoredProviderTransactionID())
 			if extractErr != nil {
-				err = fmt.Errorf("%s: %w", transaction.ProviderTransactionID, extractErr)
+				err = fmt.Errorf("%s: %w", transaction.StoredProviderTransactionID(), extractErr)
 				break
 			}
-			transactionIDs[transaction.ProviderTransactionID] = id
+			transactionIDs[transaction.StoredProviderTransactionID()] = id
 		}
 		initialStep.Actual.(map[string]any)["transaction_count"] = len(transactionIDs)
 		initialStep.Actual.(map[string]any)["transaction_ids"] = len(transactionIDs) == manifest.Expected.BankTransactionCount
@@ -52,7 +52,7 @@ func (c *e2eHTTPClient) ledgerScenario(ctx context.Context, manifest e2eFixtureM
 		return fail("ledger scenario could not discover imported transactions")
 	}
 
-	fullID := transactionIDs[manifest.Bank.Transactions[0].ProviderTransactionID]
+	fullID := transactionIDs[manifest.Bank.Transactions[0].StoredProviderTransactionID()]
 	fullConfirmPath := "/billing/confirm"
 	fullConfirmResponse, err := c.do(ctx, http.MethodPost, fullConfirmPath, url.Values{
 		"transaction_id": {strconv.FormatUint(fullID, 10)},
@@ -75,7 +75,7 @@ func (c *e2eHTTPClient) ledgerScenario(ctx context.Context, manifest e2eFixtureM
 		return fail("full rent confirmation failed")
 	}
 
-	partialID := transactionIDs[manifest.Bank.Transactions[1].ProviderTransactionID]
+	partialID := transactionIDs[manifest.Bank.Transactions[1].StoredProviderTransactionID()]
 	partialPath := "/billing/allocate"
 	partialResponse, err := c.do(ctx, http.MethodPost, partialPath, url.Values{
 		"transaction_id":    {strconv.FormatUint(partialID, 10)},
@@ -101,7 +101,7 @@ func (c *e2eHTTPClient) ledgerScenario(ctx context.Context, manifest e2eFixtureM
 		return fail("rent/deposit split failed")
 	}
 
-	crossMonthID := transactionIDs[manifest.Bank.Transactions[3].ProviderTransactionID]
+	crossMonthID := transactionIDs[manifest.Bank.Transactions[3].StoredProviderTransactionID()]
 	crossMonthResponse, err := c.do(ctx, http.MethodPost, partialPath, url.Values{
 		"transaction_id":  {strconv.FormatUint(crossMonthID, 10)},
 		"allocation_kind": {"rent"},
@@ -125,7 +125,7 @@ func (c *e2eHTTPClient) ledgerScenario(ctx context.Context, manifest e2eFixtureM
 		return fail("cross-month rent allocation failed")
 	}
 
-	otherID := transactionIDs[manifest.Bank.Transactions[4].ProviderTransactionID]
+	otherID := transactionIDs[manifest.Bank.Transactions[4].StoredProviderTransactionID()]
 	otherResponse, err := c.do(ctx, http.MethodPost, partialPath, url.Values{
 		"transaction_id":  {strconv.FormatUint(otherID, 10)},
 		"allocation_kind": {"other_income"},
@@ -148,7 +148,7 @@ func (c *e2eHTTPClient) ledgerScenario(ctx context.Context, manifest e2eFixtureM
 		return fail("other income allocation failed")
 	}
 
-	foreignID := transactionIDs[manifest.Bank.Transactions[2].ProviderTransactionID]
+	foreignID := transactionIDs[manifest.Bank.Transactions[2].StoredProviderTransactionID()]
 	foreignResponse, err := c.do(ctx, http.MethodPost, partialPath, url.Values{
 		"transaction_id":  {strconv.FormatUint(foreignID, 10)},
 		"allocation_kind": {"rent"},
@@ -294,8 +294,8 @@ func (c *e2eHTTPClient) ledgerScenario(ctx context.Context, manifest e2eFixtureM
 		"amount_conservation": true,
 	}, finalResponse, err)
 	if err == nil {
-		fullRow, fullErr := e2eTransactionRow(finalResponse.Body, manifest.Bank.Transactions[0].ProviderTransactionID)
-		foreignRow, foreignErr := e2eTransactionRow(finalResponse.Body, manifest.Bank.Transactions[2].ProviderTransactionID)
+		fullRow, fullErr := e2eTransactionRow(finalResponse.Body, manifest.Bank.Transactions[0].StoredProviderTransactionID())
+		foreignRow, foreignErr := e2eTransactionRow(finalResponse.Body, manifest.Bank.Transactions[2].StoredProviderTransactionID())
 		fullStatus := e2eTransactionStatus(fullRow)
 		foreignStatus := e2eTransactionStatus(foreignRow)
 		conserved := strings.Contains(fullRow, "已分配 EUR 950.00") && strings.Contains(fullRow, "余款 EUR 0.00")
