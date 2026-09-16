@@ -169,63 +169,63 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Funcs(t
 	    .dashboard-toolbar label { margin: 0; min-width: 150px; }
 	    .dashboard-filter { flex-wrap: wrap; justify-content: flex-end; }
 	    .dashboard-filter label { min-width: 140px; }
-	    .dashboard-filter input, .dashboard-filter select { min-height: 42px; border-radius: 14px; padding: 9px 12px; background: rgba(255,255,255,0.07); box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 0 0 1px rgba(255,255,255,0.03); }
-	    .dashboard-filter input:focus, .dashboard-filter select:focus { border-color: rgba(104,114,217,0.85); background: rgba(255,255,255,0.08); }
+	    .dashboard-filter input, .dashboard-filter select { min-height: 42px; border-radius: 8px; padding: 9px 12px; background: var(--surface-muted); }
+	    .dashboard-filter input:focus, .dashboard-filter select:focus { border-color: var(--accent); background: var(--surface); }
 	    .dashboard-counts { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: -6px 0 18px; color: var(--foreground-subtle); }
-	    .dashboard-counts a { color: inherit; text-decoration: none; border-bottom: 1px dashed rgba(255,255,255,.28); }
-	    .dashboard-counts a:hover { color: #fff; }
+	    .dashboard-counts a { color: inherit; text-decoration: none; border-bottom: 1px dashed var(--border-strong); }
+	    .dashboard-counts a:hover { color: var(--accent-bright); }
 	    .dashboard-secondary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0 0 18px; }
 	    .dashboard-secondary .metric { min-height: 118px; }
 	    .sync-status { margin-bottom: 18px; }
 	    .dashboard-pagination { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; }
 	    .dashboard-pagination .disabled { opacity: .42; pointer-events: none; }
-    .dashboard-toolbar input[type="month"] { min-height: 42px; border-radius: 14px; padding: 9px 12px; background: rgba(255,255,255,0.07); box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 0 0 1px rgba(255,255,255,0.03); }
-    .dashboard-toolbar input[type="month"]:hover { border-color: rgba(255,255,255,0.22); background: rgba(255,255,255,0.09); }
-    .dashboard-toolbar input[type="month"]:focus { border-color: rgba(104,114,217,0.85); background: rgba(255,255,255,0.08); }
-    .month-nav { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; color: var(--foreground); background: rgba(255,255,255,0.055); box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 0 0 1px rgba(255,255,255,0.08); text-decoration: none; font-size: 28px; line-height: 1; }
-    .month-nav:hover { background: rgba(255,255,255,0.10); }
+    .dashboard-toolbar input[type="month"] { min-height: 42px; border-radius: 8px; padding: 9px 12px; background: var(--surface-muted); }
+    .dashboard-toolbar input[type="month"]:hover { border-color: var(--border-strong); background: var(--surface); }
+    .dashboard-toolbar input[type="month"]:focus { border-color: var(--accent); background: var(--surface); }
+    .month-nav { width: 42px; height: 42px; border: 1px solid var(--border); border-radius: 8px; display: grid; place-items: center; color: var(--foreground); background: var(--surface); text-decoration: none; font-size: 28px; line-height: 1; }
+    .month-nav:hover { background: var(--surface-muted); }
     .collection-panel { padding: 18px; margin: 0 0 18px; }
     .collection-head { display: flex; justify-content: space-between; align-items: center; }
     .collection-head span { color: var(--positive); font: 700 18px var(--mono); }
-    .progress-track { height: 10px; margin: 12px 0 8px; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,0.08); }
+    .progress-track { height: 10px; margin: 12px 0 8px; border-radius: 999px; overflow: hidden; background: #e5e7eb; }
     .progress-value { height: 100%; border-radius: inherit; background: var(--positive); transition: width 180ms ease; }
     .status.open, .status.overdue, .status.partial, .status.paid, .status.needs_review { border-radius: 999px; padding: 5px 9px; display: inline-block; font-size: 12px; }
-    .status.open { color: #d8dcff; background: rgba(104,114,217,0.12); }
-    .status.overdue, .status.needs_review { color: #ffd0ce; background: rgba(255,139,134,0.10); }
-    .review-link { color: #ffd0ce; text-decoration: none; border-bottom: 1px dashed currentColor; }
-    .review-link:hover { color: #fff; }
-    .status.partial { color: #ffe0a7; background: rgba(233,184,114,0.10); }
-    .status.paid { color: #cbffe1; background: rgba(125,211,168,0.10); }
+    .status.open { color: #1e40af; background: #dbeafe; }
+    .status.overdue, .status.needs_review { color: #991b1b; background: #fee2e2; }
+    .review-link { color: #991b1b; text-decoration: none; border-bottom: 1px dashed currentColor; }
+    .review-link:hover { color: var(--danger); }
+    .status.partial { color: #92400e; background: #fef3c7; }
+    .status.paid { color: #065f46; background: #d1fae5; }
     .metric-link { display: block; color: inherit; text-decoration: none; }
-    .metric-link:hover { border-color: rgba(104,114,217,0.48); }
-    .metric-link:focus-visible { outline: 2px solid rgba(104,114,217,0.9); outline-offset: 3px; }
+    .metric-link:hover { border-color: #93c5fd; }
+    .metric-link:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 3px; }
     .rent-row { cursor: pointer; }
-    .rent-row:hover, .rent-row:focus { background: rgba(255,255,255,0.035); outline: none; }
+    .rent-row:hover, .rent-row:focus { background: var(--surface-accent); outline: none; }
     .rent-row td:first-child::after { content: " +"; margin-left: 6px; color: var(--foreground-muted); font: 700 12px var(--mono); }
     .rent-row[aria-expanded="true"] td:first-child::after { content: " -"; }
-    .rent-details td { padding: 0; background: rgba(255,255,255,0.025); }
-    .payment-list { padding: 14px 18px 16px 32px; border-top: 1px solid rgba(255,255,255,0.045); }
+    .rent-details td { padding: 0; background: var(--surface-muted); }
+    .payment-list { padding: 14px 18px 16px 32px; border-top: 1px solid var(--border); }
     .payment-list h3 { margin: 0 0 10px; font-size: 12px; color: var(--foreground); }
-    .payment-item { display: grid; grid-template-columns: 140px 170px minmax(180px, 1fr) minmax(160px, 1fr) 100px; gap: 12px; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.04); color: var(--foreground-subtle); font-size: 12px; }
+    .payment-item { display: grid; grid-template-columns: 140px 170px minmax(180px, 1fr) minmax(160px, 1fr) 100px; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); color: var(--foreground-subtle); font-size: 12px; }
     .payment-item:last-child { border-bottom: 0; }
     .payment-item .amount { font-size: 13px; }
-	    .tenant-link, .void-link { color: inherit; text-decoration: none; border-bottom: 1px dashed rgba(255,255,255,.35); }
-	    .tenant-link:hover, .void-link:hover { color: #fff; border-color: currentColor; }
+	    .tenant-link, .void-link { color: inherit; text-decoration: none; border-bottom: 1px dashed var(--border-strong); }
+	    .tenant-link:hover, .void-link:hover { color: var(--accent-bright); border-color: currentColor; }
 	    .dunning-launch { white-space: nowrap; }
-	    .dunning-drawer { margin: 18px 0; padding: 20px; border-color: rgba(104,114,217,.42); }
+	    .dunning-drawer { margin: 18px 0; padding: 20px; border-color: #93c5fd; background: var(--surface-accent); }
 	    .dunning-drawer[hidden] { display: none; }
 	    .dunning-drawer .panel-head { align-items: flex-start; }
 	    .dunning-drawer h2 { margin: 0 0 5px; }
 	    .dunning-grid { display: grid; grid-template-columns: minmax(220px, .75fr) minmax(0, 1.25fr); gap: 20px; }
 	    .dunning-config, .dunning-selection { min-width: 0; }
-	    .dunning-config { padding-right: 20px; border-right: 1px solid rgba(255,255,255,.08); }
+	    .dunning-config { padding-right: 20px; border-right: 1px solid var(--border); }
 	    .dunning-config form, .dunning-selection form { display: grid; gap: 10px; }
 	    .dunning-config label { display: grid; gap: 6px; }
-	    .dunning-config input { min-height: 40px; border-radius: 12px; padding: 8px 11px; background: rgba(255,255,255,.06); }
+	    .dunning-config input { min-height: 40px; border-radius: 8px; padding: 8px 11px; background: var(--surface-muted); }
 	    .dunning-selection { display: grid; gap: 12px; }
 	    .dunning-candidates { display: grid; gap: 7px; }
-	    .dunning-candidate { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: rgba(255,255,255,.025); }
-	    .dunning-candidate:has(input:checked) { border-color: rgba(104,114,217,.56); background: rgba(104,114,217,.08); }
+	    .dunning-candidate { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+	    .dunning-candidate:has(input:checked) { border-color: #93c5fd; background: var(--surface-accent); }
 	    .dunning-candidate.is-disabled { opacity: .58; }
 	    .dunning-candidate strong { display: block; }
 	    .dunning-candidate .amount { white-space: nowrap; }
@@ -233,14 +233,14 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Funcs(t
 	    .dunning-actions label { color: var(--foreground-subtle); font-size: 12px; }
 	    .dunning-notice { margin: 0; }
 	    .dunning-preview, .dunning-results { display: grid; gap: 8px; margin-top: 12px; }
-	    .dunning-preview-row, .dunning-result-row { padding: 12px; border-left: 3px solid rgba(104,114,217,.72); background: rgba(255,255,255,.035); }
+	    .dunning-preview-row, .dunning-result-row { padding: 12px; border-left: 3px solid var(--accent); background: var(--surface); }
 	    .dunning-preview-row pre { max-height: 170px; overflow: auto; margin: 8px 0 0; white-space: pre-wrap; color: var(--foreground-subtle); font: 12px/1.6 var(--mono); }
 	    .dunning-result-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; border-left-color: var(--positive); }
 	    .dunning-result-row.failed { border-left-color: var(--negative); }
 	    .dunning-result-row.skipped { border-left-color: var(--foreground-muted); }
 	    .dunning-result-row .result-error { color: #ffd0ce; }
 	    .dunning-retry { margin-left: auto; }
-	    @media (max-width: 760px) { .dunning-grid { grid-template-columns: 1fr; } .dunning-config { padding-right: 0; padding-bottom: 16px; border-right: 0; border-bottom: 1px solid rgba(255,255,255,.08); } .dunning-result-row { align-items: flex-start; } .dunning-retry { width: 100%; margin-left: 0; } }
+	    @media (max-width: 760px) { .dunning-grid { grid-template-columns: 1fr; } .dunning-config { padding-right: 0; padding-bottom: 16px; border-right: 0; border-bottom: 1px solid var(--border); } .dunning-result-row { align-items: flex-start; } .dunning-retry { width: 100%; margin-left: 0; } }
 	    @media (max-width: 760px) { .payment-item { grid-template-columns: 1fr 1fr; } .payment-item .payment-description { grid-column: 1 / -1; } }
     @media (max-width: 900px) { .dashboard-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 	    @media (max-width: 640px) { .dashboard-summary, .dashboard-secondary { grid-template-columns: 1fr; } .dashboard-toolbar { align-items: stretch; flex-direction: column; min-width: 0; } .dashboard-toolbar form { display: flex; width: 100%; max-width: 100%; min-width: 0; flex-wrap: wrap; align-items: stretch; gap: 8px; } .dashboard-toolbar form label { width: 100%; flex: 1 1 100%; min-width: 0; } .dashboard-toolbar form input, .dashboard-toolbar form select { min-width: 0; width: 100%; } .month-nav { flex: 0 0 42px; } .dashboard-filter .month-nav { flex: 0 0 42px; } .dashboard-filter .btn { flex: 1 1 auto; } }

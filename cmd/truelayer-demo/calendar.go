@@ -31,7 +31,7 @@ const workspaceCalendarCSS = `
       display: grid;
       place-items: center;
       color: var(--foreground-muted);
-      background: rgba(255,255,255,0.06);
+      background: var(--surface-muted);
       cursor: pointer;
       transition: background 160ms ease, color 160ms ease;
     }
@@ -42,8 +42,8 @@ const workspaceCalendarCSS = `
     }
     .calendar-trigger:hover,
     .calendar-control.is-open .calendar-trigger {
-      color: var(--foreground);
-      background: rgba(104,114,217,0.24);
+      color: var(--accent-bright);
+      background: var(--surface-accent);
     }
     .calendar-popover {
       position: absolute;
@@ -52,11 +52,10 @@ const workspaceCalendarCSS = `
       left: 0;
       width: min(360px, calc(100vw - 28px));
       padding: 16px;
-      border: 1px solid rgba(255,255,255,0.14);
+      border: 1px solid var(--border);
       border-radius: 18px;
       color: var(--foreground);
-      background: #292a31;
-      box-shadow: 0 18px 45px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04);
+      background: var(--surface);
       opacity: 0;
       pointer-events: none;
       transform: translateY(-4px) scale(0.98);
@@ -93,7 +92,7 @@ const workspaceCalendarCSS = `
       transition: background 160ms ease, color 160ms ease;
     }
     .calendar-title:hover {
-      background: rgba(255,255,255,0.08);
+      background: var(--surface-muted);
     }
     .calendar-title.is-static {
       padding: 4px 0;
@@ -115,12 +114,12 @@ const workspaceCalendarCSS = `
     }
     .calendar-nav:hover {
       color: var(--foreground);
-      background: rgba(255,255,255,0.08);
+      background: var(--surface-muted);
     }
     .calendar-divider {
       height: 1px;
       margin: 10px 0 12px;
-      background: rgba(255,255,255,0.78);
+      background: var(--border);
     }
     .calendar-month-grid {
       display: grid;
@@ -153,21 +152,20 @@ const workspaceCalendarCSS = `
       font-size: 14px;
     }
     .calendar-option:hover {
-      border-color: rgba(147,197,253,0.72);
-      background: rgba(147,197,253,0.16);
+      border-color: #93c5fd;
+      background: var(--surface-accent);
     }
     .calendar-option.is-selected {
-      border-color: rgba(219,234,254,0.92);
-      color: #142238;
-      background: #93c5fd;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.38);
+      border-color: var(--accent);
+      color: #ffffff;
+      background: var(--accent);
     }
     .calendar-option.is-today:not(.is-selected) {
-      border-color: rgba(147,197,253,0.65);
-      color: #bfdbfe;
+      border-color: #93c5fd;
+      color: var(--accent-bright);
     }
     .calendar-option.is-outside {
-      color: rgba(255,255,255,0.28);
+      color: #9ca3af;
     }
     .calendar-option:disabled {
       cursor: not-allowed;
@@ -179,21 +177,21 @@ const workspaceCalendarCSS = `
       gap: 10px;
       margin-top: 13px;
       padding-top: 11px;
-      border-top: 1px solid rgba(255,255,255,0.10);
+      border-top: 1px solid var(--border);
     }
     .calendar-action {
       min-height: 30px;
       padding: 0 8px;
       border: 0;
       border-radius: 8px;
-      color: #93c5fd;
+      color: var(--accent-bright);
       background: transparent;
       cursor: pointer;
       font-size: 13px;
       font-weight: 700;
     }
     .calendar-action:hover {
-      background: rgba(147,197,253,0.12);
+      background: var(--surface-accent);
     }
     @media (max-width: 640px) {
       .calendar-popover {

@@ -14,18 +14,18 @@ var billingTemplate = template.Must(template.New("billing").Parse(`<!doctype htm
     .filterbar input[type="month"] { min-height: 40px; border-radius: 10px; }
     .filter-actions { display: flex; align-items: end; gap: 8px; }
     .filterbar .btn { min-height: 40px; margin-top: 0; }
-    .filterbar .btn.subtle { color: var(--foreground-muted); background: transparent; box-shadow: none; }
-    .filterbar .btn.subtle:hover { color: var(--foreground); background: rgba(255,255,255,0.055); }
+    .filterbar .btn.subtle { color: var(--foreground-muted); background: transparent; }
+    .filterbar .btn.subtle:hover { color: var(--foreground); background: var(--surface-muted); }
     .actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
     .actions form { margin: 0; }
     .actions .btn.primary { margin-top: 0; }
     .status { display: inline-block; border-radius: 999px; padding: 5px 9px; font-size: 12px; white-space: nowrap; }
-    .status.matched { color: #cbffe1; background: rgba(125,211,168,0.10); }
-    .status.candidate { color: #ffe0a7; background: rgba(233,184,114,0.10); }
-    .status.unmatched { color: #d8dcff; background: rgba(104,114,217,0.12); }
-    .status.needs_review { color: #ffd0ce; background: rgba(255,139,134,0.10); }
-    .status.partial { color: #ffe0a7; background: rgba(233,184,114,0.10); }
-    .status.ignored { color: var(--foreground-muted); background: rgba(255,255,255,0.08); }
+    .status.matched { color: #065f46; background: #d1fae5; }
+    .status.candidate { color: #92400e; background: #fef3c7; }
+    .status.unmatched { color: #1e40af; background: #dbeafe; }
+    .status.needs_review { color: #991b1b; background: #fee2e2; }
+    .status.partial { color: #92400e; background: #fef3c7; }
+    .status.ignored { color: var(--foreground-muted); background: #e5e7eb; }
     .status-link { text-decoration: none; cursor: pointer; }
     .status-link:hover { border-color: currentColor; }
     .description { max-width: 260px; color: var(--foreground); overflow-wrap: anywhere; }
@@ -49,8 +49,8 @@ var billingTemplate = template.Must(template.New("billing").Parse(`<!doctype htm
     .allocation-form { display: grid; gap: 6px; margin-top: 8px; min-width: 230px; }
     .allocation-form select, .allocation-form input { min-height: 30px; padding: 5px 8px; font-size: 12px; }
     .allocation-form .btn { min-height: 30px; padding: 0 9px; font-size: 12px; }
-    .allocation-line { display: grid; gap: 6px; padding-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.08); }
-    .allocation-add { color: var(--accent); background: transparent; box-shadow: none; }
+    .allocation-line { display: grid; gap: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+    .allocation-add { color: var(--accent); background: transparent; }
     .allocation-details { margin-top: 8px; }
     .allocation-details summary { color: var(--accent); cursor: pointer; font-size: 12px; }
     .transaction-table tr.expense .allocation-details { display: none; }

@@ -195,18 +195,18 @@ var tenantDetailTemplate = template.Must(template.New("tenant-detail").Parse(`<!
     .payer-item { display: flex; justify-content: space-between; gap: 12px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--border); }
     .payer-item:last-child { border-bottom: 0; }
     .payer-meta { display: grid; gap: 4px; }
-    .flag { color: #ffe0a7; font-size: 12px; }
+    .flag { color: var(--warning); font-size: 12px; }
     .status { display: inline-block; border-radius: 999px; padding: 5px 9px; font-size: 12px; white-space: nowrap; }
-    .status.open { color: #d8dcff; background: rgba(104,114,217,.12); }
-    .status.overdue, .status.needs_review { color: #ffd0ce; background: rgba(255,139,134,.10); }
-    .status.partial { color: #ffe0a7; background: rgba(233,184,114,.10); }
-    .status.paid { color: #cbffe1; background: rgba(125,211,168,.10); }
-    .status.voided { color: var(--foreground-muted); background: rgba(255,255,255,.08); }
+    .status.open { color: #1e40af; background: #dbeafe; }
+    .status.overdue, .status.needs_review { color: #991b1b; background: #fee2e2; }
+    .status.partial { color: #92400e; background: #fef3c7; }
+    .status.paid { color: #065f46; background: #d1fae5; }
+    .status.voided { color: var(--foreground-muted); background: #e5e7eb; }
     .history-filter { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
     .history-filter label { margin: 0; }
     .history-filter input { min-height: 40px; }
     .history-table { min-width: 760px; }
-    .payment-list { display: grid; gap: 8px; margin-top: 10px; padding: 12px; background: rgba(255,255,255,.025); border-radius: 12px; }
+    .payment-list { display: grid; gap: 8px; margin-top: 10px; padding: 12px; background: var(--surface-muted); border-radius: 8px; }
     .payment-item { display: grid; grid-template-columns: 100px 145px 1fr 150px; gap: 10px; font-size: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
     .payment-item:last-child { border-bottom: 0; padding-bottom: 0; }
     .pagination { display: flex; gap: 8px; align-items: center; margin-top: 16px; }

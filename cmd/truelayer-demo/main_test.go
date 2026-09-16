@@ -92,6 +92,25 @@ func TestWorkspaceUIPrimitivesHaveConsistentInteractionStates(t *testing.T) {
 	}
 }
 
+func TestWorkspaceCSSUsesFlatDesignTokens(t *testing.T) {
+	for _, expected := range []string{
+		"--surface: #ffffff;",
+		"--foreground: #111827;",
+		"--accent: #2563eb;",
+		"background: var(--background-base);",
+		".panel { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }",
+	} {
+		if !strings.Contains(workspacePageCSS, expected) {
+			t.Fatalf("flat workspace CSS missing %q", expected)
+		}
+	}
+	for _, forbidden := range []string{"backdrop-filter:", "box-shadow:", "radial-gradient", "linear-gradient", "rgba("} {
+		if strings.Contains(workspacePageCSS, forbidden) {
+			t.Fatalf("flat workspace CSS still contains depth effect %q", forbidden)
+		}
+	}
+}
+
 func TestAuthURLIncludesOAuthParameters(t *testing.T) {
 	a := app{cfg: config{
 		AuthBaseURL: "https://auth.truelayer-sandbox.com",
