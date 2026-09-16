@@ -1,0 +1,359 @@
+package main
+
+import (
+	"html/template"
+	"strings"
+	"testing"
+)
+
+// executeTemplate renders one page and hands back the markup.
+func executeTemplate(tmpl *template.Template, data any) (string, error) {
+	var body strings.Builder
+	if err := tmpl.Execute(&body, data); err != nil {
+		return "", err
+	}
+	return body.String(), nil
+}
+
+// splitWorkspaceCSS returns the desktop stylesheet and the mobile-only tail that
+// follows it. A rule in the tail cannot move the desktop rendering; a rule in the
+// head can.
+func splitWorkspaceCSS(t *testing.T) (base, mobile string) {
+	t.Helper()
+	base, mobile, found := strings.Cut(workspacePageCSS, "@media (max-width: 640px)")
+	if !found {
+		t.Fatal("workspacePageCSS has no @media (max-width: 640px) block")
+	}
+	return base, mobile
+}
+
+// The sidebar used to be copy-pasted into seven templates and the copies had
+// already drifted: the cash-receipt pages rendered no count badges, the footer
+// carried three different captions, and the dashboard alone labelled its <nav>.
+// One shared definition is what makes the drawer a one-place change, so every
+// page has to go on rendering exactly one of it.
+func TestEveryWorkspacePageRendersTheSharedChromeOnce(t *testing.T) {
+	pages := map[string]func() (string, error){
+		"billing": func() (string, error) {
+			return executeTemplate(billingTemplate, billingPageData{})
+		},
+		"rent-dashboard": func() (string, error) {
+			return executeTemplate(rentDashboardTemplate, rentDashboardPageData{})
+		},
+		"tenants": func() (string, error) {
+			return executeTemplate(tenantTemplate, tenantPageData{})
+		},
+		"expenses": func() (string, error) {
+			return executeTemplate(expenseTemplate, expensePageData{})
+		},
+		"tenant-detail": func() (string, error) {
+			return executeTemplate(tenantDetailTemplate, tenantDetailPageData{})
+		},
+		"cash-receipt": func() (string, error) {
+			return executeTemplate(cashReceiptTemplate, cashReceiptFormData{})
+		},
+		"cash-receipt-void": func() (string, error) {
+			return executeTemplate(cashReceiptVoidTemplate, cashReceiptVoidPageData{})
+		},
+	}
+
+	for name, render := range pages {
+		page, err := render()
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		for marker, want := range map[string]int{
+			`id="nav-drawer"`:         1,
+			`<aside class="sidebar"`:  1,
+			`class="nav-compact-bar"`: 1,
+			`class="nav-scrim"`:       1,
+		} {
+			if got := strings.Count(page, marker); got != want {
+				t.Fatalf("%s renders %q %d times, want %d", name, marker, got, want)
+			}
+		}
+	}
+}
+
+// The drawer is pure CSS: a hidden checkbox holds the open state and the sidebar
+// slides in on :checked. It has to keep working with JavaScript disabled, so the
+// rules live in the stylesheet and not in a script.
+func TestWorkspaceCSSDrawerIsCSSOnlyAndMobileScoped(t *testing.T) {
+	base, mobile := splitWorkspaceCSS(t)
+
+	for _, forbidden := range []string{"#nav-drawer", "translateX", "nav-burger"} {
+		if strings.Contains(base, forbidden) {
+			t.Fatalf("drawer declaration %q reached the desktop stylesheet", forbidden)
+		}
+	}
+	if !strings.Contains(base, ".nav-compact-bar,\n    .nav-scrim { display: none; }") {
+		t.Fatal("the compact bar and the scrim are not hidden above the breakpoint")
+	}
+
+	for _, expected := range []string{
+		".nav-compact-bar {",
+		"transform: translateX(-100%);",
+		"#nav-drawer:checked ~ .sidebar { transform: translateX(0); visibility: visible; }",
+		"#nav-drawer:checked ~ .nav-scrim {",
+	} {
+		if !strings.Contains(mobile, expected) {
+			t.Fatalf("mobile drawer CSS is missing %q", expected)
+		}
+	}
+
+	// The tab order is the half of the drawer that does not show up in a
+	// screenshot, and both halves have failed at some point. Closed, the sidebar
+	// must be out of the tab order as well as off-screen (translate alone leaves
+	// its links focusable and the focus ring lands past the viewport edge); open,
+	// it must come back. The state checkbox must not be `hidden`, which is
+	// display:none and therefore unreachable by keyboard — that would make the
+	// narrow-screen navigation openable by pointer only.
+	if !strings.Contains(mobile, "visibility: hidden;") {
+		t.Fatal("the closed drawer leaves its links in the tab order")
+	}
+	if !strings.Contains(mobile, ".nav-drawer-input {") {
+		t.Fatal("the drawer state checkbox has no narrow-screen style; a bare checkbox would render in the layout")
+	}
+	if strings.Contains(base, ".nav-drawer-input { display: none; }") == false {
+		t.Fatal("the drawer state checkbox is not suppressed above the breakpoint")
+	}
+	if strings.Contains(workspaceNav, `class="nav-drawer-input" hidden`) {
+		t.Fatal("the drawer checkbox carries `hidden`, which cannot take focus")
+	}
+}
+
+// Sticky is what keeps a row's identity and its actions on screen while the table
+// scrolls sideways. It must never leak above the breakpoint: at 1280px the tables
+// have to render exactly as they did before.
+func TestFrozenLastColumnIsMobileOnly(t *testing.T) {
+	base, mobile := splitWorkspaceCSS(t)
+
+	if strings.Contains(base, "sticky") {
+		t.Fatal("a sticky declaration reached the desktop stylesheet")
+	}
+	for _, expected := range []string{
+		".table-wrap > table > thead > tr > th:last-child,",
+		".table-wrap > table > tbody > tr > td:last-child:not([colspan]) {",
+		"position: sticky;",
+		"right: 0;",
+		// Without an opaque background the scrolled cells show through, and without
+		// the inset shadow there is no hint that more columns exist: mobile browsers
+		// draw no scrollbar.
+		"background: var(--surface);",
+		"box-shadow: -8px 0 8px -8px rgba(0, 0, 0, 0.18);",
+	} {
+		if !strings.Contains(mobile, expected) {
+			t.Fatalf("frozen last column CSS is missing %q", expected)
+		}
+	}
+}
+
+// The tenant detail card is the defect the audit started from: the 130px label
+// column wasted 98px per row and pinched the value column to 139px, breaking the
+// email address across lines. Narrow screens stack the pairs; the wide rule has to
+// stay untouched.
+func TestTenantDetailProfileListStacksOnlyOnNarrowScreens(t *testing.T) {
+	page, err := executeTemplate(tenantDetailTemplate, tenantDetailPageData{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wideRule := ".profile-list { display: grid; grid-template-columns: 130px 1fr; gap: 10px 18px; margin: 0; padding: 18px 20px; }"
+	wide := strings.Index(page, wideRule)
+	if wide < 0 {
+		t.Fatal("the wide .profile-list rule was modified or removed")
+	}
+
+	mobileRule := ".profile-list { grid-template-columns: 1fr; gap: 4px 0; }"
+	mobile := strings.Index(page, mobileRule)
+	if mobile < 0 {
+		t.Fatal("the narrow-screen single-column .profile-list rule is missing")
+	}
+
+	// The rule must sit inside the page's own narrow-screen block, which is the
+	// last one written: html/template strips CSS comments from <style>, so the
+	// anchor has to be a declaration.
+	block := strings.LastIndex(page[:mobile], "@media (max-width: 640px)")
+	if block < wide {
+		t.Fatal("the single-column rule is not inside a @media (max-width: 640px) block")
+	}
+	if strings.Contains(page[block+len("@media (max-width: 640px)"):mobile], "@media") {
+		t.Fatal("the single-column rule is not in the last narrow-screen block")
+	}
+}
+
+// Rendering the count badges on the pages that never had them would change their
+// desktop appearance, which is a hard constraint of this task. The shell's
+// ShowNavCounts flag is what keeps those three pages byte-identical while the
+// other four keep their badges.
+func TestNavCountsOnlyRenderWhereTheyDidBefore(t *testing.T) {
+	withBadges := map[string]func() (string, error){
+		"billing": func() (string, error) {
+			return executeTemplate(billingTemplate, billingPageData{workspaceShell: workspaceShell{
+				ShowNavCounts: true, TenantCount: 3, IncomeCount: 4, ExpenseCount: 5,
+			}})
+		},
+		"rent-dashboard": func() (string, error) {
+			return executeTemplate(rentDashboardTemplate, rentDashboardPageData{workspaceShell: workspaceShell{
+				ShowNavCounts: true, TenantCount: 3, IncomeCount: 4, ExpenseCount: 5,
+			}})
+		},
+		"tenants": func() (string, error) {
+			return executeTemplate(tenantTemplate, tenantPageData{workspaceShell: workspaceShell{
+				ShowNavCounts: true, TenantCount: 3, IncomeCount: 4, ExpenseCount: 5,
+			}})
+		},
+		"expenses": func() (string, error) {
+			return executeTemplate(expenseTemplate, expensePageData{workspaceShell: workspaceShell{
+				ShowNavCounts: true, TenantCount: 3, IncomeCount: 4, ExpenseCount: 5,
+			}})
+		},
+	}
+	for name, render := range withBadges {
+		page, err := render()
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if got := strings.Count(page, `class="nav-count"`); got != 4 {
+			t.Fatalf("%s renders %d count badges, want 4", name, got)
+		}
+	}
+
+	// These three never had badges. The counts are populated anyway: the flag, not
+	// an empty value, is what has to keep the markup out.
+	withoutBadges := map[string]func() (string, error){
+		"tenant-detail": func() (string, error) {
+			return executeTemplate(tenantDetailTemplate, tenantDetailPageData{workspaceShell: workspaceShell{
+				ShowNavCounts: false, TenantCount: 3, IncomeCount: 4, ExpenseCount: 5,
+			}})
+		},
+		"cash-receipt": func() (string, error) {
+			return executeTemplate(cashReceiptTemplate, cashReceiptFormData{workspaceShell: workspaceShell{
+				ShowNavCounts: false, TenantCount: 3, IncomeCount: 4, ExpenseCount: 5,
+			}})
+		},
+		"cash-receipt-void": func() (string, error) {
+			return executeTemplate(cashReceiptVoidTemplate, cashReceiptVoidPageData{workspaceShell: workspaceShell{
+				ShowNavCounts: false, TenantCount: 3, IncomeCount: 4, ExpenseCount: 5,
+			}})
+		},
+	}
+	for name, render := range withoutBadges {
+		page, err := render()
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if got := strings.Count(page, `class="nav-count"`); got != 0 {
+			t.Fatalf("%s renders %d count badges, want none", name, got)
+		}
+	}
+}
+
+// The payer preview turned the whole card into the horizontal scroller: heading,
+// blurb and the 返回流水 link all slid out of view together. Only the table should
+// scroll, so the overflow moves to a wrapper around it. The page keeps its own
+// palette; this is a scrolling fix, not a re-theming.
+func TestPayerPreviewScrollsTheTableNotTheCard(t *testing.T) {
+	page, err := executeTemplate(payerPreviewTemplate, payerPreviewPageData{
+		Rows: []payerPreviewRow{{TransactionID: "1", PayerName: "Aoife", AmountDisplay: "EUR 8.00"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(page, ".tp-scroll{overflow-x:auto}") {
+		t.Fatal("the narrow-screen media block does not scroll .tp-scroll")
+	}
+	if strings.Contains(page, ".card{padding:18px;overflow-x:auto}") {
+		t.Fatal("the card is still the horizontal scroller")
+	}
+	if !strings.Contains(page, `.card{max-width:1100px;margin:auto;padding:24px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}`) {
+		t.Fatal("the payer preview card rule changed shape")
+	}
+
+	if !strings.Contains(page, `<div class="tp-scroll"><table>`) {
+		t.Fatal("the table is not wrapped in .tp-scroll")
+	}
+	if !strings.Contains(page, "</table></div>") {
+		t.Fatal("the .tp-scroll wrapper is not closed after the table")
+	}
+}
+
+// The billing action column measured 320px, so it cannot be frozen; narrow
+// screens swap it for a status badge plus a 处理 toggle that expands in place and
+// drop the two secondary columns. Desktop keeps the content inline: there is no
+// summary to click, and the ~3 lines of script only strip the open attribute
+// where the narrow-screen block applies.
+//
+// The amount moves into that summary rather than staying frozen beside it. Frozen
+// as its own column it was 136-146px, which together with the 88px action column
+// took 72% of a 327px window and — once sticky pushed it left — covered the payer
+// column outright. The payer name is the only thing that says which row is being
+// acted on, so the amount rides along in the frozen cell instead.
+func TestBillingActionCellCollapsesOnlyOnNarrowScreens(t *testing.T) {
+	page := renderBillingPage(t, billingPageData{workspaceShell: workspaceShell{
+		ShowNavCounts: true, TenantCount: 1, IncomeCount: 1, ExpenseCount: 1,
+	},
+		TransactionRows: []transactionPageRow{{ID: "7", Direction: "income", DirectionLabel: "收入"}},
+	})
+
+	if !strings.Contains(page, `<details class="txn-action" open>`) {
+		t.Fatal("the action cell is not a <details> opened for the wide-screen rendering")
+	}
+	if !strings.Contains(page, `<summary class="txn-summary">`) {
+		t.Fatal("the collapsed action cell has no summary")
+	}
+	if !strings.Contains(page, `.txn-col-action > .txn-action > summary { display: none; }`) {
+		t.Fatal("the summary is not hidden on wide screens")
+	}
+	// A closed <details> hides its content through the UA stylesheet; the markup
+	// therefore ships open and the script closes it only where the narrow-screen
+	// block applies.
+	if !strings.Contains(page, `window.matchMedia('(max-width: 640px)')`) {
+		t.Fatal("nothing collapses the action cell on narrow screens")
+	}
+	if !strings.Contains(page, `document.querySelectorAll('details.txn-action[open]').forEach(function(node){node.removeAttribute('open');})`) {
+		t.Fatal("the collapse script does not remove the open attribute")
+	}
+
+	for _, expected := range []string{
+		// Dropping the two secondary columns lowers the table's floor from 1040px,
+		// but it must not fall to 0: with no floor CJK wraps one character per line.
+		".transaction-table { min-width: 680px; }",
+		".transaction-table .txn-col-desc,\n      .transaction-table .txn-col-account { display: none; }",
+		// The amount column goes too, and its content reappears inside the frozen
+		// action cell. A frozen amount that covers the payer is worse than a frozen
+		// amount the user reaches by scrolling a little.
+		".transaction-table .txn-col-amount { display: none; }",
+		".transaction-table .txn-col-action { width: 118px; padding: 10px 8px; }",
+		".txn-amount-mobile { display: block; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }",
+	} {
+		if !strings.Contains(page, expected) {
+			t.Fatalf("billing narrow-screen CSS is missing %q", expected)
+		}
+	}
+	// The carried amount must not reach wide screens. Two rules keep it out: the
+	// page-local default below the wide-screen block hides it always, and the
+	// wide-screen block hides the whole summary it lives in.
+	if !strings.Contains(page, ".txn-amount-mobile { display: none; }") {
+		t.Fatal("the carried amount is not hidden by default")
+	}
+	if wide := strings.Index(page, ".txn-amount-mobile { display: none; }"); wide > strings.Index(page, ".txn-amount-mobile { display: block;") {
+		t.Fatal("the mobile override is written before the wide-screen default")
+	}
+}
+
+// The billing narrow-screen block has to sit after the wide-screen one, or the
+// sticky amount column and the hidden secondary columns would apply at 1280px.
+func TestBillingNarrowScreenBlockFollowsTheWideScreenOne(t *testing.T) {
+	page := renderBillingPage(t, billingPageData{})
+	wide := strings.Index(page, "@media (min-width: 641px) {")
+	// Anchored on a declaration, not a comment: html/template strips CSS comments.
+	narrow := strings.Index(page, ".confirm-form .btn,\n      .bind-form select,")
+	if wide < 0 || narrow < 0 {
+		t.Fatalf("billing media blocks are missing (wide=%d narrow=%d)", wide, narrow)
+	}
+	if narrow < wide {
+		t.Fatal("the narrow-screen block is written before the wide-screen block")
+	}
+}

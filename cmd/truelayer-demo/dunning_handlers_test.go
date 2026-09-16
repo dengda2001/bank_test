@@ -66,9 +66,9 @@ func TestDunningPOSTRejectsLegacySessionWithoutDatabase(t *testing.T) {
 func TestRentDashboardTemplateRendersDunningDrawerAndRetry(t *testing.T) {
 	var body strings.Builder
 	err := rentDashboardTemplate.Execute(&body, rentDashboardPageData{
-		Environment: "sandbox",
-		Period:      "2026-09",
-		PeriodLabel: "2026年9月",
+		workspaceShell: workspaceShell{Environment: "sandbox"},
+		Period:         "2026-09",
+		PeriodLabel:    "2026年9月",
 		Dunning: dunningDrawerData{
 			Enabled:          true,
 			Open:             true,

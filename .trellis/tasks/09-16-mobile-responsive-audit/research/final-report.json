@@ -1,0 +1,942 @@
+{
+  "base": "http://localhost:8081",
+  "generatedAt": "2026-09-16T13:13:28.693Z",
+  "pages": [
+    {
+      "page": "tenants",
+      "viewport": "375x667",
+      "url": "/tenants",
+      "status": 200,
+      "result": {
+        "viewportWidth": 375,
+        "docScrollWidth": 375,
+        "horizontalOverflow": 0,
+        "offenders": [
+          {
+            "selector": "table",
+            "width": 815,
+            "right": 839,
+            "escapesRightBy": 464,
+            "minWidth": "740px",
+            "overflowX": "visible",
+            "text": "租客付款人租金账单安排房间创建时间操作 Liu Yang刘洋6 LIU YANG编号：PAYER"
+          }
+        ],
+        "activeScrollers": [
+          "div.table-wrap"
+        ]
+      }
+    },
+    {
+      "page": "tenant-detail",
+      "viewport": "375x667",
+      "url": "/tenants/6",
+      "status": 200,
+      "result": {
+        "viewportWidth": 375,
+        "docScrollWidth": 375,
+        "horizontalOverflow": 0,
+        "offenders": [
+          {
+            "selector": "table.history-table",
+            "width": 760,
+            "right": 784,
+            "escapesRightBy": 409,
+            "minWidth": "760px",
+            "overflowX": "visible",
+            "text": "月份应缴日应收实收未收状态／来源2026年9月2026-09-01EUR 1500.00EUR "
+          }
+        ],
+        "activeScrollers": [
+          "div.table-wrap"
+        ]
+      }
+    },
+    {
+      "page": "rent-dashboard",
+      "viewport": "375x667",
+      "url": "/rent-dashboard",
+      "status": 200,
+      "result": {
+        "viewportWidth": 375,
+        "docScrollWidth": 375,
+        "horizontalOverflow": 0,
+        "offenders": [
+          {
+            "selector": "table",
+            "width": 742,
+            "right": 766,
+            "escapesRightBy": 391,
+            "minWidth": "680px",
+            "overflowX": "visible",
+            "text": "租客▲房间应缴日▲应收▼已收未收状态 刘洋别名：Liu YangB-20214 Camden S"
+          }
+        ],
+        "activeScrollers": [
+          "div.table-wrap"
+        ]
+      }
+    },
+    {
+      "page": "billing",
+      "viewport": "375x667",
+      "url": "/billing",
+      "status": 200,
+      "result": {
+        "viewportWidth": 375,
+        "docScrollWidth": 375,
+        "horizontalOverflow": 0,
+        "offenders": [
+          {
+            "selector": "table.transaction-table",
+            "width": 680,
+            "right": 704,
+            "escapesRightBy": 329,
+            "minWidth": "680px",
+            "overflowX": "visible",
+            "text": "类型付款人／流水号▲金额／余额▼到账／租金月▲描述／参考号账户用途／处理 收入 CARD SET"
+          },
+          {
+            "selector": "form.month-choice-form",
+            "width": 290,
+            "right": 531,
+            "escapesRightBy": 156,
+            "minWidth": "290px",
+            "overflowX": "visible",
+            "text": "选择月份... 记住此付款人确认月份"
+          },
+          {
+            "selector": "form.bind-form",
+            "width": 250,
+            "right": 491,
+            "escapesRightBy": 116,
+            "minWidth": "250px",
+            "overflowX": "visible",
+            "text": "选择租客...刘洋吴敏周涛孙磊张伟李娜王芳赵敏郑凯陈静 记住付款人关联并记住"
+          },
+          {
+            "selector": "form.allocation-form",
+            "width": 230,
+            "right": 471,
+            "escapesRightBy": 96,
+            "minWidth": "230px",
+            "overflowX": "visible",
+            "text": "房租押金其他收入不指定租客刘洋吴敏周涛孙磊张伟李娜王芳赵敏郑凯陈静选择租金月份...添加拆分项保"
+          },
+          {
+            "selector": "form.allocation-form",
+            "width": 230,
+            "right": 471,
+            "escapesRightBy": 96,
+            "minWidth": "230px",
+            "overflowX": "visible",
+            "text": "房租押金其他收入不指定租客刘洋吴敏周涛孙磊张伟李娜王芳赵敏郑凯陈静选择租金月份...添加拆分项保"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 431,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "无需匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 431,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 431,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 431,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 431,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 431,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 431,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 431,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 431,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 431,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 431,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 431,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 431,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 431,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 431,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 431,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 431,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 431,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 431,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 431,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          }
+        ],
+        "activeScrollers": [
+          "div.table-wrap"
+        ]
+      }
+    },
+    {
+      "page": "expenses",
+      "viewport": "375x667",
+      "url": "/expenses",
+      "status": 200,
+      "result": {
+        "viewportWidth": 375,
+        "docScrollWidth": 375,
+        "horizontalOverflow": 0,
+        "offenders": [
+          {
+            "selector": "table",
+            "width": 700,
+            "right": 724,
+            "escapesRightBy": 349,
+            "minWidth": "700px",
+            "overflowX": "visible",
+            "text": "描述金额类别日期备注付款方式 物业管理费（9 月）2EUR 120.00物业10 Sep 202"
+          }
+        ],
+        "activeScrollers": [
+          "div.table-wrap"
+        ]
+      }
+    },
+    {
+      "page": "cash-receipt-new",
+      "viewport": "375x667",
+      "url": "/cash-receipts/new",
+      "status": 200,
+      "result": {
+        "viewportWidth": 375,
+        "docScrollWidth": 375,
+        "horizontalOverflow": 0,
+        "offenders": [],
+        "activeScrollers": []
+      }
+    },
+    {
+      "page": "tenants",
+      "viewport": "390x844",
+      "url": "/tenants",
+      "status": 200,
+      "result": {
+        "viewportWidth": 390,
+        "docScrollWidth": 390,
+        "horizontalOverflow": 0,
+        "offenders": [
+          {
+            "selector": "table",
+            "width": 815,
+            "right": 839,
+            "escapesRightBy": 449,
+            "minWidth": "740px",
+            "overflowX": "visible",
+            "text": "租客付款人租金账单安排房间创建时间操作 Liu Yang刘洋6 LIU YANG编号：PAYER"
+          }
+        ],
+        "activeScrollers": [
+          "div.table-wrap"
+        ]
+      }
+    },
+    {
+      "page": "tenant-detail",
+      "viewport": "390x844",
+      "url": "/tenants/6",
+      "status": 200,
+      "result": {
+        "viewportWidth": 390,
+        "docScrollWidth": 390,
+        "horizontalOverflow": 0,
+        "offenders": [
+          {
+            "selector": "table.history-table",
+            "width": 760,
+            "right": 784,
+            "escapesRightBy": 394,
+            "minWidth": "760px",
+            "overflowX": "visible",
+            "text": "月份应缴日应收实收未收状态／来源2026年9月2026-09-01EUR 1500.00EUR "
+          }
+        ],
+        "activeScrollers": [
+          "div.table-wrap"
+        ]
+      }
+    },
+    {
+      "page": "rent-dashboard",
+      "viewport": "390x844",
+      "url": "/rent-dashboard",
+      "status": 200,
+      "result": {
+        "viewportWidth": 390,
+        "docScrollWidth": 390,
+        "horizontalOverflow": 0,
+        "offenders": [
+          {
+            "selector": "table",
+            "width": 742,
+            "right": 766,
+            "escapesRightBy": 376,
+            "minWidth": "680px",
+            "overflowX": "visible",
+            "text": "租客▲房间应缴日▲应收▼已收未收状态 刘洋别名：Liu YangB-20214 Camden S"
+          }
+        ],
+        "activeScrollers": [
+          "div.table-wrap"
+        ]
+      }
+    },
+    {
+      "page": "billing",
+      "viewport": "390x844",
+      "url": "/billing",
+      "status": 200,
+      "result": {
+        "viewportWidth": 390,
+        "docScrollWidth": 390,
+        "horizontalOverflow": 0,
+        "offenders": [
+          {
+            "selector": "table.transaction-table",
+            "width": 680,
+            "right": 704,
+            "escapesRightBy": 314,
+            "minWidth": "680px",
+            "overflowX": "visible",
+            "text": "类型付款人／流水号▲金额／余额▼到账／租金月▲描述／参考号账户用途／处理 收入 CARD SET"
+          },
+          {
+            "selector": "form.month-choice-form",
+            "width": 290,
+            "right": 546,
+            "escapesRightBy": 156,
+            "minWidth": "290px",
+            "overflowX": "visible",
+            "text": "选择月份... 记住此付款人确认月份"
+          },
+          {
+            "selector": "form.bind-form",
+            "width": 250,
+            "right": 506,
+            "escapesRightBy": 116,
+            "minWidth": "250px",
+            "overflowX": "visible",
+            "text": "选择租客...刘洋吴敏周涛孙磊张伟李娜王芳赵敏郑凯陈静 记住付款人关联并记住"
+          },
+          {
+            "selector": "form.allocation-form",
+            "width": 230,
+            "right": 486,
+            "escapesRightBy": 96,
+            "minWidth": "230px",
+            "overflowX": "visible",
+            "text": "房租押金其他收入不指定租客刘洋吴敏周涛孙磊张伟李娜王芳赵敏郑凯陈静选择租金月份...添加拆分项保"
+          },
+          {
+            "selector": "form.allocation-form",
+            "width": 230,
+            "right": 486,
+            "escapesRightBy": 96,
+            "minWidth": "230px",
+            "overflowX": "visible",
+            "text": "房租押金其他收入不指定租客刘洋吴敏周涛孙磊张伟李娜王芳赵敏郑凯陈静选择租金月份...添加拆分项保"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 446,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "无需匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 446,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 446,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 446,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 446,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 446,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 446,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 446,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 446,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 446,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 446,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 446,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 446,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 446,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 446,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 446,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 446,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 446,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 446,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          },
+          {
+            "selector": "form.action-form",
+            "width": 190,
+            "right": 446,
+            "escapesRightBy": 56,
+            "minWidth": "190px",
+            "overflowX": "visible",
+            "text": "撤销匹配"
+          }
+        ],
+        "activeScrollers": [
+          "div.table-wrap"
+        ]
+      }
+    },
+    {
+      "page": "expenses",
+      "viewport": "390x844",
+      "url": "/expenses",
+      "status": 200,
+      "result": {
+        "viewportWidth": 390,
+        "docScrollWidth": 390,
+        "horizontalOverflow": 0,
+        "offenders": [
+          {
+            "selector": "table",
+            "width": 700,
+            "right": 724,
+            "escapesRightBy": 334,
+            "minWidth": "700px",
+            "overflowX": "visible",
+            "text": "描述金额类别日期备注付款方式 物业管理费（9 月）2EUR 120.00物业10 Sep 202"
+          }
+        ],
+        "activeScrollers": [
+          "div.table-wrap"
+        ]
+      }
+    },
+    {
+      "page": "cash-receipt-new",
+      "viewport": "390x844",
+      "url": "/cash-receipts/new",
+      "status": 200,
+      "result": {
+        "viewportWidth": 390,
+        "docScrollWidth": 390,
+        "horizontalOverflow": 0,
+        "offenders": [],
+        "activeScrollers": []
+      }
+    },
+    {
+      "page": "tenants",
+      "viewport": "768x1024",
+      "url": "/tenants",
+      "status": 200,
+      "result": {
+        "viewportWidth": 768,
+        "docScrollWidth": 768,
+        "horizontalOverflow": 0,
+        "offenders": [
+          {
+            "selector": "table",
+            "width": 760,
+            "right": 798,
+            "escapesRightBy": 30,
+            "minWidth": "760px",
+            "overflowX": "visible",
+            "text": "租客付款人租金账单安排房间创建时间操作 Liu Yang刘洋6 LIU YANG编号：PAYER"
+          }
+        ],
+        "activeScrollers": [
+          "div.table-wrap"
+        ]
+      }
+    },
+    {
+      "page": "tenant-detail",
+      "viewport": "768x1024",
+      "url": "/tenants/6",
+      "status": 200,
+      "result": {
+        "viewportWidth": 768,
+        "docScrollWidth": 768,
+        "horizontalOverflow": 0,
+        "offenders": [
+          {
+            "selector": "table.history-table",
+            "width": 1000,
+            "right": 1038,
+            "escapesRightBy": 270,
+            "minWidth": "760px",
+            "overflowX": "visible",
+            "text": "月份应缴日应收实收未收状态／来源2026年9月2026-09-01EUR 1500.00EUR "
+          }
+        ],
+        "activeScrollers": [
+          "div.table-wrap"
+        ]
+      }
+    },
+    {
+      "page": "rent-dashboard",
+      "viewport": "768x1024",
+      "url": "/rent-dashboard",
+      "status": 200,
+      "result": {
+        "viewportWidth": 768,
+        "docScrollWidth": 768,
+        "horizontalOverflow": 0,
+        "offenders": [
+          {
+            "selector": "table",
+            "width": 760,
+            "right": 798,
+            "escapesRightBy": 30,
+            "minWidth": "760px",
+            "overflowX": "visible",
+            "text": "租客▲房间应缴日▲应收▼已收未收状态 刘洋别名：Liu YangB-20214 Camden S"
+          }
+        ],
+        "activeScrollers": [
+          "div.table-wrap"
+        ]
+      }
+    },
+    {
+      "page": "billing",
+      "viewport": "768x1024",
+      "url": "/billing",
+      "status": 200,
+      "result": {
+        "viewportWidth": 768,
+        "docScrollWidth": 768,
+        "horizontalOverflow": 0,
+        "offenders": [
+          {
+            "selector": "table.transaction-table",
+            "width": 1040,
+            "right": 1078,
+            "escapesRightBy": 310,
+            "minWidth": "1040px",
+            "overflowX": "visible",
+            "text": "类型付款人／流水号▲金额／余额▼到账／租金月▲描述／参考号账户用途／处理 收入 CARD SET"
+          }
+        ],
+        "activeScrollers": [
+          "div.table-wrap"
+        ]
+      }
+    },
+    {
+      "page": "expenses",
+      "viewport": "768x1024",
+      "url": "/expenses",
+      "status": 200,
+      "result": {
+        "viewportWidth": 768,
+        "docScrollWidth": 768,
+        "horizontalOverflow": 0,
+        "offenders": [
+          {
+            "selector": "table",
+            "width": 760,
+            "right": 798,
+            "escapesRightBy": 30,
+            "minWidth": "760px",
+            "overflowX": "visible",
+            "text": "描述金额类别日期备注付款方式 物业管理费（9 月）2EUR 120.00物业10 Sep 202"
+          }
+        ],
+        "activeScrollers": [
+          "div.table-wrap"
+        ]
+      }
+    },
+    {
+      "page": "cash-receipt-new",
+      "viewport": "768x1024",
+      "url": "/cash-receipts/new",
+      "status": 200,
+      "result": {
+        "viewportWidth": 768,
+        "docScrollWidth": 768,
+        "horizontalOverflow": 0,
+        "offenders": [],
+        "activeScrollers": []
+      }
+    },
+    {
+      "page": "login",
+      "viewport": "375x667",
+      "url": "/",
+      "status": 200,
+      "result": {
+        "viewportWidth": 375,
+        "docScrollWidth": 375,
+        "horizontalOverflow": 0,
+        "offenders": [],
+        "activeScrollers": []
+      }
+    },
+    {
+      "page": "login",
+      "viewport": "390x844",
+      "url": "/",
+      "status": 200,
+      "result": {
+        "viewportWidth": 390,
+        "docScrollWidth": 390,
+        "horizontalOverflow": 0,
+        "offenders": [],
+        "activeScrollers": []
+      }
+    },
+    {
+      "page": "login",
+      "viewport": "768x1024",
+      "url": "/",
+      "status": 200,
+      "result": {
+        "viewportWidth": 768,
+        "docScrollWidth": 768,
+        "horizontalOverflow": 0,
+        "offenders": [],
+        "activeScrollers": []
+      }
+    }
+  ],
+  "states": [
+    {
+      "state": "tenants-row-expanded",
+      "viewport": "390x844",
+      "url": "/tenants",
+      "result": {
+        "viewportWidth": 390,
+        "docScrollWidth": 390,
+        "horizontalOverflow": 0,
+        "offenders": [
+          {
+            "selector": "table",
+            "width": 815,
+            "right": 839,
+            "escapesRightBy": 449,
+            "minWidth": "740px",
+            "overflowX": "visible",
+            "text": "租客付款人租金账单安排房间创建时间操作 Liu Yang刘洋6 LIU YANG编号：PAYER"
+          }
+        ],
+        "activeScrollers": [
+          "div.table-wrap"
+        ]
+      }
+    },
+    {
+      "state": "dashboard-dunning-drawer",
+      "viewport": "390x844",
+      "url": "/rent-dashboard",
+      "result": {
+        "viewportWidth": 390,
+        "docScrollWidth": 390,
+        "horizontalOverflow": 0,
+        "offenders": [
+          {
+            "selector": "table",
+            "width": 742,
+            "right": 766,
+            "escapesRightBy": 376,
+            "minWidth": "680px",
+            "overflowX": "visible",
+            "text": "租客▲房间应缴日▲应收▼已收未收状态 刘洋别名：Liu YangB-20214 Camden S"
+          }
+        ],
+        "activeScrollers": [
+          "div.table-wrap"
+        ]
+      }
+    }
+  ],
+  "consoleErrors": []
+}

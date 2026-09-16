@@ -1,0 +1,64 @@
+{
+  "tenants": [
+    "tenants__00.png",
+    "tenants__01.png",
+    "tenants__02.png",
+    "tenants__03.png",
+    "tenants__04.png"
+  ],
+  "tenant-detail": [
+    "tenant-detail__00.png",
+    "tenant-detail__01.png",
+    "tenant-detail__02.png",
+    "tenant-detail__03.png"
+  ],
+  "rent-dashboard": [
+    "rent-dashboard__00.png",
+    "rent-dashboard__01.png",
+    "rent-dashboard__02.png",
+    "rent-dashboard__03.png",
+    "rent-dashboard__04.png",
+    "rent-dashboard__05.png"
+  ],
+  "billing": [
+    "billing__00.png",
+    "billing__01.png",
+    "billing__02.png",
+    "billing__03.png",
+    "billing__04.png",
+    "billing__05.png",
+    "billing__06.png",
+    "billing__07.png",
+    "billing__08.png"
+  ],
+  "expenses": [
+    "expenses__00.png",
+    "expenses__01.png",
+    "expenses__02.png"
+  ],
+  "cash-receipt-new": [
+    "cash-receipt-new__00.png",
+    "cash-receipt-new__01.png",
+    "cash-receipt-new__02.png"
+  ],
+  "tenants-row-expanded": [
+    "tenants-row-expanded__00.png",
+    "tenants-row-expanded__01.png",
+    "tenants-row-expanded__02.png",
+    "tenants-row-expanded__03.png",
+    "tenants-row-expanded__04.png"
+  ],
+  "dashboard-dunning-drawer": [
+    "dashboard-dunning-drawer__00.png",
+    "dashboard-dunning-drawer__01.png",
+    "dashboard-dunning-drawer__02.png",
+    "dashboard-dunning-drawer__03.png",
+    "dashboard-dunning-drawer__04.png",
+    "dashboard-dunning-drawer__05.png",
+    "dashboard-dunning-drawer__06.png",
+    "dashboard-dunning-drawer__07.png"
+  ],
+  "login": [
+    "login__00.png"
+  ]
+}

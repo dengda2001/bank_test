@@ -194,6 +194,10 @@ const workspaceCalendarCSS = `
       background: var(--surface-accent);
     }
     @media (max-width: 640px) {
+      /* P1：日期按钮实测 30x30，低于 44px 的触控下限。输入框同步抬到 46px，
+         否则 44px 的按钮会从 40px 高的框里上下各溢出 2px。 */
+      .calendar-input, .dashboard-toolbar .calendar-input { min-height: 46px; padding-right: 52px; }
+      .calendar-trigger { width: 44px; height: 44px; border-radius: 12px; }
       .calendar-popover {
         position: fixed;
         top: auto;

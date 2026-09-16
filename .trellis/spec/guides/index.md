@@ -51,6 +51,18 @@ These guides help you **ask the right questions before coding**.
 
 → Read [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md)
 
+### When Touching the Server-Rendered UI
+
+- [ ] You're editing a rule inside a page's `<style>` block
+- [ ] **You're changing `workspacePageCSS` — it is concatenated *before* every page's own rules, so it loses every specificity tie**
+- [ ] You're adding a column, or a control, to a page
+- [ ] You're growing a box (height/padding) that has a border, underline or background pinned to its edges
+- [ ] You're hiding something with `hidden`, `display: none`, or `translateX` — is it still reachable by keyboard?
+- [ ] You're asserting on rendered CSS — did you anchor on a declaration? (`html/template` strips CSS comments)
+- [ ] Your change is about geometry, hit areas or focus, not just which declarations exist → a Go string test will not see it
+
+→ Read [Responsive Conventions](../frontend/responsive-conventions.md)
+
 ### When Verifying AI Cross-Review Results
 
 - [ ] Reviewer claims "user input can be malicious" → Check the actual data source (internal manifest? user config? external API?)

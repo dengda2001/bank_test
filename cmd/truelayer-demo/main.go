@@ -125,9 +125,7 @@ type incomeTransaction struct {
 }
 
 type billingPageData struct {
-	Username          string
-	Environment       string
-	ActivePage        string
+	workspaceShell
 	Connected         bool
 	NeedsReconnect    bool
 	LastSync          string
@@ -158,9 +156,6 @@ type billingPageData struct {
 	PreviousPageURL      string
 	NextPageURL          string
 	PendingCount         int
-	IncomeCount          int
-	TenantCount          int
-	ExpenseCount         int
 	TokenFile            string
 }
 
@@ -220,40 +215,26 @@ type expenseRecord struct {
 }
 
 type tenantPageData struct {
-	Username     string
-	Environment  string
-	ActivePage   string
-	Message      string
-	Error        string
-	Rows         []tenantRecord
-	TenantCount  int
-	RentTotal    string
-	TenantFile   string
-	ExpenseCount int
-	IncomeCount  int
-	ShowForm     bool
-	Editing      bool
-	Form         tenantRecord
+	workspaceShell
+	Message   string
+	Error     string
+	Rows      []tenantRecord
+	RentTotal string
+	ShowForm  bool
+	Editing   bool
+	Form      tenantRecord
 }
 
 type expensePageData struct {
-	Username     string
-	Environment  string
-	ActivePage   string
+	workspaceShell
 	Message      string
 	Error        string
 	Rows         []expenseRecord
-	ExpenseCount int
 	ExpenseTotal string
-	ExpenseFile  string
-	TenantCount  int
-	IncomeCount  int
 }
 
 type rentDashboardPageData struct {
-	Username                   string
-	Environment                string
-	ActivePage                 string
+	workspaceShell
 	Period                     string
 	PeriodLabel                string
 	PreviousPeriod             string
@@ -281,9 +262,6 @@ type rentDashboardPageData struct {
 	PartialCount               int
 	PaidCount                  int
 	ReviewCount                int
-	TenantCount                int
-	IncomeCount                int
-	ExpenseCount               int
 	CollectionPercent          int
 	PendingCount               int
 	PendingTotal               string
@@ -736,9 +714,16 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 	}
 	sortURL := func(sortValue string) string { return billingSortURL(r.URL.Query(), sortValue) }
 	data := billingPageData{
-		Username:          a.displayUsername(r),
-		Environment:       a.cfg.Environment,
-		ActivePage:        "billing",
+		workspaceShell: workspaceShell{
+			ActivePage:    "billing",
+			Username:      a.displayUsername(r),
+			Environment:   a.cfg.Environment,
+			FootNote:      "银行流水与租金关联",
+			ShowNavCounts: true,
+			IncomeCount:   int(totalTransactions),
+			TenantCount:   tenantCount,
+			ExpenseCount:  expenseCount,
+		},
 		Connected:         connected,
 		NeedsReconnect:    r.URL.Query().Get("reconnect") == "1",
 		LastSync:          lastSync,
@@ -768,10 +753,7 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 		PreviousPageURL:      previousPageURL,
 		NextPageURL:          nextPageURL,
 		PendingCount:         pendingCount,
-		IncomeCount:          int(totalTransactions),
 		TokenFile:            a.cfg.TokenFile,
-		TenantCount:          tenantCount,
-		ExpenseCount:         expenseCount,
 	}
 	if data.LastSync == "" {
 		data.LastSync = "尚未同步"
@@ -934,20 +916,23 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 	}
 	showForm := editing || r.URL.Query().Get("add") == "1"
 	data := tenantPageData{
-		Username:     a.displayUsername(r),
-		Environment:  a.cfg.Environment,
-		ActivePage:   "tenants",
-		Message:      r.URL.Query().Get("message"),
-		Error:        r.URL.Query().Get("error"),
-		Rows:         tenants,
-		TenantCount:  len(tenants),
-		RentTotal:    formatMoney(sumTenantRent(tenants), "EUR", 2),
-		TenantFile:   a.cfg.TenantFile,
-		ExpenseCount: expenseCount,
-		IncomeCount:  incomeCount,
-		ShowForm:     showForm,
-		Editing:      editing,
-		Form:         formRecord,
+		workspaceShell: workspaceShell{
+			ActivePage:    "tenants",
+			Username:      a.displayUsername(r),
+			Environment:   a.cfg.Environment,
+			FootNote:      "租客资料：" + a.cfg.TenantFile,
+			ShowNavCounts: true,
+			TenantCount:   len(tenants),
+			IncomeCount:   incomeCount,
+			ExpenseCount:  expenseCount,
+		},
+		Message:   r.URL.Query().Get("message"),
+		Error:     r.URL.Query().Get("error"),
+		Rows:      tenants,
+		RentTotal: formatMoney(sumTenantRent(tenants), "EUR", 2),
+		ShowForm:  showForm,
+		Editing:   editing,
+		Form:      formRecord,
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tenantTemplate.Execute(w, data); err != nil {
@@ -1072,17 +1057,20 @@ func (a *app) handleExpenses(w http.ResponseWriter, r *http.Request) {
 	}
 	prepareExpenses(expenses)
 	data := expensePageData{
-		Username:     a.displayUsername(r),
-		Environment:  a.cfg.Environment,
-		ActivePage:   "expenses",
+		workspaceShell: workspaceShell{
+			ActivePage:    "expenses",
+			Username:      a.displayUsername(r),
+			Environment:   a.cfg.Environment,
+			FootNote:      "支出资料：" + a.cfg.ExpenseFile,
+			ShowNavCounts: true,
+			TenantCount:   tenantCount,
+			IncomeCount:   incomeCount,
+			ExpenseCount:  len(expenses),
+		},
 		Message:      r.URL.Query().Get("message"),
 		Error:        r.URL.Query().Get("error"),
 		Rows:         expenses,
-		ExpenseCount: len(expenses),
 		ExpenseTotal: formatMoney(sumExpenses(expenses), "EUR", 2),
-		ExpenseFile:  a.cfg.ExpenseFile,
-		TenantCount:  tenantCount,
-		IncomeCount:  incomeCount,
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := expenseTemplate.Execute(w, data); err != nil {
@@ -2215,6 +2203,16 @@ const workspacePageCSS = `
       border-radius: 0 12px 12px 0;
       padding: 24px;
     }
+    /* The compact bar and the scrim belong to the narrow-screen drawer. Above
+       the 640px breakpoint they must not exist visually, so the desktop grid
+       (sidebar column + content) renders exactly as before. */
+    .nav-compact-bar,
+    .nav-scrim { display: none; }
+    /* The drawer's state checkbox. display:none above 640px, because the control
+       it drives does not exist there — and because a bare checkbox in the layout
+       would move the desktop grid this task promises not to move. At <=640 it is
+       re-shown as a focusable-but-invisible box (see the drawer section below). */
+    .nav-drawer-input { display: none; }
     .side-brand {
       display: flex;
       align-items: center;
@@ -2384,7 +2382,7 @@ const workspacePageCSS = `
     }
     @media (max-width: 640px) {
       .app { padding: 8px; }
-      .content { padding: 14px; }
+      .content { border-radius: 12px; padding: 14px; }
       .topbar { flex-direction: column; }
       .topbar .actions { width: 100%; justify-content: stretch; }
       .topbar .actions > *, .topbar .actions form { flex: 1 1 auto; }
@@ -2392,16 +2390,118 @@ const workspacePageCSS = `
       .summary { grid-template-columns: 1fr; }
       h1 { font-size: 34px; }
       table { min-width: 680px; }
+
+      /* ---- 抽屉：紧凑栏 + 汉堡 ---- */
+      .nav-compact-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 56px;
+        margin: 0 0 8px;
+        padding: 0 12px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--surface);
+        cursor: pointer;
+      }
+      .nav-compact-bar .mark { width: 30px; height: 30px; font-size: 14px; }
+      .nav-burger { margin-left: auto; font-size: 20px; line-height: 1; }
+      /* 键盘也要能开抽屉。复选框原本带 hidden 属性（= display:none），聚焦不了，
+         于是 <=640 的导航变成了只能点、不能按 Tab 到达——比改造前更差，改造前
+         侧栏链接是普通可聚焦链接。改成「看不见但可聚焦」，焦点画在紧凑栏上。 */
+      .nav-drawer-input {
+        display: block;
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .nav-drawer-input:focus-visible ~ .nav-compact-bar {
+        outline: 2px solid var(--accent-bright);
+        outline-offset: 2px;
+      }
+      /* The sidebar leaves the grid and becomes an off-canvas drawer. */
+      .sidebar {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 40;
+        width: min(280px, 86vw);
+        border: 1px solid var(--border);
+        border-radius: 0 12px 12px 0;
+        overflow-y: auto;
+        transform: translateX(-100%);
+        /* 只 translate 不动的是「看得见的位置」，不是可聚焦性：关闭态下侧栏链接
+           仍在 Tab 顺序里，焦点会跑到屏幕外。visibility 一并切。过渡时 visibility
+           的取值是离散的：转 visible 立刻生效，转 hidden 等过渡结束才生效，正好
+           是抽屉要的行为。 */
+        visibility: hidden;
+        transition: transform 200ms ease, visibility 200ms ease;
+      }
+      #nav-drawer:checked ~ .sidebar { transform: translateX(0); visibility: visible; }
+      #nav-drawer:checked ~ .nav-scrim {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 30;
+        margin: 0;
+        background: rgba(17, 24, 39, 0.45);
+      }
+
+      /* ---- 冻结最右列 ----
+         移动端不渲染滚动条，横滑时用户看不出右边还有内容；background 阻止下层
+         单元格透出，内侧阴影是方向提示。直接子级选择器避开 /tenants 展开行里
+         嵌套表格的单元格，否则冻结区会出现上下两层 sticky。 */
+      .table-wrap > table > thead > tr > th:last-child,
+      .table-wrap > table > tbody > tr > td:last-child:not([colspan]) {
+        position: sticky;
+        right: 0;
+        background: var(--surface);
+        box-shadow: -8px 0 8px -8px rgba(0, 0, 0, 0.18);
+      }
+      .table-wrap > table > thead > tr > th:last-child { background: #f9fafb; }
+
+      /* ---- P1：字号与断行 ---- */
+      .mono { font-size: 12px; }
+      th { font-size: 12px; }
+      /* 日期单元格整格是 mono（应缴日 / 创建时间）。它们逐字断成 3–5 行后不可读，
+         又不会被溢出检测捕获。副行仍可换行，否则 /billing 的到账列会被撑爆。 */
+      td.mono { white-space: nowrap; }
+      td.mono .tiny { white-space: normal; }
+
+      /* ---- P1：触控目标 44px ----
+         th 的 13px padding 不响应点击，可点区域必须长在 <a> 上。 */
+      th .sort-link { min-height: 44px; padding: 13px 14px; margin: -13px -14px; }
+      .tenant-link, .status.status-link {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+      }
+      /* 租客姓名链接就是两个汉字，实测 26px 宽。高度已经够了，宽度不够。
+         用 ::after 向左右各撑 9px；padding 也能撑开，但那会把链接自身的虚线
+         下划线一起拉长，看起来像划到空白处。 */
+      .tenant-link { position: relative; }
+      .tenant-link::after { content: ""; position: absolute; top: 0; bottom: 0; left: -9px; right: -9px; }
+
+      /* 控件基础高度 40px（.btn 也是 40px），差 4px。逐页补会漏，这里一次抬到
+         44px；checkbox/radio 由 input[type=...] 的 0,1,1 规则管着，不受影响。
+         注意基础样式是拼在每页自己的 <style> 之前的，所以页内更具体的规则
+         （如 /billing 那批 30px 的归类控件）会盖过这一条 —— 那些归各页的窄屏块管。 */
+      input, select, textarea, .btn { min-height: 44px; }
+      /* 抽屉打开后 .nav a 就是唯一的导航方式，基础样式里它是 40px。 */
+      .nav a { min-height: 44px; }
     }
 `
 
-var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html>
+var tenantTemplate = newWorkspacePageTemplate("tenants", nil, `<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RentOps Tenants</title>
-  <style>` + workspacePageCSS + workspaceCalendarCSS + `
+  <style>`+workspacePageCSS+workspaceCalendarCSS+`
     .tenant-row, .tenant-month-row { cursor: pointer; }
     .tenant-row:hover, .tenant-row:focus, .tenant-month-row:hover, .tenant-month-row:focus { background: var(--surface-accent); outline: none; }
     .tenant-row td:first-child::after, .tenant-month-row td:first-child::after { content: " +"; margin-left: 6px; color: var(--foreground-muted); font: 700 12px var(--mono); }
@@ -2428,21 +2528,21 @@ var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html
     .tenant-month-details .payment-item:last-child { border-bottom: 0; }
     .tenant-month-details .payment-item .amount { font-size: 13px; }
     @media (max-width: 760px) { .tenant-month-details .payment-item { grid-template-columns: 1fr 1fr; } .tenant-month-details .payment-item .payment-description { grid-column: 1 / -1; } }
-  ` + `</style>
-  <script>` + workspaceCalendarScript + `</script>
+    @media (max-width: 640px) {
+      .row-actions .btn { min-height: 44px; }
+      /* P1：账单安排列实测只剩 59px，把「每月 1 日 / 2026-07-01 至 2026-09-30」
+         断成 5 行。112px 够放两行。表格地板同步抬高，否则从这一列多拿的宽度
+         会从别的列抠走；680px 是共享表给无表头页的地板，这里列更多。 */
+      .table-wrap > table > thead > tr > th:nth-child(4),
+      .table-wrap > table > tbody > tr > td:nth-child(4) { min-width: 112px; }
+      table { min-width: 740px; }
+    }
+  `+`</style>
+  <script>`+workspaceCalendarScript+`</script>
 </head>
 <body>
   <div class="app">
-    <aside class="sidebar" aria-label="Main navigation">
-      <div class="side-brand"><div class="mark">R</div><div><div class="brand-title">RentOps</div><div class="brand-meta">{{.Environment}} workspace</div></div></div>
-      <nav class="nav">
-        <a href="/rent-dashboard"><span class="glyph">总</span><span>月度总览</span><span class="nav-count">{{.TenantCount}}</span></a>
-        <a href="/billing"><span class="glyph">流</span><span>银行流水</span><span class="nav-count">{{.IncomeCount}}</span></a>
-        <a href="/tenants" class="active"><span class="glyph">租</span><span>租客管理</span><span class="nav-count">{{.TenantCount}}</span></a>
-        <a href="/expenses"><span class="glyph">支</span><span>支出记录</span><span class="nav-count">{{.ExpenseCount}}</span></a>
-      </nav>
-      <div class="side-foot">当前用户：{{.Username}}<br>租客资料：{{.TenantFile}}</div>
-    </aside>
+    {{template "workspace-nav" .}}
     <main class="content">
       <header class="topbar">
         <div>
@@ -2566,29 +2666,37 @@ var tenantTemplate = template.Must(template.New("tenants").Parse(`<!doctype html
   </script>
 </body>
 </html>
-`))
+`)
 
-var expenseTemplate = template.Must(template.New("expenses").Parse(`<!doctype html>
+var expenseTemplate = newWorkspacePageTemplate("expenses", nil, `<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RentOps Expenses</title>
-  <style>` + workspacePageCSS + workspaceCalendarCSS + `</style>
-  <script>` + workspaceCalendarScript + `</script>
+  <style>`+workspacePageCSS+workspaceCalendarCSS+`
+    @media (max-width: 640px) {
+      /* P1：类别列实测只剩 53px，减去 28px 内边距装不下两个汉字，类别名被断成
+         两行。76px 够放最长的一个。表格地板同步抬高，否则从这列多拿的宽度会
+         从别的列抠走。 */
+      .table-wrap > table > thead > tr > th:nth-child(3),
+      .table-wrap > table > tbody > tr > td:nth-child(3) { min-width: 76px; }
+      /* 同一类问题的另一列：日期实测 103px，减去 28px 内边距剩 75px，而
+         「10 Sep 2026」要 ~78px，差 3px 折成两行。金额/类别/日期这类定长值是
+         按格式读的，折行就破坏了可读性；长度不定的自由文本（描述、备注）折行
+         是正常的，不动。多要的 22px 从「备注」借——那列 184px 排两行还有富余，
+         自动表格布局会自己找它要，所以表格总宽和横向滚动范围不变。 */
+      .table-wrap > table > thead > tr > th:nth-child(4),
+      .table-wrap > table > tbody > tr > td:nth-child(4) { min-width: 125px; }
+      table { min-width: 700px; }
+      /* 表单里其它控件都是整宽，只有提交按钮是 111px，并排看像没做完。 */
+      .panel.form > .btn.primary { width: 100%; }
+    }`+`</style>
+  <script>`+workspaceCalendarScript+`</script>
 </head>
 <body>
   <div class="app">
-    <aside class="sidebar" aria-label="Main navigation">
-      <div class="side-brand"><div class="mark">R</div><div><div class="brand-title">RentOps</div><div class="brand-meta">{{.Environment}} workspace</div></div></div>
-      <nav class="nav">
-        <a href="/rent-dashboard"><span class="glyph">总</span><span>月度总览</span><span class="nav-count">{{.TenantCount}}</span></a>
-        <a href="/billing"><span class="glyph">流</span><span>银行流水</span><span class="nav-count">{{.IncomeCount}}</span></a>
-        <a href="/tenants"><span class="glyph">租</span><span>租客管理</span><span class="nav-count">{{.TenantCount}}</span></a>
-        <a href="/expenses" class="active"><span class="glyph">支</span><span>支出记录</span><span class="nav-count">{{.ExpenseCount}}</span></a>
-      </nav>
-      <div class="side-foot">当前用户：{{.Username}}<br>支出资料：{{.ExpenseFile}}</div>
-    </aside>
+    {{template "workspace-nav" .}}
     <main class="content">
       <header class="topbar">
         <div>
@@ -2653,7 +2761,7 @@ var expenseTemplate = template.Must(template.New("expenses").Parse(`<!doctype ht
   </div>
 </body>
 </html>
-`))
+`)
 
 var legacyBillingTemplate = template.Must(template.New("billing-legacy").Parse(`<!doctype html>
 <html lang="en">

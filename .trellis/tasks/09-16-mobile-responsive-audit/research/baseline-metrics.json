@@ -1,0 +1,2024 @@
+{
+  "tenants": {
+    "smallTargets": [
+      {
+        "tag": "a",
+        "label": "总月度总览10",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "流银行流水28",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "租租客管理10",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "支支出记录2",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "添加租客",
+        "w": 329,
+        "h": 40
+      },
+      {
+        "tag": "button",
+        "label": "退出登录",
+        "w": 329,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "详情",
+        "w": 50,
+        "h": 32
+      },
+      {
+        "tag": "a",
+        "label": "编辑",
+        "w": 50,
+        "h": 32
+      },
+      {
+        "tag": "a",
+        "label": "详情",
+        "w": 50,
+        "h": 32
+      },
+      {
+        "tag": "a",
+        "label": "编辑",
+        "w": 50,
+        "h": 32
+      },
+      {
+        "tag": "a",
+        "label": "详情",
+        "w": 50,
+        "h": 32
+      },
+      {
+        "tag": "a",
+        "label": "编辑",
+        "w": 50,
+        "h": 32
+      },
+      {
+        "tag": "a",
+        "label": "详情",
+        "w": 50,
+        "h": 32
+      },
+      {
+        "tag": "a",
+        "label": "编辑",
+        "w": 50,
+        "h": 32
+      },
+      {
+        "tag": "a",
+        "label": "详情",
+        "w": 50,
+        "h": 32
+      },
+      {
+        "tag": "a",
+        "label": "编辑",
+        "w": 50,
+        "h": 32
+      },
+      {
+        "tag": "a",
+        "label": "详情",
+        "w": 50,
+        "h": 32
+      },
+      {
+        "tag": "a",
+        "label": "编辑",
+        "w": 50,
+        "h": 32
+      },
+      {
+        "tag": "a",
+        "label": "详情",
+        "w": 50,
+        "h": 32
+      },
+      {
+        "tag": "a",
+        "label": "编辑",
+        "w": 50,
+        "h": 32
+      },
+      {
+        "tag": "a",
+        "label": "详情",
+        "w": 50,
+        "h": 32
+      },
+      {
+        "tag": "a",
+        "label": "编辑",
+        "w": 50,
+        "h": 32
+      },
+      {
+        "tag": "a",
+        "label": "详情",
+        "w": 50,
+        "h": 32
+      },
+      {
+        "tag": "a",
+        "label": "编辑",
+        "w": 50,
+        "h": 32
+      },
+      {
+        "tag": "a",
+        "label": "详情",
+        "w": 50,
+        "h": 32
+      },
+      {
+        "tag": "a",
+        "label": "编辑",
+        "w": 50,
+        "h": 32
+      }
+    ],
+    "tinyText": [],
+    "tables": [
+      {
+        "minWidth": "680px",
+        "tableWidth": 680,
+        "wrapWidth": 327,
+        "scrollRange": 353,
+        "headers": [
+          {
+            "col": "租客",
+            "scrollToSee": 0
+          },
+          {
+            "col": "付款人",
+            "scrollToSee": 0
+          },
+          {
+            "col": "租金",
+            "scrollToSee": 0
+          },
+          {
+            "col": "账单安排",
+            "scrollToSee": 26
+          },
+          {
+            "col": "房间",
+            "scrollToSee": 162
+          },
+          {
+            "col": "创建时间",
+            "scrollToSee": 217
+          },
+          {
+            "col": "操作",
+            "scrollToSee": 353
+          },
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          },
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          },
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          },
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          },
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          },
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          },
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          },
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          },
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          },
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          }
+        ]
+      },
+      {
+        "minWidth": "620px",
+        "tableWidth": 0,
+        "wrapWidth": 0,
+        "scrollRange": 0,
+        "headers": [
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          }
+        ]
+      },
+      {
+        "minWidth": "620px",
+        "tableWidth": 0,
+        "wrapWidth": 0,
+        "scrollRange": 0,
+        "headers": [
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          }
+        ]
+      },
+      {
+        "minWidth": "620px",
+        "tableWidth": 0,
+        "wrapWidth": 0,
+        "scrollRange": 0,
+        "headers": [
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          }
+        ]
+      },
+      {
+        "minWidth": "620px",
+        "tableWidth": 0,
+        "wrapWidth": 0,
+        "scrollRange": 0,
+        "headers": [
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          }
+        ]
+      },
+      {
+        "minWidth": "620px",
+        "tableWidth": 0,
+        "wrapWidth": 0,
+        "scrollRange": 0,
+        "headers": [
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          }
+        ]
+      },
+      {
+        "minWidth": "620px",
+        "tableWidth": 0,
+        "wrapWidth": 0,
+        "scrollRange": 0,
+        "headers": [
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          }
+        ]
+      },
+      {
+        "minWidth": "620px",
+        "tableWidth": 0,
+        "wrapWidth": 0,
+        "scrollRange": 0,
+        "headers": [
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          }
+        ]
+      },
+      {
+        "minWidth": "620px",
+        "tableWidth": 0,
+        "wrapWidth": 0,
+        "scrollRange": 0,
+        "headers": [
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          }
+        ]
+      },
+      {
+        "minWidth": "620px",
+        "tableWidth": 0,
+        "wrapWidth": 0,
+        "scrollRange": 0,
+        "headers": [
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          }
+        ]
+      },
+      {
+        "minWidth": "620px",
+        "tableWidth": 0,
+        "wrapWidth": 0,
+        "scrollRange": 0,
+        "headers": [
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          }
+        ]
+      }
+    ],
+    "fontHistogram": {
+      "11": 68,
+      "12": 34,
+      "13": 78,
+      "15": 10,
+      "16": 34,
+      "17": 2,
+      "26": 2,
+      "34": 1
+    }
+  },
+  "tenant-detail": {
+    "smallTargets": [
+      {
+        "tag": "a",
+        "label": "总月度总览",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "流银行流水",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "租租客管理",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "支支出记录",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "返回租客列表",
+        "w": 329,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "编辑资料",
+        "w": 329,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "现金补录",
+        "w": 329,
+        "h": 40
+      },
+      {
+        "tag": "button",
+        "label": "移除",
+        "w": 62,
+        "h": 40
+      },
+      {
+        "tag": "input",
+        "label": "payer_name",
+        "w": 291,
+        "h": 40
+      },
+      {
+        "tag": "input",
+        "label": "payer_id",
+        "w": 291,
+        "h": 40
+      },
+      {
+        "tag": "button",
+        "label": "添加付款人",
+        "w": 110,
+        "h": 40
+      },
+      {
+        "tag": "input",
+        "label": "from_month",
+        "w": 225,
+        "h": 40
+      },
+      {
+        "tag": "input",
+        "label": "to_month",
+        "w": 225,
+        "h": 40
+      },
+      {
+        "tag": "button",
+        "label": "查询历史",
+        "w": 94,
+        "h": 40
+      }
+    ],
+    "tinyText": [],
+    "tables": [
+      {
+        "minWidth": "760px",
+        "tableWidth": 760,
+        "wrapWidth": 327,
+        "scrollRange": 433,
+        "headers": [
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应缴日",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实收",
+            "scrollToSee": 81
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 216
+          },
+          {
+            "col": "状态／来源",
+            "scrollToSee": 433
+          }
+        ]
+      }
+    ],
+    "fontHistogram": {
+      "11": 19,
+      "12": 19,
+      "13": 19,
+      "15": 11,
+      "16": 52,
+      "17": 4,
+      "34": 1
+    }
+  },
+  "rent-dashboard": {
+    "smallTargets": [
+      {
+        "tag": "a",
+        "label": "总月度总览10",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "流银行流水10",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "租租客管理10",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "支支出记录2",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "button",
+        "label": "退出登录",
+        "w": 94,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "‹",
+        "w": 42,
+        "h": 42
+      },
+      {
+        "tag": "input",
+        "label": "period",
+        "w": 229,
+        "h": 42
+      },
+      {
+        "tag": "button",
+        "label": "打开日期选择器",
+        "w": 30,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "›",
+        "w": 42,
+        "h": 42
+      },
+      {
+        "tag": "a",
+        "label": "逾期 1",
+        "w": 63,
+        "h": 32
+      },
+      {
+        "tag": "a",
+        "label": "部分缴纳 2",
+        "w": 87,
+        "h": 32
+      },
+      {
+        "tag": "a",
+        "label": "待确认 0",
+        "w": 75,
+        "h": 32
+      },
+      {
+        "tag": "button",
+        "label": "邮件催缴",
+        "w": 94,
+        "h": 40
+      },
+      {
+        "tag": "input",
+        "label": "search",
+        "w": 287,
+        "h": 40
+      },
+      {
+        "tag": "select",
+        "label": "全部未缴（含部分）逾期待确认部分缴纳未开始收款已缴清",
+        "w": 287,
+        "h": 40
+      },
+      {
+        "tag": "button",
+        "label": "筛选",
+        "w": 140,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "清除筛选",
+        "w": 140,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "租客▲",
+        "w": 37,
+        "h": 15
+      },
+      {
+        "tag": "a",
+        "label": "应缴日▲",
+        "w": 49,
+        "h": 15
+      },
+      {
+        "tag": "a",
+        "label": "应收▼",
+        "w": 37,
+        "h": 15
+      },
+      {
+        "tag": "a",
+        "label": "状态",
+        "w": 24,
+        "h": 15
+      },
+      {
+        "tag": "a",
+        "label": "刘洋",
+        "w": 26,
+        "h": 16
+      },
+      {
+        "tag": "a",
+        "label": "孙磊",
+        "w": 26,
+        "h": 16
+      },
+      {
+        "tag": "a",
+        "label": "李娜",
+        "w": 26,
+        "h": 16
+      },
+      {
+        "tag": "a",
+        "label": "吴敏",
+        "w": 26,
+        "h": 16
+      },
+      {
+        "tag": "a",
+        "label": "周涛",
+        "w": 26,
+        "h": 16
+      },
+      {
+        "tag": "a",
+        "label": "张伟",
+        "w": 26,
+        "h": 16
+      },
+      {
+        "tag": "a",
+        "label": "王芳",
+        "w": 26,
+        "h": 16
+      },
+      {
+        "tag": "a",
+        "label": "赵敏",
+        "w": 26,
+        "h": 16
+      },
+      {
+        "tag": "a",
+        "label": "郑凯",
+        "w": 26,
+        "h": 16
+      },
+      {
+        "tag": "a",
+        "label": "陈静",
+        "w": 26,
+        "h": 16
+      },
+      {
+        "tag": "select",
+        "label": "122450",
+        "w": 85,
+        "h": 40
+      }
+    ],
+    "tinyText": [
+      {
+        "tag": "a",
+        "label": "租客▲",
+        "fontSize": 11
+      },
+      {
+        "tag": "a",
+        "label": "应缴日▲",
+        "fontSize": 11
+      },
+      {
+        "tag": "a",
+        "label": "应收▼",
+        "fontSize": 11
+      },
+      {
+        "tag": "a",
+        "label": "状态",
+        "fontSize": 11
+      }
+    ],
+    "tables": [
+      {
+        "minWidth": "680px",
+        "tableWidth": 718,
+        "wrapWidth": 327,
+        "scrollRange": 391,
+        "headers": [
+          {
+            "col": "租客▲",
+            "scrollToSee": 0
+          },
+          {
+            "col": "房间",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应缴日▲",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收▼",
+            "scrollToSee": 62
+          },
+          {
+            "col": "已收",
+            "scrollToSee": 197
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 333
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 391
+          }
+        ]
+      }
+    ],
+    "fontHistogram": {
+      "10": 3,
+      "11": 36,
+      "12": 47,
+      "13": 58,
+      "15": 30,
+      "16": 62,
+      "17": 3,
+      "18": 1,
+      "26": 6,
+      "28": 2,
+      "34": 1
+    }
+  },
+  "billing": {
+    "smallTargets": [
+      {
+        "tag": "a",
+        "label": "总月度总览10",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "流银行流水28",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "租租客管理10",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "支支出记录2",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "连接银行账户",
+        "w": 329,
+        "h": 40
+      },
+      {
+        "tag": "button",
+        "label": "历史付款人预览",
+        "w": 177,
+        "h": 40
+      },
+      {
+        "tag": "button",
+        "label": "导入旧数据",
+        "w": 145,
+        "h": 40
+      },
+      {
+        "tag": "button",
+        "label": "退出登录",
+        "w": 329,
+        "h": 40
+      },
+      {
+        "tag": "input",
+        "label": "payer",
+        "w": 329,
+        "h": 40
+      },
+      {
+        "tag": "select",
+        "label": "全部租客刘洋吴敏周涛孙磊张伟李娜王芳赵敏郑凯陈静",
+        "w": 329,
+        "h": 40
+      },
+      {
+        "tag": "input",
+        "label": "period",
+        "w": 329,
+        "h": 40
+      },
+      {
+        "tag": "button",
+        "label": "打开日期选择器",
+        "w": 30,
+        "h": 30
+      },
+      {
+        "tag": "input",
+        "label": "rent_period",
+        "w": 329,
+        "h": 40
+      },
+      {
+        "tag": "button",
+        "label": "打开日期选择器",
+        "w": 30,
+        "h": 30
+      },
+      {
+        "tag": "select",
+        "label": "全部用途房租押金其他收入",
+        "w": 329,
+        "h": 40
+      },
+      {
+        "tag": "select",
+        "label": "全部收入支出",
+        "w": 329,
+        "h": 40
+      },
+      {
+        "tag": "select",
+        "label": "全部状态待处理（需关联或确认）已关联部分关联待确认未关联",
+        "w": 329,
+        "h": 40
+      },
+      {
+        "tag": "button",
+        "label": "应用筛选",
+        "w": 94,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "清除筛选",
+        "w": 94,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "付款人／流水号▲",
+        "w": 98,
+        "h": 15
+      },
+      {
+        "tag": "a",
+        "label": "金额／余额▼",
+        "w": 74,
+        "h": 15
+      },
+      {
+        "tag": "a",
+        "label": "到账／租金月▲",
+        "w": 86,
+        "h": 15
+      },
+      {
+        "tag": "a",
+        "label": "未关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "select",
+        "label": "选择租客...刘洋吴敏周涛孙磊张伟李娜王芳赵敏郑凯陈静",
+        "w": 158,
+        "h": 30
+      },
+      {
+        "tag": "input",
+        "label": "remember_payer",
+        "w": 13,
+        "h": 13
+      },
+      {
+        "tag": "button",
+        "label": "关联并记住",
+        "w": 80,
+        "h": 30
+      },
+      {
+        "tag": "select",
+        "label": "房租押金其他收入",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "select",
+        "label": "不指定租客刘洋吴敏周涛孙磊张伟李娜王芳赵敏郑凯陈静",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "select",
+        "label": "选择租金月份...",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "input",
+        "label": "归类金额",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "input",
+        "label": "归类备注",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "button",
+        "label": "添加拆分项",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "button",
+        "label": "保存归类",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "input",
+        "label": "忽略原因",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "button",
+        "label": "无需匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "部分关联",
+        "w": 66,
+        "h": 27
+      },
+      {
+        "tag": "select",
+        "label": "选择月份...",
+        "w": 292,
+        "h": 36
+      },
+      {
+        "tag": "input",
+        "label": "remember_payer",
+        "w": 13,
+        "h": 13
+      },
+      {
+        "tag": "button",
+        "label": "确认月份",
+        "w": 292,
+        "h": 32
+      },
+      {
+        "tag": "select",
+        "label": "房租押金其他收入",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "select",
+        "label": "不指定租客刘洋吴敏周涛孙磊张伟李娜王芳赵敏郑凯陈静",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "select",
+        "label": "选择租金月份...",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "input",
+        "label": "归类金额",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "input",
+        "label": "归类备注",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "button",
+        "label": "添加拆分项",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "button",
+        "label": "保存归类",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "未关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "未关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "a",
+        "label": "已关联",
+        "w": 54,
+        "h": 27
+      },
+      {
+        "tag": "button",
+        "label": "撤销匹配",
+        "w": 292,
+        "h": 30
+      },
+      {
+        "tag": "select",
+        "label": "2550100",
+        "w": 94,
+        "h": 36
+      }
+    ],
+    "tinyText": [
+      {
+        "tag": "a",
+        "label": "付款人／流水号▲",
+        "fontSize": 11
+      },
+      {
+        "tag": "a",
+        "label": "金额／余额▼",
+        "fontSize": 11
+      },
+      {
+        "tag": "a",
+        "label": "到账／租金月▲",
+        "fontSize": 11
+      }
+    ],
+    "tables": [
+      {
+        "minWidth": "1040px",
+        "tableWidth": 1040,
+        "wrapWidth": 327,
+        "scrollRange": 713,
+        "headers": [
+          {
+            "col": "类型",
+            "scrollToSee": 0
+          },
+          {
+            "col": "付款人／流水号▲",
+            "scrollToSee": 0
+          },
+          {
+            "col": "金额／余额▼",
+            "scrollToSee": 29
+          },
+          {
+            "col": "到账／租金月▲",
+            "scrollToSee": 175
+          },
+          {
+            "col": "描述／参考号",
+            "scrollToSee": 282
+          },
+          {
+            "col": "账户",
+            "scrollToSee": 393
+          },
+          {
+            "col": "用途／处理",
+            "scrollToSee": 713
+          }
+        ]
+      }
+    ],
+    "fontHistogram": {
+      "10": 3,
+      "11": 213,
+      "12": 246,
+      "13": 294,
+      "15": 28,
+      "16": 60,
+      "17": 2,
+      "34": 1
+    }
+  },
+  "expenses": {
+    "smallTargets": [
+      {
+        "tag": "a",
+        "label": "总月度总览10",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "流银行流水28",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "租租客管理10",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "支支出记录2",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "button",
+        "label": "退出登录",
+        "w": 94,
+        "h": 40
+      },
+      {
+        "tag": "input",
+        "label": "description",
+        "w": 291,
+        "h": 40
+      },
+      {
+        "tag": "input",
+        "label": "amount",
+        "w": 291,
+        "h": 40
+      },
+      {
+        "tag": "select",
+        "label": "维修 水电 清洁 保险 其他",
+        "w": 291,
+        "h": 41
+      },
+      {
+        "tag": "input",
+        "label": "expense_date",
+        "w": 291,
+        "h": 40
+      },
+      {
+        "tag": "button",
+        "label": "打开日期选择器",
+        "w": 30,
+        "h": 30
+      },
+      {
+        "tag": "input",
+        "label": "payment_method",
+        "w": 291,
+        "h": 40
+      },
+      {
+        "tag": "input",
+        "label": "room_hint",
+        "w": 291,
+        "h": 40
+      },
+      {
+        "tag": "input",
+        "label": "tenant_hint",
+        "w": 291,
+        "h": 40
+      },
+      {
+        "tag": "button",
+        "label": "保存支出",
+        "w": 94,
+        "h": 40
+      }
+    ],
+    "tinyText": [],
+    "tables": [
+      {
+        "minWidth": "680px",
+        "tableWidth": 680,
+        "wrapWidth": 327,
+        "scrollRange": 353,
+        "headers": [
+          {
+            "col": "描述",
+            "scrollToSee": 0
+          },
+          {
+            "col": "金额",
+            "scrollToSee": 0
+          },
+          {
+            "col": "类别",
+            "scrollToSee": 0
+          },
+          {
+            "col": "日期",
+            "scrollToSee": 89
+          },
+          {
+            "col": "备注",
+            "scrollToSee": 277
+          },
+          {
+            "col": "付款方式",
+            "scrollToSee": 353
+          }
+        ]
+      }
+    ],
+    "fontHistogram": {
+      "11": 19,
+      "12": 12,
+      "13": 20,
+      "15": 2,
+      "16": 38,
+      "17": 3,
+      "26": 2,
+      "34": 1
+    }
+  },
+  "cash-receipt-new": {
+    "smallTargets": [
+      {
+        "tag": "a",
+        "label": "总月度总览",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "流银行流水",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "租租客管理",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "支支出记录",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "返回总览",
+        "w": 94,
+        "h": 40
+      },
+      {
+        "tag": "select",
+        "label": "请选择租客刘洋 · B-202吴敏 · C-303周涛 ",
+        "w": 327,
+        "h": 40
+      },
+      {
+        "tag": "input",
+        "label": "period",
+        "w": 327,
+        "h": 40
+      },
+      {
+        "tag": "input",
+        "label": "amount",
+        "w": 327,
+        "h": 40
+      },
+      {
+        "tag": "input",
+        "label": "currency",
+        "w": 327,
+        "h": 40
+      },
+      {
+        "tag": "input",
+        "label": "received_at",
+        "w": 327,
+        "h": 40
+      },
+      {
+        "tag": "input",
+        "label": "idempotency_key",
+        "w": 327,
+        "h": 40
+      },
+      {
+        "tag": "button",
+        "label": "预览入账",
+        "w": 327,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "返回租客",
+        "w": 327,
+        "h": 40
+      }
+    ],
+    "tinyText": [],
+    "tables": [],
+    "fontHistogram": {
+      "11": 5,
+      "12": 18,
+      "13": 8,
+      "16": 17,
+      "17": 2,
+      "34": 1
+    }
+  },
+  "cash-receipt-void": {
+    "smallTargets": [
+      {
+        "tag": "a",
+        "label": "总月度总览",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "流银行流水",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "租租客管理",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "支支出记录",
+        "w": 321,
+        "h": 40
+      },
+      {
+        "tag": "a",
+        "label": "返回租客详情",
+        "w": 126,
+        "h": 40
+      },
+      {
+        "tag": "button",
+        "label": "确认作废",
+        "w": 327,
+        "h": 40
+      }
+    ],
+    "tinyText": [],
+    "tables": [],
+    "fontHistogram": {
+      "11": 6,
+      "12": 2,
+      "13": 8,
+      "16": 29,
+      "17": 1,
+      "34": 1
+    }
+  }
+}

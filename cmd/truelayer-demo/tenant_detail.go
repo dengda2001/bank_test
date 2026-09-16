@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"html/template"
 	"net/http"
 	"strconv"
 	"strings"
@@ -171,8 +170,7 @@ func (s *obligationService) listTenantBillingHistoryPage(ctx context.Context, us
 }
 
 type tenantDetailPageData struct {
-	Username      string
-	Environment   string
+	workspaceShell
 	CurrentPeriod string
 	Message       string
 	Error         string
@@ -181,12 +179,12 @@ type tenantDetailPageData struct {
 	History       tenantBillingHistoryPage
 }
 
-var tenantDetailTemplate = template.Must(template.New("tenant-detail").Parse(`<!doctype html>
+var tenantDetailTemplate = newWorkspacePageTemplate("tenant-detail", nil, `<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RentOps Tenant Detail</title>
-  <style>` + workspacePageCSS + `
+  <style>`+workspacePageCSS+`
     .detail-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(320px, .9fr); gap: 16px; margin-bottom: 16px; }
     .profile-list { display: grid; grid-template-columns: 130px 1fr; gap: 10px 18px; margin: 0; padding: 18px 20px; }
     .profile-list dt { color: var(--foreground-muted); }
@@ -212,14 +210,22 @@ var tenantDetailTemplate = template.Must(template.New("tenant-detail").Parse(`<!
     .pagination { display: flex; gap: 8px; align-items: center; margin-top: 16px; padding: 0 20px 18px; }
     @media (max-width: 900px) { .detail-grid { grid-template-columns: 1fr; } }
     @media (max-width: 680px) { .payment-item { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 640px) {
+      /* 「档案信息」的标签列实测文字宽只有 32px，却固定占 130px，把值列压到
+         139px：邮箱从域名中间裂开、房间地址折 4 行。窄屏改单列，值列拿到全部
+         宽度；宽屏的 130px 1fr 保持不变。 */
+      .profile-list { grid-template-columns: 1fr; gap: 4px 0; }
+      .profile-list dt { font-size: 12px; }
+      /* 移除按钮实测 62×40。 */
+      .payer-item .btn { min-height: 44px; }
+      /* 页内的 .history-filter input 比共享表的裸 input 更具体，它的 40px 会盖过
+         共享窄屏块里的 44px（起止月份两个 input 实测 221x40）。 */
+      .history-filter input { min-height: 44px; }
+    }
   </style>
 </head>
 <body><div class="app">
-  <aside class="sidebar" aria-label="Main navigation">
-    <div class="side-brand"><div class="mark">R</div><div><div class="brand-title">RentOps</div><div class="brand-meta">{{.Environment}} workspace</div></div></div>
-    <nav class="nav"><a href="/rent-dashboard"><span class="glyph">总</span><span>月度总览</span></a><a href="/billing"><span class="glyph">流</span><span>银行流水</span></a><a href="/tenants" class="active"><span class="glyph">租</span><span>租客管理</span></a><a href="/expenses"><span class="glyph">支</span><span>支出记录</span></a></nav>
-    <div class="side-foot">当前用户：{{.Username}}<br>租客缴费详情</div>
-  </aside>
+  {{template "workspace-nav" .}}
   <main class="content">
 	<header class="topbar"><div><div class="brand-title">租客详情</div><h1>{{if .Tenant.DisplayAlias}}{{.Tenant.DisplayAlias}}{{else}}{{.Tenant.Name}}{{end}}</h1><div class="tiny">正式姓名：{{.Tenant.Name}}</div></div><div class="actions"><a class="btn" href="/tenants">返回租客列表</a><a class="btn" href="/tenants?edit={{.Tenant.ID}}">编辑资料</a><a class="btn primary" href="/cash-receipts/new?tenant_id={{.Tenant.ID}}&amp;period={{.CurrentPeriod}}">现金补录</a></div></header>
 	{{if eq .Message "cash_receipt_saved"}}<div class="notice ok">现金收款已入账，并计入对应租金月份。</div>{{end}}
@@ -237,7 +243,7 @@ var tenantDetailTemplate = template.Must(template.New("tenant-detail").Parse(`<!
       {{if gt .History.TotalPages 1}}<div class="pagination">{{if .History.HasPrev}}<a class="btn subtle" href="/tenants/{{.Tenant.ID}}?from_month={{.History.FromPeriod}}&amp;to_month={{.History.ToPeriod}}&amp;page={{.History.PrevPage}}&amp;page_size={{.History.PageSize}}">上一页</a>{{end}}<span class="tiny">第 {{.History.Page}} / {{.History.TotalPages}} 页</span>{{if .History.HasNext}}<a class="btn subtle" href="/tenants/{{.Tenant.ID}}?from_month={{.History.FromPeriod}}&amp;to_month={{.History.ToPeriod}}&amp;page={{.History.NextPage}}&amp;page_size={{.History.PageSize}}">下一页</a>{{end}}</div>{{end}}
     </section>
   </main>
-</div></body></html>`))
+</div></body></html>`)
 
 func (a *app) handleTenantDetail(w http.ResponseWriter, r *http.Request) {
 	if !a.requireAuth(w, r) {
@@ -284,8 +290,12 @@ func (a *app) handleTenantDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := tenantDetailPageData{
-		Username:      a.displayUsername(r),
-		Environment:   a.cfg.Environment,
+		workspaceShell: workspaceShell{
+			ActivePage:  "tenants",
+			Username:    a.displayUsername(r),
+			Environment: a.cfg.Environment,
+			FootNote:    "租客缴费详情",
+		},
 		CurrentPeriod: monthStart(time.Now().UTC()).Format("2006-01"),
 		Message:       r.URL.Query().Get("message"),
 		Error:         r.URL.Query().Get("error"),

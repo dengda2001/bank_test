@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "本任务核心改动是把 7 份已漂移的 <aside> 外壳副本收敛为一处，该指南给出识别重复模式与判断抽取时机的标准"}
+{"file": ".trellis/tasks/09-16-mobile-responsive-audit/research/mobile-audit.md", "reason": "每条待修问题都带真实浏览器实测数值与根因定位，实现时以此为准，不要重新静态推断"}
+{"file": ".trellis/tasks/09-16-mobile-responsive-audit/design.md", "reason": "技术方案、桌面端冻结硬约束、以及按页的例外处理"}

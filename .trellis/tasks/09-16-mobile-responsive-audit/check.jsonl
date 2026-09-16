@@ -1,0 +1,3 @@
+{"file": ".trellis/tasks/09-16-mobile-responsive-audit/research/mobile-audit.md", "reason": "验收判据来源：逐条比对 P0/P1 发现是否真被修掉，而非只看测试是否通过"}
+{"file": ".trellis/tasks/09-16-mobile-responsive-audit/implement.md", "reason": "完成判据清单与启动前门禁（含未提交改动必须先行提交）"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "外壳抽取跨 Go 数据结构、模板常量与 7 个 handler 渲染点，需检查各层是否同步"}

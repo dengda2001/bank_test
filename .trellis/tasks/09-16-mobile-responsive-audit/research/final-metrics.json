@@ -1,0 +1,896 @@
+{
+  "tenants": {
+    "smallTargets": [
+      {
+        "tag": "input",
+        "label": "nav-drawer",
+        "w": 13,
+        "h": 1
+      }
+    ],
+    "tinyText": [],
+    "tables": [
+      {
+        "minWidth": "740px",
+        "tableWidth": 815,
+        "wrapWidth": 327,
+        "scrollRange": 488,
+        "headers": [
+          {
+            "col": "租客",
+            "scrollToSee": 0
+          },
+          {
+            "col": "付款人",
+            "scrollToSee": 0
+          },
+          {
+            "col": "租金",
+            "scrollToSee": 0
+          },
+          {
+            "col": "账单安排",
+            "scrollToSee": 70
+          },
+          {
+            "col": "房间",
+            "scrollToSee": 179
+          },
+          {
+            "col": "创建时间",
+            "scrollToSee": 352
+          },
+          {
+            "col": "操作",
+            "scrollToSee": 0
+          },
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          },
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          },
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          },
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          },
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          },
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          },
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          },
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          },
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          },
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          }
+        ]
+      },
+      {
+        "minWidth": "620px",
+        "tableWidth": 0,
+        "wrapWidth": 0,
+        "scrollRange": 0,
+        "headers": [
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          }
+        ]
+      },
+      {
+        "minWidth": "620px",
+        "tableWidth": 0,
+        "wrapWidth": 0,
+        "scrollRange": 0,
+        "headers": [
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          }
+        ]
+      },
+      {
+        "minWidth": "620px",
+        "tableWidth": 0,
+        "wrapWidth": 0,
+        "scrollRange": 0,
+        "headers": [
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          }
+        ]
+      },
+      {
+        "minWidth": "620px",
+        "tableWidth": 0,
+        "wrapWidth": 0,
+        "scrollRange": 0,
+        "headers": [
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          }
+        ]
+      },
+      {
+        "minWidth": "620px",
+        "tableWidth": 0,
+        "wrapWidth": 0,
+        "scrollRange": 0,
+        "headers": [
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          }
+        ]
+      },
+      {
+        "minWidth": "620px",
+        "tableWidth": 0,
+        "wrapWidth": 0,
+        "scrollRange": 0,
+        "headers": [
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          }
+        ]
+      },
+      {
+        "minWidth": "620px",
+        "tableWidth": 0,
+        "wrapWidth": 0,
+        "scrollRange": 0,
+        "headers": [
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          }
+        ]
+      },
+      {
+        "minWidth": "620px",
+        "tableWidth": 0,
+        "wrapWidth": 0,
+        "scrollRange": 0,
+        "headers": [
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          }
+        ]
+      },
+      {
+        "minWidth": "620px",
+        "tableWidth": 0,
+        "wrapWidth": 0,
+        "scrollRange": 0,
+        "headers": [
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          }
+        ]
+      },
+      {
+        "minWidth": "620px",
+        "tableWidth": 0,
+        "wrapWidth": 0,
+        "scrollRange": 0,
+        "headers": [
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实际收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          }
+        ]
+      }
+    ],
+    "fontHistogram": {
+      "11": 11,
+      "12": 93,
+      "13": 78,
+      "14": 1,
+      "15": 10,
+      "16": 35,
+      "17": 2,
+      "20": 1,
+      "26": 2,
+      "34": 1
+    }
+  },
+  "tenant-detail": {
+    "smallTargets": [
+      {
+        "tag": "input",
+        "label": "nav-drawer",
+        "w": 13,
+        "h": 1
+      }
+    ],
+    "tinyText": [],
+    "tables": [
+      {
+        "minWidth": "760px",
+        "tableWidth": 760,
+        "wrapWidth": 327,
+        "scrollRange": 433,
+        "headers": [
+          {
+            "col": "月份",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应缴日",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收",
+            "scrollToSee": 0
+          },
+          {
+            "col": "实收",
+            "scrollToSee": 111
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 247
+          },
+          {
+            "col": "状态／来源",
+            "scrollToSee": 0
+          }
+        ]
+      }
+    ],
+    "fontHistogram": {
+      "11": 5,
+      "12": 40,
+      "13": 19,
+      "14": 1,
+      "15": 11,
+      "16": 48,
+      "17": 4,
+      "20": 1,
+      "34": 1
+    }
+  },
+  "rent-dashboard": {
+    "smallTargets": [
+      {
+        "tag": "input",
+        "label": "nav-drawer",
+        "w": 13,
+        "h": 1
+      },
+      {
+        "tag": "a",
+        "label": "刘洋",
+        "w": 26,
+        "h": 44
+      },
+      {
+        "tag": "a",
+        "label": "孙磊",
+        "w": 26,
+        "h": 44
+      },
+      {
+        "tag": "a",
+        "label": "李娜",
+        "w": 26,
+        "h": 44
+      },
+      {
+        "tag": "a",
+        "label": "吴敏",
+        "w": 26,
+        "h": 44
+      },
+      {
+        "tag": "a",
+        "label": "周涛",
+        "w": 26,
+        "h": 44
+      },
+      {
+        "tag": "a",
+        "label": "张伟",
+        "w": 26,
+        "h": 44
+      },
+      {
+        "tag": "a",
+        "label": "王芳",
+        "w": 26,
+        "h": 44
+      },
+      {
+        "tag": "a",
+        "label": "赵敏",
+        "w": 26,
+        "h": 44
+      },
+      {
+        "tag": "a",
+        "label": "郑凯",
+        "w": 26,
+        "h": 44
+      },
+      {
+        "tag": "a",
+        "label": "陈静",
+        "w": 26,
+        "h": 44
+      }
+    ],
+    "tinyText": [],
+    "tables": [
+      {
+        "minWidth": "680px",
+        "tableWidth": 742,
+        "wrapWidth": 327,
+        "scrollRange": 415,
+        "headers": [
+          {
+            "col": "租客▲",
+            "scrollToSee": 0
+          },
+          {
+            "col": "房间",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应缴日▲",
+            "scrollToSee": 0
+          },
+          {
+            "col": "应收▼",
+            "scrollToSee": 86
+          },
+          {
+            "col": "已收",
+            "scrollToSee": 221
+          },
+          {
+            "col": "未收",
+            "scrollToSee": 357
+          },
+          {
+            "col": "状态",
+            "scrollToSee": 0
+          }
+        ]
+      }
+    ],
+    "fontHistogram": {
+      "10": 3,
+      "11": 15,
+      "12": 70,
+      "13": 58,
+      "14": 1,
+      "15": 30,
+      "16": 63,
+      "17": 3,
+      "18": 1,
+      "20": 1,
+      "26": 6,
+      "28": 2,
+      "34": 1
+    }
+  },
+  "billing": {
+    "smallTargets": [
+      {
+        "tag": "input",
+        "label": "nav-drawer",
+        "w": 13,
+        "h": 1
+      },
+      {
+        "tag": "input",
+        "label": "remember_payer",
+        "w": 13,
+        "h": 13
+      },
+      {
+        "tag": "input",
+        "label": "remember_payer",
+        "w": 13,
+        "h": 13
+      }
+    ],
+    "tinyText": [],
+    "tables": [
+      {
+        "minWidth": "680px",
+        "tableWidth": 680,
+        "wrapWidth": 327,
+        "scrollRange": 353,
+        "headers": [
+          {
+            "col": "类型",
+            "scrollToSee": 0
+          },
+          {
+            "col": "付款人／流水号▲",
+            "scrollToSee": 13
+          },
+          {
+            "col": "金额／余额▼",
+            "scrollToSee": 0
+          },
+          {
+            "col": "到账／租金月▲",
+            "scrollToSee": 235
+          },
+          {
+            "col": "描述／参考号",
+            "scrollToSee": 0
+          },
+          {
+            "col": "账户",
+            "scrollToSee": 0
+          },
+          {
+            "col": "用途／处理",
+            "scrollToSee": 0
+          }
+        ]
+      }
+    ],
+    "fontHistogram": {
+      "10": 2,
+      "11": 37,
+      "12": 338,
+      "13": 294,
+      "14": 1,
+      "16": 61,
+      "17": 2,
+      "20": 1,
+      "34": 1
+    }
+  },
+  "expenses": {
+    "smallTargets": [
+      {
+        "tag": "input",
+        "label": "nav-drawer",
+        "w": 13,
+        "h": 1
+      }
+    ],
+    "tinyText": [],
+    "tables": [
+      {
+        "minWidth": "700px",
+        "tableWidth": 700,
+        "wrapWidth": 327,
+        "scrollRange": 373,
+        "headers": [
+          {
+            "col": "描述",
+            "scrollToSee": 0
+          },
+          {
+            "col": "金额",
+            "scrollToSee": 0
+          },
+          {
+            "col": "类别",
+            "scrollToSee": 0
+          },
+          {
+            "col": "日期",
+            "scrollToSee": 123
+          },
+          {
+            "col": "备注",
+            "scrollToSee": 294
+          },
+          {
+            "col": "付款方式",
+            "scrollToSee": 0
+          }
+        ]
+      }
+    ],
+    "fontHistogram": {
+      "11": 11,
+      "12": 22,
+      "13": 20,
+      "14": 1,
+      "15": 2,
+      "16": 39,
+      "17": 3,
+      "20": 1,
+      "26": 2,
+      "34": 1
+    }
+  },
+  "cash-receipt-new": {
+    "smallTargets": [
+      {
+        "tag": "input",
+        "label": "nav-drawer",
+        "w": 13,
+        "h": 1
+      }
+    ],
+    "tinyText": [],
+    "tables": [],
+    "fontHistogram": {
+      "11": 5,
+      "12": 20,
+      "13": 8,
+      "14": 1,
+      "16": 18,
+      "17": 2,
+      "20": 1,
+      "34": 1
+    }
+  },
+  "cash-receipt-void": {
+    "smallTargets": [
+      {
+        "tag": "input",
+        "label": "nav-drawer",
+        "w": 13,
+        "h": 1
+      }
+    ],
+    "tinyText": [],
+    "tables": [],
+    "fontHistogram": {
+      "11": 5,
+      "12": 11,
+      "13": 8,
+      "14": 1,
+      "16": 24,
+      "17": 1,
+      "20": 1,
+      "34": 1
+    }
+  }
+}

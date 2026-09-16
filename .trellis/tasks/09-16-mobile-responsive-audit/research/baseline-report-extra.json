@@ -1,0 +1,159 @@
+{
+  "generatedAt": "2026-09-16T12:16:02.185Z",
+  "pages": [
+    {
+      "page": "billing-revoke-preview",
+      "viewport": "375x667",
+      "id": "600",
+      "url": "/billing/revoke?transaction_id=600",
+      "status": 200,
+      "finalUrl": "http://localhost:8081/billing/revoke?transaction_id=600",
+      "result": {
+        "heading": "撤销整笔匹配",
+        "viewportWidth": 375,
+        "docScrollWidth": 375,
+        "horizontalOverflow": 0,
+        "pageHeight": 737,
+        "rowCount": 0,
+        "offenders": [],
+        "scrollerDetail": [],
+        "smallTargets": [
+          {
+            "tag": "input",
+            "label": "reason",
+            "w": 305,
+            "h": 37
+          },
+          {
+            "tag": "button",
+            "label": "确认撤销",
+            "w": 94,
+            "h": 43
+          },
+          {
+            "tag": "a",
+            "label": "返回流水",
+            "w": 94,
+            "h": 43
+          }
+        ]
+      }
+    },
+    {
+      "page": "billing-payer-preview",
+      "viewport": "375x667",
+      "url": "POST /billing/payer/preview",
+      "finalUrl": "http://localhost:8081/billing/payer/preview",
+      "result": {
+        "heading": "历史待处理付款人预览",
+        "viewportWidth": 375,
+        "docScrollWidth": 375,
+        "horizontalOverflow": 0,
+        "pageHeight": 667,
+        "rowCount": 2,
+        "offenders": [
+          {
+            "selector": "table",
+            "width": 720,
+            "escapesRightBy": 380,
+            "overflowX": "visible",
+            "text": "流水付款人金额建议状态／原因操作#597WU MINPAYER-WMEUR 80"
+          }
+        ],
+        "scrollerDetail": [
+          {
+            "selector": "main.card",
+            "scrollRange": 415,
+            "containsHeading": true,
+            "padding": "18px"
+          }
+        ],
+        "smallTargets": [
+          {
+            "tag": "a",
+            "label": "返回流水",
+            "w": 90,
+            "h": 39
+          }
+        ]
+      }
+    },
+    {
+      "page": "billing-revoke-preview",
+      "viewport": "390x844",
+      "id": "600",
+      "url": "/billing/revoke?transaction_id=600",
+      "status": 200,
+      "finalUrl": "http://localhost:8081/billing/revoke?transaction_id=600",
+      "result": {
+        "heading": "撤销整笔匹配",
+        "viewportWidth": 390,
+        "docScrollWidth": 390,
+        "horizontalOverflow": 0,
+        "pageHeight": 844,
+        "rowCount": 0,
+        "offenders": [],
+        "scrollerDetail": [],
+        "smallTargets": [
+          {
+            "tag": "input",
+            "label": "reason",
+            "w": 320,
+            "h": 37
+          },
+          {
+            "tag": "button",
+            "label": "确认撤销",
+            "w": 94,
+            "h": 43
+          },
+          {
+            "tag": "a",
+            "label": "返回流水",
+            "w": 94,
+            "h": 43
+          }
+        ]
+      }
+    },
+    {
+      "page": "billing-payer-preview",
+      "viewport": "390x844",
+      "url": "POST /billing/payer/preview",
+      "finalUrl": "http://localhost:8081/billing/payer/preview",
+      "result": {
+        "heading": "历史待处理付款人预览",
+        "viewportWidth": 390,
+        "docScrollWidth": 390,
+        "horizontalOverflow": 0,
+        "pageHeight": 844,
+        "rowCount": 2,
+        "offenders": [
+          {
+            "selector": "table",
+            "width": 720,
+            "escapesRightBy": 365,
+            "overflowX": "visible",
+            "text": "流水付款人金额建议状态／原因操作#597WU MINPAYER-WMEUR 80"
+          }
+        ],
+        "scrollerDetail": [
+          {
+            "selector": "main.card",
+            "scrollRange": 400,
+            "containsHeading": true,
+            "padding": "18px"
+          }
+        ],
+        "smallTargets": [
+          {
+            "tag": "a",
+            "label": "返回流水",
+            "w": 90,
+            "h": 39
+          }
+        ]
+      }
+    }
+  ]
+}

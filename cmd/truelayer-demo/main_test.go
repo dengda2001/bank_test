@@ -127,6 +127,12 @@ func TestWorkspaceUIPrimitivesHaveConsistentInteractionStates(t *testing.T) {
 }
 
 func TestWorkspaceCSSUsesFlatDesignTokens(t *testing.T) {
+	// The flat look is a desktop constraint: the base stylesheet must stay
+	// free of depth effects. The `@media (max-width: 640px)` block below it is
+	// mobile-only, and there the drawer scrim and the frozen column's inset
+	// shadow are functional (they say "there is more to the right"), so the
+	// guard stops at the breakpoint.
+	baseCSS, _, _ := strings.Cut(workspacePageCSS, "@media (max-width: 640px)")
 	for _, expected := range []string{
 		"--surface: #ffffff;",
 		"--foreground: #111827;",
@@ -134,12 +140,12 @@ func TestWorkspaceCSSUsesFlatDesignTokens(t *testing.T) {
 		"background: var(--background-base);",
 		".panel { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }",
 	} {
-		if !strings.Contains(workspacePageCSS, expected) {
+		if !strings.Contains(baseCSS, expected) {
 			t.Fatalf("flat workspace CSS missing %q", expected)
 		}
 	}
 	for _, forbidden := range []string{"backdrop-filter:", "box-shadow:", "radial-gradient", "linear-gradient", "rgba("} {
-		if strings.Contains(workspacePageCSS, forbidden) {
+		if strings.Contains(baseCSS, forbidden) {
 			t.Fatalf("flat workspace CSS still contains depth effect %q", forbidden)
 		}
 	}
@@ -709,11 +715,10 @@ func TestBillingTemplateShowsDataFetchError(t *testing.T) {
 	var body strings.Builder
 
 	err := billingTemplate.Execute(&body, billingPageData{
-		Username:    "ddrzh",
-		Environment: "sandbox",
-		LastSync:    "尚未同步",
-		Error:       "data_fetch_failed",
-		TokenFile:   "truelayer-token.json",
+		workspaceShell: workspaceShell{Username: "ddrzh", Environment: "sandbox"},
+		LastSync:       "尚未同步",
+		Error:          "data_fetch_failed",
+		TokenFile:      "truelayer-token.json",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -726,8 +731,7 @@ func TestBillingTemplateShowsDataFetchError(t *testing.T) {
 func TestBillingTemplateRendersTransactionFilters(t *testing.T) {
 	var body strings.Builder
 	err := billingTemplate.Execute(&body, billingPageData{
-		Username:          "ddrzh",
-		Environment:       "sandbox",
+		workspaceShell:    workspaceShell{Username: "ddrzh", Environment: "sandbox"},
 		DirectionFilter:   "expense",
 		MatchStatusFilter: "unmatched",
 		PeriodFilter:      "2026-09",
@@ -897,11 +901,10 @@ func TestHistoricalPayerPreviewTemplateConfirmsOneRowAtATime(t *testing.T) {
 func TestRentDashboardTemplateRendersMonthlyStatus(t *testing.T) {
 	var body strings.Builder
 	err := rentDashboardTemplate.Execute(&body, rentDashboardPageData{
-		Username:      "ddrzh",
-		Environment:   "sandbox",
-		Period:        "2026-09",
-		PeriodLabel:   "2026年9月",
-		ExpectedTotal: "EUR 950.00",
+		workspaceShell: workspaceShell{Username: "ddrzh", Environment: "sandbox"},
+		Period:         "2026-09",
+		PeriodLabel:    "2026年9月",
+		ExpectedTotal:  "EUR 950.00",
 		Rows: []rentDashboardRow{{
 			ObligationID:   11,
 			TenantName:     "Aoife Murphy",

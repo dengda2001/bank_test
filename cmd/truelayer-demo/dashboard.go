@@ -31,9 +31,14 @@ func (a *app) renderRentDashboard(w http.ResponseWriter, r *http.Request, action
 		period = periodMonth.Format("2006-01")
 	}
 	data := rentDashboardPageData{
-		Username:       a.displayUsername(r),
-		Environment:    a.cfg.Environment,
-		ActivePage:     "rent-dashboard",
+		workspaceShell: workspaceShell{
+			ActivePage:    "rent-dashboard",
+			Username:      a.displayUsername(r),
+			Environment:   a.cfg.Environment,
+			FootNote:      "月度收租工作台",
+			ShowNavCounts: true,
+			NavLabel:      "主导航",
+		},
 		Period:         periodMonth.Format("2006-01"),
 		PeriodLabel:    fmt.Sprintf("%d年%d月", periodMonth.Year(), periodMonth.Month()),
 		PreviousPeriod: periodMonth.AddDate(0, -1, 0).Format("2006-01"),
@@ -138,7 +143,7 @@ func (a *app) renderRentDashboard(w http.ResponseWriter, r *http.Request, action
 	}
 }
 
-var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Funcs(template.FuncMap{
+var rentDashboardTemplate = newWorkspacePageTemplate("rent-dashboard", template.FuncMap{
 	"rentDashboardURL": func(period, search, status, sortValue string, page, pageSize int) string {
 		return rentDashboardURL(period, search, status, sortValue, page, pageSize)
 	},
@@ -168,13 +173,13 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Funcs(t
 			return "未发送"
 		}
 	},
-}).Parse(`<!doctype html>
+}, `<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RentOps Dashboard</title>
-  <style>` + workspacePageCSS + workspaceCalendarCSS + `
+  <style>`+workspacePageCSS+workspaceCalendarCSS+`
 	    /* ---- 顶部工具条：只保留月份选择 ---- */
 	    .dashboard-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-bottom: 20px; }
 	    .dashboard-toolbar .period-picker { display: flex; align-items: center; gap: 10px; margin: 0; }
@@ -289,7 +294,7 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Funcs(t
     @media (max-width: 640px) {
       .dashboard-summary, .dashboard-secondary { grid-template-columns: 1fr; }
       .dashboard-toolbar { justify-content: stretch; }
-      .dashboard-toolbar .period-picker { display: grid; width: 100%; grid-template-columns: 42px minmax(0, 1fr) 42px; align-items: center; gap: 8px; }
+      .dashboard-toolbar .period-picker { display: grid; width: 100%; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: 8px; }
       .dashboard-toolbar .period-label { display: none; }
       .dashboard-toolbar .period-field { width: auto; min-width: 0; }
       .list-filter { display: grid; grid-template-columns: 1fr; gap: 10px; }
@@ -302,22 +307,43 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Funcs(t
       .section-head { align-items: flex-start; flex-direction: column; }
       .section-actions { margin-left: 0; }
       .count-chip.shown { margin-left: 0; }
+      /* 共享窄屏块里的 input/select 抬到 44px，但这几条页内规则带着 .list-filter
+         之类的前缀、比裸元素选择器更具体，会把它盖回去（实测搜索框/状态筛选/每页
+         条数下拉都是 40px）。就地覆盖；催缴面板默认收起，它里面的 input 同理。 */
+      .list-filter input, .list-filter select { min-height: 44px; }
+      .dashboard-pagination .page-size-field select { min-height: 44px; }
+      .dunning-config input { min-height: 44px; }
+      .dashboard-toolbar input[type="month"] { min-height: 44px; }
+      /* 上/下月按钮实测 42x42，网格轨道一并抬到 44px，否则按钮会撑破轨道。 */
+      .month-nav { width: 44px; height: 44px; }
+      /* P1：可点的状态筛选 chip 实测 63x32 / 87x32 / 75x32，高度差 12px。
+         只抬 <a>，非链接的「本月共 N 户」不是触控目标，保持原样。 */
+      a.count-chip { min-height: 44px; }
+      /* 分页按钮曾被 flex 压成「上一 / 页」；催缴面板的「收起」被挤成 48×47
+         后文字竖排。两者都需要不被压缩，且标签不断行。 */
+      .dashboard-pagination .pagination-nav .btn { white-space: nowrap; flex-shrink: 0; }
+      .dunning-drawer .panel-head .btn { white-space: nowrap; flex-shrink: 0; }
+      /* 共享窄屏块给 input 的 44px 被 input[type="checkbox"] 显式放行，而催缴面板
+         默认收起、审计量的是可见元素，所以「确认同日重发」一直没被量到：整块可点
+         区域只有 20px 高。label 包着 checkbox，抬 label 就抬了整个可点区域。 */
+      .dunning-actions label { display: inline-flex; align-items: center; min-height: 44px; }
+      /* 共享窄屏块把姓名链接抬到 44px 高，而它的唯一视觉提示是本页基础样式里的
+         border-bottom——盒子一高，虚线就被推到文字下方约 22px，看着像一条孤立的
+         分隔线，不像下划线（截图复核发现）。窄屏改用文字自身的下划线：虚线贴回
+         文字，链接盒仍是 44px，命中区不变。同特异度，写在基础样式之后故生效。 */
+      .tenant-link {
+        border-bottom: 0;
+        text-decoration: underline dashed var(--border-strong);
+        text-underline-offset: 3px;
+      }
+      .tenant-link:hover { text-decoration-color: currentColor; }
     }
   </style>
-  <script>` + workspaceCalendarScript + `</script>
+  <script>`+workspaceCalendarScript+`</script>
 </head>
 <body>
   <div class="app">
-    <aside class="sidebar" aria-label="Main navigation">
-      <div class="side-brand"><div class="mark">R</div><div><div class="brand-title">RentOps</div><div class="brand-meta">{{.Environment}} workspace</div></div></div>
-      <nav class="nav" aria-label="主导航">
-        <a href="/rent-dashboard" class="active"><span class="glyph">总</span><span>月度总览</span><span class="nav-count">{{.TenantCount}}</span></a>
-        <a href="/billing"><span class="glyph">流</span><span>银行流水</span><span class="nav-count">{{.IncomeCount}}</span></a>
-        <a href="/tenants"><span class="glyph">租</span><span>租客管理</span><span class="nav-count">{{.TenantCount}}</span></a>
-        <a href="/expenses"><span class="glyph">支</span><span>支出记录</span><span class="nav-count">{{.ExpenseCount}}</span></a>
-      </nav>
-      <div class="side-foot">当前用户：{{.Username}}<br>月度收租工作台</div>
-    </aside>
+    {{template "workspace-nav" .}}
     <main class="content">
       <header class="topbar">
         <div><div class="brand-title">本月收租</div><h1>{{.PeriodLabel}}</h1></div>
@@ -462,4 +488,4 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Funcs(t
 	  </script>
 </body>
 </html>
-`))
+`)
