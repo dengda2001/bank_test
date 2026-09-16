@@ -192,3 +192,42 @@ func TestRentDashboardMetricsKeepTheE2EShape(t *testing.T) {
 		t.Fatal("dashboard lost the filtered-count text the E2E runner asserts on")
 	}
 }
+
+func TestRentDashboardManualBalanceActionOnlyAppearsForOutstandingRent(t *testing.T) {
+	var body strings.Builder
+	err := rentDashboardTemplate.Execute(&body, rentDashboardPageData{
+		Period:       "2026-09",
+		PeriodLabel:  "2026年9月",
+		StatusFilter: "all",
+		SortFilter:   dashboardDefaultSort,
+		Page:         1,
+		PageSize:     dashboardDefaultPageSize,
+		TotalPages:   1,
+		Rows: []rentDashboardRow{
+			{ObligationID: 71, TenantID: 7, TenantName: "有差额租客", Period: "2026-09", ExpectedCents: 100000, PaidCents: 40000, Status: "partial", StatusLabel: "部分缴纳"},
+			{ObligationID: 72, TenantID: 8, TenantName: "已缴清租客", Period: "2026-09", ExpectedCents: 100000, PaidCents: 100000, Status: "paid", StatusLabel: "已缴清"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := body.String()
+	if got := strings.Count(page, `>一键平账</button>`); got != 1 {
+		t.Fatalf("manual balance action count=%d want 1: %s", got, page)
+	}
+	for _, expected := range []string{
+		`action="/rent-dashboard/settle"`,
+		`name="obligation_id" value="71"`,
+		`name="period" value="2026-09"`,
+		`onkeydown="event.stopPropagation()"`,
+		`onsubmit="return confirm('确认一键平账吗？')"`,
+		`class="status-actions"`,
+	} {
+		if !strings.Contains(page, expected) {
+			t.Fatalf("dashboard is missing manual balance markup %q: %s", expected, page)
+		}
+	}
+	if strings.Contains(page, `name="obligation_id" value="72"`) {
+		t.Fatalf("paid obligation unexpectedly renders manual balance action: %s", page)
+	}
+}

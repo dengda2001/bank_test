@@ -35,7 +35,7 @@ func (s *transactionService) reconcileTransactions(ctx context.Context, userID u
 	}
 	var transactions []paymentTransaction
 	if err := s.db.WithContext(ctx).
-		Where("user_id = ? AND direction = ? AND match_status IN ?", userID, "income", pendingMatchStatuses).
+		Where("user_id = ? AND direction = ? AND match_status IN ? AND source <> ?", userID, "income", pendingMatchStatuses, manualBalanceTransactionSource).
 		Order("transaction_time ASC, id ASC").Find(&transactions).Error; err != nil {
 		return err
 	}

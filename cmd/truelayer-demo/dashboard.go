@@ -242,6 +242,9 @@ var rentDashboardTemplate = newWorkspacePageTemplate("rent-dashboard", template.
     .status.overdue, .status.needs_review { color: #991b1b; background: #fee2e2; }
     .status.partial { color: #92400e; background: #fef3c7; }
     .status.paid { color: #065f46; background: #d1fae5; }
+    .status-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: max-content; }
+    .manual-balance-form { margin: 0; }
+    .manual-balance-form .btn { min-height: 32px; padding: 0 10px; font-size: 12px; white-space: nowrap; }
     .metric-link { display: block; color: inherit; text-decoration: none; }
     .metric-link:hover { border-color: #93c5fd; }
     .metric-link:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 3px; }
@@ -325,6 +328,7 @@ var rentDashboardTemplate = newWorkspacePageTemplate("rent-dashboard", template.
          默认收起、审计量的是可见元素，所以「确认同日重发」一直没被量到：整块可点
          区域只有 20px 高。label 包着 checkbox，抬 label 就抬了整个可点区域。 */
       .dunning-actions label { display: inline-flex; align-items: center; min-height: 44px; }
+	  .manual-balance-form .btn { min-height: 44px; }
       /* 共享窄屏块把姓名链接抬到 44px 高，而它的唯一视觉提示是本页基础样式里的
          border-bottom——盒子一高，虚线就被推到文字下方约 22px，看着像一条孤立的
          分隔线，不像下划线（截图复核发现）。窄屏改用文字自身的下划线：虚线贴回
@@ -349,7 +353,11 @@ var rentDashboardTemplate = newWorkspacePageTemplate("rent-dashboard", template.
       </header>
 	  {{if eq .Error "invalid_period"}}<div class="notice error">选择的月份无效，请重新选择。</div>{{end}}
 	  {{if eq .Error "invalid_dashboard_filter"}}<div class="notice error">筛选条件无效，请重新选择。</div>{{end}}
+	  {{if eq .Error "invalid_manual_balance"}}<div class="notice error">平账请求无效，请返回列表后重试。</div>{{end}}
+	  {{if eq .Error "manual_balance_failed"}}<div class="notice error">一键平账未完成，请刷新页面后重试。</div>{{end}}
 	  {{if eq .Message "rent_confirmed"}}<div class="notice ok">租金已确认并计入对应月份。</div>{{end}}
+	  {{if eq .Message "manual_balance_saved"}}<div class="notice ok">已创建“手动平账”收入，并补齐该月租金差额。</div>{{end}}
+	  {{if eq .Message "manual_balance_not_needed"}}<div class="notice ok">该月租金已缴清，无需再平账。</div>{{end}}
 	  {{if .SyncCoverage}}{{if or (eq .SyncStatus "partial") (eq .SyncStatus "failed")}}<div class="notice error sync-status">最近一次银行同步异常：{{.SyncCoverage}}{{if .LastSuccessfulSyncCoverage}}<br>最近一次成功同步：{{.LastSuccessfulSyncCoverage}}{{end}}</div>{{else}}<div class="notice sync-status">银行流水状态：{{.SyncCoverage}}</div>{{end}}{{else}}<div class="notice sync-status">尚未完成银行同步，待处理金额可能不完整。</div>{{end}}
 	  <div class="dashboard-toolbar">
 	    <form class="period-picker" method="get" action="/rent-dashboard">
@@ -399,7 +407,7 @@ var rentDashboardTemplate = newWorkspacePageTemplate("rent-dashboard", template.
           <div class="table-wrap"><table>
             <thead><tr><th><a class="sort-link{{if .TenantSort.Active}} active{{end}}" href="{{.TenantSort.URL}}">租客{{if .TenantSort.Arrow}}<span class="sort-arrow">{{.TenantSort.Arrow}}</span>{{end}}</a></th><th>房间</th><th><a class="sort-link{{if .DueSort.Active}} active{{end}}" href="{{.DueSort.URL}}">应缴日{{if .DueSort.Arrow}}<span class="sort-arrow">{{.DueSort.Arrow}}</span>{{end}}</a></th><th><a class="sort-link{{if .AmountSort.Active}} active{{end}}" href="{{.AmountSort.URL}}">应收{{if .AmountSort.Arrow}}<span class="sort-arrow">{{.AmountSort.Arrow}}</span>{{end}}</a></th><th>已收</th><th>未收</th><th><a class="sort-link{{if .StatusSort.Active}} active{{end}}" href="{{.StatusSort.URL}}">状态{{if .StatusSort.Arrow}}<span class="sort-arrow">{{.StatusSort.Arrow}}</span>{{end}}</a></th></tr></thead>
             <tbody>{{range .Rows}}
-  	            <tr class="rent-row" tabindex="0" role="button" aria-expanded="false" aria-controls="rent-details-{{.ObligationID}}" data-details-target="rent-details-{{.ObligationID}}"><td><a class="tenant-link" href="/tenants/{{.TenantID}}?from_month={{.Period}}&amp;to_month={{.Period}}"><strong>{{.TenantName}}</strong></a>{{if .TenantAlias}}<br><span class="tiny">别名：{{.TenantAlias}}</span>{{end}}</td><td>{{if .RoomLabel}}{{.RoomLabel}}<br>{{end}}{{.RoomAddress}}</td><td class="mono">{{.DueDate}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span></td></tr>
+	            <tr class="rent-row" tabindex="0" role="button" aria-expanded="false" aria-controls="rent-details-{{.ObligationID}}" data-details-target="rent-details-{{.ObligationID}}"><td><a class="tenant-link" href="/tenants/{{.TenantID}}?from_month={{.Period}}&amp;to_month={{.Period}}"><strong>{{.TenantName}}</strong></a>{{if .TenantAlias}}<br><span class="tiny">别名：{{.TenantAlias}}</span>{{end}}</td><td>{{if .RoomLabel}}{{.RoomLabel}}<br>{{end}}{{.RoomAddress}}</td><td class="mono">{{.DueDate}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td><div class="status-actions"><span class="status {{.Status}}">{{.StatusLabel}}</span>{{if gt .ExpectedCents .PaidCents}}<form class="manual-balance-form" method="post" action="/rent-dashboard/settle" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()" onsubmit="return confirm('确认一键平账吗？')"><input type="hidden" name="obligation_id" value="{{.ObligationID}}"><input type="hidden" name="period" value="{{$.Period}}"><input type="hidden" name="search" value="{{$.SearchFilter}}"><input type="hidden" name="status" value="{{$.StatusFilter}}"><input type="hidden" name="sort" value="{{$.SortFilter}}"><input type="hidden" name="page" value="{{$.Page}}"><input type="hidden" name="page_size" value="{{$.PageSize}}"><button class="btn subtle" type="submit">一键平账</button></form>{{end}}</div></td></tr>
               <tr id="rent-details-{{.ObligationID}}" class="rent-details" hidden><td colspan="7"><div class="payment-list"><h3>收款明细 · <a class="tenant-link" href="/cash-receipts/new?tenant_id={{.TenantID}}&amp;period={{.Period}}">补录现金</a></h3>{{if .Payments}}{{range .Payments}}<div class="payment-item"><span class="amount">{{.AmountDisplay}}</span><span class="mono">{{.DateDisplay}}</span><span class="payment-description">{{.Description}}</span><span class="mono">{{if eq .Source "现金"}}现金 · {{end}}参考号：{{.Reference}}</span><span class="mono">{{.ConfirmationSource}}{{if eq .Source "现金"}} · <a class="void-link" href="/cash-receipts/void?receipt_id={{.PaymentID}}">作废</a>{{end}}</span></div>{{end}}{{else}}<div class="tiny">本月暂无已确认收款。</div>{{end}}</div></td></tr>
             {{end}}</tbody>
   	    </table></div>

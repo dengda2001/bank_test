@@ -149,127 +149,141 @@ func (s *transactionService) allocateTransaction(ctx context.Context, userID, tr
 	if userID == 0 || transactionID == 0 {
 		return transactionAllocationSummary{}, errors.New("userID and transactionID are required")
 	}
+	var summary transactionAllocationSummary
+	err := s.db.WithContext(ctx).Transaction(func(txdb *gorm.DB) error {
+		var allocationErr error
+		summary, allocationErr = s.allocateTransactionInTx(txdb, userID, transactionID, drafts, idempotencyKey, confirmationSource)
+		return allocationErr
+	})
+	return summary, err
+}
+
+// allocateTransactionInTx writes allocations and their ledger projections into
+// an existing transaction. Callers that create a new payment transaction as
+// part of the same business action use this to prevent an orphaned receipt.
+func (s *transactionService) allocateTransactionInTx(txdb *gorm.DB, userID, transactionID uint64, drafts []transactionAllocationDraft, idempotencyKey, confirmationSource string) (transactionAllocationSummary, error) {
+	if userID == 0 || transactionID == 0 {
+		return transactionAllocationSummary{}, errors.New("userID and transactionID are required")
+	}
 	if strings.TrimSpace(confirmationSource) == "" {
 		confirmationSource = "manual"
 	}
-	var summary transactionAllocationSummary
-	err := s.db.WithContext(ctx).Transaction(func(txdb *gorm.DB) error {
-		var source paymentTransaction
-		if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", transactionID, userID).First(&source).Error; err != nil {
-			return err
+	var source paymentTransaction
+	if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", transactionID, userID).First(&source).Error; err != nil {
+		return transactionAllocationSummary{}, err
+	}
+	var existing []paymentAllocation
+	if err := txdb.Where("payment_transaction_id = ? AND user_id = ?", transactionID, userID).Order("id ASC").Find(&existing).Error; err != nil {
+		return transactionAllocationSummary{}, err
+	}
+	if idempotencyKey != "" {
+		var previous paymentAllocation
+		firstKey := allocationRequestKey(idempotencyKey, transactionID, 0)
+		err := txdb.Where("user_id = ? AND idempotency_key = ?", userID, firstKey).First(&previous).Error
+		if err == nil {
+			return summarizeTransactionAllocations(source, existing), nil
 		}
-		var existing []paymentAllocation
-		if err := txdb.Where("payment_transaction_id = ? AND user_id = ?", transactionID, userID).Order("id ASC").Find(&existing).Error; err != nil {
-			return err
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return transactionAllocationSummary{}, err
 		}
-		if idempotencyKey != "" {
-			var previous paymentAllocation
-			firstKey := allocationRequestKey(idempotencyKey, transactionID, 0)
-			err := txdb.Where("user_id = ? AND idempotency_key = ?", userID, firstKey).First(&previous).Error
-			if err == nil {
-				summary = summarizeTransactionAllocations(source, existing)
-				return nil
-			}
-			if !errors.Is(err, gorm.ErrRecordNotFound) {
-				return err
-			}
-		}
-		if source.MatchStatus == "ignored" {
-			return errors.New("restore ignored transaction before allocating it")
-		}
+	}
+	if source.MatchStatus == "ignored" {
+		return transactionAllocationSummary{}, errors.New("restore ignored transaction before allocating it")
+	}
 
-		obligations := make(map[uint64]rentObligation)
-		now := time.Now().UTC()
-		for _, draft := range drafts {
-			if draft.Kind != allocationKindRent || draft.RentObligationID == 0 {
-				continue
-			}
-			if _, ok := obligations[draft.RentObligationID]; ok {
-				continue
-			}
-			var obligation rentObligation
-			if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", draft.RentObligationID, userID).First(&obligation).Error; err != nil {
-				return err
-			}
-			var obligationAllocations []paymentAllocation
-			if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligation.ID, userID).Find(&obligationAllocations).Error; err != nil {
-				return err
-			}
-			var cashReceipts []cashReceipt
-			if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligation.ID, userID).Find(&cashReceipts).Error; err != nil {
-				return err
-			}
-			obligations[obligation.ID] = projectRentObligation(obligation, obligationAllocations, cashReceipts, now)
+	obligations := make(map[uint64]rentObligation)
+	now := time.Now().UTC()
+	for _, draft := range drafts {
+		if draft.Kind != allocationKindRent || draft.RentObligationID == 0 {
+			continue
 		}
-		if err := validateTransactionAllocationDrafts(source, existing, drafts, obligations); err != nil {
-			return err
+		if _, ok := obligations[draft.RentObligationID]; ok {
+			continue
 		}
+		var obligation rentObligation
+		if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", draft.RentObligationID, userID).First(&obligation).Error; err != nil {
+			return transactionAllocationSummary{}, err
+		}
+		var obligationAllocations []paymentAllocation
+		if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligation.ID, userID).Find(&obligationAllocations).Error; err != nil {
+			return transactionAllocationSummary{}, err
+		}
+		var cashReceipts []cashReceipt
+		if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligation.ID, userID).Find(&cashReceipts).Error; err != nil {
+			return transactionAllocationSummary{}, err
+		}
+		obligations[obligation.ID] = projectRentObligation(obligation, obligationAllocations, cashReceipts, now)
+	}
+	if err := validateTransactionAllocationDrafts(source, existing, drafts, obligations); err != nil {
+		return transactionAllocationSummary{}, err
+	}
 
-		operationID := recordID("allocation", now)
-		for index, draft := range drafts {
-			var rentObligationID *uint64
-			if draft.Kind == allocationKindRent {
-				rentObligationID = &draft.RentObligationID
-			}
-			var tenantID *uint64
-			if draft.TenantID != 0 {
-				tenantID = &draft.TenantID
-			}
-			allocation := paymentAllocation{
-				UserID:               userID,
-				PaymentTransactionID: transactionID,
-				RentObligationID:     rentObligationID,
-				TenantID:             tenantID,
-				AmountCents:          draft.AmountCents,
-				AllocationKind:       draft.Kind,
-				Note:                 strings.TrimSpace(draft.Note),
-				Status:               allocationStatusConfirmed,
-				OperationID:          &operationID,
-				IdempotencyKey:       nullableString(allocationRequestKey(idempotencyKey, transactionID, index)),
-				ConfirmedByUserID:    userID,
-				ConfirmedAt:          now,
-				ConfirmationSource:   confirmationSource,
-			}
-			if err := txdb.Create(&allocation).Error; err != nil {
-				return err
-			}
-			existing = append(existing, allocation)
+	operationID := recordID("allocation", now)
+	for index, draft := range drafts {
+		var rentObligationID *uint64
+		if draft.Kind == allocationKindRent {
+			rentObligationID = &draft.RentObligationID
 		}
+		var tenantID *uint64
+		if draft.TenantID != 0 {
+			tenantID = &draft.TenantID
+		}
+		allocation := paymentAllocation{
+			UserID:               userID,
+			PaymentTransactionID: transactionID,
+			RentObligationID:     rentObligationID,
+			TenantID:             tenantID,
+			AmountCents:          draft.AmountCents,
+			AllocationKind:       draft.Kind,
+			Note:                 strings.TrimSpace(draft.Note),
+			Status:               allocationStatusConfirmed,
+			OperationID:          &operationID,
+			IdempotencyKey:       nullableString(allocationRequestKey(idempotencyKey, transactionID, index)),
+			ConfirmedByUserID:    userID,
+			ConfirmedAt:          now,
+			ConfirmationSource:   confirmationSource,
+		}
+		if err := txdb.Create(&allocation).Error; err != nil {
+			return transactionAllocationSummary{}, err
+		}
+		existing = append(existing, allocation)
+	}
 
-		for obligationID, obligation := range obligations {
-			var allocations []paymentAllocation
-			if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligationID, userID).Find(&allocations).Error; err != nil {
-				return err
-			}
-			var cashReceipts []cashReceipt
-			if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligationID, userID).Find(&cashReceipts).Error; err != nil {
-				return err
-			}
-			projected := projectRentObligation(obligation, allocations, cashReceipts, now)
-			if err := txdb.Model(&rentObligation{}).Where("id = ? AND user_id = ?", obligationID, userID).Updates(map[string]any{
-				"paid_amount_cents": projected.PaidAmountCents,
-				"status":            projected.Status,
-			}).Error; err != nil {
-				return err
-			}
+	for obligationID, obligation := range obligations {
+		var allocations []paymentAllocation
+		if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligationID, userID).Find(&allocations).Error; err != nil {
+			return transactionAllocationSummary{}, err
 		}
+		var cashReceipts []cashReceipt
+		if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligationID, userID).Find(&cashReceipts).Error; err != nil {
+			return transactionAllocationSummary{}, err
+		}
+		projected := projectRentObligation(obligation, allocations, cashReceipts, now)
+		if err := txdb.Model(&rentObligation{}).Where("id = ? AND user_id = ?", obligationID, userID).Updates(map[string]any{
+			"paid_amount_cents": projected.PaidAmountCents,
+			"status":            projected.Status,
+		}).Error; err != nil {
+			return transactionAllocationSummary{}, err
+		}
+	}
 
-		summary = summarizeTransactionAllocations(source, existing)
-		var matchedTenantID uint64
-		for _, allocation := range existing {
-			if !ledgerAllocationIsEffective(allocation) || allocation.TenantID == nil || *allocation.TenantID == 0 {
-				continue
-			}
-			matchedTenantID = *allocation.TenantID
-			break
+	summary := summarizeTransactionAllocations(source, existing)
+	var matchedTenantID uint64
+	for _, allocation := range existing {
+		if !ledgerAllocationIsEffective(allocation) || allocation.TenantID == nil || *allocation.TenantID == 0 {
+			continue
 		}
-		projection := projectTransactionMatch(source, existing, "", "")
-		if matchedTenantID != 0 && projection.MatchedTenantID == nil {
-			projection.MatchedTenantID = &matchedTenantID
-		}
-		return updateTransactionProjection(txdb, userID, transactionID, projection)
-	})
-	return summary, err
+		matchedTenantID = *allocation.TenantID
+		break
+	}
+	projection := projectTransactionMatch(source, existing, "", "")
+	if matchedTenantID != 0 && projection.MatchedTenantID == nil {
+		projection.MatchedTenantID = &matchedTenantID
+	}
+	if err := updateTransactionProjection(txdb, userID, transactionID, projection); err != nil {
+		return transactionAllocationSummary{}, err
+	}
+	return summary, nil
 }
 
 func allocationRequestKey(requestKey string, transactionID uint64, index int) string {

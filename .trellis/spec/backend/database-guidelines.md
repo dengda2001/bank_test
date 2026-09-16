@@ -772,6 +772,85 @@ if err := validateLedgerAllocation(check); err != nil {
 projected := projectLedgerObligation(obligation, allocations, now)
 ```
 
+## Scenario: Dashboard Manual Balance Income
+
+### 1. Scope / Trigger
+
+- Trigger: A landlord settles the remaining balance of one Dashboard rent
+  obligation without importing a bank transaction.
+- Applies to `POST /rent-dashboard/settle`,
+  `transactionService.settleRentObligation`, `payment_transactions`, and the
+  confirmed rent allocation/projection path.
+
+### 2. Signatures
+
+- `POST /rent-dashboard/settle` accepts an `obligation_id` transport field plus
+  Dashboard return filters; it never accepts an amount, tenant, or currency.
+- `transactionService.settleRentObligation(ctx, userID, obligationID)` creates
+  the manual transaction and allocation within one database transaction.
+- `manualBalanceTransactionSource = "manual_balance"` identifies these
+  synthetic records; their visible description is `手动平账`.
+
+### 3. Contracts
+
+- Lock the user-scoped obligation first, recompute its paid amount from
+  effective allocations and confirmed cash receipts, and use only that fresh
+  remaining amount for the income transaction.
+- The created transaction must be income, EUR, use the selected obligation
+  month as `parsed_period_month`, and be allocated as confirmed `rent` to the
+  same tenant and obligation before the transaction commits.
+- The source transaction, allocation, and obligation projection are atomic. A
+  concurrent retry waits for the obligation lock, sees no remaining balance,
+  and creates no new record.
+- `manual_balance` is excluded from background reconciliation. If a user
+  revokes its allocation through the audit path, it must remain revoked rather
+  than being automatically reallocated.
+
+### 4. Validation & Error Matrix
+
+- Missing, invalid, cross-user, or voided obligation -> no new transaction;
+  the Dashboard returns a generic safe error state.
+- Already-paid obligation or a stale/double-click request -> no new
+  transaction and an informational “no balance remains” Dashboard state.
+- Non-EUR currency, corrupt overpaid projection, or allocation validation
+  failure -> roll back the entire operation.
+- A browser POST must be protected by the normal authenticated session and
+  must not trust hidden return fields for financial facts.
+
+### 5. Good/Base/Bad Cases
+
+- Good: a €1,000 bill with €400 confirmed creates one €600 `手动平账` income
+  transaction and one €600 rent allocation, then projects the bill as paid.
+- Base: no remaining balance produces no manual transaction.
+- Bad: post a client-computed amount, write a transaction before allocation in
+  another transaction, or let reconciliation recreate a revoked manual entry.
+
+### 6. Tests Required
+
+- Template test: the action is shown only when a Dashboard row has a positive
+  balance and has a native confirmation prompt.
+- Database test: assert exact remaining cents, transaction source/description,
+  allocation target, paid projection, cross-user isolation, repeat/concurrent
+  request behavior, and no reallocation after a revoke.
+- Handler test: only authenticated POSTs reach the service and return filters
+  are preserved on redirect.
+
+### 7. Wrong vs Correct
+
+Wrong:
+
+```go
+amountCents := moneyToCents(parsePostedAmount(r.Form.Get("amount")))
+db.Create(&paymentTransaction{AmountCents: amountCents})
+```
+
+Correct:
+
+```go
+// The locked server-side projection is the only source of the amount.
+created, err := service.settleRentObligation(ctx, userID, obligationID)
+```
+
 ## Scenario: Bank Receipt Allocation, Correction, and Coverage
 
 ### 1. Scope / Trigger
