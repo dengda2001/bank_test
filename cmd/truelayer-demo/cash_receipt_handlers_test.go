@@ -97,10 +97,13 @@ func TestCashReceiptVoidTemplateShowsReasonAndOriginalReceipt(t *testing.T) {
 		t.Fatal(err)
 	}
 	page := body.String()
-	for _, expected := range []string{"作废现金收款", "Aoife Murphy", "cash-9", "hand delivered", "void_reason", "原始收据与作废原因会保留"} {
+	for _, expected := range []string{"撤销现金收款", "Aoife Murphy", "cash-9", "hand delivered", "void_reason", "原始收据与撤销原因会保留"} {
 		if !strings.Contains(page, expected) {
 			t.Fatalf("cash void page missing %q: %s", expected, page)
 		}
+	}
+	if strings.Contains(page, "作废") {
+		t.Fatalf("cash void page still says 作废: %s", page)
 	}
 }
 
