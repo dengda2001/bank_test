@@ -54,7 +54,15 @@ var billingTemplate = template.Must(template.New("billing").Parse(`<!doctype htm
     .allocation-details { margin-top: 8px; }
     .allocation-details summary { color: var(--accent); cursor: pointer; font-size: 12px; }
     .transaction-table tr.expense .allocation-details { display: none; }
-    .pagination { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 12px; }
+    th .sort-link { display: inline-flex; align-items: center; gap: 6px; color: inherit; font: inherit; letter-spacing: inherit; text-decoration: none; white-space: nowrap; }
+    th .sort-link:hover { color: var(--accent); }
+    th .sort-link.active { color: var(--accent); font-weight: 800; }
+    th .sort-link .sort-arrow { font-size: 10px; line-height: 1; }
+    /* The page size sits with the pager rather than in the filter grid. */
+    .pagination { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+    .pagination .page-size-field { display: flex; align-items: center; gap: 8px; margin: 0; }
+    .pagination .page-size-field select { min-height: 36px; }
+    .pagination .pagination-nav { display: flex; align-items: center; gap: 10px; margin-left: auto; }
     .pagination a { color: var(--accent); text-decoration: none; }
     @media (max-width: 820px) { .filterbar { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 480px) { .filterbar { grid-template-columns: 1fr; } }
@@ -103,25 +111,23 @@ var billingTemplate = template.Must(template.New("billing").Parse(`<!doctype htm
       {{if eq .Message "legacy_imported"}}<div class="notice ok">旧版 JSON 和 JSONL 数据已导入。</div>{{end}}
       {{if eq .Error "legacy_import_failed"}}<div class="notice error">旧数据导入失败，请检查源文件。</div>{{end}}
       <form class="filterbar" method="get" action="/billing" aria-label="Transaction filters">
-        <label for="arrival_from">到账起<input id="arrival_from" name="arrival_from" type="date" value="{{.ArrivalFromFilter}}"></label>
-        <label for="arrival_to">到账止<input id="arrival_to" name="arrival_to" type="date" value="{{.ArrivalToFilter}}"></label>
         <label for="payer">付款人<input id="payer" name="payer" type="search" value="{{.PayerFilter}}" placeholder="姓名或付款人 ID"></label>
         <label for="tenant_id">租客<select id="tenant_id" name="tenant_id"><option value="">全部租客</option>{{range .TenantOptions}}<option value="{{.ID}}" {{if eq $.TenantFilter .ID}}selected{{end}}>{{.Name}}</option>{{end}}</select></label>
         <label for="period">到账月<input id="period" name="period" type="month" value="{{.PeriodFilter}}" onchange="this.form.submit()"></label>
         <label for="rent_period">租金所属月<input id="rent_period" name="rent_period" type="month" value="{{.RentPeriodFilter}}"></label>
         <label for="allocation">入账用途<select id="allocation" name="allocation"><option value="">全部用途</option><option value="rent" {{if eq .AllocationFilter "rent"}}selected{{end}}>房租</option><option value="deposit" {{if eq .AllocationFilter "deposit"}}selected{{end}}>押金</option><option value="other_income" {{if eq .AllocationFilter "other_income"}}selected{{end}}>其他收入</option></select></label>
         <label for="direction">收支<select id="direction" name="direction"><option value="">全部</option><option value="income" {{if eq .DirectionFilter "income"}}selected{{end}}>收入</option><option value="expense" {{if eq .DirectionFilter "expense"}}selected{{end}}>支出</option></select></label>
-        <label for="match_status">匹配状态<select id="match_status" name="match_status"><option value="">全部状态</option><option value="matched" {{if eq .MatchStatusFilter "matched"}}selected{{end}}>已关联</option><option value="partial" {{if eq .MatchStatusFilter "partial"}}selected{{end}}>部分关联</option><option value="candidate" {{if eq .MatchStatusFilter "candidate"}}selected{{end}}>待确认</option><option value="unmatched" {{if eq .MatchStatusFilter "unmatched"}}selected{{end}}>未关联</option><option value="needs_review" {{if eq .MatchStatusFilter "needs_review"}}selected{{end}}>需处理</option><option value="ignored" {{if eq .MatchStatusFilter "ignored"}}selected{{end}}>已忽略</option></select></label>
-        <label for="sort">排序<select id="sort" name="sort"><option value="arrival_desc" {{if or (eq .SortFilter "") (eq .SortFilter "arrival_desc")}}selected{{end}}>到账日期新到旧</option><option value="arrival_asc" {{if eq .SortFilter "arrival_asc"}}selected{{end}}>到账日期旧到新</option><option value="amount_desc" {{if eq .SortFilter "amount_desc"}}selected{{end}}>金额从高到低</option><option value="amount_asc" {{if eq .SortFilter "amount_asc"}}selected{{end}}>金额从低到高</option><option value="payer_asc" {{if eq .SortFilter "payer_asc"}}selected{{end}}>付款人 A-Z</option></select></label>
-        <label for="pending">待处理<input id="pending" name="pending" type="checkbox" value="1" {{if .PendingFilter}}checked{{end}}></label>
-        <label for="page_size">每页<select id="page_size" name="page_size"><option value="25" {{if eq .PageSize 25}}selected{{end}}>25</option><option value="50" {{if eq .PageSize 50}}selected{{end}}>50</option><option value="100" {{if eq .PageSize 100}}selected{{end}}>100</option></select></label>
+        <label for="match_status">匹配状态<select id="match_status" name="match_status"><option value="">全部状态</option><option value="pending" {{if eq .MatchStatusSelection "pending"}}selected{{end}}>待处理（需关联或确认）</option><option value="matched" {{if eq .MatchStatusSelection "matched"}}selected{{end}}>已关联</option><option value="partial" {{if eq .MatchStatusSelection "partial"}}selected{{end}}>部分关联</option><option value="candidate" {{if eq .MatchStatusSelection "candidate"}}selected{{end}}>待确认</option><option value="unmatched" {{if eq .MatchStatusSelection "unmatched"}}selected{{end}}>未关联</option><option value="needs_review" {{if eq .MatchStatusSelection "needs_review"}}selected{{end}}>需处理</option><option value="ignored" {{if eq .MatchStatusSelection "ignored"}}selected{{end}}>已忽略</option></select></label>
+        {{if .ArrivalFromFilter}}<input type="hidden" name="arrival_from" value="{{.ArrivalFromFilter}}">{{end}}
+        {{if .ArrivalToFilter}}<input type="hidden" name="arrival_to" value="{{.ArrivalToFilter}}">{{end}}
+        {{if .SortFilter}}<input type="hidden" name="sort" value="{{.SortFilter}}">{{end}}
         <div class="filter-actions"><button class="btn" type="submit">应用筛选</button><a class="btn subtle" href="/billing">清除筛选</a></div>
       </form>
       <section class="panel surface" aria-labelledby="statement-title">
         <div class="panel-head"><h2 id="statement-title">流水明细</h2><span class="tiny">{{.LastSync}}</span></div>
         {{if .TransactionRows}}
         <div class="table-wrap"><table class="transaction-table">
-          <thead><tr><th>类型</th><th>付款人／流水号</th><th>金额／余额</th><th>到账／租金月</th><th>描述／参考号</th><th>账户</th><th>用途／处理</th></tr></thead>
+          <thead><tr><th>类型</th><th><a class="sort-link{{if .PayerSort.Active}} active{{end}}" href="{{.PayerSort.URL}}">付款人／流水号{{if .PayerSort.Arrow}}<span class="sort-arrow">{{.PayerSort.Arrow}}</span>{{end}}</a></th><th><a class="sort-link{{if .AmountSort.Active}} active{{end}}" href="{{.AmountSort.URL}}">金额／余额{{if .AmountSort.Arrow}}<span class="sort-arrow">{{.AmountSort.Arrow}}</span>{{end}}</a></th><th><a class="sort-link{{if .ArrivalSort.Active}} active{{end}}" href="{{.ArrivalSort.URL}}">到账／租金月{{if .ArrivalSort.Arrow}}<span class="sort-arrow">{{.ArrivalSort.Arrow}}</span>{{end}}</a></th><th>描述／参考号</th><th>账户</th><th>用途／处理</th></tr></thead>
           <tbody>{{range .TransactionRows}}
             <tr class="{{.Direction}}">
               <td><span class="direction {{.Direction}}">{{.DirectionLabel}}</span></td>
@@ -135,7 +141,22 @@ var billingTemplate = template.Must(template.New("billing").Parse(`<!doctype htm
           {{end}}</tbody>
         </table></div>
         {{else}}<div class="empty">没有符合当前筛选条件的流水。</div>{{end}}
-        {{if gt .TotalTransactions 0}}<div class="pagination"><span class="tiny">第 {{.Page}} / {{.TotalPages}} 页，共 {{.TotalTransactions}} 笔</span>{{if .PreviousPageURL}}<a href="{{.PreviousPageURL}}">上一页</a>{{end}}{{if .NextPageURL}}<a href="{{.NextPageURL}}">下一页</a>{{end}}</div>{{end}}
+        {{if gt .TotalTransactions 0}}<div class="pagination">
+          <form class="page-size-field" method="get" action="/billing">
+            {{if .ArrivalFromFilter}}<input type="hidden" name="arrival_from" value="{{.ArrivalFromFilter}}">{{end}}
+            {{if .ArrivalToFilter}}<input type="hidden" name="arrival_to" value="{{.ArrivalToFilter}}">{{end}}
+            {{if .PayerFilter}}<input type="hidden" name="payer" value="{{.PayerFilter}}">{{end}}
+            {{if .TenantFilter}}<input type="hidden" name="tenant_id" value="{{.TenantFilter}}">{{end}}
+            {{if .PeriodFilter}}<input type="hidden" name="period" value="{{.PeriodFilter}}">{{end}}
+            {{if .RentPeriodFilter}}<input type="hidden" name="rent_period" value="{{.RentPeriodFilter}}">{{end}}
+            {{if .AllocationFilter}}<input type="hidden" name="allocation" value="{{.AllocationFilter}}">{{end}}
+            {{if .DirectionFilter}}<input type="hidden" name="direction" value="{{.DirectionFilter}}">{{end}}
+            {{if .MatchStatusSelection}}<input type="hidden" name="match_status" value="{{.MatchStatusSelection}}">{{end}}
+            {{if .SortFilter}}<input type="hidden" name="sort" value="{{.SortFilter}}">{{end}}
+            <label for="page_size">每页<select id="page_size" name="page_size" onchange="this.form.submit()"><option value="25" {{if eq .PageSize 25}}selected{{end}}>25</option><option value="50" {{if eq .PageSize 50}}selected{{end}}>50</option><option value="100" {{if eq .PageSize 100}}selected{{end}}>100</option></select></label>
+          </form>
+          <div class="pagination-nav"><span class="tiny">第 {{.Page}} / {{.TotalPages}} 页，共 {{.TotalTransactions}} 笔</span>{{if .PreviousPageURL}}<a href="{{.PreviousPageURL}}">上一页</a>{{end}}{{if .NextPageURL}}<a href="{{.NextPageURL}}">下一页</a>{{end}}</div>
+        </div>{{end}}
       </section>
     </main>
   </div>

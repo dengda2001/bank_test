@@ -11,6 +11,10 @@ import (
 const (
 	dashboardDefaultPageSize = 12
 	dashboardMaxPageSize     = 50
+	// dashboardDefaultSort is what the list falls back to when no column heading
+	// has been clicked: outstanding bills first. The sort is chosen by clicking a
+	// table heading, so this value never appears as a form control.
+	dashboardDefaultSort = "status"
 )
 
 type rentDashboardFilters struct {
@@ -22,7 +26,7 @@ type rentDashboardFilters struct {
 }
 
 func defaultRentDashboardFilters() rentDashboardFilters {
-	return rentDashboardFilters{Status: "all", Sort: "status", Page: 1, PageSize: dashboardDefaultPageSize}
+	return rentDashboardFilters{Status: "all", Sort: dashboardDefaultSort, Page: 1, PageSize: dashboardDefaultPageSize}
 }
 
 func rentDashboardFiltersFromQuery(q url.Values) (rentDashboardFilters, error) {
@@ -64,7 +68,7 @@ func validateRentDashboardFilters(filters rentDashboardFilters) error {
 		return errors.New("dashboard status is invalid")
 	}
 	switch filters.Sort {
-	case "status", "tenant_asc", "amount_desc", "amount_asc", "due_asc", "due_desc":
+	case dashboardDefaultSort, "tenant_asc", "tenant_desc", "amount_desc", "amount_asc", "due_asc", "due_desc":
 	default:
 		return errors.New("dashboard sort is invalid")
 	}
@@ -113,6 +117,10 @@ func filterAndSortRentDashboardRows(rows []rentDashboardRow, filters rentDashboa
 		case "tenant_asc":
 			if strings.ToLower(left.TenantName) != strings.ToLower(right.TenantName) {
 				return strings.ToLower(left.TenantName) < strings.ToLower(right.TenantName)
+			}
+		case "tenant_desc":
+			if strings.ToLower(left.TenantName) != strings.ToLower(right.TenantName) {
+				return strings.ToLower(left.TenantName) > strings.ToLower(right.TenantName)
 			}
 		case "amount_desc":
 			if left.ExpectedCents != right.ExpectedCents {
@@ -167,7 +175,7 @@ func rentDashboardURL(period, search, status, sortValue string, page, pageSize i
 	if status != "" && status != "all" {
 		values.Set("status", status)
 	}
-	if sortValue != "" && sortValue != "status" {
+	if sortValue != "" && sortValue != dashboardDefaultSort {
 		values.Set("sort", sortValue)
 	}
 	if page > 1 {

@@ -145,18 +145,23 @@ type billingPageData struct {
 	RentPeriodFilter  string
 	AllocationFilter  string
 	SortFilter        string
-	Page              int
-	PageSize          int
-	TotalTransactions int64
-	TotalPages        int
-	PreviousPageURL   string
-	NextPageURL       string
-	PendingFilter     bool
-	PendingCount      int
-	IncomeCount       int
-	TenantCount       int
-	ExpenseCount      int
-	TokenFile         string
+	ArrivalSort       tableSortLink
+	PayerSort         tableSortLink
+	AmountSort        tableSortLink
+	// MatchStatusSelection is what the 匹配状态 dropdown shows; it can be the
+	// synthetic "pending" option even though MatchStatusFilter itself is empty.
+	MatchStatusSelection string
+	Page                 int
+	PageSize             int
+	TotalTransactions    int64
+	TotalPages           int
+	PreviousPageURL      string
+	NextPageURL          string
+	PendingCount         int
+	IncomeCount          int
+	TenantCount          int
+	ExpenseCount         int
+	TokenFile            string
 }
 
 type billingTenantOption struct {
@@ -257,6 +262,10 @@ type rentDashboardPageData struct {
 	SearchFilter               string
 	StatusFilter               string
 	SortFilter                 string
+	TenantSort                 tableSortLink
+	DueSort                    tableSortLink
+	AmountSort                 tableSortLink
+	StatusSort                 tableSortLink
 	Page                       int
 	PageSize                   int
 	FilteredCount              int
@@ -719,6 +728,13 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 	if userID, ok := a.currentUserID(r); ok && a.bankConnections != nil {
 		connected, _ = a.bankConnections.hasRefreshToken(r.Context(), userID)
 	}
+	// Sorting moved onto the table headings; the 排序 dropdown is gone. An empty
+	// sort is the newest-first default, so that is the heading shown as active.
+	activeSort := filters.Sort
+	if activeSort == "" {
+		activeSort = "arrival_desc"
+	}
+	sortURL := func(sortValue string) string { return billingSortURL(r.URL.Query(), sortValue) }
 	data := billingPageData{
 		Username:          a.displayUsername(r),
 		Environment:       a.cfg.Environment,
@@ -740,18 +756,22 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 		RentPeriodFilter:  filters.RentPeriod,
 		AllocationFilter:  filters.AllocationKind,
 		SortFilter:        filters.Sort,
-		Page:              page,
-		PageSize:          pageSize,
-		TotalTransactions: totalTransactions,
-		TotalPages:        totalPages,
-		PreviousPageURL:   previousPageURL,
-		NextPageURL:       nextPageURL,
-		PendingFilter:     filters.PendingOnly,
-		PendingCount:      pendingCount,
-		IncomeCount:       int(totalTransactions),
-		TokenFile:         a.cfg.TokenFile,
-		TenantCount:       tenantCount,
-		ExpenseCount:      expenseCount,
+		ArrivalSort:       sortLinkFor(sortURL, activeSort, "arrival_desc", "arrival_asc"),
+		PayerSort:         sortLinkFor(sortURL, activeSort, "payer_asc", "payer_desc"),
+		AmountSort:        sortLinkFor(sortURL, activeSort, "amount_desc", "amount_asc"),
+
+		MatchStatusSelection: matchStatusSelection(filters),
+		Page:                 page,
+		PageSize:             pageSize,
+		TotalTransactions:    totalTransactions,
+		TotalPages:           totalPages,
+		PreviousPageURL:      previousPageURL,
+		NextPageURL:          nextPageURL,
+		PendingCount:         pendingCount,
+		IncomeCount:          int(totalTransactions),
+		TokenFile:            a.cfg.TokenFile,
+		TenantCount:          tenantCount,
+		ExpenseCount:         expenseCount,
 	}
 	if data.LastSync == "" {
 		data.LastSync = "尚未同步"
@@ -768,6 +788,23 @@ func billingPageURL(query url.Values, page int) string {
 		values[key] = append([]string(nil), items...)
 	}
 	values.Set("page", strconv.Itoa(page))
+	return "/billing?" + values.Encode()
+}
+
+// billingSortURL rebuilds the current filter set with a different column sort.
+// It drops page: the rows the reader was on do not survive a re-sort, so a
+// heading click always lands on the first page.
+func billingSortURL(query url.Values, sortValue string) string {
+	values := url.Values{}
+	for key, items := range query {
+		values[key] = append([]string(nil), items...)
+	}
+	values.Del("page")
+	if sortValue == "" {
+		values.Del("sort")
+	} else {
+		values.Set("sort", sortValue)
+	}
 	return "/billing?" + values.Encode()
 }
 

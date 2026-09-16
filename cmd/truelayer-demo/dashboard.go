@@ -55,6 +55,18 @@ func (a *app) renderRentDashboard(w http.ResponseWriter, r *http.Request, action
 		}
 	}
 
+	// Sorting is driven by the list headings rather than a dropdown, so each
+	// heading carries the link that applies its own sort. Columns with a single
+	// meaningful order (房间, 已收, 未收) stay plain text.
+	sortURL := func(sortValue string) string {
+		return rentDashboardURL(data.Period, data.SearchFilter, data.StatusFilter, sortValue, 1, data.PageSize)
+	}
+	activeSort := normalisedSort(data.SortFilter, dashboardDefaultSort)
+	data.TenantSort = sortLinkFor(sortURL, activeSort, "tenant_asc", "tenant_desc")
+	data.DueSort = sortLinkFor(sortURL, activeSort, "due_asc", "due_desc")
+	data.AmountSort = sortLinkFor(sortURL, activeSort, "amount_desc", "amount_asc")
+	data.StatusSort = sortLinkFor(sortURL, activeSort, dashboardDefaultSort, "")
+
 	if userID, ok := a.currentUserID(r); ok && a.db != nil {
 		service := newTransactionService(a.db)
 		if err := service.reconcileTransactions(r.Context(), userID); err != nil {
@@ -163,29 +175,61 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Funcs(t
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RentOps Dashboard</title>
   <style>` + workspacePageCSS + workspaceCalendarCSS + `
+	    /* ---- 顶部工具条：只保留月份选择 ---- */
+	    .dashboard-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-bottom: 20px; }
+	    .dashboard-toolbar .period-picker { display: flex; align-items: center; gap: 10px; margin: 0; }
+	    .dashboard-toolbar .period-label { margin: 0; }
+	    .dashboard-toolbar .period-field { display: block; flex: 0 0 auto; width: 200px; margin: 0; }
+	    .dashboard-toolbar input[type="month"] { min-height: 42px; border-radius: 8px; padding: 9px 12px; background: var(--surface-muted); }
+	    .dashboard-toolbar input[type="month"]:hover { border-color: var(--border-strong); background: var(--surface); }
+	    .dashboard-toolbar input[type="month"]:focus { border-color: var(--accent); background: var(--surface); }
+	    .month-nav { width: 42px; height: 42px; border: 1px solid var(--border); border-radius: 8px; display: grid; place-items: center; color: var(--foreground); background: var(--surface); text-decoration: none; font-size: 28px; line-height: 1; }
+	    .month-nav:hover { background: var(--surface-muted); }
+	    /* The month picker now sits against the right edge of the workspace, so the
+	       calendar popover has to unfold leftwards or body{overflow-x:hidden} clips
+	       it. Narrow viewports keep the calendar's own fixed bottom sheet. */
+	    @media (min-width: 641px) {
+	      .dashboard-toolbar .calendar-popover { left: auto; right: 0; transform-origin: top right; }
+	    }
+
+	    /* ---- 区块一：收租汇总 ---- */
+	    .dashboard-section { margin-bottom: 22px; }
+	    .section-head { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 12px; }
+	    .section-head h2 { margin: 0; }
+	    .section-head .tiny { margin-top: 4px; }
+	    .section-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-left: auto; }
 	    .dashboard-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-	    .dashboard-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
-	    .dashboard-toolbar form { display: flex; align-items: end; gap: 10px; }
-	    .dashboard-toolbar label { margin: 0; min-width: 150px; }
-	    .dashboard-filter { flex-wrap: wrap; justify-content: flex-end; }
-	    .dashboard-filter label { min-width: 140px; }
-	    .dashboard-filter .filter-actions { display: flex; gap: 8px; }
-	    .dashboard-filter input, .dashboard-filter select { min-height: 42px; border-radius: 8px; padding: 9px 12px; background: var(--surface-muted); }
-	    .dashboard-filter input:focus, .dashboard-filter select:focus { border-color: var(--accent); background: var(--surface); }
-	    .dashboard-counts { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: -6px 0 18px; color: var(--foreground-subtle); }
-	    .dashboard-counts a { color: inherit; text-decoration: none; border-bottom: 1px dashed var(--border-strong); }
-	    .dashboard-counts a:hover { color: var(--accent-bright); }
-	    .dashboard-secondary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0 0 18px; }
+	    .dashboard-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; padding: 12px 16px; }
+	    .count-chip { display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px; color: var(--foreground-subtle); background: var(--surface-muted); font-size: 12px; font-weight: 700; text-decoration: none; white-space: nowrap; }
+	    .count-chip.overdue, .count-chip.review { border-color: #fecaca; color: #991b1b; background: #fef2f2; }
+	    .count-chip.partial { border-color: #fde68a; color: #92400e; background: #fef3c7; }
+	    .count-chip.shown { margin-left: auto; color: var(--foreground-muted); background: var(--surface); }
+	    a.count-chip:hover { border-color: #93c5fd; color: var(--accent-bright); background: var(--surface-accent); }
+	    .dashboard-secondary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
 	    .dashboard-secondary .metric { min-height: 118px; }
 	    .sync-status { margin-bottom: 18px; }
-	    .dashboard-pagination { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; }
+	    .collection-panel { padding: 18px; margin-top: 12px; }
+
+	    /* ---- 区块二：租客账单列表 ---- */
+	    .list-filter { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); background: var(--surface-muted); }
+	    .list-filter label { margin: 0; }
+	    .list-filter .search-field { flex: 1 1 240px; min-width: 220px; }
+	    .list-filter .select-field { flex: 0 0 auto; width: 180px; }
+	    .list-filter input, .list-filter select { min-height: 40px; background: var(--surface); }
+	    .list-filter .filter-actions { display: flex; gap: 8px; margin-left: auto; }
+
+	    /* Sorting is now done through the headings, so they have to read as controls. */
+	    th .sort-link { display: inline-flex; align-items: center; gap: 6px; color: inherit; font: inherit; letter-spacing: inherit; text-decoration: none; white-space: nowrap; }
+	    th .sort-link:hover { color: var(--accent-bright); }
+	    th .sort-link.active { color: var(--accent-bright); font-weight: 800; }
+	    th .sort-link .sort-arrow { font-size: 10px; line-height: 1; }
+
+	    /* The page size belongs with the pager, not with the filters. */
+	    .dashboard-pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 16px 20px 20px; }
+	    .dashboard-pagination .page-size-field { display: flex; align-items: center; gap: 8px; margin: 0; }
+	    .dashboard-pagination .page-size-field select { min-height: 40px; background: var(--surface); }
+	    .dashboard-pagination .pagination-nav { display: flex; align-items: center; gap: 12px; margin-left: auto; }
 	    .dashboard-pagination .disabled { opacity: .42; pointer-events: none; }
-    .dashboard-toolbar input[type="month"] { min-height: 42px; border-radius: 8px; padding: 9px 12px; background: var(--surface-muted); }
-    .dashboard-toolbar input[type="month"]:hover { border-color: var(--border-strong); background: var(--surface); }
-    .dashboard-toolbar input[type="month"]:focus { border-color: var(--accent); background: var(--surface); }
-    .month-nav { width: 42px; height: 42px; border: 1px solid var(--border); border-radius: 8px; display: grid; place-items: center; color: var(--foreground); background: var(--surface); text-decoration: none; font-size: 28px; line-height: 1; }
-    .month-nav:hover { background: var(--surface-muted); }
-    .collection-panel { padding: 18px; margin: 0 0 18px; }
     .collection-head { display: flex; justify-content: space-between; align-items: center; }
     .collection-head span { color: var(--positive); font: 700 18px var(--mono); }
     .progress-track { height: 10px; margin: 12px 0 8px; border-radius: 999px; overflow: hidden; background: #e5e7eb; }
@@ -193,8 +237,6 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Funcs(t
     .status.open, .status.overdue, .status.partial, .status.paid, .status.needs_review { border-radius: 999px; padding: 5px 9px; display: inline-block; font-size: 12px; }
     .status.open { color: #1e40af; background: #dbeafe; }
     .status.overdue, .status.needs_review { color: #991b1b; background: #fee2e2; }
-    .review-link { color: #991b1b; text-decoration: none; border-bottom: 1px dashed currentColor; }
-    .review-link:hover { color: var(--danger); }
     .status.partial { color: #92400e; background: #fef3c7; }
     .status.paid { color: #065f46; background: #d1fae5; }
     .metric-link { display: block; color: inherit; text-decoration: none; }
@@ -244,18 +286,22 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Funcs(t
 	    @media (max-width: 760px) { .dunning-grid { grid-template-columns: 1fr; } .dunning-config { padding-right: 0; padding-bottom: 16px; border-right: 0; border-bottom: 1px solid var(--border); } .dunning-result-row { align-items: flex-start; } .dunning-retry { width: 100%; margin-left: 0; } }
 	    @media (max-width: 760px) { .payment-item { grid-template-columns: 1fr 1fr; } .payment-item .payment-description { grid-column: 1 / -1; } }
     @media (max-width: 900px) { .dashboard-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-	    @media (max-width: 640px) {
+    @media (max-width: 640px) {
       .dashboard-summary, .dashboard-secondary { grid-template-columns: 1fr; }
-      .dashboard-toolbar { align-items: stretch; flex-direction: column; min-width: 0; }
-      .dashboard-toolbar form.dashboard-filter { display: grid; width: 100%; max-width: 100%; min-width: 0; grid-template-columns: 42px minmax(0, 1fr) 42px; align-items: end; gap: 8px; }
-      .dashboard-toolbar .dashboard-filter label { width: auto; min-width: 0; flex: none; }
-      .dashboard-toolbar .dashboard-filter .period-filter { grid-column: 2; }
-      .dashboard-filter .previous { grid-column: 1; grid-row: 1; }
-      .dashboard-filter .next { grid-column: 3; grid-row: 1; }
-      .dashboard-toolbar .dashboard-filter label:not(.period-filter) { grid-column: 1 / -1; }
-      .dashboard-toolbar form.dashboard-filter input, .dashboard-toolbar form.dashboard-filter select { min-width: 0; width: 100%; }
-	      .dashboard-toolbar .dashboard-filter .filter-actions { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-	      .dashboard-toolbar .dashboard-filter .filter-actions .btn { width: 100%; min-width: 0; }
+      .dashboard-toolbar { justify-content: stretch; }
+      .dashboard-toolbar .period-picker { display: grid; width: 100%; grid-template-columns: 42px minmax(0, 1fr) 42px; align-items: center; gap: 8px; }
+      .dashboard-toolbar .period-label { display: none; }
+      .dashboard-toolbar .period-field { width: auto; min-width: 0; }
+      .list-filter { display: grid; grid-template-columns: 1fr; gap: 10px; }
+      .list-filter .search-field, .list-filter .select-field { flex: none; width: 100%; min-width: 0; }
+      .dashboard-pagination { flex-direction: column; align-items: stretch; }
+      .dashboard-pagination .page-size-field { justify-content: space-between; }
+      .dashboard-pagination .pagination-nav { margin-left: 0; justify-content: space-between; }
+      .list-filter .filter-actions { margin-left: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .list-filter .filter-actions .btn { width: 100%; min-width: 0; }
+      .section-head { align-items: flex-start; flex-direction: column; }
+      .section-actions { margin-left: 0; }
+      .count-chip.shown { margin-left: 0; }
     }
   </style>
   <script>` + workspaceCalendarScript + `</script>
@@ -282,45 +328,79 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Funcs(t
 	  {{if eq .Message "rent_confirmed"}}<div class="notice ok">租金已确认并计入对应月份。</div>{{end}}
 	  {{if .SyncCoverage}}{{if or (eq .SyncStatus "partial") (eq .SyncStatus "failed")}}<div class="notice error sync-status">最近一次银行同步异常：{{.SyncCoverage}}{{if .LastSuccessfulSyncCoverage}}<br>最近一次成功同步：{{.LastSuccessfulSyncCoverage}}{{end}}</div>{{else}}<div class="notice sync-status">银行流水状态：{{.SyncCoverage}}</div>{{end}}{{else}}<div class="notice sync-status">尚未完成银行同步，待处理金额可能不完整。</div>{{end}}
 	  <div class="dashboard-toolbar">
-	    <div><div class="label">月度收租情况</div><div class="tiny">查看本月应收、已收、未收和需要处理的流水。</div></div>
-	    {{if .Dunning.Enabled}}<button class="btn dunning-launch" type="button" data-dunning-open aria-controls="dunning-drawer" aria-expanded="{{if .Dunning.Open}}true{{else}}false{{end}}">邮件催缴</button>{{end}}
-	    <form class="dashboard-filter" method="get" action="/rent-dashboard">
+	    <form class="period-picker" method="get" action="/rent-dashboard">
+	      <span class="label period-label">收租月份</span>
 	      <a class="month-nav previous" href="{{rentDashboardURL .PreviousPeriod .SearchFilter .StatusFilter .SortFilter 1 .PageSize}}" aria-label="查看上个月">‹</a>
-	      <label class="period-filter" for="period">选择月份<input id="period" name="period" type="month" value="{{.Period}}" onchange="this.form.submit()"></label>
+	      <label class="period-field" for="period"><input id="period" name="period" type="month" value="{{.Period}}" onchange="this.form.submit()"></label>
 	      <a class="month-nav next" href="{{rentDashboardURL .NextPeriod .SearchFilter .StatusFilter .SortFilter 1 .PageSize}}" aria-label="查看下个月">›</a>
-	      <label for="dashboard-search">搜索租客<input id="dashboard-search" name="search" type="search" value="{{.SearchFilter}}" placeholder="姓名、别名、房间"></label>
-	      <label for="dashboard-status">状态<select id="dashboard-status" name="status"><option value="all"{{if eq .StatusFilter "all"}} selected{{end}}>全部</option><option value="unpaid"{{if eq .StatusFilter "unpaid"}} selected{{end}}>未缴（含部分）</option><option value="overdue"{{if eq .StatusFilter "overdue"}} selected{{end}}>逾期</option><option value="needs_review"{{if eq .StatusFilter "needs_review"}} selected{{end}}>待确认</option><option value="partial"{{if eq .StatusFilter "partial"}} selected{{end}}>部分缴纳</option><option value="open"{{if eq .StatusFilter "open"}} selected{{end}}>未开始收款</option><option value="paid"{{if eq .StatusFilter "paid"}} selected{{end}}>已缴清</option></select></label>
-	      <label for="dashboard-sort">排序<select id="dashboard-sort" name="sort"><option value="status"{{if eq .SortFilter "status"}} selected{{end}}>优先显示待处理</option><option value="tenant_asc"{{if eq .SortFilter "tenant_asc"}} selected{{end}}>租客姓名</option><option value="amount_desc"{{if eq .SortFilter "amount_desc"}} selected{{end}}>应收金额从高到低</option><option value="amount_asc"{{if eq .SortFilter "amount_asc"}} selected{{end}}>应收金额从低到高</option><option value="due_asc"{{if eq .SortFilter "due_asc"}} selected{{end}}>应缴日从早到晚</option><option value="due_desc"{{if eq .SortFilter "due_desc"}} selected{{end}}>应缴日从晚到早</option></select></label>
-	      <label for="dashboard-page-size">每页<select id="dashboard-page-size" name="page_size"><option value="12"{{if eq .PageSize 12}} selected{{end}}>12</option><option value="24"{{if eq .PageSize 24}} selected{{end}}>24</option><option value="50"{{if eq .PageSize 50}} selected{{end}}>50</option></select></label>
-	      <div class="filter-actions"><button class="btn" type="submit">筛选</button><a class="btn subtle" href="/rent-dashboard?period={{.Period}}">清除筛选</a></div>
+	      {{if .SearchFilter}}<input type="hidden" name="search" value="{{.SearchFilter}}">{{end}}
+	      {{if and .StatusFilter (ne .StatusFilter "all")}}<input type="hidden" name="status" value="{{.StatusFilter}}">{{end}}
+	      {{if and .SortFilter (ne .SortFilter "status")}}<input type="hidden" name="sort" value="{{.SortFilter}}">{{end}}
+	      {{if and (gt .PageSize 0) (ne .PageSize 12)}}<input type="hidden" name="page_size" value="{{.PageSize}}">{{end}}
 	    </form>
 	  </div>
-	  <section class="dashboard-summary" aria-label="月度收租汇总">
-	    <div class="panel metric metric-primary"><div class="label">本月应收</div><strong>{{.ExpectedTotal}}</strong><span>本月租金账单</span></div>
-	    <a class="panel metric metric-success metric-link" href="{{rentDashboardURL .Period .SearchFilter "paid" .SortFilter 1 .PageSize}}"><div class="label">已收租金</div><strong>{{.PaidTotal}}</strong><span>{{.PaidCount}} 户已缴清 · 查看账单</span></a>
-	    <a class="panel metric metric-warning metric-link" href="{{rentDashboardURL .Period .SearchFilter "unpaid" .SortFilter 1 .PageSize}}"><div class="label">剩余未收</div><strong>{{.BalanceTotal}}</strong><span>{{.UnpaidCount}} 户未缴或部分缴纳 · 查看账单</span></a>
-	    <a class="panel metric metric-link" href="/billing?period={{.Period}}&amp;pending=1" aria-label="查看{{.PeriodLabel}}待处理流水"><div class="label">待处理</div><strong>{{.PendingCount}}</strong><span>笔流水需要关联或确认 · 查看对应流水</span></a>
+	  <section class="dashboard-section" aria-labelledby="dashboard-summary-title">
+	    <div class="section-head">
+	      <div><h2 id="dashboard-summary-title">收租汇总</h2><div class="tiny">{{.PeriodLabel}} · 各卡片金额仅统计 EUR</div></div>
+	    </div>
+	    <section class="dashboard-summary" aria-label="月度收租汇总">
+	      <div class="panel metric metric-primary"><div class="label">本月应收</div><strong>{{.ExpectedTotal}}</strong><span>本月租金账单</span></div>
+	      <a class="panel metric metric-success metric-link" href="{{rentDashboardURL .Period .SearchFilter "paid" .SortFilter 1 .PageSize}}"><div class="label">已收租金</div><strong>{{.PaidTotal}}</strong><span>{{.PaidCount}} 户已缴清 · 查看账单</span></a>
+	      <a class="panel metric metric-warning metric-link" href="{{rentDashboardURL .Period .SearchFilter "unpaid" .SortFilter 1 .PageSize}}"><div class="label">剩余未收</div><strong>{{.BalanceTotal}}</strong><span>{{.UnpaidCount}} 户未缴或部分缴纳 · 查看账单</span></a>
+	      <a class="panel metric metric-link" href="/billing?period={{.Period}}&amp;pending=1" aria-label="查看{{.PeriodLabel}}待处理流水"><div class="label">待处理</div><strong>{{.PendingCount}}</strong><span>笔流水需要关联或确认 · 查看对应流水</span></a>
+	    </section>
+	    <div class="panel dashboard-counts" aria-label="账单状态数量">
+	      <span class="count-chip">本月共 {{.TotalRows}} 户</span>
+	      <a class="count-chip overdue" href="{{rentDashboardURL .Period .SearchFilter "overdue" .SortFilter 1 .PageSize}}">逾期 {{.OverdueCount}}</a>
+	      <a class="count-chip partial" href="{{rentDashboardURL .Period .SearchFilter "partial" .SortFilter 1 .PageSize}}">部分缴纳 {{.PartialCount}}</a>
+	      <a class="count-chip review" href="{{rentDashboardURL .Period .SearchFilter "needs_review" .SortFilter 1 .PageSize}}">待确认 {{.ReviewCount}}</a>
+	      <span class="count-chip shown">当前显示 {{.FilteredCount}} 户</span>
+	    </div>
+	    <section class="dashboard-secondary" aria-label="银行流水汇总">
+	      <a class="panel metric metric-link" href="/billing?period={{.Period}}&amp;direction=income&amp;pending=1"><div class="label">待分配金额</div><strong>{{.PendingTotal}}</strong><span>{{.PendingCount}} 笔收入仍有未分配余额，金额仅统计 EUR</span></a>
+	      <a class="panel metric metric-link" href="/billing?period={{.Period}}&amp;allocation=other_income"><div class="label">其他收入</div><strong>{{.OtherIncomeTotal}}</strong><span>{{.OtherIncomeCount}} 笔已确认的非租金收入</span></a>
+	    </section>
+	    <section class="panel collection-panel" aria-label="收款进度"><div class="collection-head"><strong>收款进度</strong><span>{{.CollectionPercent}}%</span></div><div class="progress-track"><div class="progress-value" style="width: {{.CollectionPercent}}%"></div></div><div class="tiny">已收 {{.PaidTotal}}，本月还差 {{.BalanceTotal}}</div></section>
 	  </section>
-	  <div class="dashboard-counts" aria-label="账单状态数量"><span>本月共 {{.TotalRows}} 户</span><a href="{{rentDashboardURL .Period .SearchFilter "overdue" .SortFilter 1 .PageSize}}">逾期 {{.OverdueCount}}</a><a href="{{rentDashboardURL .Period .SearchFilter "partial" .SortFilter 1 .PageSize}}">部分缴纳 {{.PartialCount}}</a><a href="{{rentDashboardURL .Period .SearchFilter "needs_review" .SortFilter 1 .PageSize}}">待确认 {{.ReviewCount}}</a><span>当前显示 {{.FilteredCount}} 户</span></div>
-	  <section class="dashboard-secondary" aria-label="银行流水汇总">
-	    <a class="panel metric metric-link" href="/billing?period={{.Period}}&amp;direction=income&amp;pending=1"><div class="label">待分配金额</div><strong>{{.PendingTotal}}</strong><span>{{.PendingCount}} 笔收入仍有未分配余额，金额仅统计 EUR</span></a>
-	    <a class="panel metric metric-link" href="/billing?period={{.Period}}&amp;allocation=other_income"><div class="label">其他收入</div><strong>{{.OtherIncomeTotal}}</strong><span>{{.OtherIncomeCount}} 笔已确认的非租金收入</span></a>
-	  </section>
-	  <section class="panel collection-panel" aria-label="收款进度"><div class="collection-head"><strong>收款进度</strong><span>{{.CollectionPercent}}%</span></div><div class="progress-track"><div class="progress-value" style="width: {{.CollectionPercent}}%"></div></div><div class="tiny">已收 {{.PaidTotal}}，本月还差 {{.BalanceTotal}}</div></section>
-      <section class="panel surface" aria-labelledby="rent-status-title">
-        <div class="panel-head"><h2 id="rent-status-title">租客缴费情况</h2><a class="tiny review-link" href="/billing?period={{.Period}}&amp;match_status=needs_review">{{.ReviewCount}} 笔待确认</a></div>
-        {{if .Rows}}
-        <div class="table-wrap"><table>
-          <thead><tr><th>租客</th><th>房间</th><th>应缴日</th><th>应收</th><th>已收</th><th>未收</th><th>状态</th></tr></thead>
-          <tbody>{{range .Rows}}
-	            <tr class="rent-row" tabindex="0" role="button" aria-expanded="false" aria-controls="rent-details-{{.ObligationID}}" data-details-target="rent-details-{{.ObligationID}}"><td><a class="tenant-link" href="/tenants/{{.TenantID}}?from_month={{.Period}}&amp;to_month={{.Period}}"><strong>{{.TenantName}}</strong></a>{{if .TenantAlias}}<br><span class="tiny">别名：{{.TenantAlias}}</span>{{end}}</td><td>{{if .RoomLabel}}{{.RoomLabel}}<br>{{end}}{{.RoomAddress}}</td><td class="mono">{{.DueDate}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span></td></tr>
-            <tr id="rent-details-{{.ObligationID}}" class="rent-details" hidden><td colspan="7"><div class="payment-list"><h3>收款明细 · <a class="tenant-link" href="/cash-receipts/new?tenant_id={{.TenantID}}&amp;period={{.Period}}">补录现金</a></h3>{{if .Payments}}{{range .Payments}}<div class="payment-item"><span class="amount">{{.AmountDisplay}}</span><span class="mono">{{.DateDisplay}}</span><span class="payment-description">{{.Description}}</span><span class="mono">{{if eq .Source "现金"}}现金 · {{end}}参考号：{{.Reference}}</span><span class="mono">{{.ConfirmationSource}}{{if eq .Source "现金"}} · <a class="void-link" href="/cash-receipts/void?receipt_id={{.PaymentID}}">作废</a>{{end}}</span></div>{{end}}{{else}}<div class="tiny">本月暂无已确认收款。</div>{{end}}</div></td></tr>
-          {{end}}</tbody>
-	    </table></div>
-	    {{else if gt .FilteredCount 0}}<div class="empty">当前页没有账单，请返回上一页。</div>
-	    {{else if gt .TotalRows 0}}<div class="empty">没有符合当前筛选条件的租金账单，请调整搜索词或状态。</div>
-	    {{else}}<div class="empty">本月还没有租金账单。请先添加租客并设置租金开始日期。</div>{{end}}
-	    {{if gt .TotalPages 1}}<nav class="dashboard-pagination" aria-label="租客账单分页"><a class="btn subtle{{if eq .Page 1}} disabled{{end}}" href="{{rentDashboardURL .Period .SearchFilter .StatusFilter .SortFilter (dashboardPreviousPage .Page) .PageSize}}">上一页</a><span class="tiny">第 {{.Page}} / {{.TotalPages}} 页 · 共 {{.FilteredCount}} 户</span><a class="btn subtle{{if eq .Page .TotalPages}} disabled{{end}}" href="{{rentDashboardURL .Period .SearchFilter .StatusFilter .SortFilter (dashboardNextPage .Page .TotalPages) .PageSize}}">下一页</a></nav>{{end}}
+	  <section class="dashboard-section" aria-labelledby="rent-status-title">
+	    <div class="section-head">
+	      <div><h2 id="rent-status-title">租客缴费情况</h2><div class="tiny">共 {{.FilteredCount}} 户 · 点击任意一行展开收款明细</div></div>
+	      {{if .Dunning.Enabled}}<div class="section-actions"><button class="btn dunning-launch" type="button" data-dunning-open aria-controls="dunning-drawer" aria-expanded="{{if .Dunning.Open}}true{{else}}false{{end}}">邮件催缴</button></div>{{end}}
+	    </div>
+	    <section class="panel surface" aria-label="租客账单列表">
+	      <form class="list-filter" method="get" action="/rent-dashboard">
+	        <input type="hidden" name="period" value="{{.Period}}">
+	        <label class="search-field" for="dashboard-search">搜索租客<input id="dashboard-search" name="search" type="search" value="{{.SearchFilter}}" placeholder="姓名、别名、房间"></label>
+	        <label class="select-field" for="dashboard-status">状态<select id="dashboard-status" name="status"><option value="all"{{if eq .StatusFilter "all"}} selected{{end}}>全部</option><option value="unpaid"{{if eq .StatusFilter "unpaid"}} selected{{end}}>未缴（含部分）</option><option value="overdue"{{if eq .StatusFilter "overdue"}} selected{{end}}>逾期</option><option value="needs_review"{{if eq .StatusFilter "needs_review"}} selected{{end}}>待确认</option><option value="partial"{{if eq .StatusFilter "partial"}} selected{{end}}>部分缴纳</option><option value="open"{{if eq .StatusFilter "open"}} selected{{end}}>未开始收款</option><option value="paid"{{if eq .StatusFilter "paid"}} selected{{end}}>已缴清</option></select></label>
+	        <input type="hidden" name="sort" value="{{.SortFilter}}">
+	        <div class="filter-actions"><button class="btn" type="submit">筛选</button><a class="btn subtle" href="/rent-dashboard?period={{.Period}}">清除筛选</a></div>
+	      </form>
+          {{if .Rows}}
+          <div class="table-wrap"><table>
+            <thead><tr><th><a class="sort-link{{if .TenantSort.Active}} active{{end}}" href="{{.TenantSort.URL}}">租客{{if .TenantSort.Arrow}}<span class="sort-arrow">{{.TenantSort.Arrow}}</span>{{end}}</a></th><th>房间</th><th><a class="sort-link{{if .DueSort.Active}} active{{end}}" href="{{.DueSort.URL}}">应缴日{{if .DueSort.Arrow}}<span class="sort-arrow">{{.DueSort.Arrow}}</span>{{end}}</a></th><th><a class="sort-link{{if .AmountSort.Active}} active{{end}}" href="{{.AmountSort.URL}}">应收{{if .AmountSort.Arrow}}<span class="sort-arrow">{{.AmountSort.Arrow}}</span>{{end}}</a></th><th>已收</th><th>未收</th><th><a class="sort-link{{if .StatusSort.Active}} active{{end}}" href="{{.StatusSort.URL}}">状态{{if .StatusSort.Arrow}}<span class="sort-arrow">{{.StatusSort.Arrow}}</span>{{end}}</a></th></tr></thead>
+            <tbody>{{range .Rows}}
+  	            <tr class="rent-row" tabindex="0" role="button" aria-expanded="false" aria-controls="rent-details-{{.ObligationID}}" data-details-target="rent-details-{{.ObligationID}}"><td><a class="tenant-link" href="/tenants/{{.TenantID}}?from_month={{.Period}}&amp;to_month={{.Period}}"><strong>{{.TenantName}}</strong></a>{{if .TenantAlias}}<br><span class="tiny">别名：{{.TenantAlias}}</span>{{end}}</td><td>{{if .RoomLabel}}{{.RoomLabel}}<br>{{end}}{{.RoomAddress}}</td><td class="mono">{{.DueDate}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span></td></tr>
+              <tr id="rent-details-{{.ObligationID}}" class="rent-details" hidden><td colspan="7"><div class="payment-list"><h3>收款明细 · <a class="tenant-link" href="/cash-receipts/new?tenant_id={{.TenantID}}&amp;period={{.Period}}">补录现金</a></h3>{{if .Payments}}{{range .Payments}}<div class="payment-item"><span class="amount">{{.AmountDisplay}}</span><span class="mono">{{.DateDisplay}}</span><span class="payment-description">{{.Description}}</span><span class="mono">{{if eq .Source "现金"}}现金 · {{end}}参考号：{{.Reference}}</span><span class="mono">{{.ConfirmationSource}}{{if eq .Source "现金"}} · <a class="void-link" href="/cash-receipts/void?receipt_id={{.PaymentID}}">作废</a>{{end}}</span></div>{{end}}{{else}}<div class="tiny">本月暂无已确认收款。</div>{{end}}</div></td></tr>
+            {{end}}</tbody>
+  	    </table></div>
+  	    {{else if gt .FilteredCount 0}}<div class="empty">当前页没有账单，请返回上一页。</div>
+  	    {{else if gt .TotalRows 0}}<div class="empty">没有符合当前筛选条件的租金账单，请调整搜索词或状态。</div>
+  	    {{else}}<div class="empty">本月还没有租金账单。请先添加租客并设置租金开始日期。</div>{{end}}
+	    {{if .Rows}}<nav class="dashboard-pagination" aria-label="租客账单分页">
+	      <form class="page-size-field" method="get" action="/rent-dashboard">
+	        <input type="hidden" name="period" value="{{.Period}}">
+	        {{if .SearchFilter}}<input type="hidden" name="search" value="{{.SearchFilter}}">{{end}}
+	        {{if and .StatusFilter (ne .StatusFilter "all")}}<input type="hidden" name="status" value="{{.StatusFilter}}">{{end}}
+	        {{if and .SortFilter (ne .SortFilter "status")}}<input type="hidden" name="sort" value="{{.SortFilter}}">{{end}}
+	        <label for="dashboard-page-size">每页<select id="dashboard-page-size" name="page_size" onchange="this.form.submit()"><option value="12"{{if eq .PageSize 12}} selected{{end}}>12</option><option value="24"{{if eq .PageSize 24}} selected{{end}}>24</option><option value="50"{{if eq .PageSize 50}} selected{{end}}>50</option></select></label>
+	      </form>
+	      <div class="pagination-nav">
+	        <a class="btn subtle{{if eq .Page 1}} disabled{{end}}" href="{{rentDashboardURL .Period .SearchFilter .StatusFilter .SortFilter (dashboardPreviousPage .Page) .PageSize}}">上一页</a>
+	        <span class="tiny">第 {{.Page}} / {{.TotalPages}} 页 · 共 {{.FilteredCount}} 户</span>
+	        <a class="btn subtle{{if eq .Page .TotalPages}} disabled{{end}}" href="{{rentDashboardURL .Period .SearchFilter .StatusFilter .SortFilter (dashboardNextPage .Page .TotalPages) .PageSize}}">下一页</a>
+	      </div>
+	    </nav>{{end}}
+	    </section>
 	  </section>
 	  {{if .Dunning.Enabled}}
 	  <section id="dunning-drawer" class="panel dunning-drawer" aria-labelledby="dunning-title"{{if not .Dunning.Open}} hidden{{end}}>

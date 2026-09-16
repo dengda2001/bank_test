@@ -75,6 +75,12 @@ type transactionService struct {
 
 var pendingMatchStatuses = []string{"candidate", "needs_review", "unmatched", "partial"}
 
+// pendingMatchStatusFilter is the 匹配状态 option meaning "still needs
+// attention". It is not a stored match status: it expands to the four unfinished
+// ones and only ever applies to income. It used to be a separate 待处理 checkbox;
+// folding it into the status dropdown keeps one control per question.
+const pendingMatchStatusFilter = "pending"
+
 func isPendingMatchStatus(status string) bool {
 	for _, pendingStatus := range pendingMatchStatuses {
 		if status == pendingStatus {
@@ -249,6 +255,13 @@ func filtersFromQuery(q url.Values) transactionFilters {
 	if tenantIDRaw != "" {
 		tenantID, _ = strconv.ParseUint(tenantIDRaw, 10, 64)
 	}
+	matchStatus := strings.TrimSpace(q.Get("match_status"))
+	pendingOnly := matchStatus == pendingMatchStatusFilter || strings.TrimSpace(q.Get("pending")) == "1"
+	if matchStatus == pendingMatchStatusFilter {
+		// Expanded into PendingOnly, so it must not also narrow match_status to a
+		// status literally called "pending" — no such row could ever match.
+		matchStatus = ""
+	}
 	return transactionFilters{
 		ArrivalFrom:    strings.TrimSpace(q.Get("arrival_from")),
 		ArrivalTo:      strings.TrimSpace(q.Get("arrival_to")),
@@ -256,15 +269,25 @@ func filtersFromQuery(q url.Values) transactionFilters {
 		TenantID:       tenantID,
 		TenantIDRaw:    tenantIDRaw,
 		Direction:      strings.TrimSpace(q.Get("direction")),
-		MatchStatus:    strings.TrimSpace(q.Get("match_status")),
+		MatchStatus:    matchStatus,
 		PeriodMonth:    strings.TrimSpace(q.Get("period")),
 		RentPeriod:     strings.TrimSpace(q.Get("rent_period")),
 		AllocationKind: strings.TrimSpace(q.Get("allocation")),
 		Sort:           strings.TrimSpace(q.Get("sort")),
 		Page:           page,
 		PageSize:       pageSize,
-		PendingOnly:    strings.TrimSpace(q.Get("pending")) == "1",
+		PendingOnly:    pendingOnly,
 	}
+}
+
+// matchStatusSelection is the value the 匹配状态 dropdown should show. A pending
+// filter arrives either as the dropdown option or as the legacy pending=1 link
+// the dashboard cards still use; both have to light up the same option.
+func matchStatusSelection(filters transactionFilters) string {
+	if filters.PendingOnly && filters.MatchStatus == "" {
+		return pendingMatchStatusFilter
+	}
+	return filters.MatchStatus
 }
 
 type transactionFilters struct {
@@ -289,7 +312,7 @@ func validateTransactionFilters(filters transactionFilters) error {
 		return errors.New("direction filter is invalid")
 	}
 	switch filters.MatchStatus {
-	case "", "matched", "candidate", "unmatched", "needs_review", "partial", "ignored":
+	case "", "matched", "candidate", "unmatched", "needs_review", "partial", "ignored", pendingMatchStatusFilter:
 	default:
 		return errors.New("match status filter is invalid")
 	}
@@ -335,7 +358,7 @@ func validateTransactionFilters(filters transactionFilters) error {
 		return errors.New("allocation filter is invalid")
 	}
 	switch filters.Sort {
-	case "", "arrival_desc", "arrival_asc", "amount_desc", "amount_asc", "payer_asc":
+	case "", "arrival_desc", "arrival_asc", "amount_desc", "amount_asc", "payer_asc", "payer_desc":
 	default:
 		return errors.New("sort filter is invalid")
 	}
@@ -538,6 +561,8 @@ func (s *transactionService) listTransactionsPage(ctx context.Context, userID ui
 		order = "payment_transactions.amount_cents ASC, payment_transactions.id ASC"
 	case "payer_asc":
 		order = "payment_transactions.payer_name ASC, payment_transactions.id DESC"
+	case "payer_desc":
+		order = "payment_transactions.payer_name DESC, payment_transactions.id DESC"
 	}
 	page := filters.Page
 	if page <= 0 {
