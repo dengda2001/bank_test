@@ -145,6 +145,37 @@ func TestBillingTemplateUsesExplicitOneClickMatchAndLimitedRematch(t *testing.T)
 	}
 }
 
+// 一笔已关联的流水本来在行里常驻两个 100% 宽的下拉框，状态早就定了，控件却占满整列。
+// 它们现在收在 <details> 里：默认只渲染一颗「修改匹配」按钮，点开才出现选择控件。
+func TestBillingRematchSelectsStayBehindTheRematchButton(t *testing.T) {
+	page := renderBillingPage(t, billingPageData{TransactionRows: []transactionPageRow{{
+		ID:                   "8",
+		Direction:            "income",
+		MatchStatus:          "matched",
+		MatchStatusLabel:     "已关联",
+		CanRematch:           true,
+		CanEditRentMatch:     true,
+		RematchTenantOptions: []billingTenantOption{{ID: 22, Name: "Bríd Murphy"}},
+		RematchMonthOptions:  []billingMonthOption{{Period: "2026-10", Label: "2026年10月", Remaining: "EUR 950.00"}},
+	}}})
+
+	// 不带 open：默认收起，两个下拉才不会出现在每一行已关联的流水里。带上 open 属性
+	// 这条断言就会读到 "open" 并失败，这正是要防的回归。
+	if tag := markupBetween(t, page, `<details class="rematch-details"`, ">"); strings.Contains(tag, "open") {
+		t.Fatalf("rematch disclosure starts expanded: %s", tag)
+	}
+
+	disclosure := markupBetween(t, page, `<details class="rematch-details"`, "</details>")
+	if !strings.Contains(disclosure, `<summary class="btn">修改匹配</summary>`) {
+		t.Fatalf("collapsed rematch row does not offer the 修改匹配 button: %s", disclosure)
+	}
+	for _, expected := range []string{`action="/billing/rematch"`, `name="tenant_id"`, `aria-label="修改匹配租客"`, `name="period"`, `aria-label="修改租金月份"`, "确认修改"} {
+		if !strings.Contains(disclosure, expected) {
+			t.Fatalf("rematch disclosure lost %q: %s", expected, disclosure)
+		}
+	}
+}
+
 func TestRematchFilterOptionsStayIndependentAndDeduplicated(t *testing.T) {
 	tenantOptions, monthOptions := rematchFilterOptions([]billingRentMatchOption{
 		{TenantID: 1, TenantName: "租客甲", Period: "2026-09", PeriodLabel: "2026年9月"},
