@@ -428,3 +428,36 @@ Implemented the Chinese monthly rent dashboard with clear expected/paid/balance 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 13: 移动端适配：审计、整改、真机前验收
+
+**Date**: 2026-09-16
+**Task**: 移动端适配：审计、整改、真机前验收
+**Branch**: `main`
+
+### Summary
+
+把 10 个页面在真实浏览器里按 375/390/768 量了一遍，然后整改。审计自己的结论被实测推翻：固定像素列宽并不导致页面级横向溢出（21 条页面×视口记录全部为 0），真正的缺陷是滚动容器内被切掉的列、26-32px 的触控目标、11px 正文。整改内容：抽出共享外壳 workspaceNav（原侧栏有 7 份漂移的拷贝）；≤640 侧栏改为纯 CSS 抽屉；冻结最右操作列；/billing 用就地展开的 <details> 代替无法冻结的 320px 操作列，金额移进冻结单元格；44px 触控下限（含两个绕开共享样式的预览模板）；/tenant-detail 档案标签列改单列。新增 8 个 Go 测试断言渲染结果不变量，Playwright 夹具（29 个脚本）复测每一条结论，桌面端与改动前构建逐页比对（6/8 字节一致，2 处已归因）。自查抓到并修掉 3 个我自己引入的可见回退：44px 姓名链接把虚线下划线推到文字下方 22px、抽屉复选框带 hidden 导致窄屏导航只能点不能按键盘、关闭态侧栏仅 translate 仍留在 Tab 顺序里。未修项（5 条 P1-4 排版、/billing 在 900–1440px 的桌面横向溢出、真机验证）连同理由记在 research/mobile-audit.md。任务按要求压成单个提交 0f92566。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0f92566` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
