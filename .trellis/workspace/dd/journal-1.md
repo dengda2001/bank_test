@@ -527,3 +527,36 @@ Added a confirmed one-click Dashboard rent settlement that creates an auditable 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 16: Manual transaction matching and independent rematch selectors
+
+**Date**: 2026-09-16
+**Task**: Manual transaction matching and independent rematch selectors
+**Branch**: `main`
+
+### Summary
+
+Disabled automatic transaction matching writes, added explicit one-click billing matching and safe rent rematching, and changed rematch UI to independent tenant and rent-month selectors. Tests and vet passed; pushed to origin/main.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4e3e6da` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 15
+- **Total Sessions**: 16
 - **Last Active**: 2026-09-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~529 | Active |
+| `journal-1.md` | ~562 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 16 | 2026-09-16 | Manual transaction matching and independent rematch selectors | `4e3e6da` | `main` |
 | 15 | 2026-09-16 | Dashboard manual rent balance | `ee5a5f6` | `main` |
 | 14 | 2026-09-16 | Simplify billing and dashboard summaries | `ea1a1f5` | `main` |
 | 13 | 2026-09-16 | 移动端适配：审计、整改、真机前验收 | `0f92566` | `main` |
