@@ -154,6 +154,50 @@ func (a *app) handleTransactionRevoke(w http.ResponseWriter, r *http.Request) {
 	a.handleTransactionAction(w, r, transactionActionRevokeAllocations)
 }
 
+func (a *app) handleTransactionRematch(w http.ResponseWriter, r *http.Request) {
+	if !a.requireAuth(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	userID, ok := a.currentUserID(r)
+	if !ok || a.db == nil {
+		http.Error(w, "database session required", http.StatusBadRequest)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/billing?error=invalid_rematch", http.StatusFound)
+		return
+	}
+	transactionID, err := parsePositiveUint(r.Form.Get("transaction_id"))
+	if err != nil {
+		http.Redirect(w, r, "/billing?error=invalid_rematch", http.StatusFound)
+		return
+	}
+	targetTenantID, err := parsePositiveUint(r.Form.Get("tenant_id"))
+	if err != nil {
+		http.Redirect(w, r, "/billing?error=invalid_rematch", http.StatusFound)
+		return
+	}
+	periodValue := strings.TrimSpace(r.Form.Get("period"))
+	if periodValue == "" {
+		http.Redirect(w, r, "/billing?error=invalid_rematch", http.StatusFound)
+		return
+	}
+	targetPeriod, err := parsePeriodMonth(periodValue)
+	if err != nil {
+		http.Redirect(w, r, "/billing?error=invalid_rematch", http.StatusFound)
+		return
+	}
+	if err := newTransactionService(a.db).rematchRentAllocation(r.Context(), userID, transactionID, targetTenantID, targetPeriod); err != nil {
+		http.Redirect(w, r, "/billing?error=rematch_failed", http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, "/billing?message=match_updated", http.StatusFound)
+}
+
 func (a *app) handleTransactionRevokePreview(w http.ResponseWriter, r *http.Request) {
 	if !a.requireAuth(w, r) {
 		return

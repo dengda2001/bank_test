@@ -172,6 +172,16 @@ type billingMonthOption struct {
 	Remaining string
 }
 
+type billingRentMatchOption struct {
+	RentObligationID uint64
+	TenantID         uint64
+	TenantName       string
+	Period           string
+	PeriodLabel      string
+	Remaining        string
+	Label            string
+}
+
 type tenantRecord struct {
 	ID               string  `json:"id"`
 	Name             string  `json:"name"`
@@ -391,6 +401,7 @@ func main() {
 	mux.HandleFunc("/dunning/send", a.handleDunningSend)
 	mux.HandleFunc("/billing", a.handleBilling)
 	mux.HandleFunc("/billing/confirm", a.handleRentMatchConfirmation)
+	mux.HandleFunc("/billing/rematch", a.handleTransactionRematch)
 	mux.HandleFunc("/billing/allocate", a.handleTransactionAllocation)
 	mux.HandleFunc("/billing/ignore", a.handleTransactionIgnore)
 	mux.HandleFunc("/billing/restore", a.handleTransactionRestore)
@@ -813,6 +824,21 @@ func (a *app) handleRentMatchConfirmation(w http.ResponseWriter, r *http.Request
 		http.Redirect(w, r, "/billing?error=invalid_confirmation", http.StatusFound)
 		return
 	}
+	rememberPayer := r.Form.Get("remember_payer") != "0"
+	service := newTransactionService(a.db)
+	if value := strings.TrimSpace(r.Form.Get("rent_obligation_id")); value != "" {
+		rentObligationID, parseErr := parsePositiveUint(value)
+		if parseErr != nil {
+			http.Redirect(w, r, "/billing?error=invalid_confirmation", http.StatusFound)
+			return
+		}
+		if err := service.confirmRentMatchToObligation(r.Context(), userID, transactionID, rentObligationID, rememberPayer); err != nil {
+			http.Redirect(w, r, "/billing?error=confirmation_failed", http.StatusFound)
+			return
+		}
+		http.Redirect(w, r, "/billing?message=rent_confirmed", http.StatusFound)
+		return
+	}
 	tenantID, err := strconv.ParseUint(r.Form.Get("tenant_id"), 10, 64)
 	if err != nil || tenantID == 0 {
 		http.Redirect(w, r, "/billing?error=invalid_confirmation", http.StatusFound)
@@ -827,8 +853,7 @@ func (a *app) handleRentMatchConfirmation(w http.ResponseWriter, r *http.Request
 		}
 		period = &parsed
 	}
-	rememberPayer := r.Form.Get("remember_payer") != "0"
-	if err := newTransactionService(a.db).confirmRentMatch(r.Context(), userID, transactionID, tenantID, period, rememberPayer); err != nil {
+	if err := service.confirmRentMatch(r.Context(), userID, transactionID, tenantID, period, rememberPayer); err != nil {
 		http.Redirect(w, r, "/billing?error=confirmation_failed", http.StatusFound)
 		return
 	}

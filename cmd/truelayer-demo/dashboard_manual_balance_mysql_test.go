@@ -112,7 +112,7 @@ func TestManualBalanceSettlesOnlyTheOutstandingRentOnMySQL(t *testing.T) {
 	if _, err := service.revokeTransactionAllocations(ctx, owner.ID, created.ID, "manual balance correction", "manual-balance-revoke"); err != nil {
 		t.Fatal(err)
 	}
-	if err := service.reconcileTransactions(ctx, owner.ID); err != nil {
+	if _, err := service.listTransactionPageRows(ctx, owner.ID, transactionFilters{}); err != nil {
 		t.Fatal(err)
 	}
 	var reallocatedCount int64

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"time"
 
@@ -208,6 +209,98 @@ func (s *transactionService) revokeTransactionAllocations(ctx context.Context, u
 	}
 	var summary transactionAllocationSummary
 	err = s.db.WithContext(ctx).Transaction(func(txdb *gorm.DB) error {
+		_, _, nextSummary, revokeErr := s.revokeTransactionAllocationsInTx(txdb, userID, transactionID, reason, idempotencyKey)
+		summary = nextSummary
+		return revokeErr
+	})
+	return summary, err
+}
+
+// revokeTransactionAllocationsInTx keeps the audit-preserving revoke work
+// reusable by correction flows that must void and replace allocations atomically.
+func (s *transactionService) revokeTransactionAllocationsInTx(txdb *gorm.DB, userID, transactionID uint64, reason, idempotencyKey string) (paymentTransaction, []paymentAllocation, transactionAllocationSummary, error) {
+	var source paymentTransaction
+	if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", transactionID, userID).First(&source).Error; err != nil {
+		return paymentTransaction{}, nil, transactionAllocationSummary{}, err
+	}
+	var allocations []paymentAllocation
+	if err := txdb.Where("payment_transaction_id = ? AND user_id = ?", transactionID, userID).Order("id ASC").Find(&allocations).Error; err != nil {
+		return paymentTransaction{}, nil, transactionAllocationSummary{}, err
+	}
+	alreadyDone, err := s.existingTransactionAction(txdb, userID, transactionID, transactionActionRevokeAllocations, reason, idempotencyKey)
+	if err != nil {
+		return paymentTransaction{}, nil, transactionAllocationSummary{}, err
+	}
+	if alreadyDone {
+		return source, allocations, summarizeTransactionAllocations(source, allocations), nil
+	}
+	if summarizeTransactionAllocations(source, allocations).AllocatedCents == 0 {
+		return paymentTransaction{}, nil, transactionAllocationSummary{}, errors.New("transaction has no effective allocations to revoke")
+	}
+
+	now := time.Now().UTC()
+	operationID := recordID("transaction-revoke", now)
+	obligationIDs := make(map[uint64]struct{})
+	for _, allocation := range allocations {
+		if !ledgerAllocationIsEffective(allocation) {
+			continue
+		}
+		if allocation.RentObligationID != nil && *allocation.RentObligationID != 0 && ledgerAllocationKind(allocation) == allocationKindRent {
+			obligationIDs[*allocation.RentObligationID] = struct{}{}
+		}
+		if err := txdb.Model(&paymentAllocation{}).Where("id = ? AND user_id = ? AND payment_transaction_id = ? AND status = ?", allocation.ID, userID, transactionID, allocationStatusConfirmed).Updates(map[string]any{
+			"status":            allocationStatusVoided,
+			"operation_id":      operationID,
+			"voided_at":         now,
+			"voided_by_user_id": userID,
+			"void_reason":       reason,
+		}).Error; err != nil {
+			return paymentTransaction{}, nil, transactionAllocationSummary{}, err
+		}
+	}
+
+	for obligationID := range obligationIDs {
+		var obligation rentObligation
+		if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", obligationID, userID).First(&obligation).Error; err != nil {
+			return paymentTransaction{}, nil, transactionAllocationSummary{}, err
+		}
+		var current []paymentAllocation
+		if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligationID, userID).Find(&current).Error; err != nil {
+			return paymentTransaction{}, nil, transactionAllocationSummary{}, err
+		}
+		var cashReceipts []cashReceipt
+		if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligationID, userID).Find(&cashReceipts).Error; err != nil {
+			return paymentTransaction{}, nil, transactionAllocationSummary{}, err
+		}
+		projected := projectRentObligation(obligation, current, cashReceipts, now)
+		if err := txdb.Model(&rentObligation{}).Where("id = ? AND user_id = ?", obligationID, userID).Updates(map[string]any{
+			"paid_amount_cents": projected.PaidAmountCents,
+			"status":            projected.Status,
+		}).Error; err != nil {
+			return paymentTransaction{}, nil, transactionAllocationSummary{}, err
+		}
+	}
+
+	if err := s.writeTransactionAction(txdb, userID, transactionID, transactionActionRevokeAllocations, reason, idempotencyKey, operationID, now); err != nil {
+		return paymentTransaction{}, nil, transactionAllocationSummary{}, err
+	}
+	allocationsAfter := make([]paymentAllocation, 0, len(allocations))
+	if err := txdb.Where("payment_transaction_id = ? AND user_id = ?", transactionID, userID).Order("id ASC").Find(&allocationsAfter).Error; err != nil {
+		return paymentTransaction{}, nil, transactionAllocationSummary{}, err
+	}
+	projection := projectTransactionMatch(source, allocationsAfter, transactionActionRevokeAllocations, reason)
+	if err := updateTransactionProjection(txdb, userID, transactionID, projection); err != nil {
+		return paymentTransaction{}, nil, transactionAllocationSummary{}, err
+	}
+	return source, allocationsAfter, summarizeTransactionAllocations(source, allocationsAfter), nil
+}
+
+func (s *transactionService) rematchRentAllocation(ctx context.Context, userID, transactionID, targetTenantID uint64, targetPeriod time.Time) error {
+	if userID == 0 || transactionID == 0 || targetTenantID == 0 || targetPeriod.IsZero() {
+		return errors.New("userID, transactionID, target tenant, and target rent month are required")
+	}
+	targetPeriod = monthStart(targetPeriod)
+	return s.db.WithContext(ctx).Transaction(func(txdb *gorm.DB) error {
 		var source paymentTransaction
 		if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", transactionID, userID).First(&source).Error; err != nil {
 			return err
@@ -216,78 +309,62 @@ func (s *transactionService) revokeTransactionAllocations(ctx context.Context, u
 		if err := txdb.Where("payment_transaction_id = ? AND user_id = ?", transactionID, userID).Order("id ASC").Find(&allocations).Error; err != nil {
 			return err
 		}
-		alreadyDone, err := s.existingTransactionAction(txdb, userID, transactionID, transactionActionRevokeAllocations, reason, idempotencyKey)
+		previous, ok := singleEffectiveRentAllocation(allocations)
+		if !ok {
+			return errors.New("only a transaction with one effective rent allocation can be rematched")
+		}
+		var target rentObligation
+		if err := txdb.Where("user_id = ? AND tenant_id = ? AND period_month = ?", userID, targetTenantID, targetPeriod).First(&target).Error; err != nil {
+			return err
+		}
+		if previous.RentObligationIDValue() == target.ID {
+			return errors.New("selected rent obligation is already matched")
+		}
+
+		obligations, err := lockRentObligations(txdb, userID, previous.RentObligationIDValue(), target.ID)
 		if err != nil {
 			return err
 		}
-		if alreadyDone {
-			summary = summarizeTransactionAllocations(source, allocations)
-			return nil
-		}
-		if summarizeTransactionAllocations(source, allocations).AllocatedCents == 0 {
-			return errors.New("transaction has no effective allocations to revoke")
-		}
-
-		now := time.Now().UTC()
-		operationID := recordID("transaction-revoke", now)
-		obligationIDs := make(map[uint64]struct{})
-		for _, allocation := range allocations {
-			if !ledgerAllocationIsEffective(allocation) {
-				continue
-			}
-			if allocation.RentObligationID != nil && *allocation.RentObligationID != 0 && ledgerAllocationKind(allocation) == allocationKindRent {
-				obligationIDs[*allocation.RentObligationID] = struct{}{}
-			}
-			if err := txdb.Model(&paymentAllocation{}).Where("id = ? AND user_id = ? AND payment_transaction_id = ? AND status = ?", allocation.ID, userID, transactionID, allocationStatusConfirmed).Updates(map[string]any{
-				"status":            allocationStatusVoided,
-				"operation_id":      operationID,
-				"voided_at":         now,
-				"voided_by_user_id": userID,
-				"void_reason":       reason,
-			}).Error; err != nil {
-				return err
-			}
-		}
-
-		for obligationID := range obligationIDs {
-			var obligation rentObligation
-			if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", obligationID, userID).First(&obligation).Error; err != nil {
-				return err
-			}
-			var current []paymentAllocation
-			if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligationID, userID).Find(&current).Error; err != nil {
-				return err
-			}
-			var cashReceipts []cashReceipt
-			if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligationID, userID).Find(&cashReceipts).Error; err != nil {
-				return err
-			}
-			projected := projectRentObligation(obligation, current, cashReceipts, now)
-			if err := txdb.Model(&rentObligation{}).Where("id = ? AND user_id = ?", obligationID, userID).Updates(map[string]any{
-				"paid_amount_cents": projected.PaidAmountCents,
-				"status":            projected.Status,
-			}).Error; err != nil {
-				return err
-			}
-		}
-
-		if err := s.writeTransactionAction(txdb, userID, transactionID, transactionActionRevokeAllocations, reason, idempotencyKey, operationID, now); err != nil {
+		target = obligations[target.ID]
+		if _, _, _, err := s.revokeTransactionAllocationsInTx(txdb, userID, transactionID, "修改匹配", ""); err != nil {
 			return err
 		}
-		// The in-memory allocations were read before the void update above, so they
-		// still read as effective. Project from the persisted rows instead.
-		allocationsAfter := make([]paymentAllocation, 0, len(allocations))
-		if err := txdb.Where("payment_transaction_id = ? AND user_id = ?", transactionID, userID).Order("id ASC").Find(&allocationsAfter).Error; err != nil {
-			return err
-		}
-		projection := projectTransactionMatch(source, allocationsAfter, transactionActionRevokeAllocations, reason)
-		if err := updateTransactionProjection(txdb, userID, transactionID, projection); err != nil {
-			return err
-		}
-		summary = summarizeTransactionAllocations(source, allocationsAfter)
-		return nil
+		_, err = s.allocateTransactionInTx(txdb, userID, transactionID, []transactionAllocationDraft{{
+			TenantID:         target.TenantID,
+			RentObligationID: target.ID,
+			AmountCents:      previous.AmountCents,
+			Kind:             allocationKindRent,
+		}}, "", "manual_rematch")
+		return err
 	})
-	return summary, err
+}
+
+// lockRentObligations acquires all affected obligation rows in ascending ID
+// order. Rematching can touch both an old and a new rent month, so a stable
+// order prevents two inverse rematch requests from waiting on each other.
+func lockRentObligations(txdb *gorm.DB, userID uint64, obligationIDs ...uint64) (map[uint64]rentObligation, error) {
+	ids := make([]uint64, 0, len(obligationIDs))
+	seen := make(map[uint64]struct{}, len(obligationIDs))
+	for _, obligationID := range obligationIDs {
+		if obligationID == 0 {
+			return nil, errors.New("rent obligation ID is required")
+		}
+		if _, ok := seen[obligationID]; ok {
+			continue
+		}
+		seen[obligationID] = struct{}{}
+		ids = append(ids, obligationID)
+	}
+	sort.Slice(ids, func(left, right int) bool { return ids[left] < ids[right] })
+	obligations := make(map[uint64]rentObligation, len(ids))
+	for _, obligationID := range ids {
+		var obligation rentObligation
+		if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", obligationID, userID).First(&obligation).Error; err != nil {
+			return nil, err
+		}
+		obligations[obligationID] = obligation
+	}
+	return obligations, nil
 }
 
 func updateTransactionProjection(txdb *gorm.DB, userID, transactionID uint64, projection transactionMatchProjection) error {

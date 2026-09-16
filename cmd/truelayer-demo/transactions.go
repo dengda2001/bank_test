@@ -398,10 +398,18 @@ type transactionPageRow struct {
 	MatchReason               string
 	CandidateTenantID         uint64
 	CandidateTenantName       string
+	CandidateRentObligationID uint64
+	CandidatePeriod           string
 	CanConfirm                bool
 	TenantID                  uint64
 	NeedsMonthChoice          bool
 	MonthOptions              []billingMonthOption
+	ManualMatchOptions        []billingRentMatchOption
+	CanRematch                bool
+	CanEditRentMatch          bool
+	RematchOptions            []billingRentMatchOption
+	RematchTenantOptions      []billingTenantOption
+	RematchMonthOptions       []billingMonthOption
 }
 
 func paymentTransactionInputFromModel(row paymentTransaction) paymentTransactionInput {

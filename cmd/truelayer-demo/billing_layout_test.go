@@ -100,6 +100,84 @@ func TestBillingTransactionRowsShowOnlyConfirmedRentMonthAndNoTechnicalIDs(t *te
 	}
 }
 
+func TestBillingTemplateUsesExplicitOneClickMatchAndLimitedRematch(t *testing.T) {
+	page := renderBillingPage(t, billingPageData{
+		TransactionRows: []transactionPageRow{
+			{
+				ID:                        "7",
+				Direction:                 "income",
+				MatchStatus:               "unmatched",
+				MatchStatusLabel:          "未关联",
+				CandidateTenantID:         12,
+				CandidateTenantName:       "Aoife Murphy",
+				CandidateRentObligationID: 20,
+				CandidatePeriod:           "2026-09",
+				CanConfirm:                true,
+			},
+			{
+				ID:                   "8",
+				Direction:            "income",
+				MatchStatus:          "matched",
+				MatchStatusLabel:     "已关联",
+				CanRematch:           true,
+				CanEditRentMatch:     true,
+				RematchTenantOptions: []billingTenantOption{{ID: 22, Name: "Bríd Murphy"}},
+				RematchMonthOptions:  []billingMonthOption{{Period: "2026-10", Label: "2026年10月", Remaining: "EUR 950.00"}},
+			},
+		},
+	})
+
+	for _, expected := range []string{"一键匹配", `action="/billing/confirm"`, `name="rent_obligation_id" value="20"`, "租金月 2026-09", "修改匹配", `action="/billing/rematch"`, `name="tenant_id"`, `aria-label="修改匹配租客"`, `name="period"`, `aria-label="修改租金月份"`, "Bríd Murphy", "2026年10月"} {
+		if !strings.Contains(page, expected) {
+			t.Fatalf("billing page missing explicit match control %q: %s", expected, page)
+		}
+	}
+	rematchStart := strings.Index(page, `<form class="rematch-form"`)
+	if rematchStart < 0 {
+		t.Fatal("billing page missing rematch form")
+	}
+	rematchEnd := strings.Index(page[rematchStart:], `</form>`)
+	if rematchEnd < 0 {
+		t.Fatal("billing page rematch form is not closed")
+	}
+	rematchMarkup := page[rematchStart : rematchStart+rematchEnd]
+	if strings.Contains(rematchMarkup, `name="rent_obligation_id"`) {
+		t.Fatalf("rematch form should not use a combined rent-obligation selector: %s", rematchMarkup)
+	}
+}
+
+func TestRematchFilterOptionsStayIndependentAndDeduplicated(t *testing.T) {
+	tenantOptions, monthOptions := rematchFilterOptions([]billingRentMatchOption{
+		{TenantID: 1, TenantName: "租客甲", Period: "2026-09", PeriodLabel: "2026年9月"},
+		{TenantID: 1, TenantName: "租客甲", Period: "2026-10", PeriodLabel: "2026年10月"},
+		{TenantID: 2, TenantName: "租客乙", Period: "2026-09", PeriodLabel: "2026年9月"},
+	})
+	if len(tenantOptions) != 2 || len(monthOptions) != 2 {
+		t.Fatalf("independent options = tenants %d, months %d; want 2 each", len(tenantOptions), len(monthOptions))
+	}
+	if tenantOptions[0].ID != 1 || tenantOptions[1].ID != 2 || monthOptions[0].Period != "2026-09" || monthOptions[1].Period != "2026-10" {
+		t.Fatalf("unexpected independent options: tenants=%+v months=%+v", tenantOptions, monthOptions)
+	}
+}
+
+func TestBillingTemplateKeepsSplitMatchOnTheRevokeFlow(t *testing.T) {
+	page := renderBillingPage(t, billingPageData{TransactionRows: []transactionPageRow{{
+		ID:               "9",
+		Direction:        "income",
+		MatchStatus:      "matched",
+		MatchStatusLabel: "已关联",
+	}}})
+
+	for _, expected := range []string{"该流水已拆分或含其他用途；请撤销后重新归类。", `action="/billing/revoke"`} {
+		if !strings.Contains(page, expected) {
+			t.Fatalf("billing page missing split-match revoke guidance %q: %s", expected, page)
+		}
+	}
+	if strings.Contains(page, `action="/billing/rematch"`) {
+		t.Fatalf("split match unexpectedly renders direct rematch: %s", page)
+	}
+}
+
 // Sorting by heading has to survive filtering and paging: the current column
 // rides along in the filter form and in the pager, or 应用筛选 would reorder the
 // list behind the reader's back.

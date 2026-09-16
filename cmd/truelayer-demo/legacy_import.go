@@ -107,9 +107,6 @@ func ImportLegacyFiles(ctx context.Context, db *gorm.DB, userID uint64, cfg conf
 		}
 		summary.Expenses++
 	}
-	if err := transactionStore.reconcileTransactions(ctx, userID); err != nil {
-		return summary, fmt.Errorf("reconcile imported transactions: %w", err)
-	}
 	return summary, nil
 }
 

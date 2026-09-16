@@ -779,7 +779,7 @@ func TestBillingTemplateShowsMonthChoiceForRememberedTenant(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"已关联租客，请确认租金月份", "选择月份...", "2026年8月", "应收 EUR 950.00", "确认月份"} {
+	for _, expected := range []string{"已识别租客，请确认租金月份", "选择月份...", "2026年8月", "应收 EUR 950.00", "确认匹配"} {
 		if !strings.Contains(body.String(), expected) {
 			t.Fatalf("billing page missing month-choice text %q: %s", expected, body.String())
 		}
@@ -828,6 +828,7 @@ func TestBillingMutationRoutesRequireAuthentication(t *testing.T) {
 		handler func(*app) http.HandlerFunc
 	}{
 		{path: "/billing/allocate", handler: func(a *app) http.HandlerFunc { return a.handleTransactionAllocation }},
+		{path: "/billing/rematch", handler: func(a *app) http.HandlerFunc { return a.handleTransactionRematch }},
 		{path: "/billing/ignore", handler: func(a *app) http.HandlerFunc { return a.handleTransactionIgnore }},
 		{path: "/billing/restore", handler: func(a *app) http.HandlerFunc { return a.handleTransactionRestore }},
 		{path: "/billing/revoke", handler: func(a *app) http.HandlerFunc { return a.handleTransactionRevoke }},

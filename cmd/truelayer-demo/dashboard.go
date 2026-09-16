@@ -73,11 +73,6 @@ func (a *app) renderRentDashboard(w http.ResponseWriter, r *http.Request, action
 	data.StatusSort = sortLinkFor(sortURL, activeSort, dashboardDefaultSort, "")
 
 	if userID, ok := a.currentUserID(r); ok && a.db != nil {
-		service := newTransactionService(a.db)
-		if err := service.reconcileTransactions(r.Context(), userID); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
 		summary, err := newObligationService(a.db).summarizeRentDashboardWithFilters(r.Context(), userID, periodMonth, filters)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

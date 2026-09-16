@@ -493,85 +493,100 @@ cashReceipt{UserID: userID, RentObligationID: obligationID, AmountCents: cents}
 projectRentObligation(obligation, bankAllocations, cashReceipts, now)
 ```
 
-## Scenario: Remembered Payer Association and Explicit Rent Month
+## Scenario: Manual Bank Transaction Matching and Rent-Month Correction
 
 ### 1. Scope / Trigger
 
-- Trigger: Manual income-to-tenant binding, automatic reconciliation, or any
-  change to monthly rent dashboard totals.
-- Applies to the database-backed `/billing` and `/rent-dashboard` flows.
+- Trigger: Rendering bank-transaction match suggestions, explicitly matching a
+  receipt to rent, or correcting the tenant/month of an existing rent match.
+- Applies to `/billing`, `/billing/confirm`, `/billing/rematch`, and the
+  transaction/allocation ledger. Dashboard rendering and legacy import are
+  specifically read-only with respect to transaction matching.
 
 ### 2. Signatures
 
-- `POST /billing/confirm` accepts `transaction_id`, `tenant_id`, and an optional
-  `period=YYYY-MM`.
+- `POST /billing/confirm` accepts a `transaction_id` plus either a user-scoped
+  `rent_obligation_id`, or the compatible `tenant_id` and `period=YYYY-MM`
+  pair.
+- `POST /billing/rematch` accepts only `transaction_id`, a target `tenant_id`,
+  and `period=YYYY-MM`; the server resolves the scoped rent obligation.
 - `transactionService.confirmRentMatch(ctx, userID, transactionID, tenantID,
-  period)` keeps tenant identity association separate from rent allocation.
-- `payment_transactions.matched_tenant_id` stores a user-scoped remembered
-  tenant association; `tenants.payer_name_hint` stores the exact normalized
-  payer-name rule after confirmation.
+  period, rememberPayer)` and `confirmRentMatchToObligation` own initial
+  matching.
+- `transactionService.rematchRentAllocation(ctx, userID, transactionID,
+  targetTenantID, targetPeriod)` owns the limited direct correction path.
 
 ### 3. Contracts
 
-- A manual binding stores the payer name hint and associates all same-user,
-  exact-normalized-name, unconfirmed income transactions that have not already
-  been allocated. Existing confirmed allocations are never overwritten.
-- A unique remembered payer name may automatically identify future transactions.
-  It may allocate only when the transaction reference or transaction month
-  selects an unpaid obligation. The nearest-open-month fallback is forbidden.
-- If identity is known but month or amount cannot be safely allocated, the
-  transaction remains `needs_review` with `matched_tenant_id` set. The UI must
-  offer a month choice with expected, paid, and remaining amounts.
-- A submitted month is checked for user/tenant ownership, currency and current
-  remaining balance before allocation; allocation remains idempotent.
+- Billing may calculate a remembered-payer/parsed-month suggestion in memory,
+  but listing `/billing`, rendering `/rent-dashboard`, and importing legacy
+  data must not change a transaction's match projection, parsed-period facts,
+  or allocations.
+- A rent allocation is created only by an explicit POST. The target is reloaded
+  with `user_id`, and the existing allocation service validates income, EUR,
+  tenant ownership, and the current obligation balance under locks. Remembering
+  the payer happens only after a successful allocation.
+- A direct rematch may move only a transaction with exactly one effective
+  `rent` allocation. It voids the old allocation, records the revoke audit
+  action, creates an equivalent allocation for the chosen obligation, and
+  projects both obligations in one database transaction.
+- The rematch UI exposes tenant and rent-month choices independently; it does
+  not materialize a tenant × month Cartesian-product selector. The submitted
+  pair is resolved and validated server-side.
+- Old and new obligation rows are locked in ascending ID order before a
+  rematch. This prevents two inverse corrections from deadlocking. Original
+  bank source facts (provider/stable IDs, date, payer, description, reference,
+  amount, currency, and raw payload) are never edited by matching.
+- Split or mixed-purpose transactions use revoke then reclassify; their
+  allocations are never silently merged or rewritten by direct rematch.
 
 ### 4. Validation & Error Matrix
 
-- Missing or cross-user transaction/tenant -> safe confirmation error; no write.
-- Same payer name maps to multiple remembered tenants -> `needs_review`; no
-  automatic allocation.
-- Paid referenced month with another unpaid month -> retain tenant association
-  and require the user to select a month.
-- Amount greater than selected obligation balance or currency mismatch -> keep
-  pending review; do not increase paid amount.
-- Duplicate confirmation or refresh -> no duplicate allocation or amount.
+- Missing, invalid, or cross-user transaction/obligation -> safe confirmation
+  error with no write.
+- Ambiguous remembered payer, absent period, paid target, over-capacity target,
+  or currency mismatch -> show/select another manual target; never auto-match.
+- A rematch to the same obligation, or any source with zero, multiple, or
+  non-rent effective allocations -> reject without voiding the old allocation.
+- A failure after the old allocation is voided (including target validation or
+  insert failure) -> roll back the void, action row, source projection, and
+  affected obligation projections together.
 
 ### 5. Good/Base/Bad Cases
 
-- Good: One binding remembers the payer name, allocates eligible same-name
-  payments, and exposes ambiguous payments for one-time month selection.
-- Base: A payer ID still has priority; exact payer-name confirmation remains the
-  fallback when the bank does not provide a stable ID.
-- Bad: Automatically assigning an ambiguous payment to the closest historical
-  unpaid month, or treating a name match as confirmed without user action.
+- Good: a visible `一键匹配` suggestion posts a transaction and obligation; the
+  server validates the fresh target before allocating it.
+- Base: a renter changes one matched receipt from September to October; the
+  September allocation remains as `voided` with a `修改匹配` audit reason, and
+  an equivalent confirmed allocation appears in October.
+- Bad: a GET/import writes a match decision, an action trusts an unscoped hidden
+  ID, or a correction overwrites an existing allocation row or bank receipt.
 
 ### 6. Tests Required
 
-- Matching unit tests assert remembered exact names use `auto_name` and paid
-  referenced months return no automatic obligation.
-- Service tests should assert batch association, sequential partial payments,
-  duplicate confirmation, user isolation, conflict handling and selected-month
-  validation against fresh balances.
-- Template tests assert Chinese labels and the month-choice form show expected,
-  paid and remaining values.
+- Template tests assert `一键匹配`, independent tenant/month-only `修改匹配`
+  selectors, and revoke/reclassify guidance for split rows.
+- Service/database tests assert explicit target validation, no allocation from
+  billing reads after a revoke, void-plus-replacement audit history, both
+  obligation projections, cross-user rejection, and split/mixed rejection.
+- Concurrency tests or code review must verify deterministic old/new obligation
+  lock ordering; run the MySQL suite with a disposable test DSN when available.
 
 ### 7. Wrong vs Correct
 
 Wrong:
 
 ```go
-// silently redirects a payment to the nearest unpaid month
-obligation, ok := selectNearestOpenObligation(transaction, tenantID)
+// Rewriting history loses the old match and can leave projections inconsistent.
+db.Model(&paymentAllocation{}).Where("id = ?", allocationID).
+    Updates(map[string]any{"tenant_id": tenantID, "rent_obligation_id": obligationID})
 ```
 
 Correct:
 
 ```go
-// associate identity first; allocate only the explicit or eligible month
-if decisionNeedsReview {
-    setMatchedTenant(transactionID, tenantID)
-    setMatchStatus(transactionID, "needs_review")
-}
+// Preserve the old row as voided, then create an equivalent replacement atomically.
+err := service.rematchRentAllocation(ctx, userID, transactionID, targetTenantID, targetPeriod)
 ```
 
 ## Scenario: Tenant Profile, Name-Only Payers, and Lifecycle History
@@ -890,9 +905,10 @@ created, err := service.settleRentObligation(ctx, userID, obligationID)
 - Ignore, restore, and revoke are separate append-only action records with a
   required reason, operation ID, actor, and optional idempotency key. Revoke
   voids current effective allocations but never deletes the source or audit.
-- Automatic matching reads active `tenant_payers`, requires an explicit parsed
-  rent period and balance/currency evidence, and never auto-selects a shared
-  payer. Arrival month is a query field, not a rent-period fallback.
+- Candidate matching reads active `tenant_payers`, parsed rent-period facts,
+  and balance/currency evidence only to render a suggestion. It never writes a
+  match or allocation without an explicit POST; arrival month is a query field,
+  not a rent-period fallback.
 - Sync coverage is authoritative only from persisted run/account rows. A
   partial or failed account result must not be shown as a complete yearly sync.
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -27,100 +28,6 @@ type paymentAllocation struct {
 	VoidReason           *string
 	ConfirmationSource   string
 	CreatedAt            time.Time
-}
-
-func (s *transactionService) reconcileTransactions(ctx context.Context, userID uint64) error {
-	if userID == 0 {
-		return errors.New("userID is required")
-	}
-	var transactions []paymentTransaction
-	if err := s.db.WithContext(ctx).
-		Where("user_id = ? AND direction = ? AND match_status IN ? AND source <> ?", userID, "income", pendingMatchStatuses, manualBalanceTransactionSource).
-		Order("transaction_time ASC, id ASC").Find(&transactions).Error; err != nil {
-		return err
-	}
-	if len(transactions) == 0 {
-		return nil
-	}
-
-	var tenants []tenant
-	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Find(&tenants).Error; err != nil {
-		return err
-	}
-	var payers []tenantPayer
-	if err := s.db.WithContext(ctx).Where("user_id = ? AND removed_at IS NULL", userID).Find(&payers).Error; err != nil {
-		return err
-	}
-	obligations := make([]rentObligation, 0)
-	for _, row := range transactions {
-		if row.TransactionTime == nil {
-			continue
-		}
-		periods := []time.Time{monthStart(*row.TransactionTime)}
-		if period, ok := parseReferencedPeriod(row.Description+" "+row.Reference, *row.TransactionTime); ok {
-			periods = append(periods, period)
-		}
-		for _, period := range periods {
-			if err := newObligationService(s.db).ensureMonthlyObligations(ctx, userID, period); err != nil {
-				return err
-			}
-		}
-	}
-	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Find(&obligations).Error; err != nil {
-		return err
-	}
-
-	for _, row := range transactions {
-		if row.MatchedTenantID != nil {
-			continue
-		}
-		input := paymentTransactionInputFromModel(row)
-		if input.ParsedPeriodMonth == nil {
-			if parsed, ok := parseReferencedPeriod(row.Description+" "+row.Reference, firstNonZeroTime(row.TransactionTime)); ok {
-				input.ParsedPeriodMonth = &parsed
-				input.ParsedPeriodSource = parsedPeriodSource(true)
-				input.ParsedPeriodNote = parsedPeriodNote(row.Description, row.Reference, true)
-				if err := s.db.WithContext(ctx).Model(&paymentTransaction{}).Where("id = ? AND user_id = ?", row.ID, userID).Updates(map[string]any{
-					"parsed_period_month":  parsed,
-					"parsed_period_source": input.ParsedPeriodSource,
-					"parsed_period_note":   input.ParsedPeriodNote,
-				}).Error; err != nil {
-					return err
-				}
-			}
-		}
-		decision := decideStrictRentMatch(input, payers, tenants, obligations)
-		if decision.Status == "matched" || decision.Status == "partial" {
-			if decision.ConfirmationSource != "auto_id" && decision.ConfirmationSource != "auto_name" {
-				if err := s.setMatchDecision(ctx, userID, row.ID, decision); err != nil {
-					return err
-				}
-				continue
-			}
-		}
-		if decision.Status == "matched" || decision.Status == "partial" {
-			if err := s.applyAllocation(ctx, userID, row, decision, decision.ConfirmationSource); err != nil {
-				return err
-			}
-		} else if err := s.setMatchDecision(ctx, userID, row.ID, decision); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (s *transactionService) setMatchDecision(ctx context.Context, userID, transactionID uint64, decision matchDecision) error {
-	updates := map[string]any{
-		"match_status":      decision.Status,
-		"match_reason":      nullableString(decision.Reason),
-		"matched_tenant_id": nil,
-	}
-	if decision.TenantID != 0 {
-		updates["matched_tenant_id"] = decision.TenantID
-	}
-	return s.db.WithContext(ctx).Model(&paymentTransaction{}).
-		Where("id = ? AND user_id = ?", transactionID, userID).
-		Updates(updates).Error
 }
 
 func (s *transactionService) applyAllocation(ctx context.Context, userID uint64, transaction paymentTransaction, decision matchDecision, source string) error {
@@ -173,15 +80,24 @@ func (s *transactionService) confirmRentMatch(ctx context.Context, userID, trans
 	return nil
 }
 
+func (s *transactionService) confirmRentMatchToObligation(ctx context.Context, userID, transactionID, rentObligationID uint64, rememberPayer bool) error {
+	if userID == 0 || transactionID == 0 || rentObligationID == 0 {
+		return errors.New("transaction, rent obligation, and user are required")
+	}
+	var obligation rentObligation
+	if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", rentObligationID, userID).First(&obligation).Error; err != nil {
+		return err
+	}
+	period := monthStart(obligation.PeriodMonth)
+	return s.confirmRentMatch(ctx, userID, transactionID, obligation.TenantID, &period, rememberPayer)
+}
+
 func (s *transactionService) listTransactionPageRows(ctx context.Context, userID uint64, filters transactionFilters) ([]transactionPageRow, error) {
 	rows, _, err := s.listTransactionPageRowsWithTotal(ctx, userID, filters)
 	return rows, err
 }
 
 func (s *transactionService) listTransactionPageRowsWithTotal(ctx context.Context, userID uint64, filters transactionFilters) ([]transactionPageRow, int64, error) {
-	if err := s.reconcileTransactions(ctx, userID); err != nil {
-		return nil, 0, err
-	}
 	transactions, total, err := s.listTransactionsPage(ctx, userID, filters)
 	if err != nil {
 		return nil, 0, err
@@ -213,40 +129,132 @@ func (s *transactionService) listTransactionPageRowsWithTotal(ctx context.Contex
 		}
 	}
 	rows := make([]transactionPageRow, 0, len(transactions))
+	tenantNames := make(map[uint64]string, len(tenants))
+	for _, tenantRow := range tenants {
+		tenantNames[tenantRow.ID] = tenantRow.Name
+	}
 	for _, transaction := range transactions {
-		row := enrichTransactionPageRow(transactionPageRowFromModel(transaction), transaction, allocationsByTransaction[transaction.ID], obligations)
-		if row.TenantID != 0 && transaction.Direction == "income" && transaction.MatchStatus != "matched" {
+		allocations := allocationsByTransaction[transaction.ID]
+		row := enrichTransactionPageRow(transactionPageRowFromModel(transaction), transaction, allocations, obligations)
+		summary := summarizeTransactionAllocations(transaction, allocations)
+		if row.TenantID != 0 && transaction.Direction == "income" && summary.AllocatedCents == 0 && transaction.MatchStatus != "ignored" {
 			row.NeedsMonthChoice = true
-			for _, obligation := range obligations {
-				if obligation.TenantID != row.TenantID || obligation.RecordStatus == obligationRecordVoided || obligation.PaidAmountCents >= obligation.ExpectedAmountCents {
-					continue
-				}
-				currency := firstNonEmpty(obligation.Currency, transaction.Currency, "EUR")
-				row.MonthOptions = append(row.MonthOptions, billingMonthOption{
-					Period:    obligation.PeriodMonth.Format("2006-01"),
-					Label:     fmt.Sprintf("%d年%d月", obligation.PeriodMonth.Year(), obligation.PeriodMonth.Month()),
-					Expected:  formatMoney(centsToMoney(obligation.ExpectedAmountCents), currency, 2),
-					Paid:      formatMoney(centsToMoney(obligation.PaidAmountCents), currency, 2),
-					Remaining: formatMoney(centsToMoney(obligation.ExpectedAmountCents-obligation.PaidAmountCents), currency, 2),
-				})
+			row.MonthOptions = rentMonthOptionsForTenant(transaction, obligations, row.TenantID)
+		}
+		if transaction.Direction == "income" && summary.AllocatedCents == 0 && transaction.MatchStatus != "ignored" {
+			decision := decideStrictRentMatch(paymentTransactionInputFromModel(transaction), payers, tenants, obligations)
+			switch decision.Status {
+			case "matched", "partial":
+				row.CandidateTenantID = decision.TenantID
+				row.CandidateTenantName = tenantNames[decision.TenantID]
+				row.CandidateRentObligationID = decision.RentObligationID
+				row.CandidatePeriod = monthStart(decision.PeriodMonth).Format("2006-01")
+				row.CanConfirm = decision.TenantID != 0 && decision.RentObligationID != 0
+			case "candidate":
+				row.TenantID = decision.TenantID
+				row.NeedsMonthChoice = decision.TenantID != 0
 			}
 		}
-		if transaction.Direction == "income" && transaction.MatchStatus == "candidate" {
-			decision := decideStrictRentMatch(paymentTransactionInputFromModel(transaction), payers, tenants, obligations)
-			if decision.Status == "candidate" {
-				row.CandidateTenantID = decision.TenantID
-				row.CanConfirm = decision.TenantID != 0
-				for _, tenantRow := range tenants {
-					if tenantRow.ID == decision.TenantID {
-						row.CandidateTenantName = tenantRow.Name
-						break
-					}
-				}
-			}
+		if row.NeedsMonthChoice && len(row.MonthOptions) == 0 {
+			row.MonthOptions = rentMonthOptionsForTenant(transaction, obligations, row.TenantID)
+		}
+		if transaction.Direction == "income" && summary.AllocatedCents == 0 && transaction.MatchStatus != "ignored" && !row.CanConfirm && !row.NeedsMonthChoice {
+			row.ManualMatchOptions = availableRentMatchOptions(transaction, obligations, tenantNames, transaction.AmountCents, 0)
+		}
+		if effectiveRentAllocation, ok := singleEffectiveRentAllocation(allocations); ok {
+			row.CanRematch = true
+			row.RematchOptions = availableRentMatchOptions(transaction, obligations, tenantNames, effectiveRentAllocation.AmountCents, effectiveRentAllocation.RentObligationIDValue())
+			row.CanEditRentMatch = len(row.RematchOptions) > 0
+			row.RematchTenantOptions, row.RematchMonthOptions = rematchFilterOptions(row.RematchOptions)
 		}
 		rows = append(rows, row)
 	}
 	return rows, total, nil
+}
+
+func availableRentMatchOptions(source paymentTransaction, obligations []rentObligation, tenantNames map[uint64]string, amountCents int64, excludedObligationID uint64) []billingRentMatchOption {
+	if amountCents <= 0 {
+		return nil
+	}
+	options := make([]billingRentMatchOption, 0)
+	for _, obligation := range obligations {
+		if obligation.ID == excludedObligationID || obligation.RecordStatus == obligationRecordVoided || obligation.ExpectedAmountCents-obligation.PaidAmountCents < amountCents || !strings.EqualFold(firstNonEmpty(obligation.Currency, source.Currency), source.Currency) {
+			continue
+		}
+		options = append(options, billingRentMatchOption{
+			RentObligationID: obligation.ID,
+			TenantID:         obligation.TenantID,
+			TenantName:       firstNonEmpty(tenantNames[obligation.TenantID], "租客"),
+			Period:           monthStart(obligation.PeriodMonth).Format("2006-01"),
+			PeriodLabel:      formatMonthLabel(obligation.PeriodMonth),
+			Remaining:        formatMoney(centsToMoney(obligation.ExpectedAmountCents-obligation.PaidAmountCents), source.Currency, 2),
+			Label:            fmt.Sprintf("%s · %d年%d月 · 未收 %s", firstNonEmpty(tenantNames[obligation.TenantID], "租客"), obligation.PeriodMonth.Year(), obligation.PeriodMonth.Month(), formatMoney(centsToMoney(obligation.ExpectedAmountCents-obligation.PaidAmountCents), source.Currency, 2)),
+		})
+	}
+	return options
+}
+
+func rematchFilterOptions(options []billingRentMatchOption) ([]billingTenantOption, []billingMonthOption) {
+	tenants := make([]billingTenantOption, 0)
+	months := make([]billingMonthOption, 0)
+	seenTenants := make(map[uint64]struct{}, len(options))
+	seenMonths := make(map[string]struct{}, len(options))
+	for _, option := range options {
+		if option.TenantID != 0 {
+			if _, seen := seenTenants[option.TenantID]; !seen {
+				seenTenants[option.TenantID] = struct{}{}
+				tenants = append(tenants, billingTenantOption{ID: option.TenantID, Name: option.TenantName})
+			}
+		}
+		if option.Period != "" {
+			if _, seen := seenMonths[option.Period]; !seen {
+				seenMonths[option.Period] = struct{}{}
+				months = append(months, billingMonthOption{Period: option.Period, Label: option.PeriodLabel, Remaining: option.Remaining})
+			}
+		}
+	}
+	return tenants, months
+}
+
+func rentMonthOptionsForTenant(source paymentTransaction, obligations []rentObligation, tenantID uint64) []billingMonthOption {
+	if tenantID == 0 || source.AmountCents <= 0 {
+		return nil
+	}
+	options := make([]billingMonthOption, 0)
+	for _, obligation := range obligations {
+		if obligation.TenantID != tenantID || obligation.RecordStatus == obligationRecordVoided || obligation.PaidAmountCents >= obligation.ExpectedAmountCents || obligation.ExpectedAmountCents-obligation.PaidAmountCents < source.AmountCents || !strings.EqualFold(firstNonEmpty(obligation.Currency, source.Currency), source.Currency) {
+			continue
+		}
+		currency := firstNonEmpty(obligation.Currency, source.Currency, "EUR")
+		options = append(options, billingMonthOption{
+			Period:    obligation.PeriodMonth.Format("2006-01"),
+			Label:     fmt.Sprintf("%d年%d月", obligation.PeriodMonth.Year(), obligation.PeriodMonth.Month()),
+			Expected:  formatMoney(centsToMoney(obligation.ExpectedAmountCents), currency, 2),
+			Paid:      formatMoney(centsToMoney(obligation.PaidAmountCents), currency, 2),
+			Remaining: formatMoney(centsToMoney(obligation.ExpectedAmountCents-obligation.PaidAmountCents), currency, 2),
+		})
+	}
+	return options
+}
+
+func singleEffectiveRentAllocation(allocations []paymentAllocation) (paymentAllocation, bool) {
+	var effective []paymentAllocation
+	for _, allocation := range allocations {
+		if ledgerAllocationIsEffective(allocation) {
+			effective = append(effective, allocation)
+		}
+	}
+	if len(effective) != 1 || ledgerAllocationKind(effective[0]) != allocationKindRent || effective[0].RentObligationID == nil || *effective[0].RentObligationID == 0 {
+		return paymentAllocation{}, false
+	}
+	return effective[0], true
+}
+
+func (a paymentAllocation) RentObligationIDValue() uint64 {
+	if a.RentObligationID == nil {
+		return 0
+	}
+	return *a.RentObligationID
 }
 
 func transactionID(value string) (uint64, error) {
