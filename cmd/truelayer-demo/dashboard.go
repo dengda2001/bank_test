@@ -169,6 +169,7 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Funcs(t
 	    .dashboard-toolbar label { margin: 0; min-width: 150px; }
 	    .dashboard-filter { flex-wrap: wrap; justify-content: flex-end; }
 	    .dashboard-filter label { min-width: 140px; }
+	    .dashboard-filter .filter-actions { display: flex; gap: 8px; }
 	    .dashboard-filter input, .dashboard-filter select { min-height: 42px; border-radius: 8px; padding: 9px 12px; background: var(--surface-muted); }
 	    .dashboard-filter input:focus, .dashboard-filter select:focus { border-color: var(--accent); background: var(--surface); }
 	    .dashboard-counts { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: -6px 0 18px; color: var(--foreground-subtle); }
@@ -243,7 +244,19 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Funcs(t
 	    @media (max-width: 760px) { .dunning-grid { grid-template-columns: 1fr; } .dunning-config { padding-right: 0; padding-bottom: 16px; border-right: 0; border-bottom: 1px solid var(--border); } .dunning-result-row { align-items: flex-start; } .dunning-retry { width: 100%; margin-left: 0; } }
 	    @media (max-width: 760px) { .payment-item { grid-template-columns: 1fr 1fr; } .payment-item .payment-description { grid-column: 1 / -1; } }
     @media (max-width: 900px) { .dashboard-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-	    @media (max-width: 640px) { .dashboard-summary, .dashboard-secondary { grid-template-columns: 1fr; } .dashboard-toolbar { align-items: stretch; flex-direction: column; min-width: 0; } .dashboard-toolbar form { display: flex; width: 100%; max-width: 100%; min-width: 0; flex-wrap: wrap; align-items: stretch; gap: 8px; } .dashboard-toolbar form label { width: 100%; flex: 1 1 100%; min-width: 0; } .dashboard-toolbar form input, .dashboard-toolbar form select { min-width: 0; width: 100%; } .month-nav { flex: 0 0 42px; } .dashboard-filter .month-nav { flex: 0 0 42px; } .dashboard-filter .btn { flex: 1 1 auto; } }
+	    @media (max-width: 640px) {
+      .dashboard-summary, .dashboard-secondary { grid-template-columns: 1fr; }
+      .dashboard-toolbar { align-items: stretch; flex-direction: column; min-width: 0; }
+      .dashboard-toolbar form.dashboard-filter { display: grid; width: 100%; max-width: 100%; min-width: 0; grid-template-columns: 42px minmax(0, 1fr) 42px; align-items: end; gap: 8px; }
+      .dashboard-toolbar .dashboard-filter label { width: auto; min-width: 0; flex: none; }
+      .dashboard-toolbar .dashboard-filter .period-filter { grid-column: 2; }
+      .dashboard-filter .previous { grid-column: 1; grid-row: 1; }
+      .dashboard-filter .next { grid-column: 3; grid-row: 1; }
+      .dashboard-toolbar .dashboard-filter label:not(.period-filter) { grid-column: 1 / -1; }
+      .dashboard-toolbar form.dashboard-filter input, .dashboard-toolbar form.dashboard-filter select { min-width: 0; width: 100%; }
+	      .dashboard-toolbar .dashboard-filter .filter-actions { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+	      .dashboard-toolbar .dashboard-filter .filter-actions .btn { width: 100%; min-width: 0; }
+    }
   </style>
   <script>` + workspaceCalendarScript + `</script>
 </head>
@@ -273,14 +286,13 @@ var rentDashboardTemplate = template.Must(template.New("rent-dashboard").Funcs(t
 	    {{if .Dunning.Enabled}}<button class="btn dunning-launch" type="button" data-dunning-open aria-controls="dunning-drawer" aria-expanded="{{if .Dunning.Open}}true{{else}}false{{end}}">邮件催缴</button>{{end}}
 	    <form class="dashboard-filter" method="get" action="/rent-dashboard">
 	      <a class="month-nav previous" href="{{rentDashboardURL .PreviousPeriod .SearchFilter .StatusFilter .SortFilter 1 .PageSize}}" aria-label="查看上个月">‹</a>
-	      <label for="period">选择月份<input id="period" name="period" type="month" value="{{.Period}}" onchange="this.form.submit()"></label>
+	      <label class="period-filter" for="period">选择月份<input id="period" name="period" type="month" value="{{.Period}}" onchange="this.form.submit()"></label>
 	      <a class="month-nav next" href="{{rentDashboardURL .NextPeriod .SearchFilter .StatusFilter .SortFilter 1 .PageSize}}" aria-label="查看下个月">›</a>
 	      <label for="dashboard-search">搜索租客<input id="dashboard-search" name="search" type="search" value="{{.SearchFilter}}" placeholder="姓名、别名、房间"></label>
 	      <label for="dashboard-status">状态<select id="dashboard-status" name="status"><option value="all"{{if eq .StatusFilter "all"}} selected{{end}}>全部</option><option value="unpaid"{{if eq .StatusFilter "unpaid"}} selected{{end}}>未缴（含部分）</option><option value="overdue"{{if eq .StatusFilter "overdue"}} selected{{end}}>逾期</option><option value="needs_review"{{if eq .StatusFilter "needs_review"}} selected{{end}}>待确认</option><option value="partial"{{if eq .StatusFilter "partial"}} selected{{end}}>部分缴纳</option><option value="open"{{if eq .StatusFilter "open"}} selected{{end}}>未开始收款</option><option value="paid"{{if eq .StatusFilter "paid"}} selected{{end}}>已缴清</option></select></label>
 	      <label for="dashboard-sort">排序<select id="dashboard-sort" name="sort"><option value="status"{{if eq .SortFilter "status"}} selected{{end}}>优先显示待处理</option><option value="tenant_asc"{{if eq .SortFilter "tenant_asc"}} selected{{end}}>租客姓名</option><option value="amount_desc"{{if eq .SortFilter "amount_desc"}} selected{{end}}>应收金额从高到低</option><option value="amount_asc"{{if eq .SortFilter "amount_asc"}} selected{{end}}>应收金额从低到高</option><option value="due_asc"{{if eq .SortFilter "due_asc"}} selected{{end}}>应缴日从早到晚</option><option value="due_desc"{{if eq .SortFilter "due_desc"}} selected{{end}}>应缴日从晚到早</option></select></label>
 	      <label for="dashboard-page-size">每页<select id="dashboard-page-size" name="page_size"><option value="12"{{if eq .PageSize 12}} selected{{end}}>12</option><option value="24"{{if eq .PageSize 24}} selected{{end}}>24</option><option value="50"{{if eq .PageSize 50}} selected{{end}}>50</option></select></label>
-	      <button class="btn" type="submit">筛选</button>
-	      <a class="btn subtle" href="/rent-dashboard?period={{.Period}}">清除筛选</a>
+	      <div class="filter-actions"><button class="btn" type="submit">筛选</button><a class="btn subtle" href="/rent-dashboard?period={{.Period}}">清除筛选</a></div>
 	    </form>
 	  </div>
 	  <section class="dashboard-summary" aria-label="月度收租汇总">

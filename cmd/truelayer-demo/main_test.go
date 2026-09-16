@@ -111,6 +111,19 @@ func TestWorkspaceCSSUsesFlatDesignTokens(t *testing.T) {
 	}
 }
 
+func TestWorkspaceCSSGuardsResponsiveContent(t *testing.T) {
+	for _, expected := range []string{
+		"overflow-x: hidden;",
+		".table-wrap { max-width: 100%; overflow-x: auto; }",
+		"@media (max-width: 640px)",
+		"input[type=\"checkbox\"], input[type=\"radio\"] { width: auto;",
+	} {
+		if !strings.Contains(workspacePageCSS, expected) {
+			t.Fatalf("responsive workspace CSS missing %q", expected)
+		}
+	}
+}
+
 func TestAuthURLIncludesOAuthParameters(t *testing.T) {
 	a := app{cfg: config{
 		AuthBaseURL: "https://auth.truelayer-sandbox.com",
