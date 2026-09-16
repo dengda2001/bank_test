@@ -210,8 +210,6 @@ var rentDashboardTemplate = newWorkspacePageTemplate("rent-dashboard", template.
 	    .count-chip.partial { border-color: #fde68a; color: #92400e; background: #fef3c7; }
 	    .count-chip.shown { margin-left: auto; color: var(--foreground-muted); background: var(--surface); }
 	    a.count-chip:hover { border-color: #93c5fd; color: var(--accent-bright); background: var(--surface-accent); }
-	    .dashboard-secondary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
-	    .dashboard-secondary .metric { min-height: 118px; }
 	    .sync-status { margin-bottom: 18px; }
 	    .collection-panel { padding: 18px; margin-top: 12px; }
 
@@ -292,7 +290,7 @@ var rentDashboardTemplate = newWorkspacePageTemplate("rent-dashboard", template.
 	    @media (max-width: 760px) { .payment-item { grid-template-columns: 1fr 1fr; } .payment-item .payment-description { grid-column: 1 / -1; } }
     @media (max-width: 900px) { .dashboard-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 640px) {
-      .dashboard-summary, .dashboard-secondary { grid-template-columns: 1fr; }
+	      .dashboard-summary { grid-template-columns: 1fr; }
       .dashboard-toolbar { justify-content: stretch; }
       .dashboard-toolbar .period-picker { display: grid; width: 100%; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: 8px; }
       .dashboard-toolbar .period-label { display: none; }
@@ -382,10 +380,6 @@ var rentDashboardTemplate = newWorkspacePageTemplate("rent-dashboard", template.
 	      <a class="count-chip review" href="{{rentDashboardURL .Period .SearchFilter "needs_review" .SortFilter 1 .PageSize}}">待确认 {{.ReviewCount}}</a>
 	      <span class="count-chip shown">当前显示 {{.FilteredCount}} 户</span>
 	    </div>
-	    <section class="dashboard-secondary" aria-label="银行流水汇总">
-	      <a class="panel metric metric-link" href="/billing?period={{.Period}}&amp;direction=income&amp;pending=1"><div class="label">待分配金额</div><strong>{{.PendingTotal}}</strong><span>{{.PendingCount}} 笔收入仍有未分配余额，金额仅统计 EUR</span></a>
-	      <a class="panel metric metric-link" href="/billing?period={{.Period}}&amp;allocation=other_income"><div class="label">其他收入</div><strong>{{.OtherIncomeTotal}}</strong><span>{{.OtherIncomeCount}} 笔已确认的非租金收入</span></a>
-	    </section>
 	    <section class="panel collection-panel" aria-label="收款进度"><div class="collection-head"><strong>收款进度</strong><span>{{.CollectionPercent}}%</span></div><div class="progress-track"><div class="progress-value" style="width: {{.CollectionPercent}}%"></div></div><div class="tiny">已收 {{.PaidTotal}}，本月还差 {{.BalanceTotal}}</div></section>
 	  </section>
 	  <section class="dashboard-section" aria-labelledby="rent-status-title">

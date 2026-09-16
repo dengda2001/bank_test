@@ -59,6 +59,47 @@ func TestBillingLegacyArrivalRangeSurvivesAsHiddenInputs(t *testing.T) {
 	}
 }
 
+func TestBillingTransactionRowsShowOnlyConfirmedRentMonthAndNoTechnicalIDs(t *testing.T) {
+	page := renderBillingPage(t, billingPageData{
+		Page: 1, PageSize: 50, TotalTransactions: 1, TotalPages: 1,
+		TransactionRows: []transactionPageRow{{
+			ID:                    "7",
+			Direction:             "income",
+			DirectionLabel:        "收入",
+			PayerName:             "Aoife Murphy",
+			PayerID:               "payer-123",
+			InternalID:            "internal-456",
+			ProviderTransactionID: "provider-789",
+			AmountDisplay:         "EUR 950.00",
+			DateDisplay:           "09 Sep 2026",
+			ParsedPeriodDisplay:   "2026年8月",
+			FinalPeriodDisplay:    "2026年9月",
+			Description:           "September rent",
+			Reference:             "ref-012",
+			AccountName:           "Rent account",
+			AccountID:             "account-345",
+			MatchStatus:           "matched",
+			MatchStatusLabel:      "已关联",
+		}},
+	})
+
+	for _, unwanted := range []string{
+		"付款人 ID", "payer-123", "内部 ID", "internal-456", "银行流水号", "provider-789",
+		"参考号", "REF:", "ref-012", "account-345", "解析租金月", "2026年8月",
+	} {
+		if strings.Contains(page, unwanted) {
+			t.Fatalf("billing transaction row still renders %q: %s", unwanted, page)
+		}
+	}
+	for _, expected := range []string{
+		`<label for="period">流水到账月`, `>租金月：2026年9月<`, "Rent account",
+	} {
+		if !strings.Contains(page, expected) {
+			t.Fatalf("billing transaction row is missing %q: %s", expected, page)
+		}
+	}
+}
+
 // Sorting by heading has to survive filtering and paging: the current column
 // rides along in the filter form and in the pager, or 应用筛选 would reorder the
 // list behind the reader's back.
@@ -73,7 +114,7 @@ func TestBillingListCarriesTheColumnSort(t *testing.T) {
 		TransactionRows: []transactionPageRow{{ID: "7", Direction: "income", DirectionLabel: "收入"}},
 	})
 	for _, heading := range []string{
-		`<a class="sort-link" href="/billing?sort=payer_asc">付款人／流水号<span class="sort-arrow">▲</span></a>`,
+		`<a class="sort-link" href="/billing?sort=payer_asc">付款人<span class="sort-arrow">▲</span></a>`,
 		`<a class="sort-link active" href="/billing?sort=amount_desc">金额／余额<span class="sort-arrow">▼</span></a>`,
 		`<a class="sort-link" href="/billing?sort=arrival_desc">到账／租金月<span class="sort-arrow">▼</span></a>`,
 	} {

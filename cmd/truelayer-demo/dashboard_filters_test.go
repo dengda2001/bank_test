@@ -133,8 +133,6 @@ func TestRentDashboardTemplateRendersFiltersMetricsAndPagination(t *testing.T) {
 		`name="search"`,
 		`value="Aoife"`,
 		`value="unpaid" selected`,
-		`EUR 300.00`,
-		`EUR 400.00`,
 		"部分成功",
 		"最近一次成功同步",
 		"别名：Aoife A",
@@ -144,6 +142,11 @@ func TestRentDashboardTemplateRendersFiltersMetricsAndPagination(t *testing.T) {
 	} {
 		if !strings.Contains(page, expected) {
 			t.Fatalf("dashboard missing %q: %s", expected, page)
+		}
+	}
+	for _, hiddenMetric := range []string{"待分配金额", "其他收入"} {
+		if strings.Contains(page, hiddenMetric) {
+			t.Fatalf("dashboard still renders hidden metric %q: %s", hiddenMetric, page)
 		}
 	}
 }

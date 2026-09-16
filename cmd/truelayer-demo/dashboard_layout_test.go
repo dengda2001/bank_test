@@ -178,9 +178,14 @@ func TestRentDashboardMetricsKeepTheE2EShape(t *testing.T) {
 		t.Fatal(err)
 	}
 	page := body.String()
-	for _, metric := range []string{"本月应收", "已收租金", "剩余未收", "待处理", "待分配金额", "其他收入"} {
+	for _, metric := range []string{"本月应收", "已收租金", "剩余未收", "待处理"} {
 		if !strings.Contains(page, `<div class="label">`+metric+`</div><strong>`) {
 			t.Fatalf("metric %q does not match the E2E extraction pattern", metric)
+		}
+	}
+	for _, hiddenMetric := range []string{"待分配金额", "其他收入"} {
+		if strings.Contains(page, hiddenMetric) {
+			t.Fatalf("dashboard still renders hidden metric %q", hiddenMetric)
 		}
 	}
 	if !strings.Contains(page, "当前显示") {
