@@ -720,7 +720,7 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 		connected, _ = a.bankConnections.hasRefreshToken(r.Context(), userID)
 	}
 	data := billingPageData{
-		Username:          a.cfg.AdminUsername,
+		Username:          a.displayUsername(r),
 		Environment:       a.cfg.Environment,
 		ActivePage:        "billing",
 		Connected:         connected,
@@ -892,7 +892,7 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 	}
 	showForm := editing || r.URL.Query().Get("add") == "1"
 	data := tenantPageData{
-		Username:     a.cfg.AdminUsername,
+		Username:     a.displayUsername(r),
 		Environment:  a.cfg.Environment,
 		ActivePage:   "tenants",
 		Message:      r.URL.Query().Get("message"),
@@ -1030,7 +1030,7 @@ func (a *app) handleExpenses(w http.ResponseWriter, r *http.Request) {
 	}
 	prepareExpenses(expenses)
 	data := expensePageData{
-		Username:     a.cfg.AdminUsername,
+		Username:     a.displayUsername(r),
 		Environment:  a.cfg.Environment,
 		ActivePage:   "expenses",
 		Message:      r.URL.Query().Get("message"),
@@ -1353,6 +1353,34 @@ func (a *app) currentUserID(r *http.Request) (uint64, bool) {
 		return 0, false
 	}
 	return userID, true
+}
+
+// displayUsername is the account name shown in the page chrome. It comes from
+// the signed-in session, so an operator signed in as any account sees their own
+// name rather than whichever account APP_ADMIN_USERNAME happens to configure.
+// Requests without a valid session (the login screen, legacy cookies) fall back
+// to the configured administrator.
+func (a *app) displayUsername(r *http.Request) string {
+	c, err := r.Cookie("rentops_session")
+	if err != nil {
+		return a.cfg.AdminUsername
+	}
+	parts := strings.Split(c.Value, "|")
+	if len(parts) != 5 || parts[0] != "v2" {
+		return a.cfg.AdminUsername
+	}
+	expiresUnix, err := strconv.ParseInt(parts[3], 10, 64)
+	if err != nil || time.Now().After(time.Unix(expiresUnix, 0)) {
+		return a.cfg.AdminUsername
+	}
+	want := userSessionSignature(a.cfg, parts[1], parts[2], parts[3])
+	if !hmac.Equal([]byte(parts[4]), []byte(want)) {
+		return a.cfg.AdminUsername
+	}
+	if username := strings.TrimSpace(parts[2]); username != "" {
+		return username
+	}
+	return a.cfg.AdminUsername
 }
 
 func sessionCookie(cfg config, expires time.Time) *http.Cookie {

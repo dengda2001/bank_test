@@ -31,7 +31,7 @@ func (a *app) renderRentDashboard(w http.ResponseWriter, r *http.Request, action
 		period = periodMonth.Format("2006-01")
 	}
 	data := rentDashboardPageData{
-		Username:       a.cfg.AdminUsername,
+		Username:       a.displayUsername(r),
 		Environment:    a.cfg.Environment,
 		ActivePage:     "rent-dashboard",
 		Period:         periodMonth.Format("2006-01"),

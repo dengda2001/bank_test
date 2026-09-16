@@ -28,6 +28,40 @@ func testApp() app {
 	}}
 }
 
+// The page chrome must name the signed-in account, not whichever account
+// APP_ADMIN_USERNAME happens to configure. A second account signing in used to
+// see "当前用户：ddrzh" on every page while its own data stayed correctly isolated.
+func TestDisplayUsernameFollowsTheSessionAccount(t *testing.T) {
+	a := testApp()
+
+	request := func(cookie *http.Cookie) string {
+		req := httptest.NewRequest(http.MethodGet, "/tenants", nil)
+		if cookie != nil {
+			req.AddCookie(cookie)
+		}
+		return a.displayUsername(req)
+	}
+
+	if got := request(userSessionCookie(a.cfg, 2, "rentops-demo", time.Now().Add(sessionTTL))); got != "rentops-demo" {
+		t.Fatalf("displayUsername for a second account=%q want %q", got, "rentops-demo")
+	}
+	if got := request(userSessionCookie(a.cfg, 1, "ddrzh", time.Now().Add(sessionTTL))); got != "ddrzh" {
+		t.Fatalf("displayUsername for the administrator=%q want %q", got, "ddrzh")
+	}
+	if got := request(nil); got != a.cfg.AdminUsername {
+		t.Fatalf("displayUsername without a session=%q want %q", got, a.cfg.AdminUsername)
+	}
+	expired := userSessionCookie(a.cfg, 2, "rentops-demo", time.Now().Add(-time.Minute))
+	if got := request(expired); got != a.cfg.AdminUsername {
+		t.Fatalf("displayUsername with an expired session=%q want %q", got, a.cfg.AdminUsername)
+	}
+	tampered := userSessionCookie(a.cfg, 2, "rentops-demo", time.Now().Add(sessionTTL))
+	tampered.Value = strings.Replace(tampered.Value, "rentops-demo", "ddrzh", 1)
+	if got := request(tampered); got != a.cfg.AdminUsername {
+		t.Fatalf("displayUsername with a tampered session=%q want %q", got, a.cfg.AdminUsername)
+	}
+}
+
 func TestWorkspaceTemplatesIncludeSharedCalendarPicker(t *testing.T) {
 	tests := []struct {
 		name   string

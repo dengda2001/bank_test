@@ -284,7 +284,7 @@ func (a *app) handleTenantDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := tenantDetailPageData{
-		Username:      a.cfg.AdminUsername,
+		Username:      a.displayUsername(r),
 		Environment:   a.cfg.Environment,
 		CurrentPeriod: monthStart(time.Now().UTC()).Format("2006-01"),
 		Message:       r.URL.Query().Get("message"),

@@ -147,10 +147,10 @@ func cashReceiptErrorCode(err error) string {
 	return "cash_receipt_failed"
 }
 
-func (a *app) loadCashReceiptFormData(ctx context.Context, userID, tenantID uint64, period time.Time) (cashReceiptFormData, error) {
+func (a *app) loadCashReceiptFormData(ctx context.Context, r *http.Request, userID, tenantID uint64, period time.Time) (cashReceiptFormData, error) {
 	period = monthStart(period)
 	data := cashReceiptFormData{
-		Username:       a.cfg.AdminUsername,
+		Username:       a.displayUsername(r),
 		Environment:    a.cfg.Environment,
 		TenantID:       strconv.FormatUint(tenantID, 10),
 		Period:         period.Format("2006-01"),
@@ -184,8 +184,8 @@ func (a *app) loadCashReceiptFormData(ctx context.Context, userID, tenantID uint
 	return data, nil
 }
 
-func (a *app) cashReceiptFormDataFromPreview(ctx context.Context, preview cashReceiptPreview) (cashReceiptFormData, error) {
-	data, err := a.loadCashReceiptFormData(ctx, preview.Input.UserID, preview.Input.TenantID, preview.Obligation.PeriodMonth)
+func (a *app) cashReceiptFormDataFromPreview(ctx context.Context, r *http.Request, preview cashReceiptPreview) (cashReceiptFormData, error) {
+	data, err := a.loadCashReceiptFormData(ctx, r, preview.Input.UserID, preview.Input.TenantID, preview.Obligation.PeriodMonth)
 	if err != nil {
 		return cashReceiptFormData{}, err
 	}
@@ -241,7 +241,7 @@ func (a *app) handleCashReceiptNew(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/cash-receipts/new?error=cash_receipt_failed", http.StatusFound)
 		return
 	}
-	data, err := a.loadCashReceiptFormData(r.Context(), userID, tenantID, period)
+	data, err := a.loadCashReceiptFormData(r.Context(), r, userID, tenantID, period)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			http.NotFound(w, r)
@@ -284,7 +284,7 @@ func (a *app) handleCashReceiptPreview(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, cashReceiptNewURL(draft, cashReceiptErrorCode(err)), http.StatusFound)
 		return
 	}
-	data, err := a.cashReceiptFormDataFromPreview(r.Context(), preview)
+	data, err := a.cashReceiptFormDataFromPreview(r.Context(), r, preview)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -349,7 +349,7 @@ func (a *app) handleCashReceiptVoid(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		data := cashReceiptVoidPageData{Username: a.cfg.AdminUsername, Environment: a.cfg.Environment, Receipt: receipt, Tenant: tenantRow, AmountDisplay: formatMoney(centsToMoney(receipt.AmountCents), receipt.Currency, 2), DateDisplay: receipt.ReceivedAt.Format(dateLayout), Error: r.URL.Query().Get("error"), AlreadyVoided: receipt.Status == cashReceiptStatusVoided}
+		data := cashReceiptVoidPageData{Username: a.displayUsername(r), Environment: a.cfg.Environment, Receipt: receipt, Tenant: tenantRow, AmountDisplay: formatMoney(centsToMoney(receipt.AmountCents), receipt.Currency, 2), DateDisplay: receipt.ReceivedAt.Format(dateLayout), Error: r.URL.Query().Get("error"), AlreadyVoided: receipt.Status == cashReceiptStatusVoided}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := cashReceiptVoidTemplate.Execute(w, data); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
