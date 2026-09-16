@@ -75,7 +75,6 @@ func TestBillingTransactionRowsShowOnlyConfirmedRentMonthAndNoTechnicalIDs(t *te
 			ParsedPeriodDisplay:   "2026年8月",
 			FinalPeriodDisplay:    "2026年9月",
 			Description:           "September rent",
-			Reference:             "ref-012",
 			AccountName:           "Rent account",
 			AccountID:             "account-345",
 			MatchStatus:           "matched",
@@ -85,7 +84,7 @@ func TestBillingTransactionRowsShowOnlyConfirmedRentMonthAndNoTechnicalIDs(t *te
 
 	for _, unwanted := range []string{
 		"付款人 ID", "payer-123", "内部 ID", "internal-456", "银行流水号", "provider-789",
-		"参考号", "REF:", "ref-012", "account-345", "解析租金月", "2026年8月",
+		"参考号", "REF:", "account-345", "解析租金月", "2026年8月",
 	} {
 		if strings.Contains(page, unwanted) {
 			t.Fatalf("billing transaction row still renders %q: %s", unwanted, page)

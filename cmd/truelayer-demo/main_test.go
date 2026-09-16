@@ -742,7 +742,6 @@ func TestBillingTemplateRendersTransactionFilters(t *testing.T) {
 			AmountDisplay:    "EUR 125.50",
 			DateDisplay:      "09 Sep 2026",
 			Description:      "Boiler repair",
-			Reference:        "Maintenance",
 			AccountName:      "Rent account",
 			MatchStatus:      "unmatched",
 			MatchStatusLabel: "未关联",
@@ -926,9 +925,14 @@ func TestRentDashboardTemplateRendersMonthlyStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"2026-09", "租客缴费情况", "Aoife Murphy", "月度总览", "银行流水", `onchange="this.form.submit()"`, "收款明细", "September rent", "rent-2026-09"} {
+	for _, expected := range []string{"2026-09", "租客缴费情况", "Aoife Murphy", "月度总览", "银行流水", `onchange="this.form.submit()"`, "收款明细", "September rent"} {
 		if !strings.Contains(body.String(), expected) {
 			t.Fatalf("dashboard missing %q: %s", expected, body.String())
+		}
+	}
+	for _, unwanted := range []string{"参考号", "rent-2026-09"} {
+		if strings.Contains(body.String(), unwanted) {
+			t.Fatalf("dashboard payment detail still renders %q: %s", unwanted, body.String())
 		}
 	}
 }

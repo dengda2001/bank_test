@@ -116,4 +116,9 @@ func TestTenantTemplateRendersNestedBillingHistoryToggles(t *testing.T) {
 			t.Fatalf("tenant template missing %q: %s", expected, page)
 		}
 	}
+	for _, unwanted := range []string{"参考号", "rent-2026-09"} {
+		if strings.Contains(page, unwanted) {
+			t.Fatalf("tenant payment detail still renders %q: %s", unwanted, page)
+		}
+	}
 }

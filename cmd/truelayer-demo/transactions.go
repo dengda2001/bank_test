@@ -387,7 +387,6 @@ type transactionPageRow struct {
 	ParsedPeriodSourceDisplay string
 	FinalPeriodDisplay        string
 	Description               string
-	Reference                 string
 	AccountName               string
 	AccountID                 string
 	TransactionID             string
@@ -482,7 +481,6 @@ func transactionPageRowFromModel(row paymentTransaction) transactionPageRow {
 		ParsedPeriodDisplay:       parsedPeriod,
 		ParsedPeriodSourceDisplay: row.ParsedPeriodSource,
 		Description:               firstNonEmpty(row.Description, "无描述"),
-		Reference:                 firstNonEmpty(row.Reference, "无参考号"),
 		AccountName:               firstNonEmpty(stringValue(row.AccountName), "未知账户"),
 		AccountID:                 stringValue(row.AccountID),
 		TransactionID:             firstNonEmpty(stringValue(row.ProviderTransactionID), "#"+strconv.FormatUint(row.ID, 10)),
