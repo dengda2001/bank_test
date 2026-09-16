@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 13
+- **Total Sessions**: 14
 - **Last Active**: 2026-09-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~463 | Active |
+| `journal-1.md` | ~496 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 14 | 2026-09-16 | Simplify billing and dashboard summaries | `ea1a1f5` | `main` |
 | 13 | 2026-09-16 | 移动端适配：审计、整改、真机前验收 | `0f92566` | `main` |
 | 12 | 2026-09-16 | 完成全站 UI Flat Design 重构 | `7eb23af`, `8bf1c8a`, `0fb4cdb`, `9a47273`, `ecff7f4` | `main` |
 | 11 | 2026-09-16 | 完成单月邮件催缴 | `522b706`, `4c812db`, `b247ed9` | `main` |

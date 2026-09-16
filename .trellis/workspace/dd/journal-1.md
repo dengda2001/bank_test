@@ -461,3 +461,36 @@ Implemented the Chinese monthly rent dashboard with clear expected/paid/balance 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 14: Simplify billing and dashboard summaries
+
+**Date**: 2026-09-16
+**Task**: Simplify billing and dashboard summaries
+**Branch**: `main`
+
+### Summary
+
+Removed technical transaction identifiers, kept only the confirmed rent month, renamed the arrival-month filter, and hid non-essential Dashboard income cards while keeping data flows intact. Added rendering and E2E regression coverage.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ea1a1f5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
