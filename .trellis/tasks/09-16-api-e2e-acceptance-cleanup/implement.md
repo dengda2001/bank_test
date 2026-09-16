@@ -4,8 +4,8 @@
 
 - [x] 从当前路由和服务代码生成业务接口清单 `api-inventory.md`。
 - [x] 确认现有认证入口、数据库配置和无现成 E2E runner/清理脚本。
-- [ ] 配置并确认可丢弃的非生产 MySQL 目标、账户播种方式和受控查询方式。
-- [ ] 配置可控 SMTP sink；未配置时跳过实际投递场景并明确标记为未验收。
+- [x] 配置并确认可丢弃的非生产 MySQL 目标、账户播种方式和受控查询方式；封装为 `scripts/run-e2e-local.sh`。
+- [x] 确认本轮不验收真实投递：`RENTOPS_E2E_SKIP_DUNNING_DELIVERY=1` 跳过 `/dunning/send` 并将其标记为未验收。
 
 ## 纵向执行切片
 
@@ -30,8 +30,9 @@
 
 - [x] runner 验收 Dashboard 查询/筛选/分页、历史和催缴候选/预览/发送/幂等/隔离；本地 httptest 已验证。
 - [x] 失败断言停止后续写入并保留 runID、请求、预期/实际和错误报告；本地 httptest 已验证。
-- [x] 实现全部通过后的 allowlist 清理、事务删除，以及清理后 HTTP + 受控查询双重零残留验证；真实数据库尚未执行。
+- [x] 实现全部通过后的 allowlist 清理、事务删除，以及清理后 HTTP + 受控查询双重零残留验证；已在真实隔离库执行并通过。
 - [x] 已记录验收命令和环境限制，禁止把 skipped 当作 passed。
+- [x] 新增「只跳过真实投递」开关：拆分配置／预览与投递两个场景，跳过时报告 `skipped` 并写入 `unverified`。
 
 ## 质量门禁
 
@@ -43,14 +44,18 @@
 
 ## 当前实现与 live gate
 
-runner 工程实现已完成，最近一次本地质量门禁为：
+runner 工程实现已完成，并在本机隔离环境完成一次全量真实运行：
 
 - `go test ./... -count=1`
 - `go vet ./...`
 - `git diff --check`
-- `go run ./cmd/rentops-e2e -report /private/tmp/rentops-e2e-dry-run.json`
+- `bash scripts/run-e2e-local.sh` → `run status: passed`（16 场景：15 passed、1 skipped）
 
-真实验收仍待一个可丢弃的非生产环境，以下条件全部满足后才能运行 `-execute`：
+运行标识 `rentops-e2e-20260916-032709-60dd6b72`，报告 `status: passed`，
+`cleanup` 的 `verified`／`http_verified`／`fixture_removed` 均为真；
+运行结束后一次性库与账号已删除，受控查询确认零残留。
+
+`-execute` 的完整前置条件如下（`scripts/run-e2e-local.sh` 已自动满足除 SMTP 之外的全部项）：
 
 - `RENTOPS_E2E_BASE_URL` 指向运行中的应用 origin；远程目标还必须显式设置 `RENTOPS_E2E_ALLOW_REMOTE=1`。
 - `RENTOPS_E2E_TARGET_NAME` 与 `RENTOPS_E2E_TARGET_ALLOWLIST` 完全相同，且明确标识为非生产目标。
@@ -62,7 +67,33 @@ runner 工程实现已完成，最近一次本地质量门禁为：
 
 运行命令为 `go run ./cmd/rentops-e2e -execute -report <report-path>`。目标探针失败时不会创建 fixture；业务断言失败时会保留 fixture 和报告且不会清理；数据库清理后还会用第二账户通过 HTTP 验证租客详情、租客列表和流水列表不再暴露本轮数据；只有数据库清理、HTTP 零残留验证及本地 fixture 删除都完成后报告才会是 `passed`。
 
-最近一次本机环境审计发现没有 Docker 或 MariaDB；Homebrew MySQL 8.4.11 的 `mysqld --initialize-insecure --no-defaults` 在初始化阶段即 SIGSEGV，已删除临时数据目录，未启动实例、未启动应用，也未产生任何业务写入。真实验收仍需外部提供可用的隔离 MySQL/应用/第二账户/SMTP sink。
+## 环境
+
+- 本机 Linux，MySQL 8.0.45 监听 `127.0.0.1:53306`，`sudo mysql` 免密；早先记录的
+  macOS 阻塞（无 Docker/MariaDB、Homebrew MySQL 初始化 SIGSEGV）在本机不成立。
+- 隔离方式为「一次性库 + 专属账号」，既有 `rentops` 等非本次运行的库从未被读写。
+- 失败运行会保留一次性库并在输出中打印精确删除命令；每次重跑前应确认
+  `SHOW DATABASES` 与 `mysql.user` 中 `rentops_e2e_*` 已清空。
+
+## 本轮真实运行暴露的断言／查询缺陷
+
+真实环境第一次让下列 4 处「看着合理但与应用契约不符」的断言暴露出来，均已修复：
+
+1. **银行流水号应比对规范化 provider id**：入库与 `/billing` 展示的是
+   `NormalisedProviderTransactionID`（`transactions.go:110`），runner 原先断言原始
+   `ProviderTransactionID`。新增 `e2eBankTransactionFixture.StoredProviderTransactionID()`，
+   并统一替换全部回读与清理校验点。
+2. **现金预览金额渲染格式**：预览页把本次现金渲染为 `350.00 EUR`（`{{.Amount}} {{.Currency}}`），
+   余额卡片才是 `EUR 0.00`；原先断言 `EUR 350.00` 永不成立。改为按真实渲染断言，并把子断言拆开上报。
+3. **Dashboard 银行口径按流水日期归期**：其他收入归类挂在 9 月流水上，8 月口径必然为 0。
+   改为 8 月断言 `EUR 0.00`，另加 9 月读断言《其他收入 = EUR 50.00》覆盖期间隔离。
+4. **清理归属校验的期间格式**：`loadE2ECleanupObligations` 使用 `%Y-%m-%d`，而所有期望键
+   使用 `%Y-%m`，导致义务键永不匹配（并连带使分配／现金／催缴查找全部落空）。修正为 `%Y-%m`，
+   同时把失败原因写入清理报告，避免只报「cleanup ownership validation failed」。
+5. **清理后 HTTP 零残留扫描误报**：应用外壳渲染操作员账号名（`当前用户：{{.Username}}`），
+   而该用户名本身以 run ID 为前缀，裸 run ID 标记因此把外壳文案当成残留。扫描前先剔除两个
+   账号名；真实业务残留仍会被检出（新增单测覆盖两个方向）。
+
 
 ## 回滚/停止点
 

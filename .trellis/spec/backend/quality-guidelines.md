@@ -177,6 +177,73 @@ if m := compactEnglishMonthYearRegex.FindStringSubmatch(text); len(m) == 3 {
 ```
 
 
+### Scenario: Isolated HTTP E2E Acceptance Harness
+
+#### 1. Scope / Trigger
+
+- Trigger: changes to `cmd/rentops-e2e/`, `scripts/run-e2e-local.sh`, or any route, response contract, or amount projection the acceptance suite asserts on.
+- The suite is the only place where rent, tenant, dashboard, and dunning behaviour is verified against the running application over real HTTP.
+
+#### 2. Signatures
+
+- `go run ./cmd/rentops-e2e -report <path>` runs preflight only; `-execute` is required to send writes.
+- `scripts/run-e2e-local.sh` provisions a disposable environment: database `rentops_e2e_<run-id>`, user `rentops_e2e_<hex>`, two accounts seeded by starting the app twice with different `APP_ADMIN_USERNAME`, then runs the suite and drops the database.
+- Environment keys:
+  - `RENTOPS_E2E_SKIP_DUNNING_DELIVERY=1`: skip only the real send (`/dunning/send` and its repeat).
+  - `RENTOPS_E2E_CONFIRM_WRITES=I_UNDERSTAND_NON_PRODUCTION`, `RENTOPS_E2E_CONFIRM_CLEANUP=I_UNDERSTAND_DELETE_RUN_ID_ONLY`.
+
+#### 3. Contracts
+
+- Run IDs match `rentops-e2e-YYYYMMDD-HHMMSS-xxxxxxxx`; every fixture value, stable key, description, idempotency key, and request key starts with that run ID.
+- Target name and database name must each equal an explicit allowlist; the runner re-checks `SELECT DATABASE()` before deleting.
+- The report is machine-readable and redacted. `status: "passed"` means every executed assertion passed **and** `cleanup.verified`, `cleanup.http_verified`, and `cleanup.fixture_removed` are all true.
+- Scenarios report `passed`, `failed`, or `skipped`. Every `skipped` scenario is also listed in the top-level `unverified` array with its reason.
+- `RENTOPS_E2E_SKIP_DUNNING_DELIVERY=1` keeps dunning candidate discovery, configuration, and preview in scope while leaving `/dunning/send` unverified. A passing run with this flag must never be read as "mail delivery was verified".
+
+#### 4. Validation & Error Matrix
+
+- Assertion failure -> stop the remaining writes, keep the run data and report, report `status: "failed"`.
+- Scenario skipped -> `unverified` entry; never counted as passed and never a failure.
+- Setup failure (fixture directory, missing SMTP sink, target probe) -> fail before any write request.
+- Cleanup allowlist mismatch -> stop without deleting, keep `cleanup.verified = false`.
+- Cleanup succeeded -> re-check zero residue over HTTP as the second account **and** through controlled queries; leftover local fixture files fail the run.
+
+#### 5. Good/Base/Bad Cases
+
+- Good: a failed assertion leaves the isolated data and JSON report in place for diagnosis; cleanup only runs after every assertion passed.
+- Base: with mail delivery explicitly excluded, the run reports `status: "passed"` plus `unverified: [{name: "dunning-delivery", ...}]`.
+- Bad: treating `skipped` as `passed`, or reporting `passed` while the delivery path was never attempted.
+
+#### 6. Tests Required
+
+- Unit-test option validation, skipped-scenario recording, and that `unverified` survives the redacting report writer.
+- Assert the application's real read-back contract, not what a page "ought" to render:
+  - bank statement numbers are the **normalised** provider transaction id (`e2eBankTransactionFixture.StoredProviderTransactionID`), not `ProviderTransactionID`;
+  - the cash preview renders the entered amount as `350.00 EUR` while the balance cards render `EUR 0.00`;
+  - dashboard bank metrics are scoped by transaction date, so an allocation on a September transaction is absent from the August period view.
+- Invalid dashboard filters, non-EUR cash, and cross-user ID access are asserted as controlled errors, not as crashes.
+- The post-cleanup residue scan ignores the operator account name rendered by the app chrome, which itself carries the run ID prefix.
+- After changing any cleanup loader/validator pair, run the live suite: a key or SQL format mismatch is invisible to unit tests.
+
+#### 7. Wrong vs Correct
+
+Wrong:
+
+```go
+// The preview renders "350.00 EUR"; this substring can never appear, so the
+// scenario fails against a correct application.
+preview.Passed = strings.Contains(body, "EUR 350.00")
+```
+
+Correct:
+
+```go
+// Assert the value the template actually emits, keeping the exact-amount intent.
+cashAmount := strings.Contains(body, "350.00 EUR")
+afterRemaining := strings.Contains(body, "EUR 0.00")
+preview.Passed = response.StatusCode == http.StatusOK && cashAmount && afterRemaining
+```
+
 ---
 
 ## Code Review Checklist
