@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RentOps 月度工作台</title>
+  <link rel="stylesheet" href="/static/css/workspace.css">
+  <link rel="stylesheet" href="/static/css/calendar.css">
+  <link rel="stylesheet" href="/static/css/pages/rent-workspace.css">
+</head>
+<body>
+  {{template "workspace-nav" .}}
+  <div class="workspace"><main class="main">
+    <div class="workspace-toolbar">
+      <div><div class="eyebrow">RENTOPS · MONTHLY WORKSPACE</div><h1>月度收租工作台</h1><div class="tiny">{{.PeriodLabel}} · 所有金额来自同一套月度账务事实</div></div>
+      <form class="workspace-period" method="get" action="/rent-dashboard"><label for="workspace-period">月份</label><input id="workspace-period" name="period" type="month" value="{{.Period}}"><input type="hidden" name="view" value="{{.View}}"><button class="btn" type="submit">查看</button></form>
+    </div>
+    {{if eq .Error "invalid_workspace_filter"}}<div class="notice error">筛选条件无效，已恢复安全默认值。</div>{{end}}
+    {{if .Message}}<div class="notice ok">{{.Message}}</div>{{end}}
+    <nav class="workspace-tabs" aria-label="工作台视角">
+      <a class="btn subtle{{if eq .View "properties"}} active{{end}}" href="{{workspaceViewURL .Filters "properties" 0 0}}">房产视角</a>
+      <a class="btn subtle{{if eq .View "rooms"}} active{{end}}" href="{{workspaceViewURL .Filters "rooms" .Filters.PropertyID 0}}">房间视角</a>
+      <a class="btn subtle{{if eq .View "tenants"}} active{{end}}" href="{{workspaceViewURL .Filters "tenants" .Filters.PropertyID .Filters.RoomID}}">租客视角</a>
+    </nav>
+    <section class="workspace-summary" aria-label="月度汇总">
+      <div class="panel metric"><div class="label">本月应收</div><strong>{{.Summary.ExpectedAmount}}</strong><span>{{.Summary.TotalRooms}} 间有效房间 · 空置 {{.Summary.VacantRooms}}</span></div>
+      <div class="panel metric metric-success"><div class="label">已收租金</div><strong>{{.Summary.PaidAmount}}</strong><span>收缴率 {{.Summary.CollectionPercent}}% · {{.Summary.PaidRooms}} 间已交满</span></div>
+      <div class="panel metric metric-warning"><div class="label">剩余未收</div><strong>{{.Summary.BalanceAmount}}</strong><span>{{.Summary.UnpaidRooms}} 间未交满</span></div>
+      <div class="panel metric"><div class="label">经营净额</div><strong>{{.Summary.NetAmount}}</strong><span>已收租金 − 有效支出</span></div>
+    </section>
+    <section class="panel surface" aria-label="工作台列表">
+      <form class="workspace-filters" method="get" action="/rent-dashboard">
+        <input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="view" value="{{.View}}">
+        <label class="search" for="workspace-search">搜索<input id="workspace-search" name="search" type="search" value="{{.Filters.Search}}" placeholder="房产、房间、租客"></label>
+        <label class="property" for="workspace-property">房产<select id="workspace-property" name="property_id"><option value="">全部房产</option>{{range .PropertyOptions}}<option value="{{.ID}}"{{if eq $.Filters.PropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+        <label for="workspace-status">状态<select id="workspace-status" name="status"><option value="all"{{if eq .Filters.Status "all"}} selected{{end}}>全部</option><option value="unpaid"{{if eq .Filters.Status "unpaid"}} selected{{end}}>未交满</option><option value="needs_review"{{if eq .Filters.Status "needs_review"}} selected{{end}}>待处理</option><option value="overdue"{{if eq .Filters.Status "overdue"}} selected{{end}}>逾期</option><option value="partial"{{if eq .Filters.Status "partial"}} selected{{end}}>部分缴纳</option><option value="open"{{if eq .Filters.Status "open"}} selected{{end}}>未到期未缴</option><option value="paid"{{if eq .Filters.Status "paid"}} selected{{end}}>已交满</option><option value="vacant"{{if eq .Filters.Status "vacant"}} selected{{end}}>空置</option></select></label>
+        <input type="hidden" name="room_id" value="{{if .Filters.RoomID}}{{.Filters.RoomID}}{{end}}"><input type="hidden" name="sort" value="{{.Filters.Sort}}"><input type="hidden" name="page_size" value="{{.PageSize}}"><button class="btn" type="submit">筛选</button><a class="btn subtle" href="{{workspaceViewURL .Filters .View .Filters.PropertyID .Filters.RoomID}}">清除筛选</a>
+      </form>
+      {{if eq .View "properties"}}
+      {{if .PropertyRows}}<div class="workspace-desktop-list"><div class="table-wrap"><table class="workspace-table"><thead><tr><th>房产</th><th>房间</th><th>已交满</th><th>未交满</th><th>应收</th><th>已收</th><th>未收</th><th>支出</th><th>经营净额</th><th>状态</th></tr></thead><tbody>{{range .PropertyRows}}<tr><td><a href="{{workspacePropertyURL $.Filters .PropertyID}}"><strong>{{.Name}}</strong></a>{{if .Address}}<br><span class="tiny">{{.Address}}</span>{{end}}</td><td>{{.TotalRooms}}</td><td>{{.PaidRooms}}</td><td>{{.UnpaidRooms}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td class="amount">{{.ExpenseAmount}}</td><td class="amount">{{.NetAmount}}</td><td><span class="workspace-status {{workspaceStatusClass .Status}}">{{.StatusLabel}}</span></td></tr>{{end}}</tbody></table></div></div><div class="workspace-mobile-list" aria-label="房产列表">{{range .PropertyRows}}<article class="workspace-card">
+  <div class="workspace-card-head"><a href="{{workspacePropertyURL $.Filters .PropertyID}}"><strong>{{.Name}}</strong></a><span class="workspace-status {{workspaceStatusClass .Status}}">{{.StatusLabel}}</span></div>
+  {{if .Address}}<div class="workspace-card-meta">{{.Address}}</div>{{end}}
+  <dl class="workspace-card-grid">
+    <div><dt>房间</dt><dd>{{.TotalRooms}} 间</dd></div><div><dt>已交满</dt><dd>{{.PaidRooms}} 间</dd></div>
+    <div><dt>未交满</dt><dd>{{.UnpaidRooms}} 间</dd></div><div><dt>应收</dt><dd class="amount">{{.ExpectedAmount}}</dd></div>
+    <div><dt>已收</dt><dd class="amount">{{.PaidAmount}}</dd></div><div><dt>未收</dt><dd class="amount">{{.BalanceAmount}}</dd></div>
+    <div><dt>支出</dt><dd class="amount">{{.ExpenseAmount}}</dd></div><div><dt>经营净额</dt><dd class="amount">{{.NetAmount}}</dd></div>
+  </dl>
+</article>{{end}}</div>{{else}}<div class="workspace-empty">暂无符合条件的房产。</div>{{end}}
+      {{else if eq .View "rooms"}}
+      {{if .RoomRows}}<div class="workspace-desktop-list"><div class="table-wrap"><table class="workspace-table"><thead><tr><th>房间</th><th>房产</th><th>入住人数</th><th>应收</th><th>已收</th><th>未收</th><th>收缴率</th><th>到期日</th><th>状态</th></tr></thead><tbody>{{range .RoomRows}}<tr><td><a href="{{roomDetailURL .RoomID $.Period}}"><strong>{{.RoomLabel}}</strong></a>{{if .Address}}<br><span class="tiny">{{.Address}}</span>{{end}}</td><td>{{.PropertyName}}</td><td>{{.TenantCount}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td>{{if eq .Status "vacant"}}—{{else}}{{.CollectionPercent}}%{{end}}</td><td class="mono">{{.DueDate}}</td><td><span class="workspace-status {{workspaceStatusClass .Status}}">{{.StatusLabel}}</span></td></tr>{{end}}</tbody></table></div></div><div class="workspace-mobile-list" aria-label="房间列表">{{range .RoomRows}}<article class="workspace-card">
+  <div class="workspace-card-head"><a href="{{roomDetailURL .RoomID $.Period}}"><strong>{{.RoomLabel}}</strong></a><span class="workspace-status {{workspaceStatusClass .Status}}">{{.StatusLabel}}</span></div>
+  <div class="workspace-card-meta">{{.PropertyName}}{{if .Address}} · {{.Address}}{{end}}</div>
+  <dl class="workspace-card-grid">
+    <div><dt>入住人数</dt><dd>{{.TenantCount}}</dd></div><div><dt>应收</dt><dd class="amount">{{.ExpectedAmount}}</dd></div>
+    <div><dt>已收</dt><dd class="amount">{{.PaidAmount}}</dd></div><div><dt>未收</dt><dd class="amount">{{.BalanceAmount}}</dd></div>
+    <div><dt>收缴率</dt><dd>{{if eq .Status "vacant"}}—{{else}}{{.CollectionPercent}}%{{end}}</dd></div><div><dt>到期日</dt><dd class="mono">{{.DueDate}}</dd></div>
+  </dl>
+</article>{{end}}</div>{{else}}<div class="workspace-empty">暂无符合条件的房间。</div>{{end}}
+      {{else}}
+      {{if .TenantRows}}<div class="workspace-desktop-list"><div class="table-wrap"><table class="workspace-table"><thead><tr><th>租客</th><th>房间</th><th>个人责任</th><th>已覆盖</th><th>未付</th><th>付款来源</th><th>状态</th></tr></thead><tbody>{{range .TenantRows}}<tr><td><strong>{{.TenantName}}</strong>{{if .TenantAlias}}<br><span class="tiny">别名：{{.TenantAlias}}</span>{{end}}{{if .PaidByOther}}<br><span class="tiny">他人代付</span>{{end}}</td><td>{{.PropertyName}} · {{.RoomLabel}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td>{{if .Payments}}{{range .Payments}}{{.Source}} · {{.ConfirmationSource}}{{break}}{{end}}{{else}}—{{end}}</td><td><span class="workspace-status {{workspaceStatusClass .Status}}">{{.StatusLabel}}</span></td></tr>{{end}}</tbody></table></div></div><div class="workspace-mobile-list" aria-label="租客责任列表">{{range .TenantRows}}<article class="workspace-card">
+  <div class="workspace-card-head"><strong>{{.TenantName}}</strong><span class="workspace-status {{workspaceStatusClass .Status}}">{{.StatusLabel}}</span></div>
+  <div class="workspace-card-meta">{{.PropertyName}} · {{.RoomLabel}}{{if .TenantAlias}} · 别名：{{.TenantAlias}}{{end}}{{if .PaidByOther}} · 他人代付{{end}}</div>
+  <dl class="workspace-card-grid">
+    <div><dt>个人责任</dt><dd class="amount">{{.ExpectedAmount}}</dd></div><div><dt>已覆盖</dt><dd class="amount">{{.PaidAmount}}</dd></div>
+    <div><dt>未付</dt><dd class="amount">{{.BalanceAmount}}</dd></div><div><dt>付款来源</dt><dd>{{if .Payments}}{{range .Payments}}{{.Source}} · {{.ConfirmationSource}}{{break}}{{end}}{{else}}—{{end}}</dd></div>
+  </dl>
+</article>{{end}}</div>{{else}}<div class="workspace-empty">暂无符合条件的租客责任。</div>{{end}}
+      {{end}}
+      {{if .TotalRows}}<div class="workspace-pager"><form method="get" action="/rent-dashboard"><input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="view" value="{{.View}}"><input type="hidden" name="property_id" value="{{if .Filters.PropertyID}}{{.Filters.PropertyID}}{{end}}"><input type="hidden" name="room_id" value="{{if .Filters.RoomID}}{{.Filters.RoomID}}{{end}}"><input type="hidden" name="search" value="{{.Filters.Search}}"><input type="hidden" name="status" value="{{.Filters.Status}}"><input type="hidden" name="sort" value="{{.Filters.Sort}}"><label>每页<select name="page_size" onchange="this.form.submit()"><option value="12"{{if eq .PageSize 12}} selected{{end}}>12</option><option value="24"{{if eq .PageSize 24}} selected{{end}}>24</option><option value="50"{{if eq .PageSize 50}} selected{{end}}>50</option></select></label></form><span class="tiny">当前显示 {{.FilteredCount}} / {{.TotalRows}} 条</span><div class="pager-actions"><a class="btn subtle{{if eq .Page 1}} disabled{{end}}" href="{{workspaceURL .Filters (workspacePreviousPage .Page)}}">上一页</a><span class="tiny">第 {{.Page}} / {{.TotalPages}} 页</span><a class="btn subtle{{if eq .Page .TotalPages}} disabled{{end}}" href="{{workspaceURL .Filters (workspaceNextPage .Page .TotalPages)}}">下一页</a></div></div>{{end}}
+    </section>
+  </main></div>
+</body>
+</html>

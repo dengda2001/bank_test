@@ -1,0 +1,13 @@
+{{define "workspace-nav"}}<input type="checkbox" id="nav-drawer" class="nav-drawer-input">
+    <label for="nav-drawer" class="nav-compact-bar" aria-label="展开导航"><span class="mark">R</span><span class="brand-title">RentOps</span><span class="nav-burger">☰</span></label>
+    <label for="nav-drawer" class="nav-scrim" aria-hidden="true"></label>
+    <aside class="sidebar" aria-label="Main navigation">
+      <div class="side-brand"><div class="mark">R</div><div><div class="brand-title">RentOps</div><div class="brand-meta">{{.Environment}} workspace</div></div></div>
+      <nav class="nav"{{if .NavLabel}} aria-label="{{.NavLabel}}"{{end}}>
+        <a href="/rent-dashboard"{{if eq .ActivePage "rent-dashboard"}} class="active"{{end}}><span class="glyph">总</span><span>月度总览</span>{{if .ShowNavCounts}}<span class="nav-count">{{.TenantCount}}</span>{{end}}</a>
+        <a href="/billing"{{if eq .ActivePage "billing"}} class="active"{{end}}><span class="glyph">流</span><span>银行流水</span>{{if .ShowNavCounts}}<span class="nav-count">{{.IncomeCount}}</span>{{end}}</a>
+        <a href="/tenants"{{if eq .ActivePage "tenants"}} class="active"{{end}}><span class="glyph">租</span><span>租客管理</span>{{if .ShowNavCounts}}<span class="nav-count">{{.TenantCount}}</span>{{end}}</a>
+        <a href="/expenses"{{if eq .ActivePage "expenses"}} class="active"{{end}}><span class="glyph">支</span><span>支出记录</span>{{if .ShowNavCounts}}<span class="nav-count">{{.ExpenseCount}}</span>{{end}}</a>
+      </nav>
+      <div class="side-foot">当前用户：{{.Username}}<br>{{.FootNote}}</div>
+    </aside>{{end}}

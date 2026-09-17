@@ -1,0 +1,358 @@
+
+    :root {
+      --background-deep: #f3f4f6;
+      --background-base: #f3f4f6;
+      --surface: #ffffff;
+      --surface-muted: #f9fafb;
+      --surface-accent: #eff6ff;
+      --foreground: #111827;
+      --foreground-muted: #4b5563;
+      --foreground-subtle: #374151;
+      --accent: #2563eb;
+      --accent-bright: #1d4ed8;
+      --positive: #047857;
+      --danger: #b91c1c;
+      --warning: #b45309;
+      --border: #d1d5db;
+      --border-strong: #9ca3af;
+      --negative: var(--danger);
+      --sans: "Inter", "Geist Sans", "Aptos", "Segoe UI", system-ui, sans-serif;
+      --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { background: var(--background-deep); }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--foreground);
+      font-family: var(--sans);
+      background: var(--background-base);
+      overflow-x: hidden;
+    }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    a { color: inherit; }
+    a:focus-visible,
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible {
+      outline: 2px solid var(--accent-bright);
+      outline-offset: 3px;
+    }
+    .app {
+      width: min(1480px, 100%);
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      grid-template-columns: 236px minmax(0, 1fr);
+    }
+    .sidebar,
+    .content {
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .sidebar {
+      border-radius: 12px 0 0 12px;
+      border-right: 0;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .content {
+      min-width: 0;
+      border-radius: 0 12px 12px 0;
+      padding: 24px;
+    }
+    /* The compact bar and the scrim belong to the narrow-screen drawer. Above
+       the 640px breakpoint they must not exist visually, so the desktop grid
+       (sidebar column + content) renders exactly as before. */
+    .nav-compact-bar,
+    .nav-scrim { display: none; }
+    /* The drawer's state checkbox. display:none above 640px, because the control
+       it drives does not exist there — and because a bare checkbox in the layout
+       would move the desktop grid this task promises not to move. At <=640 it is
+       re-shown as a focusable-but-invisible box (see the drawer section below). */
+    .nav-drawer-input { display: none; }
+    .side-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .mark {
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      color: #ffffff;
+      font: 700 17px var(--mono);
+      background: var(--accent);
+    }
+    .brand-title { font-weight: 800; letter-spacing: 0; }
+    .brand-meta,
+    .label {
+      color: var(--foreground-muted);
+      font: 700 11px var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 0.10em;
+    }
+    .nav { display: grid; gap: 6px; }
+    .nav a {
+      min-height: 40px;
+      border-radius: 8px;
+      padding: 0 11px;
+      display: grid;
+      grid-template-columns: 24px 1fr auto;
+      gap: 9px;
+      align-items: center;
+      color: var(--foreground-muted);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .nav a:hover,
+    .nav a.active {
+      color: #1e40af;
+      background: #dbeafe;
+    }
+    .glyph {
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      color: #1d4ed8;
+      background: #dbeafe;
+      font: 700 11px var(--mono);
+    }
+    .nav-count {
+      min-width: 22px;
+      height: 21px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      padding: 0 6px;
+      color: var(--foreground-muted);
+      background: #f3f4f6;
+      font: 700 11px var(--mono);
+    }
+    .side-foot {
+      margin-top: auto;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      color: var(--foreground-muted);
+      font-size: 12px;
+      line-height: 1.55;
+      overflow-wrap: anywhere;
+    }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    h1 {
+      margin: 8px 0 0;
+      font-size: clamp(32px, 5vw, 52px);
+      line-height: 1;
+      letter-spacing: -0.035em;
+      font-weight: 800;
+    }
+    h2 { margin: 0; font-size: 17px; letter-spacing: -0.01em; }
+    h3 { color: var(--foreground); }
+    .actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+    .actions form { margin: 0; }
+    .btn {
+      min-height: 40px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--foreground);
+      background: var(--surface);
+      cursor: pointer;
+      font-weight: 700;
+      transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+      text-decoration: none;
+    }
+    .btn:hover { background: var(--surface-muted); border-color: var(--border-strong); }
+    .btn:active { background: #e5e7eb; }
+    .btn:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 3px; }
+    .btn:disabled,
+    .btn[aria-disabled="true"] { cursor: not-allowed; opacity: 0.5; }
+    .btn.primary { border-color: var(--accent); background: var(--accent); color: #ffffff; }
+    .btn.primary:hover { border-color: var(--accent-bright); background: var(--accent-bright); }
+    .btn.danger { border-color: #fecaca; color: var(--danger); background: #fef2f2; }
+    .btn.danger:hover { border-color: #fca5a5; background: #fee2e2; }
+    .btn.subtle { background: var(--surface-muted); }
+    .summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .panel { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+    .metric { padding: 18px; min-height: 118px; }
+    .metric strong { display: block; margin-top: 12px; font-size: clamp(26px, 3vw, 38px); line-height: 1; font-weight: 800; }
+    .metric span,
+    .tiny { display: block; margin-top: 8px; color: var(--foreground-muted); font-size: 12px; line-height: 1.55; }
+    .notice { margin-bottom: 14px; padding: 13px 15px; border-radius: 8px; border: 1px solid var(--border); color: var(--foreground-subtle); background: var(--surface-muted); }
+    .notice.error { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
+    .notice.ok { border-color: #a7f3d0; background: #ecfdf5; color: #065f46; }
+    .grid-two { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 18px; align-items: start; }
+    .form { padding: 18px; }
+    .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+    label { display: block; margin: 13px 0 6px; color: #374151; font-size: 12px; font-weight: 700; }
+    input, select, textarea {
+      width: 100%;
+      min-height: 40px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 11px;
+      color: var(--foreground);
+      background: var(--surface-muted);
+      outline: none;
+      color-scheme: light;
+    }
+    select { padding-right: 11px; }
+    input[type="date"], input[type="month"] { color-scheme: light; }
+    input[type="date"]::-webkit-calendar-picker-indicator,
+    input[type="month"]::-webkit-calendar-picker-indicator { cursor: pointer; }
+    input[type="checkbox"], input[type="radio"] { width: auto; min-height: auto; accent-color: var(--accent); }
+    textarea { resize: vertical; }
+    input:hover, select:hover, textarea:hover { border-color: var(--border-strong); }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+    .surface { overflow: hidden; }
+    .surface .panel-head { margin: 0; padding: 18px 20px; border-bottom: 1px solid var(--border); background: var(--surface-muted); }
+    .table-wrap { max-width: 100%; overflow-x: auto; }
+    table { width: 100%; min-width: 760px; border-collapse: collapse; }
+    th { text-align: left; color: var(--foreground-muted); font: 700 11px var(--mono); text-transform: uppercase; letter-spacing: 0.10em; padding: 13px 14px; border-bottom: 1px solid var(--border); background: #f9fafb; }
+    td { padding: 16px 14px; border-bottom: 1px solid #e5e7eb; color: var(--foreground-subtle); font-size: 13px; line-height: 1.45; vertical-align: top; }
+    tbody tr:hover { background: #f9fafb; }
+    .amount { color: var(--foreground); font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .amount.expense { color: var(--danger); }
+    .mono { font-family: var(--mono); font-size: 11px; color: var(--foreground-muted); overflow-wrap: anywhere; }
+    .empty { padding: 64px 20px; color: var(--foreground-muted); text-align: center; line-height: 1.7; }
+    @media (max-width: 980px) {
+      .app { grid-template-columns: 1fr; padding: 12px; }
+      .sidebar { border-radius: 12px 12px 0 0; border-right: 1px solid var(--border); border-bottom: 0; }
+      .content { border-radius: 0 0 12px 12px; }
+      .grid-two { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) {
+      .app { padding: 8px; }
+      .content { border-radius: 12px; padding: 14px; }
+      .topbar { flex-direction: column; }
+      .topbar .actions { width: 100%; justify-content: stretch; }
+      .topbar .actions > *, .topbar .actions form { flex: 1 1 auto; }
+      .topbar .actions .btn { width: 100%; }
+      .summary { grid-template-columns: 1fr; }
+      h1 { font-size: 34px; }
+      table { min-width: 680px; }
+
+      /* ---- 抽屉：紧凑栏 + 汉堡 ---- */
+      .nav-compact-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 56px;
+        margin: 0 0 8px;
+        padding: 0 12px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--surface);
+        cursor: pointer;
+      }
+      .nav-compact-bar .mark { width: 30px; height: 30px; font-size: 14px; }
+      .nav-burger { margin-left: auto; font-size: 20px; line-height: 1; }
+      /* 键盘也要能开抽屉。复选框原本带 hidden 属性（= display:none），聚焦不了，
+         于是 <=640 的导航变成了只能点、不能按 Tab 到达——比改造前更差，改造前
+         侧栏链接是普通可聚焦链接。改成「看不见但可聚焦」，焦点画在紧凑栏上。 */
+      .nav-drawer-input {
+        display: block;
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .nav-drawer-input:focus-visible ~ .nav-compact-bar {
+        outline: 2px solid var(--accent-bright);
+        outline-offset: 2px;
+      }
+      /* The sidebar leaves the grid and becomes an off-canvas drawer. */
+      .sidebar {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 40;
+        width: min(280px, 86vw);
+        border: 1px solid var(--border);
+        border-radius: 0 12px 12px 0;
+        overflow-y: auto;
+        transform: translateX(-100%);
+        /* 只 translate 不动的是「看得见的位置」，不是可聚焦性：关闭态下侧栏链接
+           仍在 Tab 顺序里，焦点会跑到屏幕外。visibility 一并切。过渡时 visibility
+           的取值是离散的：转 visible 立刻生效，转 hidden 等过渡结束才生效，正好
+           是抽屉要的行为。 */
+        visibility: hidden;
+        transition: transform 200ms ease, visibility 200ms ease;
+      }
+      #nav-drawer:checked ~ .sidebar { transform: translateX(0); visibility: visible; }
+      #nav-drawer:checked ~ .nav-scrim {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 30;
+        margin: 0;
+        background: rgba(17, 24, 39, 0.45);
+      }
+
+      /* ---- 冻结最右列 ----
+         移动端不渲染滚动条，横滑时用户看不出右边还有内容；background 阻止下层
+         单元格透出，内侧阴影是方向提示。直接子级选择器避开 /tenants 展开行里
+         嵌套表格的单元格，否则冻结区会出现上下两层 sticky。 */
+      .table-wrap > table > thead > tr > th:last-child,
+      .table-wrap > table > tbody > tr > td:last-child:not([colspan]) {
+        position: sticky;
+        right: 0;
+        background: var(--surface);
+        box-shadow: -8px 0 8px -8px rgba(0, 0, 0, 0.18);
+      }
+      .table-wrap > table > thead > tr > th:last-child { background: #f9fafb; }
+
+      /* ---- P1：字号与断行 ---- */
+      .mono { font-size: 12px; }
+      th { font-size: 12px; }
+      /* 日期单元格整格是 mono（应缴日 / 创建时间）。它们逐字断成 3–5 行后不可读，
+         又不会被溢出检测捕获。副行仍可换行，否则 /billing 的到账列会被撑爆。 */
+      td.mono { white-space: nowrap; }
+      td.mono .tiny { white-space: normal; }
+
+      /* ---- P1：触控目标 44px ----
+         th 的 13px padding 不响应点击，可点区域必须长在 <a> 上。 */
+      th .sort-link { min-height: 44px; padding: 13px 14px; margin: -13px -14px; }
+      .tenant-link, .status.status-link {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+      }
+      /* 租客姓名链接就是两个汉字，实测 26px 宽。高度已经够了，宽度不够。
+         用 ::after 向左右各撑 9px；padding 也能撑开，但那会把链接自身的虚线
+         下划线一起拉长，看起来像划到空白处。 */
+      .tenant-link { position: relative; }
+      .tenant-link::after { content: ""; position: absolute; top: 0; bottom: 0; left: -9px; right: -9px; }
+
+      /* 控件基础高度 40px（.btn 也是 40px），差 4px。逐页补会漏，这里一次抬到
+         44px；checkbox/radio 由 input[type=...] 的 0,1,1 规则管着，不受影响。
+         注意基础样式是拼在每页自己的 <style> 之前的，所以页内更具体的规则
+         （如 /billing 那批 30px 的归类控件）会盖过这一条 —— 那些归各页的窄屏块管。 */
+      input, select, textarea, .btn { min-height: 44px; }
+      /* 抽屉打开后 .nav a 就是唯一的导航方式，基础样式里它是 40px。 */
+      .nav a { min-height: 44px; }
+    }

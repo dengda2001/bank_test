@@ -1,0 +1,212 @@
+
+    .calendar-control {
+      position: relative;
+      width: 100%;
+    }
+    .calendar-input {
+      min-height: 40px;
+      border-radius: 10px;
+      padding-right: 44px;
+      cursor: pointer;
+    }
+    .dashboard-toolbar .calendar-input {
+      min-height: 42px;
+      border-radius: 14px;
+    }
+    .calendar-input::placeholder {
+      color: var(--foreground-muted);
+      opacity: 0.78;
+    }
+    .calendar-trigger {
+      position: absolute;
+      top: 50%;
+      right: 7px;
+      width: 30px;
+      height: 30px;
+      transform: translateY(-50%);
+      border: 0;
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+      color: var(--foreground-muted);
+      background: var(--surface-muted);
+      cursor: pointer;
+      transition: background 160ms ease, color 160ms ease;
+    }
+    .calendar-trigger::before {
+      content: "▦";
+      font-size: 16px;
+      line-height: 1;
+    }
+    .calendar-trigger:hover,
+    .calendar-control.is-open .calendar-trigger {
+      color: var(--accent-bright);
+      background: var(--surface-accent);
+    }
+    .calendar-popover {
+      position: absolute;
+      z-index: 20;
+      top: calc(100% + 8px);
+      left: 0;
+      width: min(360px, calc(100vw - 28px));
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      color: var(--foreground);
+      background: var(--surface);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-4px) scale(0.98);
+      transform-origin: top left;
+      transition: opacity 140ms ease, transform 140ms ease;
+    }
+    .calendar-control.is-open .calendar-popover {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0) scale(1);
+    }
+    .calendar-popover[data-calendar-kind="date"] {
+      width: min(340px, calc(100vw - 28px));
+    }
+    .calendar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 30px;
+    }
+    .calendar-title {
+      margin: 0;
+      padding: 4px 8px;
+      border: 0;
+      border-radius: 8px;
+      color: var(--foreground);
+      background: transparent;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1.2;
+      transition: background 160ms ease, color 160ms ease;
+    }
+    .calendar-title:hover {
+      background: var(--surface-muted);
+    }
+    .calendar-title.is-static {
+      padding: 4px 0;
+      cursor: default;
+    }
+    .calendar-title.is-static:hover {
+      background: transparent;
+    }
+    .calendar-nav {
+      width: 30px;
+      height: 30px;
+      border: 0;
+      border-radius: 9px;
+      color: var(--foreground-subtle);
+      background: transparent;
+      cursor: pointer;
+      font-size: 20px;
+      line-height: 1;
+    }
+    .calendar-nav:hover {
+      color: var(--foreground);
+      background: var(--surface-muted);
+    }
+    .calendar-divider {
+      height: 1px;
+      margin: 10px 0 12px;
+      background: var(--border);
+    }
+    .calendar-month-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 7px;
+    }
+    .calendar-year-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 7px;
+    }
+    .calendar-day-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 4px;
+    }
+    .calendar-weekday {
+      padding: 3px 0 7px;
+      color: var(--foreground-muted);
+      font: 700 10px var(--mono);
+      text-align: center;
+    }
+    .calendar-option {
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      color: var(--foreground);
+      background: transparent;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .calendar-option:hover {
+      border-color: #93c5fd;
+      background: var(--surface-accent);
+    }
+    .calendar-option.is-selected {
+      border-color: var(--accent);
+      color: #ffffff;
+      background: var(--accent);
+    }
+    .calendar-option.is-today:not(.is-selected) {
+      border-color: #93c5fd;
+      color: var(--accent-bright);
+    }
+    .calendar-option.is-outside {
+      color: #9ca3af;
+    }
+    .calendar-option:disabled {
+      cursor: not-allowed;
+      opacity: 0.28;
+    }
+    .calendar-footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 13px;
+      padding-top: 11px;
+      border-top: 1px solid var(--border);
+    }
+    .calendar-action {
+      min-height: 30px;
+      padding: 0 8px;
+      border: 0;
+      border-radius: 8px;
+      color: var(--accent-bright);
+      background: transparent;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .calendar-action:hover {
+      background: var(--surface-accent);
+    }
+    @media (max-width: 640px) {
+      /* P1：日期按钮实测 30x30，低于 44px 的触控下限。输入框同步抬到 46px，
+         否则 44px 的按钮会从 40px 高的框里上下各溢出 2px。 */
+      .calendar-input, .dashboard-toolbar .calendar-input { min-height: 46px; padding-right: 52px; }
+      .calendar-trigger { width: 44px; height: 44px; border-radius: 12px; }
+      .calendar-popover {
+        position: fixed;
+        top: auto;
+        right: 14px;
+        bottom: 14px;
+        left: 14px;
+        width: auto;
+        max-width: none;
+        transform-origin: bottom center;
+      }
+      .calendar-control.is-open .calendar-popover {
+        transform: translateY(0) scale(1);
+      }
+    }
