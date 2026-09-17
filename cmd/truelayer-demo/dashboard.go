@@ -11,6 +11,13 @@ func (a *app) handleRentDashboard(w http.ResponseWriter, r *http.Request) {
 	if !a.requireAuth(w, r) {
 		return
 	}
+	if userID, ok := a.currentUserID(r); ok && a.db != nil {
+		var propertyCount int64
+		if err := a.db.WithContext(r.Context()).Model(&property{}).Where("user_id = ? AND status = ?", userID, "active").Count(&propertyCount).Error; err == nil && propertyCount > 0 {
+			a.renderRentWorkspaceDashboard(w, r)
+			return
+		}
+	}
 	a.renderRentDashboard(w, r, nil)
 }
 

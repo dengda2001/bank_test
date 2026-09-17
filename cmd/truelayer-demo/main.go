@@ -396,6 +396,7 @@ func main() {
 	mux.HandleFunc("/logout", a.handleLogout)
 	mux.HandleFunc("/rent-dashboard", a.handleRentDashboard)
 	mux.HandleFunc("/rent-dashboard/settle", a.handleDashboardManualBalance)
+	mux.HandleFunc("/rooms/", a.handleRoomDetail)
 	mux.HandleFunc("/dunning/config", a.handleDunningConfig)
 	mux.HandleFunc("/dunning/preview", a.handleDunningPreview)
 	mux.HandleFunc("/dunning/send", a.handleDunningSend)
