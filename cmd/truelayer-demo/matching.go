@@ -8,13 +8,14 @@ import (
 )
 
 type matchDecision struct {
-	Status             string
-	TenantID           uint64
-	RentObligationID   uint64
-	PeriodMonth        time.Time
-	ConfirmationSource string
-	Reason             string
-	BackfillPayerID    bool
+	Status                string
+	TenantID              uint64
+	RentObligationID      uint64
+	AllocationAmountCents int64
+	PeriodMonth           time.Time
+	ConfirmationSource    string
+	Reason                string
+	BackfillPayerID       bool
 }
 
 func decideRentMatch(tx paymentTransactionInput, tenants []tenant, obligations []rentObligation) matchDecision {
@@ -153,10 +154,11 @@ func decideForTenantWithObligation(tx paymentTransactionInput, row tenant, oblig
 	}
 	remaining := obligation.ExpectedAmountCents - obligation.PaidAmountCents
 	decision := matchDecision{
-		TenantID:           row.ID,
-		RentObligationID:   obligation.ID,
-		PeriodMonth:        obligation.PeriodMonth,
-		ConfirmationSource: source,
+		TenantID:              row.ID,
+		RentObligationID:      obligation.ID,
+		AllocationAmountCents: tx.AmountCents,
+		PeriodMonth:           obligation.PeriodMonth,
+		ConfirmationSource:    source,
 	}
 	if strings.ToUpper(strings.TrimSpace(tx.Currency)) != strings.ToUpper(strings.TrimSpace(obligation.Currency)) {
 		decision.Status = "needs_review"
@@ -164,8 +166,9 @@ func decideForTenantWithObligation(tx paymentTransactionInput, row tenant, oblig
 		return decision
 	}
 	if tx.AmountCents > remaining {
-		decision.Status = "needs_review"
-		decision.Reason = "overpayment"
+		decision.Status = "partial"
+		decision.AllocationAmountCents = remaining
+		decision.Reason = "payment exceeds this tenant responsibility; remaining source needs review"
 		return decision
 	}
 	if tx.AmountCents < remaining {

@@ -34,13 +34,21 @@ func (s *transactionService) applyAllocation(ctx context.Context, userID uint64,
 	if decision.RentObligationID == 0 || decision.TenantID == 0 {
 		return errors.New("rent match target is incomplete")
 	}
+	amountCents := decision.AllocationAmountCents
+	if amountCents <= 0 {
+		amountCents = transaction.AmountCents
+	}
 	_, err := s.allocateTransaction(ctx, userID, transaction.ID, []transactionAllocationDraft{{
 		TenantID:         decision.TenantID,
 		RentObligationID: decision.RentObligationID,
-		AmountCents:      transaction.AmountCents,
+		AmountCents:      amountCents,
 		Kind:             allocationKindRent,
-	}}, "", source)
+	}}, rentMatchRequestKey(transaction.ID, decision.RentObligationID, amountCents), source)
 	return err
+}
+
+func rentMatchRequestKey(transactionID, obligationID uint64, amountCents int64) string {
+	return fmt.Sprintf("rent-match:%d:%d:%d", transactionID, obligationID, amountCents)
 }
 
 func (s *transactionService) confirmRentMatch(ctx context.Context, userID, transactionID, tenantID uint64, period *time.Time, rememberPayer bool) error {

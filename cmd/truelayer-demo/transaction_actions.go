@@ -38,12 +38,18 @@ type transactionMatchProjection struct {
 func projectTransactionMatch(source paymentTransaction, allocations []paymentAllocation, actionKind, reason string) transactionMatchProjection {
 	summary := summarizeTransactionAllocations(source, allocations)
 	projection := transactionMatchProjection{Status: summary.Status, Reason: strings.TrimSpace(reason)}
+	if source.MatchedTenantID != nil && *source.MatchedTenantID != 0 {
+		matchedTenantID := *source.MatchedTenantID
+		projection.MatchedTenantID = &matchedTenantID
+	}
 	for _, allocation := range allocations {
 		if !ledgerAllocationIsEffective(allocation) || allocation.TenantID == nil || *allocation.TenantID == 0 {
 			continue
 		}
-		tenantID := *allocation.TenantID
-		projection.MatchedTenantID = &tenantID
+		if projection.MatchedTenantID == nil {
+			tenantID := *allocation.TenantID
+			projection.MatchedTenantID = &tenantID
+		}
 		break
 	}
 	if summary.AllocatedCents > 0 {

@@ -1571,7 +1571,7 @@ func TestDecideRentMatchUsesRememberedPayerNameAutomatically(t *testing.T) {
 	}
 }
 
-func TestDecideRentMatchOverpaymentNeedsReview(t *testing.T) {
+func TestDecideRentMatchOverpaymentCapsAtTenantResponsibility(t *testing.T) {
 	payerID := "payer-123"
 	tenantRow := tenant{ID: 7, PayerID: &payerID}
 	obligation := rentObligation{ID: 11, TenantID: 7, PeriodMonth: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), ExpectedAmountCents: 95000}
@@ -1583,7 +1583,7 @@ func TestDecideRentMatchOverpaymentNeedsReview(t *testing.T) {
 	}
 
 	decision := decideRentMatch(tx, []tenant{tenantRow}, []rentObligation{obligation})
-	if decision.Status != "needs_review" || decision.Reason != "overpayment" {
+	if decision.Status != "partial" || decision.AllocationAmountCents != 95000 || decision.Reason == "" {
 		t.Fatalf("unexpected overpayment decision: %+v", decision)
 	}
 }

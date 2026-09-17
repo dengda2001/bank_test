@@ -69,24 +69,12 @@ func validateTransactionAllocationDrafts(source paymentTransaction, existing []p
 	if summary.AllocatedCents > source.AmountCents {
 		return errors.New("existing allocations exceed source amount")
 	}
-	tenantID := uint64(0)
-	if source.MatchedTenantID != nil {
-		tenantID = *source.MatchedTenantID
-	}
 	for _, allocation := range existing {
 		if !ledgerAllocationIsEffective(allocation) {
 			continue
 		}
 		if allocation.UserID != 0 && allocation.UserID != source.UserID {
 			return errors.New("existing allocation user ownership mismatch")
-		}
-		if allocation.TenantID == nil || *allocation.TenantID == 0 {
-			continue
-		}
-		if tenantID == 0 {
-			tenantID = *allocation.TenantID
-		} else if tenantID != *allocation.TenantID {
-			return errors.New("existing allocations span multiple tenants")
 		}
 	}
 
@@ -103,14 +91,6 @@ func validateTransactionAllocationDrafts(source paymentTransaction, existing []p
 				return fmt.Errorf("allocation %d tenant is required", index+1)
 			}
 		}
-		if draft.TenantID != 0 {
-			if tenantID == 0 {
-				tenantID = draft.TenantID
-			} else if tenantID != draft.TenantID {
-				return errors.New("allocation drafts span multiple tenants")
-			}
-		}
-
 		check := ledgerAllocationCheck{
 			UserID:                 source.UserID,
 			SourceUserID:           source.UserID,
