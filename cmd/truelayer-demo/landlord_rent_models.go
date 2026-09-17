@@ -7,7 +7,7 @@ type property struct {
 	UserID    uint64
 	Name      string
 	Address   *string
-	Status    string
+	Status    string `gorm:"default:active"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -21,7 +21,7 @@ type room struct {
 	UserID       uint64
 	PropertyID   uint64
 	RoomLabel    string
-	Status       string
+	Status       string `gorm:"default:active"`
 	ActiveFrom   time.Time
 	InactiveFrom *time.Time
 	CreatedAt    time.Time
@@ -41,7 +41,7 @@ type tenancyAgreement struct {
 	MonthlyRentCents int64
 	Currency         string
 	DueDay           int
-	Status           string
+	Status           string `gorm:"default:active"`
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 }
@@ -58,7 +58,7 @@ type agreementParty struct {
 	ResponsibilityCents int64
 	JoinedAt            *time.Time
 	LeftAt              *time.Time
-	Status              string
+	Status              string `gorm:"default:active"`
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
 }
@@ -77,7 +77,7 @@ type rentCharge struct {
 	DueDate              time.Time
 	ExpectedAmountCents  int64
 	Currency             string
-	RecordStatus         string
+	RecordStatus         string `gorm:"default:active"`
 	PropertyNameSnapshot *string
 	RoomLabelSnapshot    *string
 	RoomAddressSnapshot  *string

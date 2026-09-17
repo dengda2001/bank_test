@@ -4,7 +4,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+
+	"gorm.io/gorm/schema"
 )
 
 func readLandlordRentMigration(t *testing.T) string {
@@ -101,5 +104,32 @@ func TestLandlordRentModelsUseMigrationTableNames(t *testing.T) {
 		if tc.got != tc.want {
 			t.Errorf("%s table name = %q; want %q", tc.name, tc.got, tc.want)
 		}
+	}
+}
+
+func TestLandlordRentModelsDefaultNewRecordsToActive(t *testing.T) {
+	parsed, err := schema.Parse(&manualExpense{}, &sync.Map{}, schema.NamingStrategy{})
+	if err != nil {
+		t.Fatalf("parse manual expense schema: %v", err)
+	}
+	field := parsed.LookUpField("RecordStatus")
+	if field == nil {
+		t.Fatal("manual expense schema is missing RecordStatus")
+	}
+	if field.DefaultValue != "active" {
+		t.Fatalf("manual expense RecordStatus default = %q; want active", field.DefaultValue)
+	}
+
+	parsed, err = schema.Parse(&rentCharge{}, &sync.Map{}, schema.NamingStrategy{})
+	if err != nil {
+		t.Fatalf("parse rent charge schema: %v", err)
+	}
+	field = parsed.LookUpField("RecordStatus")
+	if field == nil || field.DefaultValue != "active" {
+		got := "<missing>"
+		if field != nil {
+			got = field.DefaultValue
+		}
+		t.Fatalf("rent charge RecordStatus default = %q; want active", got)
 	}
 }

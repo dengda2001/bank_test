@@ -22,7 +22,7 @@ type manualExpense struct {
 	Currency       string
 	ExpenseDate    time.Time
 	PaymentMethod  string
-	RecordStatus   string
+	RecordStatus   string `gorm:"default:active"`
 	VoidedAt       *time.Time
 	VoidedByUserID *uint64
 	VoidReason     *string
