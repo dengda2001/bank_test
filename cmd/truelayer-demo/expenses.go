@@ -12,18 +12,24 @@ import (
 )
 
 type manualExpense struct {
-	ID            uint64 `gorm:"primaryKey"`
-	UserID        uint64
-	Description   string
-	Category      string
-	AmountCents   int64
-	Currency      string
-	ExpenseDate   time.Time
-	PaymentMethod string
-	RoomHint      *string
-	TenantHint    *string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID             uint64 `gorm:"primaryKey"`
+	UserID         uint64
+	PropertyID     *uint64
+	RoomID         *uint64
+	Description    string
+	Category       string
+	AmountCents    int64
+	Currency       string
+	ExpenseDate    time.Time
+	PaymentMethod  string
+	RecordStatus   string
+	VoidedAt       *time.Time
+	VoidedByUserID *uint64
+	VoidReason     *string
+	RoomHint       *string
+	TenantHint     *string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type expenseService struct {

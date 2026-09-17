@@ -1,0 +1,105 @@
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func readLandlordRentMigration(t *testing.T) string {
+	t.Helper()
+	body, err := os.ReadFile(filepath.Join("..", "..", "migrations", "009_landlord_rent_model.sql"))
+	if err != nil {
+		t.Fatalf("read landlord rent migration: %v", err)
+	}
+	return strings.ToLower(string(body))
+}
+
+func TestLandlordRentMigrationDefinesStableRentalHierarchy(t *testing.T) {
+	sql := readLandlordRentMigration(t)
+	for _, fragment := range []string{
+		"create table if not exists properties",
+		"create table if not exists rooms",
+		"create table if not exists tenancy_agreements",
+		"create table if not exists agreement_parties",
+		"create table if not exists rent_charges",
+		"property_id bigint unsigned not null",
+		"foreign key (property_id)",
+		"foreign key (room_id)",
+		"foreign key (agreement_id)",
+		"foreign key (tenant_id)",
+	} {
+		if !strings.Contains(sql, fragment) {
+			t.Fatalf("migration missing %q", fragment)
+		}
+	}
+}
+
+func TestLandlordRentMigrationExtendsHistoricalFactsWithoutReplacingThem(t *testing.T) {
+	sql := readLandlordRentMigration(t)
+	for _, fragment := range []string{
+		"alter table rent_obligations",
+		"add column rent_charge_id bigint unsigned null",
+		"add column tenant_name_snapshot varchar(191) null",
+		"drop index idx_rent_obligations_user_tenant_period",
+		"add unique key idx_rent_obligations_user_charge_tenant",
+		"alter table manual_expenses",
+		"add column property_id bigint unsigned null",
+		"add column room_id bigint unsigned null",
+		"add column record_status varchar(32) not null default 'active'",
+		"alter table cash_receipts",
+		"add column payment_transaction_id bigint unsigned null",
+	} {
+		if !strings.Contains(sql, fragment) {
+			t.Fatalf("migration missing %q", fragment)
+		}
+	}
+}
+
+func TestLandlordRentMigrationKeepsNewFactsUserScopedAndIdempotent(t *testing.T) {
+	sql := readLandlordRentMigration(t)
+	for _, table := range []string{
+		"properties",
+		"rooms",
+		"tenancy_agreements",
+		"agreement_parties",
+		"rent_charges",
+	} {
+		needle := "create table if not exists " + table
+		start := strings.Index(sql, needle)
+		if start < 0 {
+			t.Fatalf("migration missing table declaration %q", table)
+		}
+		end := strings.Index(sql[start:], "engine=innodb")
+		if end < 0 {
+			t.Fatalf("migration missing table terminator for %q", table)
+		}
+		body := sql[start : start+end]
+		if !strings.Contains(body, "user_id bigint unsigned not null") {
+			t.Fatalf("table %q is missing user_id ownership column", table)
+		}
+		if !strings.Contains(body, "if not exists") {
+			t.Fatalf("table %q is not idempotent", table)
+		}
+	}
+}
+
+func TestLandlordRentModelsUseMigrationTableNames(t *testing.T) {
+	cases := []struct {
+		name string
+		got  string
+		want string
+	}{
+		{name: "property", got: (property{}).TableName(), want: "properties"},
+		{name: "room", got: (room{}).TableName(), want: "rooms"},
+		{name: "tenancy agreement", got: (tenancyAgreement{}).TableName(), want: "tenancy_agreements"},
+		{name: "agreement party", got: (agreementParty{}).TableName(), want: "agreement_parties"},
+		{name: "rent charge", got: (rentCharge{}).TableName(), want: "rent_charges"},
+	}
+	for _, tc := range cases {
+		if tc.got != tc.want {
+			t.Errorf("%s table name = %q; want %q", tc.name, tc.got, tc.want)
+		}
+	}
+}

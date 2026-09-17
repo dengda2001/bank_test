@@ -18,26 +18,27 @@ const (
 )
 
 type cashReceipt struct {
-	ID               uint64 `gorm:"primaryKey"`
-	UserID           uint64
-	TenantID         uint64
-	RentObligationID uint64
-	ReceiptNumber    string
-	AmountCents      int64
-	Currency         string
-	ReceivedAt       time.Time
-	Note             string
-	Status           string
-	OperationID      string
-	VoidOperationID  *string
-	IdempotencyKey   *string
-	RecordedByUserID uint64
-	RecordedAt       time.Time
-	VoidedAt         *time.Time
-	VoidedByUserID   *uint64
-	VoidReason       *string
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID                   uint64 `gorm:"primaryKey"`
+	UserID               uint64
+	PaymentTransactionID *uint64
+	TenantID             uint64
+	RentObligationID     uint64
+	ReceiptNumber        string
+	AmountCents          int64
+	Currency             string
+	ReceivedAt           time.Time
+	Note                 string
+	Status               string
+	OperationID          string
+	VoidOperationID      *string
+	IdempotencyKey       *string
+	RecordedByUserID     uint64
+	RecordedAt           time.Time
+	VoidedAt             *time.Time
+	VoidedByUserID       *uint64
+	VoidReason           *string
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
 }
 
 type cashReceiptInput struct {

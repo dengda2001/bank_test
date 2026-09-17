@@ -15,7 +15,9 @@ import (
 type rentObligation struct {
 	ID                  uint64 `gorm:"primaryKey"`
 	UserID              uint64
+	RentChargeID        *uint64
 	TenantID            uint64
+	TenantNameSnapshot  *string
 	PeriodMonth         time.Time
 	DueDate             time.Time
 	ExpectedAmountCents int64
