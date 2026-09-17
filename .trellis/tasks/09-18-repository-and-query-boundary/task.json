@@ -3,7 +3,7 @@
   "name": "repository-and-query-boundary",
   "title": "DAO / Repository 层",
   "description": "建立房产、房间、租约、租客责任、付款分配和支出的用户隔离数据访问边界；不依赖文本关系，覆盖越权、空结果和不存在目标测试。",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,
