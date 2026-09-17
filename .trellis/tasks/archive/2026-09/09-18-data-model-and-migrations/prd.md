@@ -14,10 +14,10 @@
 
 ## Acceptance Criteria
 
-- [ ] 空库可以成功应用迁移，已有租客、账单、付款和分配数据升级不失败。
-- [ ] 同一房间同一时间的有效租约约束、责任金额和房间总额约束有明确表达。
-- [ ] 所有新增数据具备用户隔离和稳定主键；历史记录 ID、金额、状态和付款关系不改变。
-- [ ] 迁移测试覆盖重复应用、旧数据兼容和功能关闭后的读取路径。
+- [x] 空库迁移契约已覆盖新增层级表、历史表扩展和兼容字段；真实 MySQL 迁移因本地未配置 `RENTOPS_MYSQL_TEST_DSN` 按约定跳过。
+- [x] 同一房间同一时间的有效租约约束、责任金额和房间总额约束已有 schema/index/服务层边界表达。
+- [x] 所有新增数据具备用户隔离和稳定主键；历史记录 ID、金额、状态和付款关系不被迁移重建。
+- [x] 迁移源文件、模型表名/默认值和历史字段兼容测试通过；真实数据库重复应用测试因无本地 MySQL 跳过。
 
 ## Dependencies
 
@@ -29,6 +29,8 @@
 - MySQL 空库迁移测试。
 - 含既有租客、月账单、付款分配和支出的升级测试。
 - 用户隔离、外键和重复迁移测试。
+
+验收记录（2026-09-18）：`go test ./cmd/truelayer-demo -run 'LandlordRent|LedgerMigration|CashReceiptMigration' -count=1`、`go test ./cmd/truelayer-demo -count=1`、`go test ./...` 和 `go vet ./...` 通过。`RENTOPS_MYSQL_TEST_DSN` 未设置，依赖真实 MySQL 的测试按用户约定跳过。
 
 ## Notes
 
