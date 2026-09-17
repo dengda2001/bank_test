@@ -82,6 +82,96 @@ development escape.
   confirmation ownership.
 - Legacy JSON/JSONL import mapping and repeat-import idempotence.
 
+## Scenario: Scoped Landlord Rent Repository
+
+### 1. Scope / Trigger
+
+- Trigger: Any landlord rent feature that reads or writes properties, rooms,
+  tenancy agreements, agreement parties, rent charges, rent obligations,
+  payment allocations, or property/room expenses.
+- Applies to `landlordRentRepository` in
+  `cmd/truelayer-demo/landlord_rent_repository.go` and its future callers.
+
+### 2. Signatures
+
+- `newLandlordRentRepository(db *gorm.DB) *landlordRentRepository` creates the
+  account-scoped persistence boundary.
+- `find*` and `list*` methods always take `ctx` and `userID`; list methods take
+  typed filters such as `rentChargeQuery`, `rentObligationQuery`,
+  `paymentAllocationQuery`, or `manualExpenseQuery`.
+- `createProperty`, `createRoom`, `createTenancyAgreement`,
+  `createAgreementParty`, `createRentCharge`, `createRentObligation`, and
+  `createManualExpense` always take `ctx`, `userID`, and a typed model row.
+
+### 3. Contracts
+
+- `userID` is the only trusted ownership input. Create methods overwrite the
+  model row's `UserID` with the explicit argument; callers cannot choose an
+  account through a posted/model field.
+- Single-row cross-user lookups return `gorm.ErrRecordNotFound`; list methods
+  return a non-nil empty slice. `userID == 0` fails before any database call.
+- Relationship creation verifies every referenced object with the same
+  `userID`. A room must belong to the property, an agreement to the room, a
+  party to both the agreement and tenant, and a charge to the matching
+  property/room/agreement chain.
+- Rent-charge and rent-obligation month filters normalize through
+  `monthStart`; expense `ToDate` is an exclusive upper bound. Active rent
+  facts and expenses exclude non-active records unless `IncludeVoided` is set.
+- Payment-allocation writes remain owned by the transaction service because
+  locking, idempotency, and projection recomputation must stay in one business
+  transaction; the repository owns their user-scoped reads.
+
+### 4. Validation & Error Matrix
+
+- `userID == 0` -> return `errLandlordRentUserRequired`; do not dereference or
+  query the database.
+- Cross-user property, room, agreement, tenant, charge, obligation, or expense
+  target -> return `gorm.ErrRecordNotFound` for a single target and write no
+  relationship row.
+- Same-user but mismatched property/room/agreement relationship -> return
+  `gorm.ErrRecordNotFound`; do not trust individual foreign-key IDs.
+- Unknown list filter target or missing relation -> return an empty list rather
+  than falling back to room labels, addresses, or other text fields.
+
+### 5. Good/Base/Bad Cases
+
+- Good: `repo.findRentObligation(ctx, userID, obligationID)` includes the
+  account predicate, and charge-scoped obligation queries join
+  `rent_charges` with both ID and user ownership conditions.
+- Base: A user with no room expenses receives `[]manualExpense{}` and can
+  distinguish that from a database error.
+- Bad: `db.First(&property, postedID)`, copying `row.UserID` from request data,
+  or joining `rent_charges` on ID alone and relying on a single-column foreign
+  key to enforce account ownership.
+
+### 6. Tests Required
+
+- Opt-in MySQL tests run the real migration runner, create two users with
+  same-named facts, and assert cross-user reads are invisible.
+- Assert cross-user relationship writes fail without creating rooms,
+  agreements, parties, charges, obligations, or expenses.
+- Assert month, property, room, tenant, status, and date filters exclude
+  unrelated rows and preserve non-nil empty-list semantics.
+- Assert missing user IDs fail before database access, and run `go vet ./...`
+  plus the full backend test suite after repository changes.
+
+### 7. Wrong vs Correct
+
+Wrong:
+
+```go
+db.First(&charge, postedChargeID)
+```
+
+Correct:
+
+```go
+charge, err := repo.findRentCharge(ctx, sessionUserID, postedChargeID)
+```
+
+The repository makes ownership part of the query contract instead of leaving
+each handler or service to remember the predicate independently.
+
 ## Scenario: Legacy JSON Storage
 
 ### 1. Scope / Trigger
