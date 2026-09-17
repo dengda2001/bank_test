@@ -48,6 +48,69 @@ func TestRentWorkspaceFiltersFromQueryDefaultsToPropertiesAndPreservesContext(t 
 	}
 }
 
+func TestRentWorkspaceMonthFormPreservesWorkspaceContext(t *testing.T) {
+	filters := defaultRentWorkspaceFilters(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
+	filters.View = rentWorkspaceViewRooms
+	filters.PropertyID = 12
+	filters.RoomID = 34
+	filters.Search = "Aoife"
+	filters.Status = "partial"
+	filters.Sort = "balance_desc"
+	filters.PageSize = 24
+	page, err := executeTemplate(rentWorkspaceTemplate, rentWorkspacePageData{
+		Filters:  filters,
+		Period:   "2026-09",
+		View:     filters.View,
+		PageSize: filters.PageSize,
+		Summary:  rentWorkspaceSummary{ExpectedAmount: "EUR 1.00"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		`name="view" value="rooms"`,
+		`name="property_id" value="12"`,
+		`name="room_id" value="34"`,
+		`name="search" value="Aoife"`,
+		`name="status" value="partial"`,
+		`name="sort" value="balance_desc"`,
+		`name="page_size" value="24"`,
+	} {
+		if !strings.Contains(page, expected) {
+			t.Fatalf("month form dropped workspace context %q", expected)
+		}
+	}
+}
+
+func TestRentWorkspaceTenantViewExplainsCompleteThirdPartyPayment(t *testing.T) {
+	filters := defaultRentWorkspaceFilters(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
+	filters.View = rentWorkspaceViewTenants
+	page, err := executeTemplate(rentWorkspaceTemplate, rentWorkspacePageData{
+		Filters:  filters,
+		Period:   "2026-09",
+		View:     filters.View,
+		PageSize: filters.PageSize,
+		Summary:  rentWorkspaceSummary{ExpectedAmount: "EUR 1,000.00"},
+		TenantRows: []rentWorkspaceTenantRow{{
+			TenantName: "Covered tenant", PropertyName: "Shared House", RoomLabel: "A-01",
+			ExpectedAmount: "EUR 500.00", PaidAmount: "EUR 500.00", BalanceAmount: "EUR 0.00",
+			Status: "paid", StatusLabel: "已缴清", PaidByOther: true,
+			Payments: []rentPaymentDetail{{Source: "银行", ConfirmationSource: "manual"}},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"Covered tenant", "已缴清", "他人代付", "EUR 0.00"} {
+		if !strings.Contains(page, expected) {
+			t.Fatalf("tenant view missing third-party payment marker %q", expected)
+		}
+	}
+	if strings.Contains(page, "/dunning/") {
+		t.Fatal("a fully covered tenant must not expose a dunning action")
+	}
+}
+
 func TestRentWorkspaceFiltersRejectInvalidScopeAndView(t *testing.T) {
 	for name, query := range map[string]url.Values{
 		"view":     {"view": []string{"invalid"}},

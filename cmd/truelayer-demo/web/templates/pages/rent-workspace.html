@@ -8,11 +8,12 @@
   <link rel="stylesheet" href="/static/css/pages/rent-workspace.css">
 </head>
 <body>
+  <div class="app">
   {{template "workspace-nav" .}}
-  <div class="workspace"><main class="main">
+  <main class="content workspace">
     <div class="workspace-toolbar">
       <div><div class="eyebrow">RENTOPS · MONTHLY WORKSPACE</div><h1>月度收租工作台</h1><div class="tiny">{{.PeriodLabel}} · 所有金额来自同一套月度账务事实</div></div>
-      <form class="workspace-period" method="get" action="/rent-dashboard"><label for="workspace-period">月份</label><input id="workspace-period" name="period" type="month" value="{{.Period}}"><input type="hidden" name="view" value="{{.View}}"><button class="btn" type="submit">查看</button></form>
+      <form class="workspace-period" method="get" action="/rent-dashboard"><label for="workspace-period">月份</label><input id="workspace-period" name="period" type="month" value="{{.Period}}"><input type="hidden" name="view" value="{{.View}}"><input type="hidden" name="property_id" value="{{if .Filters.PropertyID}}{{.Filters.PropertyID}}{{end}}"><input type="hidden" name="room_id" value="{{if .Filters.RoomID}}{{.Filters.RoomID}}{{end}}"><input type="hidden" name="search" value="{{.Filters.Search}}"><input type="hidden" name="status" value="{{.Filters.Status}}"><input type="hidden" name="sort" value="{{.Filters.Sort}}"><input type="hidden" name="page_size" value="{{.PageSize}}"><button class="btn" type="submit">查看</button></form>
     </div>
     {{if eq .Error "invalid_workspace_filter"}}<div class="notice error">筛选条件无效，已恢复安全默认值。</div>{{end}}
     {{if .Message}}<div class="notice ok">{{.Message}}</div>{{end}}
@@ -68,6 +69,7 @@
       {{end}}
       {{if .TotalRows}}<div class="workspace-pager"><form method="get" action="/rent-dashboard"><input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="view" value="{{.View}}"><input type="hidden" name="property_id" value="{{if .Filters.PropertyID}}{{.Filters.PropertyID}}{{end}}"><input type="hidden" name="room_id" value="{{if .Filters.RoomID}}{{.Filters.RoomID}}{{end}}"><input type="hidden" name="search" value="{{.Filters.Search}}"><input type="hidden" name="status" value="{{.Filters.Status}}"><input type="hidden" name="sort" value="{{.Filters.Sort}}"><label>每页<select name="page_size" onchange="this.form.submit()"><option value="12"{{if eq .PageSize 12}} selected{{end}}>12</option><option value="24"{{if eq .PageSize 24}} selected{{end}}>24</option><option value="50"{{if eq .PageSize 50}} selected{{end}}>50</option></select></label></form><span class="tiny">当前显示 {{.FilteredCount}} / {{.TotalRows}} 条</span><div class="pager-actions"><a class="btn subtle{{if eq .Page 1}} disabled{{end}}" href="{{workspaceURL .Filters (workspacePreviousPage .Page)}}">上一页</a><span class="tiny">第 {{.Page}} / {{.TotalPages}} 页</span><a class="btn subtle{{if eq .Page .TotalPages}} disabled{{end}}" href="{{workspaceURL .Filters (workspaceNextPage .Page .TotalPages)}}">下一页</a></div></div>{{end}}
     </section>
-  </main></div>
+  </main>
+  </div>
 </body>
 </html>

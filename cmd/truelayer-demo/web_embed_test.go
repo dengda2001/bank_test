@@ -67,6 +67,8 @@ func TestEmbeddedRentWorkspaceUsesOneViewModelForDesktopAndMobileLists(t *testin
 		t.Fatalf("shared row value appears %d times, want once per layout", got)
 	}
 	for _, expected := range []string{
+		`<div class="app">`,
+		`<main class="content workspace">`,
 		`href="/static/css/workspace.css"`,
 		`href="/static/css/pages/rent-workspace.css"`,
 	} {

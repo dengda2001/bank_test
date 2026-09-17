@@ -3,7 +3,7 @@
   "name": "monthly-rent-workspace-ui",
   "title": "前端月度工作台",
   "description": "实现默认房子视角、房子/房间/租客切换、房产下钻、房间列表与详情、租客责任和代付展示、支出与空状态，以及桌面/移动端交互。",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,
