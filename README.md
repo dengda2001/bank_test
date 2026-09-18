@@ -87,6 +87,16 @@ Click **Bind bank account** to start the TrueLayer authorization flow. After con
 
 The default scopes include `offline_access`, so the first successful consent stores an encrypted refresh token in the current user's `bank_connections` row. After that, use **Refresh bank data** on `/billing` or open `/refresh` while signed in to get a fresh access token and query again without completing bank login each time. If you use `TL_AUTH_URL`, make sure that Console-generated link also includes the `offline_access` scope, otherwise TrueLayer will not return a refresh token.
 
+### MySQL-backed tests
+
+The MySQL integration tests are opt-in through `RENTOPS_MYSQL_TEST_DSN`. Use the disposable test runner below to rebuild `rentops_test` before each invocation and recreate it empty after the tests, so failed fixtures cannot leak into the next run:
+
+```sh
+./scripts/run-mysql-test-clean.sh
+```
+
+By default the script uses the project credentials from `MYSQL_DSN` and a local `root` administrator on `127.0.0.1:3306`. Override `MYSQL_ADMIN_USER`, `MYSQL_ADMIN_PASSWORD`, `MYSQL_ADMIN_HOST`, or `MYSQL_ADMIN_PORT` when needed. Pass normal `go test` arguments to run a narrower set, for example `./scripts/run-mysql-test-clean.sh ./cmd/truelayer-demo -run TestManualBalanceSettlesOnlyTheOutstandingRentOnMySQL -count=1`.
+
 Refresh tokens are reusable, but they are not permanent. TrueLayer connections and user consent commonly expire on a 90-day cycle, and access can also fail if the user revokes consent or the bank requires re-authorization. When that happens, bind the bank account again.
 
 `TL_FROM` is used as the transaction start date for the first bank authorization callback, so a fresh consent can fetch as much historical data as the bank permits. Manual refreshes intentionally cap the transaction start date to the later of `TL_FROM` and the last 90 days because many banks reject older transaction ranges after the initial strong-customer-authentication window.
