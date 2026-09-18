@@ -128,6 +128,23 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
          一致。已分配／余款不跟着搬，它们留在这个 details 展开后的 txn-body 里。 */
       .txn-amount-mobile { display: block; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
       .txn-amount-mobile.expense { color: var(--danger); }
+
+      /* 把流水行重排成手机卡片：保留状态、付款人、金额、到账日期和处理入口，
+         避免用户横向寻找冻结列。桌面表格结构和操作表单继续复用。 */
+      .billing-table-wrap { overflow: visible; }
+      .billing-table-wrap .transaction-table { display: block; width: 100%; min-width: 0; }
+      .billing-table-wrap .transaction-table thead { display: none; }
+      .billing-table-wrap .transaction-table tbody { display: grid; gap: 10px; }
+      .billing-table-wrap .transaction-table tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+      .billing-table-wrap .transaction-table tbody td { display: block; min-width: 0; padding: 0; border: 0; }
+      .billing-table-wrap .transaction-table tbody td.txn-col-type { grid-column: 1; }
+      .billing-table-wrap .transaction-table tbody td.txn-col-payer { grid-column: 1; }
+      .billing-table-wrap .transaction-table tbody td.txn-col-date { grid-column: 2; grid-row: 1 / span 2; text-align: right; }
+      .billing-table-wrap .transaction-table tbody td.txn-col-desc { display: block; grid-column: 1 / -1; padding-top: 4px; }
+      .billing-table-wrap .transaction-table tbody td.txn-col-action { grid-column: 1 / -1; position: static !important; width: auto !important; padding: 0; background: transparent !important; box-shadow: none !important; }
+      .billing-table-wrap .transaction-table tbody td.txn-col-action > .txn-action { display: block; }
+      .billing-table-wrap .transaction-table tbody td.txn-col-action > .txn-action > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; }
+      .billing-table-wrap .transaction-table tbody td.txn-col-action > .txn-action > .txn-body { width: 100%; }
     }
   </style>
   <script>`+workspaceCalendarScript+`</script>
@@ -180,7 +197,7 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
       <section class="panel surface" aria-labelledby="statement-title">
         <div class="panel-head"><h2 id="statement-title">流水明细</h2><span class="tiny">{{.LastSync}}</span></div>
         {{if .TransactionRows}}
-        <div class="table-wrap"><table class="transaction-table">
+        <div class="billing-table-wrap table-wrap"><table class="transaction-table">
           <thead><tr><th class="txn-col-type">类型</th><th class="txn-col-payer"><a class="sort-link{{if .PayerSort.Active}} active{{end}}" href="{{.PayerSort.URL}}">付款人{{if .PayerSort.Arrow}}<span class="sort-arrow">{{.PayerSort.Arrow}}</span>{{end}}</a></th><th class="txn-col-amount"><a class="sort-link{{if .AmountSort.Active}} active{{end}}" href="{{.AmountSort.URL}}">金额／余额{{if .AmountSort.Arrow}}<span class="sort-arrow">{{.AmountSort.Arrow}}</span>{{end}}</a></th><th class="txn-col-date"><a class="sort-link{{if .ArrivalSort.Active}} active{{end}}" href="{{.ArrivalSort.URL}}">到账／租金月{{if .ArrivalSort.Arrow}}<span class="sort-arrow">{{.ArrivalSort.Arrow}}</span>{{end}}</a></th><th class="txn-col-desc">描述</th><th class="txn-col-account">账户</th><th class="txn-col-action">用途／处理</th></tr></thead>
           <tbody>{{range .TransactionRows}}
             <tr class="{{.Direction}}">

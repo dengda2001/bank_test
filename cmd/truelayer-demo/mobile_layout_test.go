@@ -231,6 +231,35 @@ func TestMobileExpenseListUsesCards(t *testing.T) {
 	}
 }
 
+func TestMobileBillingRowsStackAsCards(t *testing.T) {
+	page, err := executeTemplate(billingTemplate, billingPageData{
+		TransactionRows: []transactionPageRow{{
+			ID:               "7",
+			Direction:        "income",
+			DirectionLabel:   "收入",
+			PayerName:        "陈先生",
+			AmountDisplay:    "EUR 640.00",
+			DateDisplay:      "10 Sep 2026",
+			Description:      "September rent",
+			MatchStatus:      "candidate",
+			MatchStatusLabel: "待确认",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, marker := range []string{
+		`class="billing-table-wrap table-wrap"`,
+		`class="transaction-table"`,
+		`.billing-table-wrap .transaction-table tbody tr { display: grid;`,
+		`class="txn-amount-mobile"`,
+	} {
+		if !strings.Contains(page, marker) {
+			t.Fatalf("mobile billing cards missing %q", marker)
+		}
+	}
+}
+
 // Sticky is what keeps a row's identity and its actions on screen while the table
 // scrolls sideways. It must never leak above the breakpoint: at 1280px the tables
 // have to render exactly as they did before.
