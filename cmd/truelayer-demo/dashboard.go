@@ -232,9 +232,24 @@ var rentDashboardTemplate = newWorkspacePageTemplate("rent-dashboard", template.
 	    .section-head .tiny { margin-top: 4px; }
 	    .section-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-left: auto; }
 	    .dashboard-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+	    .dashboard-mobile-list { display: none; }
 	    .dashboard-pending-access { display: inline-grid; grid-template-columns: auto auto 1fr; align-items: baseline; gap: 8px; margin-top: 10px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; color: inherit; background: var(--surface); text-decoration: none; }
 	    .dashboard-pending-access strong { font: 600 16px/1 var(--mono); }
 	    .dashboard-pending-access:hover { border-color: var(--border-strong); background: var(--surface-accent); }
+	    .dashboard-mobile-card { display: grid; gap: 12px; padding: 14px; }
+	    .dashboard-mobile-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+	    .dashboard-mobile-card-head .tenant-link { display: inline; }
+	    .dashboard-mobile-card-head .tiny { margin-top: 3px; }
+	    .dashboard-mobile-card-money { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+	    .dashboard-mobile-card-money > div { padding: 8px; border-radius: 7px; background: var(--surface-muted); }
+	    .dashboard-mobile-card-money span { display: block; color: var(--foreground-muted); font-size: 10px; }
+	    .dashboard-mobile-card-money strong { display: block; margin-top: 3px; font: 700 12px var(--mono); white-space: nowrap; }
+	    .dashboard-mobile-card-actions { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 8px; align-items: end; }
+	    .dashboard-mobile-card-actions form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+	    .dashboard-mobile-card-actions form .btn { min-height: 44px; }
+	    .dashboard-mobile-payments { border-top: 1px solid var(--border); padding-top: 8px; font-size: 11px; }
+	    .dashboard-mobile-payments summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 700; }
+	    .dashboard-mobile-payments > div { display: flex; justify-content: space-between; gap: 8px; padding: 7px 0; border-top: 1px solid var(--border); }
 	    .dashboard-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; padding: 12px 16px; }
 	    .count-chip { display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px; color: var(--foreground-subtle); background: var(--surface-muted); font-size: 12px; font-weight: 700; text-decoration: none; white-space: nowrap; }
 	    .count-chip.overdue, .count-chip.review { border-color: #fecaca; color: #991b1b; background: #fef2f2; }
@@ -323,10 +338,14 @@ var rentDashboardTemplate = newWorkspacePageTemplate("rent-dashboard", template.
 	    @media (max-width: 760px) { .dunning-grid { grid-template-columns: 1fr; } .dunning-config { padding-right: 0; padding-bottom: 16px; border-right: 0; border-bottom: 1px solid var(--border); } .dunning-result-row { align-items: flex-start; } .dunning-retry { width: 100%; margin-left: 0; } }
 	    @media (max-width: 760px) { .payment-item { grid-template-columns: 1fr 1fr; } .payment-item .payment-description { grid-column: 1 / -1; } }
     @media (max-width: 900px) { .dashboard-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-	    @media (max-width: 640px) {
+    @media (max-width: 640px) {
 	      .dashboard-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	      .dashboard-summary .metric strong { font-size: 20px; letter-spacing: -0.05em; white-space: nowrap; }
 	      .topbar .brand-title { font-size: 12px; }
+	      .dashboard-table-wrap { display: none; }
+	      .dashboard-mobile-list { display: grid; gap: 9px; }
+	      .dashboard-mobile-card-money strong { font-size: 11px; }
+	      .dashboard-mobile-card-actions { grid-template-columns: 1fr; }
       .dashboard-toolbar { justify-content: stretch; }
       .dashboard-toolbar .period-picker { display: grid; width: 100%; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: 8px; }
       .dashboard-toolbar .period-label { display: none; }
@@ -441,7 +460,8 @@ var rentDashboardTemplate = newWorkspacePageTemplate("rent-dashboard", template.
 	        <div class="filter-actions"><button class="btn" type="submit">筛选</button><a class="btn subtle" href="/rent-dashboard?period={{.Period}}">清除筛选</a></div>
 	      </form>
           {{if .Rows}}
-          <div class="table-wrap"><table>
+          <div class="dashboard-mobile-list" aria-label="移动端租客账单列表">{{range .Rows}}<article class="dashboard-mobile-card panel"><div class="dashboard-mobile-card-head"><div><a class="tenant-link" href="/tenants/{{.TenantID}}?from_month={{.Period}}&amp;to_month={{.Period}}"><strong>{{.TenantName}}</strong></a>{{if .TenantAlias}}<span class="tiny">别名：{{.TenantAlias}}</span>{{end}}<span class="tiny">{{if .RoomLabel}}{{.RoomLabel}} · {{end}}{{.RoomAddress}}</span></div><span class="status {{.Status}}">{{.StatusLabel}}</span></div><div class="dashboard-mobile-card-money"><div><span>应收</span><strong>{{.ExpectedAmount}}</strong></div><div><span>已收</span><strong>{{.PaidAmount}}</strong></div><div><span>未收</span><strong>{{.BalanceAmount}}</strong></div></div><div class="dashboard-mobile-card-actions"><a class="btn subtle" href="/tenants/{{.TenantID}}?from_month={{.Period}}&amp;to_month={{.Period}}">租客详情</a>{{if gt .ExpectedCents .PaidCents}}<form class="manual-balance-form" method="post" action="/rent-dashboard/settle" onsubmit="return confirm('确认一键平账吗？')"><input type="hidden" name="obligation_id" value="{{.ObligationID}}"><input type="hidden" name="period" value="{{$.Period}}"><input name="reason" maxlength="512" placeholder="填写平账原因" aria-label="填写{{.TenantName}}平账原因" required><button class="btn primary" type="submit">一键平账</button></form>{{end}}</div>{{if .Payments}}<details class="dashboard-mobile-payments"><summary>查看收款明细（{{len .Payments}}）</summary>{{range .Payments}}<div><strong>{{.AmountDisplay}}</strong><span>{{.DateDisplay}} · {{.Source}}</span></div>{{end}}</details>{{end}}</article>{{end}}</div>
+          <div class="dashboard-table-wrap table-wrap"><table>
             <thead><tr><th><a class="sort-link{{if .TenantSort.Active}} active{{end}}" href="{{.TenantSort.URL}}">租客{{if .TenantSort.Arrow}}<span class="sort-arrow">{{.TenantSort.Arrow}}</span>{{end}}</a></th><th>房间</th><th><a class="sort-link{{if .DueSort.Active}} active{{end}}" href="{{.DueSort.URL}}">应缴日{{if .DueSort.Arrow}}<span class="sort-arrow">{{.DueSort.Arrow}}</span>{{end}}</a></th><th><a class="sort-link{{if .AmountSort.Active}} active{{end}}" href="{{.AmountSort.URL}}">应收{{if .AmountSort.Arrow}}<span class="sort-arrow">{{.AmountSort.Arrow}}</span>{{end}}</a></th><th>已收</th><th>未收</th><th><a class="sort-link{{if .StatusSort.Active}} active{{end}}" href="{{.StatusSort.URL}}">状态{{if .StatusSort.Arrow}}<span class="sort-arrow">{{.StatusSort.Arrow}}</span>{{end}}</a></th></tr></thead>
             <tbody>{{range .Rows}}
 	            <tr class="rent-row" tabindex="0" role="button" aria-expanded="false" aria-controls="rent-details-{{.ObligationID}}" data-details-target="rent-details-{{.ObligationID}}"><td><a class="tenant-link" href="/tenants/{{.TenantID}}?from_month={{.Period}}&amp;to_month={{.Period}}"><strong>{{.TenantName}}</strong></a>{{if .TenantAlias}}<br><span class="tiny">别名：{{.TenantAlias}}</span>{{end}}</td><td>{{if .RoomLabel}}{{.RoomLabel}}<br>{{end}}{{.RoomAddress}}</td><td class="mono">{{.DueDate}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td><div class="status-actions"><span class="status {{.Status}}">{{.StatusLabel}}</span>{{if gt .ExpectedCents .PaidCents}}<form class="manual-balance-form" method="post" action="/rent-dashboard/settle" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()" onsubmit="return confirm('确认一键平账吗？')"><input type="hidden" name="obligation_id" value="{{.ObligationID}}"><input type="hidden" name="period" value="{{$.Period}}"><input type="hidden" name="search" value="{{$.SearchFilter}}"><input type="hidden" name="status" value="{{$.StatusFilter}}"><input type="hidden" name="sort" value="{{$.SortFilter}}"><input type="hidden" name="page" value="{{$.Page}}"><input type="hidden" name="page_size" value="{{$.PageSize}}"><input name="reason" maxlength="512" placeholder="填写平账原因" aria-label="平账原因" required><button class="btn subtle" type="submit">一键平账</button></form>{{end}}</div></td></tr>
