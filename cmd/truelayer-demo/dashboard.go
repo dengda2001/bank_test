@@ -515,10 +515,20 @@ var rentDashboardTemplate = newWorkspacePageTemplate("rent-dashboard", template.
 	      if (!dunningDrawer || !dunningOpen) return;
 	      dunningDrawer.hidden = !open;
 	      dunningOpen.setAttribute("aria-expanded", String(open));
-	      if (open) dunningDrawer.scrollIntoView({behavior: "smooth", block: "start"});
+	      if (open) {
+	        dunningDrawer.scrollIntoView({behavior: "smooth", block: "start"});
+	        dunningDrawer.querySelector("input:not([type=hidden]), button, textarea")?.focus();
+	      }
 	    };
 	    dunningOpen?.addEventListener("click", () => setDunningOpen(true));
 	    dunningClose?.addEventListener("click", () => { setDunningOpen(false); dunningOpen?.focus(); });
+	    document.addEventListener("keydown", (event) => {
+	      if (event.key === "Escape" && dunningDrawer && !dunningDrawer.hidden) {
+	        event.preventDefault();
+	        setDunningOpen(false);
+	        dunningOpen?.focus();
+	      }
+	    });
 	  </script>
 </body>
 </html>

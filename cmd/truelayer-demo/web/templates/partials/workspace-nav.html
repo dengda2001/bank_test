@@ -18,4 +18,10 @@
         <a href="/bank"{{if eq .ActivePage "bank"}} class="active"{{end}}><span class="glyph">银</span><span>银行设置</span></a>
       </nav>
       <div class="side-foot">当前用户：{{.Username}}<br>{{.FootNote}}</div>
-    </aside>{{end}}
+    </aside>
+    <script>
+      document.addEventListener("submit", (event) => {
+        const trigger = event.target.querySelector("[data-confirm='true']");
+        if (trigger && !window.confirm("确认执行此高风险操作吗？")) event.preventDefault();
+      });
+    </script>{{end}}
