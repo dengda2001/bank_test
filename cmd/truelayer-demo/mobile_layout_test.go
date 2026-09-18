@@ -122,6 +122,35 @@ func TestWorkspaceCSSDrawerIsCSSOnlyAndMobileScoped(t *testing.T) {
 	}
 }
 
+func TestMobileBottomNavExposesFiveSectionsAndFlyouts(t *testing.T) {
+	page, err := executeTemplate(rentDashboardTemplate, rentDashboardPageData{workspaceShell: workspaceShell{ActivePage: "rent-dashboard"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, marker := range []string{
+		`class="mobile-bottom-nav"`,
+		`href="/rent-dashboard"`,
+		`href="/bills"`,
+		`href="/transactions"`,
+		`data-mobile-menu="objects"`,
+		`data-mobile-menu="more"`,
+		`id="mobile-menu-objects"`,
+		`href="/properties"`,
+		`href="/rooms"`,
+		`href="/tenants"`,
+		`id="mobile-menu-more"`,
+		`href="/dunning"`,
+		`href="/bank"`,
+	} {
+		if !strings.Contains(page, marker) {
+			t.Fatalf("mobile shell missing %q", marker)
+		}
+	}
+	if strings.Contains(strings.Split(workspacePageCSS, "@media (max-width: 640px)")[0], "mobile-bottom-nav {") {
+		t.Fatal("bottom navigation rules must stay mobile-only")
+	}
+}
+
 // Sticky is what keeps a row's identity and its actions on screen while the table
 // scrolls sideways. It must never leak above the breakpoint: at 1280px the tables
 // have to render exactly as they did before.

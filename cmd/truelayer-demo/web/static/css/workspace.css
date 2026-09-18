@@ -268,6 +268,7 @@
     .form-field label { margin: 0; }
     .form-field.full { grid-column: 1 / -1; }
     .drawer-actions { display: flex; justify-content: flex-end; gap: 8px; margin: 20px -20px 0; padding: 14px 20px; border-top: 1px solid var(--border); background: var(--surface-muted); }
+    .mobile-bottom-nav, .mobile-flyout { display: none; }
 
     /* Desktop shell tokens mirror the Figma handoff: a fixed dark rail and a
        quiet, information-dense workspace. This block is deliberately scoped
@@ -444,4 +445,67 @@
       input, select, textarea, .btn { min-height: 44px; }
       /* 抽屉打开后 .nav a 就是唯一的导航方式，基础样式里它是 40px。 */
       .nav a { min-height: 44px; }
+    }
+
+    @media (max-width: 640px) {
+      .content { padding-bottom: 94px; }
+      .mobile-bottom-nav {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 55;
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        min-height: calc(68px + env(safe-area-inset-bottom));
+        padding: 6px 6px env(safe-area-inset-bottom);
+        border-top: 1px solid var(--border);
+        background: color-mix(in oklch, var(--surface) 96%, transparent);
+        backdrop-filter: blur(12px);
+      }
+      .mobile-bottom-nav-item {
+        min-width: 0;
+        min-height: 44px;
+        border: 0;
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        align-content: center;
+        gap: 2px;
+        color: var(--foreground-muted);
+        background: transparent;
+        font-size: 10px;
+        font-weight: 700;
+        text-decoration: none;
+      }
+      .mobile-bottom-nav-item.active { color: var(--foreground); background: var(--surface-accent); }
+      .mobile-nav-glyph { font: 700 11px var(--mono); line-height: 1; }
+      .mobile-bottom-nav-item:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: -2px; }
+      .mobile-flyout {
+        position: fixed;
+        right: 8px;
+        bottom: calc(76px + env(safe-area-inset-bottom));
+        z-index: 54;
+        width: min(240px, calc(100vw - 16px));
+        padding: 8px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--surface);
+      }
+      .mobile-flyout[hidden] { display: none; }
+      .mobile-flyout a {
+        display: flex;
+        align-items: center;
+        min-height: 44px;
+        padding: 0 12px;
+        border-radius: 8px;
+        color: var(--foreground);
+        font-weight: 700;
+        text-decoration: none;
+      }
+      .mobile-flyout a:hover, .mobile-flyout a:focus-visible { background: var(--surface-muted); outline: none; }
+    }
+    @media (min-width: 600px) and (max-width: 640px) {
+      .mobile-bottom-nav { left: 50%; right: auto; width: min(560px, 100vw); transform: translateX(-50%); }
+      .mobile-flyout { right: max(8px, calc((100vw - 560px) / 2 + 8px)); }
     }

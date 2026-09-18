@@ -19,6 +19,39 @@
       </nav>
       <div class="side-foot">当前用户：{{.Username}}<br>{{.FootNote}}</div>
     </aside>
+    <nav class="mobile-bottom-nav" aria-label="移动端主要导航">
+      <a class="mobile-bottom-nav-item{{if eq .ActivePage "rent-dashboard"}} active{{end}}" href="/rent-dashboard"><span class="mobile-nav-glyph">总</span><span>首页</span></a>
+      <a class="mobile-bottom-nav-item{{if eq .ActivePage "bills"}} active{{end}}" href="/bills"><span class="mobile-nav-glyph">账</span><span>账单</span></a>
+      <a class="mobile-bottom-nav-item{{if eq .ActivePage "transactions"}} active{{end}}" href="/transactions"><span class="mobile-nav-glyph">流</span><span>流水</span></a>
+      <button class="mobile-bottom-nav-item mobile-bottom-nav-menu{{if or (eq .ActivePage "properties") (eq .ActivePage "rooms") (eq .ActivePage "tenants")}} active{{end}}" type="button" data-mobile-menu="objects" aria-expanded="false"><span class="mobile-nav-glyph">物</span><span>对象</span></button>
+      <button class="mobile-bottom-nav-item mobile-bottom-nav-menu{{if or (eq .ActivePage "tenancies") (eq .ActivePage "dunning") (eq .ActivePage "cash-receipts") (eq .ActivePage "expenses") (eq .ActivePage "bank")}} active{{end}}" type="button" data-mobile-menu="more" aria-expanded="false"><span class="mobile-nav-glyph">更</span><span>更多</span></button>
+    </nav>
+    <div class="mobile-flyout" id="mobile-menu-objects" hidden aria-label="对象菜单"><a href="/properties">房产</a><a href="/rooms">房间</a><a href="/tenants">租客</a></div>
+    <div class="mobile-flyout" id="mobile-menu-more" hidden aria-label="更多菜单"><a href="/tenancies">租住安排</a><a href="/dunning">催收任务</a><a href="/cash-receipts">现金补录</a><a href="/expenses">费用支出</a><a href="/bank">银行设置</a></div>
+    <script>
+      (() => {
+        const mobileNav = document.querySelector(".mobile-bottom-nav");
+        const menus = [...document.querySelectorAll(".mobile-flyout")];
+        const closeMenus = () => {
+          menus.forEach((menu) => { menu.hidden = true; });
+          mobileNav?.querySelectorAll("[data-mobile-menu]").forEach((button) => button.setAttribute("aria-expanded", "false"));
+        };
+        mobileNav?.addEventListener("click", (event) => {
+          const button = event.target.closest("[data-mobile-menu]");
+          if (!button) return;
+          const menu = document.getElementById("mobile-menu-" + button.dataset.mobileMenu);
+          if (!menu) return;
+          const open = menu.hidden;
+          closeMenus();
+          menu.hidden = !open;
+          button.setAttribute("aria-expanded", String(open));
+        });
+        document.addEventListener("click", (event) => {
+          if (!event.target.closest(".mobile-bottom-nav, .mobile-flyout")) closeMenus();
+        });
+        document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeMenus(); });
+      })();
+    </script>
     <script>
       document.addEventListener("submit", (event) => {
         const trigger = event.target.querySelector("[data-confirm='true']");
