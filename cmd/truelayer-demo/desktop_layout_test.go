@@ -84,3 +84,20 @@ func TestDesktopAssetFormsExposeCreateAndEditControls(t *testing.T) {
 		}
 	}
 }
+
+func TestTenantCreateFormCanBindAnExistingRoom(t *testing.T) {
+	var page bytes.Buffer
+	if err := tenantTemplate.Execute(&page, tenantPageData{
+		workspaceShell: workspaceShell{Username: "owner", Environment: "test"},
+		ShowForm:       true,
+		Form:           tenantRecord{Currency: "EUR", RentStartDate: "2026-09-01"},
+		Rooms:          []tenantRoomOption{{ID: 11, PropertyName: "天河一号", RoomLabel: "A-201", MonthlyRentValue: "1200.00", Currency: "EUR"}},
+	}); err != nil {
+		t.Fatalf("render tenant form: %v", err)
+	}
+	for _, marker := range []string{`name="room_id"`, `data-room-rent="1200.00"`, `name="structured"`, `name="arrangement_start_month"`, `tenantRoomSelect`} {
+		if !strings.Contains(page.String(), marker) {
+			t.Fatalf("tenant room binding form missing %q", marker)
+		}
+	}
+}

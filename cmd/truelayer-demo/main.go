@@ -208,6 +208,17 @@ type tenantRecord struct {
 	RentDisplay string `json:"-"`
 
 	BillingHistory []tenantBillingMonth `json:"-"`
+	// RoomID is only used by the structured tenant form. Existing tenant rows
+	// remain compatible with the legacy denormalized room fields.
+	RoomID uint64 `json:"-"`
+}
+
+type tenantRoomOption struct {
+	ID               uint64
+	PropertyName     string
+	RoomLabel        string
+	MonthlyRentValue string
+	Currency         string
 }
 
 type expenseRecord struct {
@@ -240,6 +251,7 @@ type tenantPageData struct {
 	ShowForm      bool
 	Editing       bool
 	Form          tenantRecord
+	Rooms         []tenantRoomOption
 }
 
 type expensePageData struct {
@@ -994,6 +1006,11 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	roomOptions, err := a.listTenantRoomOptions(r.Context(), r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	_, incomeCount, expenseCount, err := a.requestCounts(r.Context(), r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1032,6 +1049,7 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 		ShowForm:      showForm,
 		Editing:       editing,
 		Form:          formRecord,
+		Rooms:         roomOptions,
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tenantTemplate.Execute(w, data); err != nil {
@@ -1070,6 +1088,29 @@ func (a *app) listTenantRecords(ctx context.Context, r *http.Request) ([]tenantR
 		return newTenantService(a.db).listTenants(ctx, userID)
 	}
 	return a.loadTenants()
+}
+
+func (a *app) listTenantRoomOptions(ctx context.Context, r *http.Request) ([]tenantRoomOption, error) {
+	userID, ok := a.currentUserID(r)
+	if !ok || a.db == nil {
+		return nil, nil
+	}
+	rows, err := a.loadRoomRows(ctx, userID, monthStart(time.Now().UTC()), 0)
+	if err != nil {
+		return nil, err
+	}
+	options := make([]tenantRoomOption, 0, len(rows))
+	for _, row := range rows {
+		if row.Status != "active" {
+			continue
+		}
+		value := ""
+		if row.MonthlyRentCents > 0 {
+			value = strconv.FormatFloat(float64(row.MonthlyRentCents)/100, 'f', 2, 64)
+		}
+		options = append(options, tenantRoomOption{ID: row.ID, PropertyName: row.PropertyName, RoomLabel: row.RoomLabel, MonthlyRentValue: value, Currency: firstNonEmpty(row.Currency, ledgerCurrencyEUR)})
+	}
+	return options, nil
 }
 
 func (a *app) persistTenantRecord(ctx context.Context, r *http.Request, values formValues) error {
@@ -2348,6 +2389,14 @@ var tenantTemplate = newWorkspacePageTemplate("tenants", nil, `<!doctype html>
           <input id="monthly_rent" name="monthly_rent" type="number" min="0.01" step="0.01" inputmode="decimal" value="{{.Form.MonthlyRent}}" required>
           <label for="currency">币种</label>
           <input id="currency" name="currency" value="{{.Form.Currency}}" maxlength="3">
+          <label for="room_id">绑定房间（可选）</label>
+          <select id="room_id" name="room_id" aria-describedby="room-binding-hint">
+            <option value="">暂不绑定房间</option>
+            {{range .Rooms}}<option value="{{.ID}}" data-room-rent="{{.MonthlyRentValue}}" data-room-currency="{{.Currency}}"{{if eq $.Form.RoomID .ID}} selected{{end}}>{{.PropertyName}} · {{.RoomLabel}}{{if .MonthlyRentValue}} · {{.MonthlyRentValue}} {{.Currency}}{{end}}</option>{{end}}
+          </select>
+          <span id="room-binding-hint" class="tiny">选择房间会带出该房间当前月租，可继续手动编辑金额。</span>
+          <input id="tenant-structured" type="hidden" name="structured" value="{{if .Form.RoomID}}1{{end}}">
+          <input type="hidden" name="arrangement_start_month" value="{{.Form.RentStartDate}}">
           <input type="hidden" name="interval_unit" value="month">
           <input type="hidden" name="interval_count" value="1">
           <label for="billing_start_date">计费开始日期</label>
@@ -2407,6 +2456,17 @@ var tenantTemplate = newWorkspacePageTemplate("tenants", nil, `<!doctype html>
     </main>
   </div>
   <script>
+    const tenantRoomSelect = document.getElementById("room_id");
+    const tenantRentInput = document.getElementById("monthly_rent");
+    const tenantCurrencyInput = document.getElementById("currency");
+    const tenantStructuredInput = document.getElementById("tenant-structured");
+    tenantRoomSelect?.addEventListener("change", () => {
+      const option = tenantRoomSelect.options[tenantRoomSelect.selectedIndex];
+      const rent = option?.dataset.roomRent || "";
+      if (rent && tenantRentInput) tenantRentInput.value = rent;
+      if (option?.dataset.roomCurrency && tenantCurrencyInput) tenantCurrencyInput.value = option.dataset.roomCurrency;
+      if (tenantStructuredInput) tenantStructuredInput.value = tenantRoomSelect.value ? "1" : "";
+    });
     const toggleDetails = (toggle, details) => {
       const expanded = toggle.getAttribute("aria-expanded") === "true";
       toggle.setAttribute("aria-expanded", String(!expanded));
