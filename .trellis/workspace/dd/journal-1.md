@@ -673,3 +673,42 @@ Completed the landlord multi-property rent workspace: schema and repository laye
 ### Next Steps
 
 - None - task complete
+
+
+## Session 20: 完成 Figma 桌面工作台切片
+
+**Date**: 2026-09-19
+**Task**: 完成 Figma 桌面工作台切片
+**Branch**: `main`
+
+### Summary
+
+完成桌面端 Figma shell、四项总览指标、房产/房间新建编辑、租客绑定房间、停用确认、催收焦点交互；记录 1366/1440 浏览器验收与截图。定向测试、go vet 和 MySQL 隔离测试通过；完整测试仅剩两个既有租客日期 fixture 失败。归档 09-19-figma-desktop-workspace，下一步使用现有 09-19-figma-mobile-workspace。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `97f8813` | (see git log) |
+| `36b1c7a` | (see git log) |
+| `2337477` | (see git log) |
+| `40b846b` | (see git log) |
+| `a54ab23` | (see git log) |
+| `5d54b8b` | (see git log) |
+| `a26f468` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
