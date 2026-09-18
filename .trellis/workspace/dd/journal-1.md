@@ -560,3 +560,48 @@ Disabled automatic transaction matching writes, added explicit one-click billing
 ### Next Steps
 
 - None - task complete
+
+
+## Session 17: Complete landlord rent workspace implementation
+
+**Date**: 2026-09-18
+**Task**: Complete landlord rent workspace implementation
+**Branch**: `main`
+
+### Summary
+
+Completed the landlord multi-property rent workspace: schema and repository layers, rent ledger and dashboard handlers, externalized frontend resources, responsive desktop/mobile views, hidden billing references, and integration verification. Existing unrelated task docs, audit fixtures, scripts, and test data remain uncommitted.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a9a7dc1` | (see git log) |
+| `1d99375` | (see git log) |
+| `3d5fd8f` | (see git log) |
+| `c43d10d` | (see git log) |
+| `238e7f6` | (see git log) |
+| `4eb1e91` | (see git log) |
+| `3754c5e` | (see git log) |
+| `08b81f6` | (see git log) |
+| `1a9aa4a` | (see git log) |
+| `68cebc4` | (see git log) |
+| `3866af6` | (see git log) |
+| `1132e69` | (see git log) |
+| `71ad019` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 16
-- **Last Active**: 2026-09-16
+- **Total Sessions**: 17
+- **Last Active**: 2026-09-18
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~562 | Active |
+| `journal-1.md` | ~607 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 17 | 2026-09-18 | Complete landlord rent workspace implementation | `a9a7dc1`, `1d99375`, `3d5fd8f`, `c43d10d`, `238e7f6`, `4eb1e91`, `3754c5e`, `08b81f6`, `1a9aa4a`, `68cebc4`, `3866af6`, `1132e69`, `71ad019` | `main` |
 | 16 | 2026-09-16 | Manual transaction matching and independent rematch selectors | `4e3e6da` | `main` |
 | 15 | 2026-09-16 | Dashboard manual rent balance | `ee5a5f6` | `main` |
 | 14 | 2026-09-16 | Simplify billing and dashboard summaries | `ea1a1f5` | `main` |
