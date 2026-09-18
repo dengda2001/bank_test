@@ -73,23 +73,26 @@ type tenantPayerRecord struct {
 }
 
 type tenantInput struct {
-	Name             string
-	DisplayAlias     string
-	Email            string
-	PayerID          string
-	PayerNameHint    string
-	MonthlyRent      float64
-	Currency         string
-	IntervalUnit     string
-	IntervalCount    int
-	BillingStartDate string
-	DueDay           int
-	RentStartDate    string
-	RentEndDate      string
-	Status           string
-	RoomLabel        string
-	RoomAddress      string
-	PropertyHint     string
+	Name                  string
+	DisplayAlias          string
+	Email                 string
+	PayerID               string
+	PayerNameHint         string
+	MonthlyRent           float64
+	Currency              string
+	IntervalUnit          string
+	IntervalCount         int
+	BillingStartDate      string
+	DueDay                int
+	RentStartDate         string
+	RentEndDate           string
+	Status                string
+	RoomLabel             string
+	RoomAddress           string
+	PropertyHint          string
+	Structured            bool
+	RoomID                uint64
+	ArrangementStartMonth string
 }
 
 func newTenantService(db *gorm.DB) *tenantService {
@@ -151,9 +154,13 @@ func classifyTenantPayerSharing(rows []tenantPayer) []tenantPayerRecord {
 }
 
 func tenantInputFromForm(values formValues) (tenantInput, error) {
-	monthlyRent, err := parsePositiveAmount(values.Get("monthly_rent"))
-	if err != nil {
-		return tenantInput{}, err
+	monthlyRent := float64(0)
+	var err error
+	if strings.TrimSpace(values.Get("monthly_rent")) != "" {
+		monthlyRent, err = parsePositiveAmount(values.Get("monthly_rent"))
+		if err != nil {
+			return tenantInput{}, err
+		}
 	}
 	dueDay := 1
 	if raw := strings.TrimSpace(values.Get("due_day")); raw != "" {
@@ -169,29 +176,39 @@ func tenantInputFromForm(values formValues) (tenantInput, error) {
 			return tenantInput{}, err
 		}
 	}
+	roomID := uint64(0)
+	if raw := strings.TrimSpace(values.Get("room_id")); raw != "" {
+		roomID, err = strconv.ParseUint(raw, 10, 64)
+		if err != nil {
+			return tenantInput{}, err
+		}
+	}
 	rentStartDate := strings.TrimSpace(values.Get("rent_start_date"))
 	billingStartDate := strings.TrimSpace(values.Get("billing_start_date"))
 	if billingStartDate == "" {
 		billingStartDate = rentStartDate
 	}
 	return tenantInput{
-		Name:             strings.TrimSpace(values.Get("name")),
-		DisplayAlias:     strings.TrimSpace(values.Get("display_alias")),
-		Email:            strings.TrimSpace(values.Get("email")),
-		PayerID:          strings.TrimSpace(values.Get("payer_id")),
-		PayerNameHint:    strings.TrimSpace(values.Get("payer_name_hint")),
-		MonthlyRent:      monthlyRent,
-		Currency:         firstNonEmpty(strings.ToUpper(strings.TrimSpace(values.Get("currency"))), "EUR"),
-		IntervalUnit:     firstNonEmpty(strings.ToLower(strings.TrimSpace(values.Get("interval_unit"))), "month"),
-		IntervalCount:    intervalCount,
-		BillingStartDate: billingStartDate,
-		DueDay:           dueDay,
-		RentStartDate:    rentStartDate,
-		RentEndDate:      strings.TrimSpace(values.Get("rent_end_date")),
-		Status:           firstNonEmpty(strings.ToLower(strings.TrimSpace(values.Get("status"))), "active"),
-		RoomLabel:        strings.TrimSpace(values.Get("room_label")),
-		RoomAddress:      strings.TrimSpace(values.Get("room_address")),
-		PropertyHint:     strings.TrimSpace(values.Get("property_hint")),
+		Name:                  strings.TrimSpace(values.Get("name")),
+		DisplayAlias:          strings.TrimSpace(values.Get("display_alias")),
+		Email:                 strings.TrimSpace(values.Get("email")),
+		PayerID:               strings.TrimSpace(values.Get("payer_id")),
+		PayerNameHint:         strings.TrimSpace(values.Get("payer_name_hint")),
+		MonthlyRent:           monthlyRent,
+		Currency:              firstNonEmpty(strings.ToUpper(strings.TrimSpace(values.Get("currency"))), "EUR"),
+		IntervalUnit:          firstNonEmpty(strings.ToLower(strings.TrimSpace(values.Get("interval_unit"))), "month"),
+		IntervalCount:         intervalCount,
+		BillingStartDate:      billingStartDate,
+		DueDay:                dueDay,
+		RentStartDate:         rentStartDate,
+		RentEndDate:           strings.TrimSpace(values.Get("rent_end_date")),
+		Status:                firstNonEmpty(strings.ToLower(strings.TrimSpace(values.Get("status"))), "active"),
+		RoomLabel:             strings.TrimSpace(values.Get("room_label")),
+		RoomAddress:           strings.TrimSpace(values.Get("room_address")),
+		PropertyHint:          strings.TrimSpace(values.Get("property_hint")),
+		Structured:            strings.TrimSpace(values.Get("structured")) == "1" || roomID != 0 || strings.TrimSpace(values.Get("arrangement_start_month")) != "",
+		RoomID:                roomID,
+		ArrangementStartMonth: strings.TrimSpace(values.Get("arrangement_start_month")),
 	}, nil
 }
 
@@ -209,11 +226,35 @@ func validateTenantInput(input tenantInput) error {
 			return errors.New("email must be a valid email address")
 		}
 	}
+	if _, err := normalizeLedgerCurrency(firstNonEmpty(input.Currency, ledgerCurrencyEUR)); err != nil {
+		return err
+	}
+	if input.Structured {
+		if input.MonthlyRent < 0 {
+			return errors.New("monthly rent cannot be negative")
+		}
+		if input.Status != "active" && input.Status != "inactive" {
+			return errors.New("status must be active or inactive")
+		}
+		if input.RoomID == 0 && input.ArrangementStartMonth != "" {
+			if _, err := parsePeriodMonth(input.ArrangementStartMonth); err != nil {
+				return fmt.Errorf("invalid arrangement start month: %w", err)
+			}
+		}
+		if input.RentStartDate != "" {
+			if _, err := parseDate(input.RentStartDate); err != nil {
+				return fmt.Errorf("invalid rent start date: %w", err)
+			}
+		}
+		if input.RentEndDate != "" {
+			if _, err := parseDate(input.RentEndDate); err != nil {
+				return fmt.Errorf("invalid rent end date: %w", err)
+			}
+		}
+		return nil
+	}
 	if input.MonthlyRent <= 0 {
 		return errors.New("monthly rent must be positive")
-	}
-	if _, err := normalizeLedgerCurrency(input.Currency); err != nil {
-		return err
 	}
 	if input.IntervalUnit != "month" {
 		return errors.New("only monthly rent interval is supported in phase 1")
@@ -284,9 +325,27 @@ func (s *tenantService) createTenant(ctx context.Context, userID uint64, input t
 	if err := validateTenantInput(input); err != nil {
 		return tenant{}, err
 	}
-	currency, _ := normalizeLedgerCurrency(input.Currency)
+	currency, _ := normalizeLedgerCurrency(firstNonEmpty(input.Currency, ledgerCurrencyEUR))
+	intervalUnit := firstNonEmpty(input.IntervalUnit, "month")
+	intervalCount := input.IntervalCount
+	if intervalCount == 0 {
+		intervalCount = 1
+	}
+	dueDay := input.DueDay
+	if dueDay == 0 {
+		dueDay = 1
+	}
 	billingStart, _ := parseDate(input.BillingStartDate)
 	rentStart, _ := parseDate(input.RentStartDate)
+	effectiveMonth := monthStart(time.Now().UTC())
+	if input.Structured {
+		if input.ArrangementStartMonth != "" {
+			effectiveMonth, _ = parsePeriodMonth(input.ArrangementStartMonth)
+		} else if !rentStart.IsZero() {
+			effectiveMonth = monthStart(rentStart)
+		}
+		billingStart, rentStart = effectiveMonth, effectiveMonth
+	}
 	var rentEnd *time.Time
 	if input.RentEndDate != "" {
 		d, _ := parseDate(input.RentEndDate)
@@ -295,18 +354,23 @@ func (s *tenantService) createTenant(ctx context.Context, userID uint64, input t
 	var row tenant
 	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		row = tenant{
-			UserID:           userID,
-			Name:             input.Name,
-			DisplayAlias:     input.DisplayAlias,
-			Email:            input.Email,
-			PayerID:          nullableString(input.PayerID),
-			PayerNameHint:    nullableString(input.PayerNameHint),
-			MonthlyRentCents: moneyToCents(input.MonthlyRent),
+			UserID:        userID,
+			Name:          input.Name,
+			DisplayAlias:  input.DisplayAlias,
+			Email:         input.Email,
+			PayerID:       nullableString(input.PayerID),
+			PayerNameHint: nullableString(input.PayerNameHint),
+			MonthlyRentCents: func() int64 {
+				if input.Structured {
+					return 0
+				}
+				return moneyToCents(input.MonthlyRent)
+			}(),
 			Currency:         currency,
-			IntervalUnit:     input.IntervalUnit,
-			IntervalCount:    input.IntervalCount,
+			IntervalUnit:     intervalUnit,
+			IntervalCount:    intervalCount,
 			BillingStartDate: billingStart,
-			DueDay:           input.DueDay,
+			DueDay:           dueDay,
 			RentStartDate:    rentStart,
 			RentEndDate:      rentEnd,
 			Status:           input.Status,
@@ -327,6 +391,34 @@ func (s *tenantService) createTenant(ctx context.Context, userID uint64, input t
 				Source:              "tenant_profile",
 			}
 			if err := tx.WithContext(ctx).Create(&payer).Error; err != nil {
+				return err
+			}
+		}
+		if input.Structured && input.RoomID != 0 {
+			if input.Status != "active" {
+				return errors.New("inactive tenant cannot be bound to a room")
+			}
+			tenantIDs := make([]uint64, 0, 1)
+			var existing tenancyAgreement
+			lookupErr := tx.Where("user_id = ? AND room_id = ? AND status = ? AND start_date <= ? AND (end_date IS NULL OR end_date >= ?)", userID, input.RoomID, "active", effectiveMonth.AddDate(0, 1, -1), effectiveMonth).Order("start_date DESC, id DESC").First(&existing).Error
+			if lookupErr == nil {
+				var parties []agreementParty
+				if err := tx.Where("user_id = ? AND agreement_id = ? AND status = ?", userID, existing.ID, "active").Find(&parties).Error; err != nil {
+					return err
+				}
+				for _, party := range parties {
+					tenantIDs = append(tenantIDs, party.TenantID)
+				}
+			} else if !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
+				return lookupErr
+			}
+			tenantIDs = append(tenantIDs, row.ID)
+			_, err := saveRentArrangementInTx(tx, userID, rentArrangementInput{
+				RoomID: input.RoomID, EffectiveMonth: effectiveMonth,
+				MonthlyRentCents: moneyToCents(input.MonthlyRent), Currency: currency,
+				DueDay: dueDay, TenantIDs: tenantIDs,
+			})
+			if err != nil {
 				return err
 			}
 		}

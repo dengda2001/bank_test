@@ -3,13 +3,14 @@ package main
 import "time"
 
 type property struct {
-	ID        uint64 `gorm:"primaryKey"`
-	UserID    uint64
-	Name      string
-	Address   *string
-	Status    string `gorm:"default:active"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID           uint64 `gorm:"primaryKey"`
+	UserID       uint64
+	Name         string
+	Address      *string
+	Status       string `gorm:"default:active"`
+	InactiveFrom *time.Time
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 func (property) TableName() string {

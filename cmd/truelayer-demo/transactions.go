@@ -17,56 +17,58 @@ import (
 )
 
 type paymentTransaction struct {
-	ID                    uint64 `gorm:"primaryKey"`
-	UserID                uint64
-	Source                string
-	SourceBatchID         *string
-	ProviderTransactionID *string
-	StableTransactionKey  string
-	AccountID             *string
-	AccountName           *string
-	Direction             string
-	AmountCents           int64
-	Currency              string
-	TransactionTime       *time.Time
-	Description           string
-	Reference             string
-	PayerID               *string
-	PayerName             *string
-	PayerNameKind         string
-	ParsedPeriodMonth     *time.Time
-	ParsedPeriodSource    string
-	ParsedPeriodNote      string
-	MatchReason           string
-	MatchedTenantID       *uint64
-	MatchStatus           string
-	RawPayloadJSON        []byte `gorm:"column:raw_payload_json"`
-	CreatedAt             time.Time
-	UpdatedAt             time.Time
+	ID                     uint64 `gorm:"primaryKey"`
+	UserID                 uint64
+	Source                 string
+	SourceBatchID          *string
+	ProviderTransactionID  *string
+	StableTransactionKey   string
+	AccountID              *string
+	AccountName            *string
+	Direction              string
+	AmountCents            int64
+	Currency               string
+	TransactionTime        *time.Time
+	Description            string
+	Reference              string
+	PayerID                *string
+	PayerName              *string
+	PayerNameKind          string
+	ParsedPeriodMonth      *time.Time
+	ParsedPeriodSource     string
+	ParsedPeriodNote       string
+	MatchReason            string
+	ManualAdjustmentReason string
+	MatchedTenantID        *uint64
+	MatchStatus            string
+	RawPayloadJSON         []byte `gorm:"column:raw_payload_json"`
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
 }
 
 type paymentTransactionInput struct {
-	Source                string
-	SourceBatchID         string
-	ProviderTransactionID string
-	StableTransactionKey  string
-	AccountID             string
-	AccountName           string
-	Direction             string
-	AmountCents           int64
-	Currency              string
-	TransactionTime       *time.Time
-	Description           string
-	Reference             string
-	PayerID               string
-	PayerName             string
-	PayerNameKind         string
-	ParsedPeriodMonth     *time.Time
-	ParsedPeriodSource    string
-	ParsedPeriodNote      string
-	MatchReason           string
-	MatchStatus           string
-	RawPayloadJSON        []byte
+	Source                 string
+	SourceBatchID          string
+	ProviderTransactionID  string
+	StableTransactionKey   string
+	AccountID              string
+	AccountName            string
+	Direction              string
+	AmountCents            int64
+	Currency               string
+	TransactionTime        *time.Time
+	Description            string
+	Reference              string
+	PayerID                string
+	PayerName              string
+	PayerNameKind          string
+	ParsedPeriodMonth      *time.Time
+	ParsedPeriodSource     string
+	ParsedPeriodNote       string
+	MatchReason            string
+	ManualAdjustmentReason string
+	MatchStatus            string
+	RawPayloadJSON         []byte
 }
 
 type transactionService struct {
@@ -159,28 +161,29 @@ func (s *transactionService) ingestDemoResult(ctx context.Context, userID uint64
 
 func paymentTransactionFromInput(userID uint64, input paymentTransactionInput) paymentTransaction {
 	return paymentTransaction{
-		UserID:                userID,
-		Source:                input.Source,
-		SourceBatchID:         nullableString(input.SourceBatchID),
-		ProviderTransactionID: nullableString(input.ProviderTransactionID),
-		StableTransactionKey:  input.StableTransactionKey,
-		AccountID:             nullableString(input.AccountID),
-		AccountName:           nullableString(input.AccountName),
-		Direction:             input.Direction,
-		AmountCents:           input.AmountCents,
-		Currency:              input.Currency,
-		TransactionTime:       input.TransactionTime,
-		Description:           input.Description,
-		Reference:             input.Reference,
-		PayerID:               nullableString(input.PayerID),
-		PayerName:             nullableString(input.PayerName),
-		PayerNameKind:         input.PayerNameKind,
-		ParsedPeriodMonth:     input.ParsedPeriodMonth,
-		ParsedPeriodSource:    input.ParsedPeriodSource,
-		ParsedPeriodNote:      input.ParsedPeriodNote,
-		MatchReason:           input.MatchReason,
-		MatchStatus:           input.MatchStatus,
-		RawPayloadJSON:        input.RawPayloadJSON,
+		UserID:                 userID,
+		Source:                 input.Source,
+		SourceBatchID:          nullableString(input.SourceBatchID),
+		ProviderTransactionID:  nullableString(input.ProviderTransactionID),
+		StableTransactionKey:   input.StableTransactionKey,
+		AccountID:              nullableString(input.AccountID),
+		AccountName:            nullableString(input.AccountName),
+		Direction:              input.Direction,
+		AmountCents:            input.AmountCents,
+		Currency:               input.Currency,
+		TransactionTime:        input.TransactionTime,
+		Description:            input.Description,
+		Reference:              input.Reference,
+		PayerID:                nullableString(input.PayerID),
+		PayerName:              nullableString(input.PayerName),
+		PayerNameKind:          input.PayerNameKind,
+		ParsedPeriodMonth:      input.ParsedPeriodMonth,
+		ParsedPeriodSource:     input.ParsedPeriodSource,
+		ParsedPeriodNote:       input.ParsedPeriodNote,
+		MatchReason:            input.MatchReason,
+		ManualAdjustmentReason: input.ManualAdjustmentReason,
+		MatchStatus:            input.MatchStatus,
+		RawPayloadJSON:         input.RawPayloadJSON,
 	}
 }
 
@@ -395,6 +398,7 @@ type transactionPageRow struct {
 	MatchStatus               string
 	MatchStatusLabel          string
 	MatchReason               string
+	ManualAdjustmentReason    string
 	CandidateTenantID         uint64
 	CandidateTenantName       string
 	CandidateRentObligationID uint64
@@ -413,26 +417,27 @@ type transactionPageRow struct {
 
 func paymentTransactionInputFromModel(row paymentTransaction) paymentTransactionInput {
 	return paymentTransactionInput{
-		Source:                row.Source,
-		ProviderTransactionID: stringValue(row.ProviderTransactionID),
-		StableTransactionKey:  row.StableTransactionKey,
-		AccountID:             stringValue(row.AccountID),
-		AccountName:           stringValue(row.AccountName),
-		Direction:             row.Direction,
-		AmountCents:           row.AmountCents,
-		Currency:              row.Currency,
-		TransactionTime:       row.TransactionTime,
-		Description:           row.Description,
-		Reference:             row.Reference,
-		PayerID:               stringValue(row.PayerID),
-		PayerName:             stringValue(row.PayerName),
-		PayerNameKind:         row.PayerNameKind,
-		ParsedPeriodMonth:     row.ParsedPeriodMonth,
-		ParsedPeriodSource:    row.ParsedPeriodSource,
-		ParsedPeriodNote:      row.ParsedPeriodNote,
-		MatchReason:           row.MatchReason,
-		MatchStatus:           row.MatchStatus,
-		RawPayloadJSON:        row.RawPayloadJSON,
+		Source:                 row.Source,
+		ProviderTransactionID:  stringValue(row.ProviderTransactionID),
+		StableTransactionKey:   row.StableTransactionKey,
+		AccountID:              stringValue(row.AccountID),
+		AccountName:            stringValue(row.AccountName),
+		Direction:              row.Direction,
+		AmountCents:            row.AmountCents,
+		Currency:               row.Currency,
+		TransactionTime:        row.TransactionTime,
+		Description:            row.Description,
+		Reference:              row.Reference,
+		PayerID:                stringValue(row.PayerID),
+		PayerName:              stringValue(row.PayerName),
+		PayerNameKind:          row.PayerNameKind,
+		ParsedPeriodMonth:      row.ParsedPeriodMonth,
+		ParsedPeriodSource:     row.ParsedPeriodSource,
+		ParsedPeriodNote:       row.ParsedPeriodNote,
+		MatchReason:            row.MatchReason,
+		ManualAdjustmentReason: row.ManualAdjustmentReason,
+		MatchStatus:            row.MatchStatus,
+		RawPayloadJSON:         row.RawPayloadJSON,
 	}
 }
 
@@ -489,6 +494,7 @@ func transactionPageRowFromModel(row paymentTransaction) transactionPageRow {
 		MatchStatus:               row.MatchStatus,
 		MatchStatusLabel:          statusLabel,
 		MatchReason:               row.MatchReason,
+		ManualAdjustmentReason:    row.ManualAdjustmentReason,
 		TenantID:                  tenantID,
 	}
 }

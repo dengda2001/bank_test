@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +30,7 @@ type manualExpense struct {
 	VoidReason     *string
 	RoomHint       *string
 	TenantHint     *string
+	InvoiceURL     *string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
@@ -37,6 +40,8 @@ type expenseService struct {
 }
 
 type expenseInput struct {
+	PropertyID    *uint64
+	RoomID        *uint64
 	Description   string
 	Category      string
 	Amount        float64
@@ -45,6 +50,7 @@ type expenseInput struct {
 	PaymentMethod string
 	RoomHint      string
 	TenantHint    string
+	InvoiceURL    string
 }
 
 func newExpenseService(db *gorm.DB) *expenseService {
@@ -60,7 +66,21 @@ func expenseInputFromForm(values formValues, now time.Time) (expenseInput, error
 	if _, err := time.Parse(dateLayout, expenseDate); expenseDate == "" || err != nil {
 		expenseDate = now.UTC().Format(dateLayout)
 	}
+	var propertyID, roomID *uint64
+	for key, target := range map[string]**uint64{"property_id": &propertyID, "room_id": &roomID} {
+		raw := strings.TrimSpace(values.Get(key))
+		if raw == "" {
+			continue
+		}
+		parsed, parseErr := strconv.ParseUint(raw, 10, 64)
+		if parseErr != nil || parsed == 0 {
+			return expenseInput{}, errors.New("asset id must be a positive integer")
+		}
+		*target = &parsed
+	}
 	return expenseInput{
+		PropertyID:    propertyID,
+		RoomID:        roomID,
 		Description:   strings.TrimSpace(values.Get("description")),
 		Category:      firstNonEmpty(values.Get("category"), "General"),
 		Amount:        amount,
@@ -69,6 +89,7 @@ func expenseInputFromForm(values formValues, now time.Time) (expenseInput, error
 		PaymentMethod: firstNonEmpty(values.Get("payment_method"), "Manual"),
 		RoomHint:      strings.TrimSpace(values.Get("room_hint")),
 		TenantHint:    strings.TrimSpace(values.Get("tenant_hint")),
+		InvoiceURL:    strings.TrimSpace(values.Get("invoice_url")),
 	}, nil
 }
 
@@ -85,6 +106,29 @@ func validateExpenseInput(input expenseInput) error {
 	if _, err := parseDate(input.ExpenseDate); err != nil {
 		return errors.New("expense date is invalid")
 	}
+	if input.InvoiceURL != "" {
+		if err := validateExternalHTTPURL(input.InvoiceURL); err != nil {
+			return fmt.Errorf("invoice url: %w", err)
+		}
+	}
+	return nil
+}
+
+func validateExternalHTTPURL(value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	if len(value) > 2048 {
+		return errors.New("url is too long")
+	}
+	parsed, err := url.ParseRequestURI(value)
+	if err != nil || !parsed.IsAbs() || parsed.Host == "" {
+		return errors.New("url must be an absolute http(s) url")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return errors.New("url must use http or https")
+	}
 	return nil
 }
 
@@ -95,9 +139,25 @@ func (s *expenseService) createExpense(ctx context.Context, userID uint64, input
 	if err := validateExpenseInput(input); err != nil {
 		return manualExpense{}, err
 	}
+	if input.PropertyID != nil {
+		if _, err := newLandlordRentRepository(s.db).findProperty(ctx, userID, *input.PropertyID); err != nil {
+			return manualExpense{}, err
+		}
+	}
+	if input.RoomID != nil {
+		roomRow, err := newLandlordRentRepository(s.db).findRoom(ctx, userID, *input.RoomID)
+		if err != nil {
+			return manualExpense{}, err
+		}
+		if input.PropertyID != nil && roomRow.PropertyID != *input.PropertyID {
+			return manualExpense{}, gorm.ErrRecordNotFound
+		}
+	}
 	expenseDate, _ := parseDate(input.ExpenseDate)
 	row := manualExpense{
 		UserID:        userID,
+		PropertyID:    input.PropertyID,
+		RoomID:        input.RoomID,
 		Description:   input.Description,
 		Category:      input.Category,
 		AmountCents:   moneyToCents(input.Amount),
@@ -106,6 +166,7 @@ func (s *expenseService) createExpense(ctx context.Context, userID uint64, input
 		PaymentMethod: input.PaymentMethod,
 		RoomHint:      nullableString(input.RoomHint),
 		TenantHint:    nullableString(input.TenantHint),
+		InvoiceURL:    nullableString(input.InvoiceURL),
 	}
 	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
 		return manualExpense{}, err
@@ -135,6 +196,8 @@ func (s *expenseService) listExpenses(ctx context.Context, userID uint64) ([]exp
 func expenseRecordFromModel(row manualExpense) expenseRecord {
 	record := expenseRecord{
 		ID:            strconv.FormatUint(row.ID, 10),
+		PropertyID:    optionalUint64String(row.PropertyID),
+		RoomID:        optionalUint64String(row.RoomID),
 		Description:   row.Description,
 		Category:      row.Category,
 		Amount:        centsToMoney(row.AmountCents),
@@ -143,11 +206,19 @@ func expenseRecordFromModel(row manualExpense) expenseRecord {
 		PaymentMethod: row.PaymentMethod,
 		RoomHint:      stringValue(row.RoomHint),
 		TenantHint:    stringValue(row.TenantHint),
+		InvoiceURL:    stringValue(row.InvoiceURL),
 		CreatedAt:     row.CreatedAt.Format(time.RFC3339),
 	}
 	record.AmountDisplay = formatMoney(record.Amount, record.Currency, 2)
 	record.DateDisplay = formatDate(record.ExpenseDate)
 	return record
+}
+
+func optionalUint64String(value *uint64) string {
+	if value == nil || *value == 0 {
+		return ""
+	}
+	return strconv.FormatUint(*value, 10)
 }
 
 func manualExpenseTransaction(userID uint64, row manualExpense) paymentTransaction {

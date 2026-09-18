@@ -118,15 +118,29 @@ func agreementPartyActiveInMonth(party agreementParty, periodMonth time.Time) bo
 }
 
 func roomActiveInMonth(row room, periodMonth time.Time) bool {
-	if row.Status != "active" {
+	if row.Status != "active" && row.InactiveFrom == nil {
 		return false
 	}
 	start := monthStart(periodMonth)
 	end := start.AddDate(0, 1, 0).Add(-time.Nanosecond)
+	if row.Status != "active" && row.InactiveFrom != nil && !start.Before(monthStart(*row.InactiveFrom)) {
+		return false
+	}
 	if !row.ActiveFrom.IsZero() && row.ActiveFrom.After(end) {
 		return false
 	}
 	if row.InactiveFrom != nil && row.InactiveFrom.Before(start) {
+		return false
+	}
+	return true
+}
+
+func propertyActiveInMonth(row property, periodMonth time.Time) bool {
+	if row.Status != "active" && row.InactiveFrom == nil {
+		return false
+	}
+	start := monthStart(periodMonth)
+	if row.InactiveFrom != nil && !start.Before(monthStart(*row.InactiveFrom)) {
 		return false
 	}
 	return true
@@ -171,8 +185,11 @@ func (s *rentLedgerService) ensureRentCharge(ctx context.Context, userID, proper
 	var result rentChargeLedger
 	err := s.db.WithContext(ctx).Transaction(func(txdb *gorm.DB) error {
 		var propertyRow property
-		if err := txdb.Where("id = ? AND user_id = ? AND status = ?", propertyID, userID, "active").First(&propertyRow).Error; err != nil {
+		if err := txdb.Where("id = ? AND user_id = ?", propertyID, userID).First(&propertyRow).Error; err != nil {
 			return err
+		}
+		if !propertyActiveInMonth(propertyRow, periodMonth) {
+			return errors.New("property is not active for target month")
 		}
 		var roomRow room
 		if err := txdb.Where("id = ? AND user_id = ? AND property_id = ?", roomID, userID, propertyID).First(&roomRow).Error; err != nil {

@@ -19,13 +19,24 @@ const (
 )
 
 var errManualBalanceNotNeeded = errors.New("rent obligation has no outstanding balance")
+var errManualBalanceReasonRequired = errors.New("manual balance reason is required")
 
 // settleRentObligation creates an auditable income transaction for exactly the
 // outstanding rent and immediately assigns it to that obligation. The lock and
 // all writes share one database transaction, so double-clicks cannot overpay.
-func (s *transactionService) settleRentObligation(ctx context.Context, userID, obligationID uint64) (paymentTransaction, error) {
+func (s *transactionService) settleRentObligation(ctx context.Context, userID, obligationID uint64, reasons ...string) (paymentTransaction, error) {
 	if userID == 0 || obligationID == 0 {
 		return paymentTransaction{}, errors.New("userID and rent obligation ID are required")
+	}
+	reason := ""
+	if len(reasons) > 0 {
+		reason = strings.TrimSpace(reasons[0])
+	}
+	if reason == "" {
+		return paymentTransaction{}, errManualBalanceReasonRequired
+	}
+	if len([]rune(reason)) > 512 {
+		return paymentTransaction{}, errors.New("manual balance reason is too long")
 	}
 
 	var created paymentTransaction
@@ -65,23 +76,24 @@ func (s *transactionService) settleRentObligation(ctx context.Context, userID, o
 		now := time.Now().UTC()
 		period := monthStart(obligation.PeriodMonth)
 		created = paymentTransaction{
-			UserID:               userID,
-			Source:               manualBalanceTransactionSource,
-			SourceBatchID:        nullableString(manualBalanceTransactionSource),
-			StableTransactionKey: recordID("manual-balance", now),
-			Direction:            "income",
-			AmountCents:          remainingCents,
-			Currency:             currency,
-			TransactionTime:      &now,
-			Description:          manualBalanceTransactionDescription,
-			Reference:            "rent-balance-" + period.Format("2006-01"),
-			PayerName:            nullableString(tenantRow.Name),
-			PayerNameKind:        "manual",
-			ParsedPeriodMonth:    &period,
-			ParsedPeriodSource:   manualBalanceTransactionSource,
-			ParsedPeriodNote:     "dashboard manual balance",
-			MatchReason:          "manual balance adjustment",
-			MatchStatus:          "unmatched",
+			UserID:                 userID,
+			Source:                 manualBalanceTransactionSource,
+			SourceBatchID:          nullableString(manualBalanceTransactionSource),
+			StableTransactionKey:   recordID("manual-balance", now),
+			Direction:              "income",
+			AmountCents:            remainingCents,
+			Currency:               currency,
+			TransactionTime:        &now,
+			Description:            manualBalanceTransactionDescription,
+			Reference:              "rent-balance-" + period.Format("2006-01"),
+			PayerName:              nullableString(tenantRow.Name),
+			PayerNameKind:          "manual",
+			ParsedPeriodMonth:      &period,
+			ParsedPeriodSource:     manualBalanceTransactionSource,
+			ParsedPeriodNote:       "dashboard manual balance",
+			MatchReason:            "manual balance adjustment",
+			ManualAdjustmentReason: reason,
+			MatchStatus:            "unmatched",
 		}
 		if err := txdb.Create(&created).Error; err != nil {
 			return err
@@ -124,7 +136,12 @@ func (a *app) handleDashboardManualBalance(w http.ResponseWriter, r *http.Reques
 		http.Redirect(w, r, dashboardManualBalanceRedirect(r.Form, "", "invalid_manual_balance"), http.StatusFound)
 		return
 	}
-	_, err = newTransactionService(a.db).settleRentObligation(r.Context(), userID, obligationID)
+	reason := strings.TrimSpace(firstNonEmpty(r.Form.Get("reason"), r.Form.Get("manual_balance_reason")))
+	if reason == "" {
+		http.Redirect(w, r, dashboardManualBalanceRedirect(r.Form, "", "manual_balance_reason_required"), http.StatusFound)
+		return
+	}
+	_, err = newTransactionService(a.db).settleRentObligation(r.Context(), userID, obligationID, reason)
 	switch {
 	case err == nil:
 		http.Redirect(w, r, dashboardManualBalanceRedirect(r.Form, "manual_balance_saved", ""), http.StatusFound)

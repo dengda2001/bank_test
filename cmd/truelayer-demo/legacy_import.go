@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -178,6 +179,8 @@ func legacyExpenseInput(record expenseRecord) (expenseInput, bool) {
 		date = time.Now().UTC().Format(dateLayout)
 	}
 	input := expenseInput{
+		PropertyID:    optionalUint64Pointer(record.PropertyID),
+		RoomID:        optionalUint64Pointer(record.RoomID),
 		Description:   strings.TrimSpace(record.Description),
 		Category:      firstNonEmpty(record.Category, "General"),
 		Amount:        record.Amount,
@@ -186,6 +189,15 @@ func legacyExpenseInput(record expenseRecord) (expenseInput, bool) {
 		PaymentMethod: firstNonEmpty(record.PaymentMethod, "Manual"),
 		RoomHint:      record.RoomHint,
 		TenantHint:    record.TenantHint,
+		InvoiceURL:    record.InvoiceURL,
 	}
 	return input, input.Description != "" && input.Amount > 0
+}
+
+func optionalUint64Pointer(value string) *uint64 {
+	parsed, err := strconv.ParseUint(strings.TrimSpace(value), 10, 64)
+	if err != nil || parsed == 0 {
+		return nil
+	}
+	return &parsed
 }

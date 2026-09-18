@@ -210,6 +210,8 @@ type tenantRecord struct {
 
 type expenseRecord struct {
 	ID            string  `json:"id"`
+	PropertyID    string  `json:"property_id,omitempty"`
+	RoomID        string  `json:"room_id,omitempty"`
 	Description   string  `json:"description"`
 	Category      string  `json:"category"`
 	Amount        float64 `json:"amount"`
@@ -218,6 +220,7 @@ type expenseRecord struct {
 	PaymentMethod string  `json:"payment_method"`
 	RoomHint      string  `json:"room_hint,omitempty"`
 	TenantHint    string  `json:"tenant_hint,omitempty"`
+	InvoiceURL    string  `json:"invoice_url,omitempty"`
 	CreatedAt     string  `json:"created_at"`
 
 	AmountDisplay string `json:"-"`
@@ -1169,6 +1172,7 @@ func (a *app) persistExpenseRecord(ctx context.Context, r *http.Request, values 
 		PaymentMethod: firstNonEmpty(values.Get("payment_method"), "Manual"),
 		RoomHint:      strings.TrimSpace(values.Get("room_hint")),
 		TenantHint:    strings.TrimSpace(values.Get("tenant_hint")),
+		InvoiceURL:    strings.TrimSpace(values.Get("invoice_url")),
 		CreatedAt:     now.Format(time.RFC3339),
 	})
 	return a.saveExpenses(expenses)

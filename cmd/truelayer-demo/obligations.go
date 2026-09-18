@@ -133,6 +133,12 @@ func tenantActiveInMonth(row tenant, periodMonth time.Time) bool {
 	if row.Status != "active" {
 		return false
 	}
+	// Structured tenants are intentionally unbound until a room arrangement
+	// creates rent charges. Legacy tenant rows keep their monthly rent and room
+	// address, so this guard preserves their existing lazy-obligation behavior.
+	if row.MonthlyRentCents <= 0 {
+		return false
+	}
 	if row.RentStartDate.After(end) {
 		return false
 	}

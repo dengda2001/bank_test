@@ -75,7 +75,7 @@ func TestManualBalanceSettlesOnlyTheOutstandingRentOnMySQL(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	created, err := service.settleRentObligation(ctx, owner.ID, obligation.ID)
+	created, err := service.settleRentObligation(ctx, owner.ID, obligation.ID, "补录现金收款")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestManualBalanceSettlesOnlyTheOutstandingRentOnMySQL(t *testing.T) {
 		t.Fatalf("settled obligation=%+v", obligation)
 	}
 
-	if _, err := service.settleRentObligation(ctx, owner.ID, obligation.ID); !errors.Is(err, errManualBalanceNotNeeded) {
+	if _, err := service.settleRentObligation(ctx, owner.ID, obligation.ID, "重复确认"); !errors.Is(err, errManualBalanceNotNeeded) {
 		t.Fatalf("repeat settlement error=%v want no-balance error", err)
 	}
 	var manualCount int64
@@ -106,7 +106,7 @@ func TestManualBalanceSettlesOnlyTheOutstandingRentOnMySQL(t *testing.T) {
 	if manualCount != 1 {
 		t.Fatalf("manual balance transaction count=%d want 1", manualCount)
 	}
-	if _, err := service.settleRentObligation(ctx, otherUser.ID, obligation.ID); !errors.Is(err, gorm.ErrRecordNotFound) {
+	if _, err := service.settleRentObligation(ctx, otherUser.ID, obligation.ID, "跨用户校验"); !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("cross-user settlement error=%v want record not found", err)
 	}
 	if _, err := service.revokeTransactionAllocations(ctx, owner.ID, created.ID, "manual balance correction", "manual-balance-revoke"); err != nil {
@@ -162,7 +162,7 @@ func TestManualBalanceConcurrentRequestsCreateOneTransactionOnMySQL(t *testing.T
 		go func() {
 			defer wait.Done()
 			<-start
-			_, err := service.settleRentObligation(ctx, owner.ID, obligation.ID)
+			_, err := service.settleRentObligation(ctx, owner.ID, obligation.ID, "并发补录")
 			results <- err
 		}()
 	}
