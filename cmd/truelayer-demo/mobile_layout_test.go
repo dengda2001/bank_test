@@ -167,6 +167,41 @@ func TestMobileDashboardUsesCardsForRentRows(t *testing.T) {
 	}
 }
 
+func TestMobileTenantListUsesCards(t *testing.T) {
+	page, err := executeTemplate(tenantTemplate, tenantPageData{
+		Rows: []tenantRecord{{
+			ID:           "7",
+			Name:         "陈先生",
+			DisplayAlias: "陈先生",
+			RoomLabel:    "2B",
+			RoomAddress:  "Rosewood Court",
+			RentDisplay:  "EUR 1280.00",
+			Currency:     "EUR",
+			Status:       "active",
+			DueDay:       1,
+			BillingHistory: []tenantBillingMonth{{
+				PeriodLabel:   "2026年9月",
+				StatusLabel:   "部分缴纳",
+				BalanceAmount: "EUR 640.00",
+			}},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, marker := range []string{
+		`class="tenant-mobile-list"`,
+		`class="tenant-mobile-card panel"`,
+		`href="/tenants/7"`,
+		`class="tenant-mobile-history"`,
+		`class="tenant-table-wrap table-wrap"`,
+	} {
+		if !strings.Contains(page, marker) {
+			t.Fatalf("mobile tenant cards missing %q", marker)
+		}
+	}
+}
+
 // Sticky is what keeps a row's identity and its actions on screen while the table
 // scrolls sideways. It must never leak above the breakpoint: at 1280px the tables
 // have to render exactly as they did before.

@@ -2336,9 +2336,23 @@ var tenantTemplate = newWorkspacePageTemplate("tenants", nil, `<!doctype html>
     .tenant-month-details .payment-list { padding: 12px 16px 14px 28px; }
     .tenant-month-details .payment-item { display: grid; grid-template-columns: 140px 170px minmax(180px, 1fr) minmax(160px, 1fr) 100px; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); color: var(--foreground-subtle); font-size: 12px; }
     .tenant-month-details .payment-item:last-child { border-bottom: 0; }
+    .tenant-mobile-list { display: none; }
+    .tenant-mobile-card { display: grid; gap: 11px; padding: 14px; }
+    .tenant-mobile-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+    .tenant-mobile-head h3 { margin: 0; font-size: 15px; }
+    .tenant-mobile-head p { margin: 3px 0 0; color: var(--foreground-muted); font-size: 11px; }
+    .tenant-mobile-rent { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 10px; border-radius: 8px; background: var(--surface-muted); }
+    .tenant-mobile-rent span { color: var(--foreground-muted); font-size: 11px; }
+    .tenant-mobile-rent strong { font: 700 15px var(--mono); }
+    .tenant-mobile-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .tenant-mobile-history { border-top: 1px solid var(--border); padding-top: 8px; }
+    .tenant-mobile-history summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 700; font-size: 12px; }
+    .tenant-mobile-history-row { display: flex; justify-content: space-between; gap: 8px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 11px; }
     .tenant-month-details .payment-item .amount { font-size: 13px; }
     @media (max-width: 760px) { .tenant-month-details .payment-item { grid-template-columns: 1fr 1fr; } .tenant-month-details .payment-item .payment-description { grid-column: 1 / -1; } }
     @media (max-width: 640px) {
+      .tenant-table-wrap { display: none; }
+      .tenant-mobile-list { display: grid; gap: 9px; }
       .row-actions .btn { min-height: 44px; }
       /* P1：账单安排列实测只剩 59px，把「每月 1 日 / 2026-07-01 至 2026-09-30」
          断成 5 行。112px 够放两行。表格地板同步抬高，否则从这一列多拿的宽度
@@ -2421,7 +2435,10 @@ var tenantTemplate = newWorkspacePageTemplate("tenants", nil, `<!doctype html>
       <section class="panel surface" aria-labelledby="tenant-list-title">
         <div class="panel-head"><h2 id="tenant-list-title">租客列表</h2><span class="tiny">{{.TenantCount}} 条记录</span></div>
         {{if .Rows}}
-        <div class="table-wrap">
+        <div class="tenant-mobile-list" aria-label="移动端租客列表">
+          {{range .Rows}}<article class="tenant-mobile-card panel"><div class="tenant-mobile-head"><div><h3>{{if .DisplayAlias}}{{.DisplayAlias}}{{else}}{{.Name}}{{end}}</h3>{{if .DisplayAlias}}<p>{{.Name}}</p>{{end}}<p>{{if .RoomLabel}}{{.RoomLabel}} · {{end}}{{.RoomAddress}}</p></div><span class="status {{.Status}}">{{if eq .Status "active"}}有效{{else}}已停用{{end}}</span></div><div class="tenant-mobile-rent"><span>月租 · 每月 {{.DueDay}} 日</span><strong>{{.RentDisplay}}</strong></div><div class="tenant-mobile-actions"><a class="btn subtle" href="/tenants/{{.ID}}">详情</a><a class="btn subtle" href="/tenants?edit={{.ID}}">编辑</a></div>{{if .BillingHistory}}<details class="tenant-mobile-history"><summary>查看最近六个月缴费</summary>{{range .BillingHistory}}<div class="tenant-mobile-history-row"><span>{{.PeriodLabel}} · {{.StatusLabel}}</span><strong>{{.BalanceAmount}}</strong></div>{{end}}</details>{{end}}</article>{{end}}
+        </div>
+        <div class="tenant-table-wrap table-wrap">
           <table>
             <thead><tr><th>租客</th><th>付款人</th><th>租金</th><th>账单安排</th><th>房间</th><th>创建时间</th><th>操作</th></tr></thead>
             <tbody>
