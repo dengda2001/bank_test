@@ -605,3 +605,38 @@ Completed the landlord multi-property rent workspace: schema and repository laye
 ### Next Steps
 
 - None - task complete
+
+
+## Session 18: 完成 Figma 领域任务与 MySQL 清理测试
+
+**Date**: 2026-09-19
+**Task**: 完成 Figma 领域任务与 MySQL 清理测试
+**Branch**: `main`
+
+### Summary
+
+拆分 Figma 原型还原任务；完成领域与运营能力、迁移、租住安排、平账原因和发票 URL；新增隔离 MySQL 测试脚本，测试前后重建 rentops_test 并验证领域相关测试通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4ae94fa` | (see git log) |
+| `6b0f5fb` | (see git log) |
+| `566b040` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
