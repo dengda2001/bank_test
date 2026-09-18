@@ -232,6 +232,9 @@ var rentDashboardTemplate = newWorkspacePageTemplate("rent-dashboard", template.
 	    .section-head .tiny { margin-top: 4px; }
 	    .section-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-left: auto; }
 	    .dashboard-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+	    .dashboard-pending-access { display: inline-grid; grid-template-columns: auto auto 1fr; align-items: baseline; gap: 8px; margin-top: 10px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; color: inherit; background: var(--surface); text-decoration: none; }
+	    .dashboard-pending-access strong { font: 600 16px/1 var(--mono); }
+	    .dashboard-pending-access:hover { border-color: var(--border-strong); background: var(--surface-accent); }
 	    .dashboard-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; padding: 12px 16px; }
 	    .count-chip { display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px; color: var(--foreground-subtle); background: var(--surface-muted); font-size: 12px; font-weight: 700; text-decoration: none; white-space: nowrap; }
 	    .count-chip.overdue, .count-chip.review { border-color: #fecaca; color: #991b1b; background: #fef2f2; }
@@ -407,8 +410,9 @@ var rentDashboardTemplate = newWorkspacePageTemplate("rent-dashboard", template.
 	      <div class="panel metric metric-primary"><div class="label">本月应收</div><strong>{{.ExpectedTotal}}</strong><span>本月租金账单</span></div>
 	      <a class="panel metric metric-success metric-link" href="{{rentDashboardURL .Period .SearchFilter "paid" .SortFilter 1 .PageSize}}"><div class="label">已收租金</div><strong>{{.PaidTotal}}</strong><span>{{.PaidCount}} 户已缴清 · 查看账单</span></a>
 	      <a class="panel metric metric-warning metric-link" href="{{rentDashboardURL .Period .SearchFilter "unpaid" .SortFilter 1 .PageSize}}"><div class="label">剩余未收</div><strong>{{.BalanceTotal}}</strong><span>{{.UnpaidCount}} 户未缴或部分缴纳 · 查看账单</span></a>
-	      <a class="panel metric metric-link" href="/billing?period={{.Period}}&amp;pending=1" aria-label="查看{{.PeriodLabel}}待处理流水"><div class="label">待处理</div><strong>{{.PendingCount}}</strong><span>笔流水需要关联或确认 · 查看对应流水</span></a>
+	      <a class="panel metric metric-link" href="/expenses" aria-label="查看{{.PeriodLabel}}房产支出"><div class="label">房产支出</div><strong>{{.ExpenseTotal}}</strong><span>{{.ExpenseCount}} 笔已记录支出 · 查看支出</span></a>
 	    </section>
+	    <a class="dashboard-pending-access" href="/billing?period={{.Period}}&amp;pending=1" aria-label="查看{{.PeriodLabel}}待处理流水"><div class="label">待处理</div><strong>{{.PendingCount}}</strong><span class="tiny">笔流水需要关联或确认 · 查看对应流水</span></a>
 	    <div class="panel dashboard-counts" aria-label="账单状态数量">
 	      <span class="count-chip">本月共 {{.TotalRows}} 户</span>
 	      <a class="count-chip overdue" href="{{rentDashboardURL .Period .SearchFilter "overdue" .SortFilter 1 .PageSize}}">逾期 {{.OverdueCount}}</a>
