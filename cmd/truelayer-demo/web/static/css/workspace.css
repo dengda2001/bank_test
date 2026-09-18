@@ -1,23 +1,26 @@
 
     :root {
-      --background-deep: #f3f4f6;
-      --background-base: #f3f4f6;
-      --surface: #ffffff;
-      --surface-muted: #f9fafb;
-      --surface-accent: #eff6ff;
-      --foreground: #111827;
-      --foreground-muted: #4b5563;
-      --foreground-subtle: #374151;
-      --accent: #2563eb;
-      --accent-bright: #1d4ed8;
-      --positive: #047857;
-      --danger: #b91c1c;
-      --warning: #b45309;
-      --border: #d1d5db;
-      --border-strong: #9ca3af;
+      --background-deep: oklch(98% .005 250);
+      --background-base: oklch(98% .005 250);
+      --surface: oklch(100% 0 0);
+      --surface-muted: oklch(96% .008 240);
+      --surface-accent: color-mix(in oklch, var(--accent) 12%, transparent);
+      --foreground: oklch(22% .02 240);
+      --foreground-muted: oklch(50% .018 240);
+      --foreground-subtle: oklch(35% .018 240);
+      --accent: oklch(58% .16 145);
+      --accent-bright: oklch(51% .16 145);
+      --positive: oklch(52% .14 145);
+      --danger: oklch(52% .18 25);
+      --warning: oklch(63% .14 70);
+      --border: oklch(90% .008 240);
+      --border-strong: oklch(70% .012 240);
       --negative: var(--danger);
       --sans: "Inter", "Geist Sans", "Aptos", "Segoe UI", system-ui, sans-serif;
       --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+      --sidebar: oklch(19% .018 240);
+      --sidebar-muted: color-mix(in oklch, var(--surface) 58%, transparent);
+      --sidebar-border: color-mix(in oklch, var(--surface) 12%, transparent);
     }
     *, *::before, *::after { box-sizing: border-box; }
     html { background: var(--background-deep); }
@@ -237,6 +240,63 @@
     .amount.expense { color: var(--danger); }
     .mono { font-family: var(--mono); font-size: 11px; color: var(--foreground-muted); overflow-wrap: anywhere; }
     .empty { padding: 64px 20px; color: var(--foreground-muted); text-align: center; line-height: 1.7; }
+
+    /* Desktop shell tokens mirror the Figma handoff: a fixed dark rail and a
+       quiet, information-dense workspace. This block is deliberately scoped
+       above the mobile drawer breakpoint; the mobile task owns its layout. */
+    @media (min-width: 641px) {
+      body { font-size: 14px; background: var(--background-deep); }
+      .app { width: 100%; max-width: none; padding: 0; grid-template-columns: 236px minmax(0, 1fr); }
+      .sidebar {
+        position: relative;
+        top: 0;
+        height: 100vh;
+        border: 0;
+        border-radius: 0;
+        padding: 20px 14px;
+        overflow: auto;
+        color: var(--surface);
+        background: var(--sidebar);
+      }
+      .side-brand { padding: 0 8px 20px; border-bottom-color: var(--sidebar-border); }
+      .side-brand .mark { border: 1px solid color-mix(in oklch, var(--surface) 30%, transparent); border-radius: 8px; background: transparent; }
+      .side-brand .brand-title { color: var(--surface); font-size: 17px; }
+      .side-brand .brand-meta { color: var(--sidebar-muted); }
+      .nav-label { padding: 22px 10px 7px; color: color-mix(in oklch, var(--surface) 45%, transparent); font: 700 10px var(--mono); letter-spacing: 0.08em; }
+      .nav { gap: 3px; }
+      .nav a { border-radius: 7px; color: color-mix(in oklch, var(--surface) 70%, transparent); font-weight: 600; }
+      .nav a:hover { color: var(--surface); background: color-mix(in oklch, var(--surface) 10%, transparent); }
+      .nav a.active { color: var(--foreground); background: var(--surface); }
+      .glyph { color: color-mix(in oklch, var(--surface) 82%, transparent); background: color-mix(in oklch, var(--surface) 12%, transparent); }
+      .nav a.active .glyph { color: var(--accent); background: var(--surface-accent); }
+      .nav-count { color: color-mix(in oklch, var(--surface) 72%, transparent); background: color-mix(in oklch, var(--surface) 12%, transparent); }
+      .nav a.active .nav-count { color: var(--accent); background: var(--surface-accent); }
+      .side-foot { color: var(--sidebar-muted); border-top-color: var(--sidebar-border); }
+      .content { min-height: 100vh; border: 0; border-radius: 0; padding: 0 28px 56px; background: var(--background-deep); }
+      .topbar {
+        position: relative;
+        top: 0;
+        z-index: 10;
+        min-height: 64px;
+        margin: 0 -28px 24px;
+        padding: 0 28px;
+        align-items: center;
+        border: 0;
+        border-bottom: 1px solid var(--border);
+        background: color-mix(in oklch, var(--surface) 92%, transparent);
+        backdrop-filter: blur(12px);
+      }
+      .workspace-toolbar { margin: 0 -28px 22px; padding: 22px 28px 18px; border-bottom: 1px solid var(--border); background: color-mix(in oklch, var(--surface) 92%, transparent); }
+      .workspace-toolbar h1 { margin-top: 0; font-size: 28px; line-height: 1.15; color: var(--foreground); background: none; -webkit-text-fill-color: currentColor; }
+      h1 { font-size: 28px; line-height: 1.15; color: var(--foreground); }
+      .panel { border-radius: 10px; box-shadow: none; }
+      .panel:hover { border-color: var(--border-strong); box-shadow: none; }
+      .metric { min-height: 112px; padding: 17px 18px; }
+      .metric strong { font: 600 27px/1.15 var(--mono); letter-spacing: -0.04em; }
+      .surface .panel-head { background: var(--surface); }
+      .table-wrap { scrollbar-color: var(--border-strong) transparent; }
+    }
+
     @media (max-width: 980px) {
       .app { grid-template-columns: 1fr; padding: 12px; }
       .sidebar { border-radius: 12px 12px 0 0; border-right: 1px solid var(--border); border-bottom: 0; }
@@ -269,6 +329,7 @@
       }
       .nav-compact-bar .mark { width: 30px; height: 30px; font-size: 14px; }
       .nav-burger { margin-left: auto; font-size: 20px; line-height: 1; }
+      .nav-label { display: none; }
       /* 键盘也要能开抽屉。复选框原本带 hidden 属性（= display:none），聚焦不了，
          于是 <=640 的导航变成了只能点、不能按 Tab 到达——比改造前更差，改造前
          侧栏链接是普通可聚焦链接。改成「看不见但可聚焦」，焦点画在紧凑栏上。 */
