@@ -507,6 +507,17 @@
         text-decoration: none;
       }
       .mobile-flyout a:hover, .mobile-flyout a:focus-visible { background: var(--surface-muted); outline: none; }
+
+      /* 对象、租住安排和现金等简单列表在手机上直接变成纵向卡片，避免把主流程
+         藏在横向滚动表格里。账单／租客／支出页有更具体的页面级重排规则。 */
+      .table-wrap:not(.billing-table-wrap):not(.tenant-table-wrap):not(.expense-table-wrap) { overflow: visible; }
+      .table-wrap:not(.billing-table-wrap):not(.tenant-table-wrap):not(.expense-table-wrap) > table { display: block; width: 100%; min-width: 0; }
+      .table-wrap:not(.billing-table-wrap):not(.tenant-table-wrap):not(.expense-table-wrap) > table > thead { display: none; }
+      .table-wrap:not(.billing-table-wrap):not(.tenant-table-wrap):not(.expense-table-wrap) > table > tbody { display: grid; gap: 10px; }
+      .table-wrap:not(.billing-table-wrap):not(.tenant-table-wrap):not(.expense-table-wrap) > table > tbody > tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+      .table-wrap:not(.billing-table-wrap):not(.tenant-table-wrap):not(.expense-table-wrap) > table > tbody > tr > td { display: block; min-width: 0; padding: 0; border: 0; }
+      .table-wrap:not(.billing-table-wrap):not(.tenant-table-wrap):not(.expense-table-wrap) > table > tbody > tr > td:last-child { position: static !important; background: transparent !important; box-shadow: none !important; }
+      .table-wrap:not(.billing-table-wrap):not(.tenant-table-wrap):not(.expense-table-wrap) > table > tbody > tr > td .btn { min-height: 44px; }
     }
     @media (min-width: 600px) and (max-width: 640px) {
       .mobile-bottom-nav { left: 50%; right: auto; width: min(560px, 100vw); transform: translateX(-50%); }

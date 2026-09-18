@@ -260,6 +260,23 @@ func TestMobileBillingRowsStackAsCards(t *testing.T) {
 	}
 }
 
+func TestMobileSimpleTablesStackAsCards(t *testing.T) {
+	base, mobile := splitWorkspaceCSS(t)
+	if strings.Contains(base, "table-wrap:not(.billing-table-wrap)") {
+		t.Fatal("simple-table mobile rules leaked into the desktop stylesheet")
+	}
+	for _, marker := range []string{
+		`.table-wrap:not(.billing-table-wrap):not(.tenant-table-wrap):not(.expense-table-wrap) > table { display: block;`,
+		`> table > thead { display: none; }`,
+		`> table > tbody > tr { display: grid;`,
+		`> table > tbody > tr > td:last-child { position: static !important;`,
+	} {
+		if !strings.Contains(mobile, marker) {
+			t.Fatalf("mobile simple-table rule missing %q", marker)
+		}
+	}
+}
+
 // Sticky is what keeps a row's identity and its actions on screen while the table
 // scrolls sideways. It must never leak above the breakpoint: at 1280px the tables
 // have to render exactly as they did before.
