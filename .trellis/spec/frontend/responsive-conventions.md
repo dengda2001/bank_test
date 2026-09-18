@@ -302,3 +302,22 @@ const workspaceNav = `...<input type="checkbox" id="nav-drawer" class="nav-drawe
   outline: 2px solid var(--accent-bright); outline-offset: 2px;
 }
 ```
+
+## 8. Desktop Figma Shell
+
+The desktop baseline is a 236px dark sidebar plus a 64px topbar. Keep the live
+palette in the shared stylesheet's OKLCH tokens (`--sidebar`, `--accent`,
+`--surface`, `--foreground`) and let page templates reuse `.panel`, `.metric`,
+`.table-wrap`, `.status`, `.entity-form`, `.form-grid`, and `.drawer-actions`.
+Desktop action forms should remain ordinary semantic HTML forms; the mobile task
+may restyle them as sheets without changing their field names or action URLs.
+
+Asset creation and tenant binding are part of the shared contract: a room form
+must carry `property_id`, and a tenant form may carry `room_id`, `structured`,
+and `arrangement_start_month`. Selecting a room may prefill its current rent,
+but the amount remains editable.
+
+High-risk action buttons expose `data-confirm="true"` so the shared delegated
+submit guard can confirm keyboard and pointer submissions. Dunning opens its
+drawer with focus moved into the first control, closes on Escape, and restores
+focus to the launch button.
