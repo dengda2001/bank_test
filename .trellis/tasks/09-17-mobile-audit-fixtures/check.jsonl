@@ -1,0 +1,2 @@
+{"file": ".trellis/tasks/09-17-mobile-audit-fixtures/prd.md", "reason": "R3 要求逐条列出「形态分支 → 命中的数据」，验收时按此表核对，造不出的分支必须有书面理由"}
+{"file": ".trellis/tasks/09-16-mobile-friendly-workspace/research/seed-options.md", "reason": "核对是否绕开了已知死角：e2e fixture 会自删数据、import-legacy 只能造 unmatched、candidate/needs_review 的存储路径"}

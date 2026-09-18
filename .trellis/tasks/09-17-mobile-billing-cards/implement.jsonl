@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/09-16-mobile-friendly-workspace/design.md", "reason": "共享契约来源：D1 双 DOM、D3 窄屏切换、D4 状态分支、D5 details 折叠、D6 筛选分层、D7 默认值陷阱"}
+{"file": ".trellis/tasks/09-16-mobile-friendly-workspace/research/billing-render-map.md", "reason": "本页渲染路径、7 列定义、逐行动作、三个隐藏参数、以及行内脚本做的三件事"}
+{"file": ".trellis/spec/frontend/responsive-conventions.md", "reason": "既有窄屏契约：断点唯一性、44px 下限、冻结列、扁平化守卫；新增规则必须落在它未覆盖的卡片形态上"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "卡片基元要被后两个子任务复用，抽象边界按该指南判断"}

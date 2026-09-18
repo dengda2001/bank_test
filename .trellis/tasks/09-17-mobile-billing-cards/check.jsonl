@@ -1,0 +1,3 @@
+{"file": ".trellis/tasks/09-16-mobile-friendly-workspace/design.md", "reason": "验收核心：D7 的四条连带改动（all 取值、下拉 value、清除筛选指向、空状态出口）最易漏"}
+{"file": ".trellis/tasks/09-16-mobile-friendly-workspace/prd.md", "reason": "§5.2、§6.3、§10.1、§10.3、§14.1 是本页验收判据"}
+{"file": ".trellis/tasks/archive/2026-09/09-16-mobile-responsive-audit/research/mobile-audit.md", "reason": "上一轮实测教训：三个缺陷只有真实渲染能发现；验收不能只跑 Go 字符串断言"}

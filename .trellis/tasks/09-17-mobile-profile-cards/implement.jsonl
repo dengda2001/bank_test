@@ -1,0 +1,3 @@
+{"file": ".trellis/tasks/09-16-mobile-friendly-workspace/design.md", "reason": "共享契约来源，尤其是 D2 view model 先行与 D6「不给这两个页面新增筛选」的边界"}
+{"file": ".trellis/tasks/09-16-mobile-friendly-workspace/research/list-pages-render-map.md", "reason": "关键陷阱：tenants.go / expenses.go 不含页面代码，模板与 handler 都在 main.go；以及两页无筛选、nil FuncMap"}
+{"file": ".trellis/spec/frontend/responsive-conventions.md", "reason": "既有窄屏契约，特别是预览页 .tp-scroll 的既有约定不能改坏"}

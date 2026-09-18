@@ -1,1 +1,2 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/tasks/09-16-mobile-friendly-workspace/prd.md", "reason": "需求集与验收标准；父任务不实现代码，但集成门禁按此判定"}
+{"file": ".trellis/tasks/09-16-mobile-friendly-workspace/design.md", "reason": "跨子任务共享契约（双 DOM、view model 先行、断点与桌面不变性、默认筛选陷阱）；集成验收时据此核对每个子任务是否越界"}

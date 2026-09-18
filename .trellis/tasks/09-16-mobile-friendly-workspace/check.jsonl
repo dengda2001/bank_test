@@ -1,1 +1,3 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/tasks/09-16-mobile-friendly-workspace/implement.md", "reason": "集成门禁清单：四个子任务归档后逐条核对，尤其是 PRD §3.0.1 的阻断条件与真机抽查"}
+{"file": ".trellis/tasks/09-16-mobile-friendly-workspace/design.md", "reason": "验收时核对实测结果与设计契约是否一致，特别是「桌面端在显式全部参数下与基线一致」这条"}
+{"file": ".trellis/spec/frontend/responsive-conventions.md", "reason": "上一轮沉淀的窄屏契约；本任务的实现不得推翻它（改动的只应是它未覆盖的卡片形态）"}

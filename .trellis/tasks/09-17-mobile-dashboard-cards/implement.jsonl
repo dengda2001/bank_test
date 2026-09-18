@@ -1,0 +1,3 @@
+{"file": ".trellis/tasks/09-16-mobile-friendly-workspace/design.md", "reason": "共享契约来源，尤其是 D2 view model 先行与 D7 默认值变更"}
+{"file": ".trellis/tasks/09-16-mobile-friendly-workspace/research/list-pages-render-map.md", "reason": "本页渲染路径、dashboard_filters.go 的职责边界、已有的展开与催缴抽屉机制"}
+{"file": ".trellis/spec/frontend/responsive-conventions.md", "reason": "既有窄屏契约；本页已有一个页面级窄屏块（dashboard.go:290-337），新增规则要与它并列而不是互相覆盖"}

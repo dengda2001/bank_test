@@ -640,3 +640,36 @@ Completed the landlord multi-property rent workspace: schema and repository laye
 ### Next Steps
 
 - None - task complete
+
+
+## Session 19: 完成 Figma 页面数据与规范路由
+
+**Date**: 2026-09-19
+**Task**: 完成 Figma 页面数据与规范路由
+**Branch**: `main`
+
+### Summary
+
+完成用户隔离的 bills、transactions、dunning、properties、rooms、tenancies、cash receipts、bank 页面数据模型与规范路由，保留旧入口；加入平账原因、催收强确认、refresh-token 同步、房产编辑和页面语义字段。定向 Go/vet 与 MySQL 清理隔离测试通过；完整包仍有两个前置租客旧 fixture 测试失败。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dd95fa1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
