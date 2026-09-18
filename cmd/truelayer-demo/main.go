@@ -2537,6 +2537,22 @@ var expenseTemplate = newWorkspacePageTemplate("expenses", nil, `<!doctype html>
       table { min-width: 700px; }
       /* 表单里其它控件都是整宽，只有提交按钮是 111px，并排看像没做完。 */
       .panel.form > .btn.primary { width: 100%; }
+    }
+    .expense-mobile-list { display: none; }
+    .expense-mobile-card { display: grid; gap: 11px; padding: 14px; }
+    .expense-mobile-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .expense-mobile-head h3 { margin: 0; color: var(--foreground); font-size: 15px; }
+    .expense-mobile-head p { margin: 4px 0 0; color: var(--foreground-muted); font-size: 11px; }
+    .expense-mobile-amount { color: var(--foreground); font: 700 16px var(--mono); white-space: nowrap; }
+    .expense-mobile-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .expense-mobile-meta > div { display: grid; gap: 3px; padding: 9px 10px; border-radius: 8px; background: var(--surface-muted); }
+    .expense-mobile-meta span, .expense-mobile-note { color: var(--foreground-muted); font-size: 11px; }
+    .expense-mobile-meta strong { color: var(--foreground); font-size: 12px; }
+    .expense-mobile-note { line-height: 1.55; }
+    .expense-mobile-invoice { font-size: 12px; }
+    @media (max-width: 640px) {
+      .expense-table-wrap { display: none; }
+      .expense-mobile-list { display: grid; gap: 9px; }
     }`+`</style>
   <script>`+workspaceCalendarScript+`</script>
 </head>
@@ -2596,7 +2612,10 @@ var expenseTemplate = newWorkspacePageTemplate("expenses", nil, `<!doctype html>
         <section class="panel surface" aria-labelledby="expense-list-title">
           <div class="panel-head"><h2 id="expense-list-title">支出列表</h2><span class="tiny">{{.ExpenseCount}} 条记录</span></div>
           {{if .Rows}}
-          <div class="table-wrap">
+          <div class="expense-mobile-list" aria-label="移动端支出列表">
+            {{range .Rows}}<article class="expense-mobile-card panel"><div class="expense-mobile-head"><div><h3>{{.Description}}</h3><p>{{.Category}} · {{.DateDisplay}}</p></div><strong class="expense-mobile-amount">{{.AmountDisplay}}</strong></div><div class="expense-mobile-meta"><div><span>付款方式</span><strong>{{.PaymentMethod}}</strong></div><div><span>归属</span><strong>{{if .RoomID}}房间 {{.RoomID}}{{else if .RoomHint}}{{.RoomHint}}{{else}}房产级支出{{end}}</strong></div></div>{{if .TenantHint}}<div class="expense-mobile-note">租客：{{.TenantHint}}</div>{{end}}{{if .InvoiceURL}}<a class="expense-mobile-invoice" href="{{.InvoiceURL}}" target="_blank" rel="noopener noreferrer">查看发票链接</a>{{end}}</article>{{end}}
+          </div>
+          <div class="expense-table-wrap table-wrap">
             <table>
               <thead><tr><th>描述</th><th>金额</th><th>类别</th><th>日期</th><th>备注</th><th>付款方式</th></tr></thead>
               <tbody>
