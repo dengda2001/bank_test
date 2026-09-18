@@ -712,3 +712,48 @@ Completed the landlord multi-property rent workspace: schema and repository laye
 ### Next Steps
 
 - None - task complete
+
+
+## Session 21: Figma mobile workspace cards and navigation
+
+**Date**: 2026-09-19
+**Task**: Figma mobile workspace cards and navigation
+**Branch**: `main`
+
+### Summary
+
+Completed the existing 09-19 mobile workspace task: five-item bottom navigation and flyouts; dashboard, billing, tenant, expense, and transaction mobile cards; shared object-table cardization; mobile dunning bottom sheet with strong confirmation; 360/390/430/600 browser overflow checks; go vet and MySQL isolation verification. Full module tests still have the two pre-existing tenant-date fixture failures.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6a80d2b` | (see git log) |
+| `a5ec2b1` | (see git log) |
+| `7fcbc0e` | (see git log) |
+| `013c8c0` | (see git log) |
+| `1e66c40` | (see git log) |
+| `1962f9a` | (see git log) |
+| `96dd78b` | (see git log) |
+| `879d6fd` | (see git log) |
+| `e289354` | (see git log) |
+| `07a5517` | (see git log) |
+| `f23f710` | (see git log) |
+| `05d946c` | (see git log) |
+| `f383c4e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
