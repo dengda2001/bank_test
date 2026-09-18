@@ -277,6 +277,26 @@ func TestMobileSimpleTablesStackAsCards(t *testing.T) {
 	}
 }
 
+func TestMobileDunningUsesSafeBottomSheet(t *testing.T) {
+	page, err := executeTemplate(rentDashboardTemplate, rentDashboardPageData{
+		Dunning: dunningDrawerData{Enabled: true, Period: "2026-09"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, marker := range []string{
+		`.dunning-drawer { position: fixed; left: 8px; right: 8px; bottom: calc(76px + env(safe-area-inset-bottom));`,
+		`max-height: calc(100vh - 96px - env(safe-area-inset-bottom));`,
+		`overflow: auto;`,
+		`data-dunning-open`,
+		`onclick="return confirm('确认发送催收邮件吗？')"`,
+	} {
+		if !strings.Contains(page, marker) {
+			t.Fatalf("mobile dunning sheet missing %q", marker)
+		}
+	}
+}
+
 // Sticky is what keeps a row's identity and its actions on screen while the table
 // scrolls sideways. It must never leak above the breakpoint: at 1280px the tables
 // have to render exactly as they did before.
