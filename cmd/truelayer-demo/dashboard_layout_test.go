@@ -212,8 +212,13 @@ func TestRentDashboardManualBalanceActionOnlyAppearsForOutstandingRent(t *testin
 		t.Fatal(err)
 	}
 	page := body.String()
-	if got := strings.Count(page, `>一键平账</button>`); got != 1 {
-		t.Fatalf("manual balance action count=%d want 1: %s", got, page)
+	for name, block := range map[string]string{
+		"mobile cards":  markupBetween(t, page, `<div class="dashboard-mobile-list"`, `<div class="dashboard-table-wrap`),
+		"desktop table": markupBetween(t, page, `<div class="dashboard-table-wrap table-wrap">`, `</table></div>`),
+	} {
+		if got := strings.Count(block, `>一键平账</button>`); got != 1 {
+			t.Fatalf("manual balance action count in %s=%d want 1: %s", name, got, block)
+		}
 	}
 	for _, expected := range []string{
 		`action="/rent-dashboard/settle"`,
