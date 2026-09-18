@@ -184,6 +184,14 @@ The card rule must remain mobile-only and must not change the table's desktop
 markup. Add a rendered-markup test for every page-specific card wrapper and keep a
 CSS test asserting the generic selector is inside the mobile tail.
 
+### 3.9 Bottom sheets and the fixed navigation
+
+Long-running or high-risk dashboard tasks such as dunning may use a page-local
+bottom sheet at `max-width: 640px`. The sheet is fixed with 8px side insets,
+`bottom: calc(76px + env(safe-area-inset-bottom))`, a viewport-relative max-height,
+and `overflow: auto`; this leaves the 68px shared navigation plus an 8px gap
+visible. The existing server-side form and confirmation handler remain unchanged.
+
 ---
 
 ## 4. Validation & Error Matrix
