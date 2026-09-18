@@ -169,6 +169,21 @@ Both `<style>` and `<script>` are affected by `html/template`'s escapers: CSS
 `/* */` comments are **stripped** from `<style>`, so a Go test cannot anchor on
 one. **Anchor assertions on a declaration, never a comment.**
 
+### 3.8 Cardize simple mobile tables
+
+Object and low-frequency list pages (properties, rooms, tenancies, cash receipts,
+and similar simple tables) use the shared mobile card rule instead of requiring a
+horizontal scan. At `max-width: 640px`, a direct child table of `.table-wrap`
+becomes a block with a hidden header, a grid body, and one bordered row card per
+record. The final cell is reset from the generic sticky rule so links and buttons
+remain in the card flow. Billing, tenant, expense, dashboard, and nested history
+tables opt out with page-specific wrapper classes because they have richer card or
+details behavior.
+
+The card rule must remain mobile-only and must not change the table's desktop
+markup. Add a rendered-markup test for every page-specific card wrapper and keep a
+CSS test asserting the generic selector is inside the mobile tail.
+
 ---
 
 ## 4. Validation & Error Matrix
@@ -216,7 +231,7 @@ a narrower two.
 
 ## 6. Tests Required
 
-`cmd/truelayer-demo/mobile_layout_test.go` — 8 tests, all parsing rendered markup
+`cmd/truelayer-demo/mobile_layout_test.go` — responsive tests, all parsing rendered markup
 or the CSS constants:
 
 | Test | Asserts |
@@ -229,6 +244,8 @@ or the CSS constants:
 | `TestPayerPreviewScrollsTheTableNotTheCard` | `.tp-scroll{overflow-x:auto}` present; `.card{...overflow-x:auto}` gone; card rule unchanged in shape; wrapper opens and closes around the table |
 | `TestBillingActionCellCollapsesOnlyOnNarrowScreens` | `<details class="txn-action" open>`, summary hidden wide, `matchMedia` script strips `open`, dropped columns, 680px floor, mobile amount default and override order |
 | `TestBillingNarrowScreenBlockFollowsTheWideScreenOne` | Narrow block is written after the wide one |
+| `TestMobileDashboardUsesCardsForRentRows`, `TestMobileTenantListUsesCards`, `TestMobileExpenseListUsesCards`, `TestMobileBillingRowsStackAsCards` | High-frequency pages expose mobile card markup while retaining desktop wrappers |
+| `TestMobileSimpleTablesStackAsCards` | Generic object-table card rules stay in the mobile stylesheet tail |
 
 **Go tests are necessary and not sufficient here.** They parse strings; they do
 not lay anything out. Three defects in this task's own work were invisible to
