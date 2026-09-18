@@ -246,6 +246,74 @@ preview.Passed = response.StatusCode == http.StatusOK && cashAmount && afterRema
 
 ---
 
+### Scenario: Canonical page view-model and route contract
+
+#### 1. Scope / Trigger
+
+- Trigger: adding or changing a page route consumed by both desktop and mobile
+  renderers in `cmd/truelayer-demo`.
+- Applies to canonical pages such as `/bills`, `/transactions`,
+  `/properties`, `/rooms`, `/tenancies`, `/cash-receipts`, and `/bank`.
+
+#### 2. Signatures
+
+- `newAppMux(a *app) *http.ServeMux` is the single live/test route registry.
+- Page handlers return server-rendered view models with typed IDs, cents,
+  status keys, and `pageActionView` action metadata.
+- `scopedPageUser(w, r)` requires a signed database session before any scoped
+  read; single-row detail loaders include `user_id` in the query.
+
+#### 3. Contracts
+
+- Canonical GET routes may keep legacy aliases, but legacy `/billing`, OAuth,
+  refresh, and cash subroutes remain functional.
+- Every action exposes a stable URL/method and declares reason or confirmation
+  requirements; templates never infer these from labels or amounts.
+- Bank pages expose connection/sync health and account metadata, never token
+  values; `/bank/sync` uses the saved refresh-token flow.
+
+#### 4. Validation & Error Matrix
+
+- Missing/invalid session -> redirect to `/` before parsing an entity ID.
+- Cross-user detail ID -> `404`, never a serialized foreign row.
+- Invalid period/status/property filters -> controlled `400`.
+- Missing required mutation reason -> redirect/error without a write.
+
+#### 5. Good/Base/Bad Cases
+
+- Good: load a user-scoped repository model, map cents and status keys, then
+  render one shared view model for both breakpoints.
+- Base: empty lists render an explicit empty state with zero leakage.
+- Bad: querying a posted property ID without `user_id`, or rebuilding balances
+  from display strings in a mobile template.
+
+#### 6. Tests Required
+
+- Route authentication and method tests for every canonical endpoint.
+- Template tests for semantic `data-*` IDs, required reason/confirmation
+  markers, empty and partial states.
+- Disposable MySQL test with two users asserting list and detail isolation;
+  reset the database before and after the run.
+
+#### 7. Wrong vs Correct
+
+Wrong:
+
+```go
+db.First(&row, r.URL.Query().Get("property_id"))
+```
+
+Correct:
+
+```go
+row, err := repo.findProperty(ctx, sessionUserID, propertyID)
+```
+
+The route contract makes ownership and semantic page fields explicit at the
+server boundary instead of leaving either concern to a renderer.
+
+---
+
 ## Code Review Checklist
 
 <!-- What reviewers should check -->

@@ -126,6 +126,8 @@ type incomeTransaction struct {
 
 type billingPageData struct {
 	workspaceShell
+	PageKey           string
+	CanonicalPath     string
 	Connected         bool
 	NeedsReconnect    bool
 	LastSync          string
@@ -229,25 +231,44 @@ type expenseRecord struct {
 
 type tenantPageData struct {
 	workspaceShell
-	Message   string
-	Error     string
-	Rows      []tenantRecord
-	RentTotal string
-	ShowForm  bool
-	Editing   bool
-	Form      tenantRecord
+	PageKey       string
+	CanonicalPath string
+	Message       string
+	Error         string
+	Rows          []tenantRecord
+	RentTotal     string
+	ShowForm      bool
+	Editing       bool
+	Form          tenantRecord
 }
 
 type expensePageData struct {
 	workspaceShell
-	Message      string
-	Error        string
-	Rows         []expenseRecord
-	ExpenseTotal string
+	PageKey       string
+	CanonicalPath string
+	Message       string
+	Error         string
+	Rows          []expenseRecord
+	ExpenseTotal  string
+	Properties    []expensePropertyOption
+	Rooms         []expenseRoomOption
+}
+
+type expensePropertyOption struct {
+	ID   uint64
+	Name string
+}
+
+type expenseRoomOption struct {
+	ID         uint64
+	PropertyID uint64
+	Label      string
 }
 
 type rentDashboardPageData struct {
 	workspaceShell
+	PageKey                    string
+	CanonicalPath              string
 	Period                     string
 	PeriodLabel                string
 	PreviousPeriod             string
@@ -393,6 +414,17 @@ func main() {
 		log.Fatal(err)
 	}
 
+	mux := newAppMux(a)
+
+	log.Printf("TrueLayer demo listening on http://localhost%s", cfg.Address)
+	log.Printf("Redirect URI must be registered in TrueLayer Console: %s", cfg.RedirectURI)
+	log.Fatal(http.ListenAndServe(cfg.Address, mux))
+}
+
+// newAppMux is the single route registry used by the live server and by
+// handler tests. Canonical Figma routes are registered alongside the legacy
+// paths so existing bookmarks and form actions remain valid.
+func newAppMux(a *app) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.Handle("/static/", embeddedWebStaticHandler())
 	mux.HandleFunc("/", a.handleIndex)
@@ -400,7 +432,24 @@ func main() {
 	mux.HandleFunc("/logout", a.handleLogout)
 	mux.HandleFunc("/rent-dashboard", a.handleRentDashboard)
 	mux.HandleFunc("/rent-dashboard/settle", a.handleDashboardManualBalance)
-	mux.HandleFunc("/rooms/", a.handleRoomDetail)
+	mux.HandleFunc("/bills", a.handleBills)
+	mux.HandleFunc("/bills/settle/preview", a.handleManualBalancePreview)
+	mux.HandleFunc("/bills/settle", a.handleDashboardManualBalance)
+	mux.HandleFunc("/transactions", a.handleTransactions)
+	mux.HandleFunc("/transactions/confirm", a.handleRentMatchConfirmation)
+	mux.HandleFunc("/transactions/rematch", a.handleTransactionRematch)
+	mux.HandleFunc("/transactions/allocate", a.handleTransactionAllocation)
+	mux.HandleFunc("/transactions/ignore", a.handleTransactionIgnore)
+	mux.HandleFunc("/transactions/restore", a.handleTransactionRestore)
+	mux.HandleFunc("/transactions/revoke", a.handleTransactionRevoke)
+	mux.HandleFunc("/transactions/payer/preview", a.handlePayerPreview)
+	mux.HandleFunc("/transactions/payer/confirm", a.handlePayerConfirm)
+	mux.HandleFunc("/rooms", a.handleRooms)
+	mux.HandleFunc("/rooms/", a.handleRoomRoute)
+	mux.HandleFunc("/properties", a.handleProperties)
+	mux.HandleFunc("/properties/", a.handlePropertyRoute)
+	mux.HandleFunc("/tenancies", a.handleTenancies)
+	mux.HandleFunc("/dunning", a.handleDunningPage)
 	mux.HandleFunc("/dunning/config", a.handleDunningConfig)
 	mux.HandleFunc("/dunning/preview", a.handleDunningPreview)
 	mux.HandleFunc("/dunning/send", a.handleDunningSend)
@@ -419,15 +468,15 @@ func main() {
 	mux.HandleFunc("/cash-receipts/new", a.handleCashReceiptNew)
 	mux.HandleFunc("/cash-receipts/preview", a.handleCashReceiptPreview)
 	mux.HandleFunc("/cash-receipts/void", a.handleCashReceiptVoid)
-	mux.HandleFunc("/cash-receipts", a.handleCashReceiptCreate)
+	mux.HandleFunc("/cash-receipts", a.handleCashReceipts)
 	mux.HandleFunc("/expenses", a.handleExpenses)
+	mux.HandleFunc("/bank", a.handleBank)
+	mux.HandleFunc("/bank/connect", a.handleLogin)
+	mux.HandleFunc("/bank/sync", a.handleRefresh)
 	mux.HandleFunc("/login", a.handleLogin)
 	mux.HandleFunc("/callback", a.handleCallback)
 	mux.HandleFunc("/refresh", a.handleRefresh)
-
-	log.Printf("TrueLayer demo listening on http://localhost%s", cfg.Address)
-	log.Printf("Redirect URI must be registered in TrueLayer Console: %s", cfg.RedirectURI)
-	log.Fatal(http.ListenAndServe(cfg.Address, mux))
+	return mux
 }
 
 func loadConfig() (config, error) {
@@ -732,7 +781,12 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 	sortURL := func(sortValue string) string { return billingSortURL(r.URL.Query(), sortValue) }
 	data := billingPageData{
 		workspaceShell: workspaceShell{
-			ActivePage:    "billing",
+			ActivePage: func() string {
+				if r.URL.Path == "/transactions" {
+					return "transactions"
+				}
+				return "billing"
+			}(),
 			Username:      a.displayUsername(r),
 			Environment:   a.cfg.Environment,
 			FootNote:      "银行流水与租金关联",
@@ -741,6 +795,18 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 			TenantCount:   tenantCount,
 			ExpenseCount:  expenseCount,
 		},
+		PageKey: func() string {
+			if r.URL.Path == "/transactions" {
+				return "transactions"
+			}
+			return "billing"
+		}(),
+		CanonicalPath: func() string {
+			if r.URL.Path == "/transactions" {
+				return "/transactions"
+			}
+			return "/billing"
+		}(),
 		Connected:         connected,
 		NeedsReconnect:    r.URL.Query().Get("reconnect") == "1",
 		LastSync:          lastSync,
@@ -957,13 +1023,15 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 			IncomeCount:   incomeCount,
 			ExpenseCount:  expenseCount,
 		},
-		Message:   r.URL.Query().Get("message"),
-		Error:     r.URL.Query().Get("error"),
-		Rows:      tenants,
-		RentTotal: formatMoney(sumTenantRent(tenants), "EUR", 2),
-		ShowForm:  showForm,
-		Editing:   editing,
-		Form:      formRecord,
+		PageKey:       "tenants",
+		CanonicalPath: "/tenants",
+		Message:       r.URL.Query().Get("message"),
+		Error:         r.URL.Query().Get("error"),
+		Rows:          tenants,
+		RentTotal:     formatMoney(sumTenantRent(tenants), "EUR", 2),
+		ShowForm:      showForm,
+		Editing:       editing,
+		Form:          formRecord,
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tenantTemplate.Execute(w, data); err != nil {
@@ -1087,6 +1155,26 @@ func (a *app) handleExpenses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	prepareExpenses(expenses)
+	var expenseProperties []expensePropertyOption
+	var expenseRooms []expenseRoomOption
+	if userID, ok := a.currentUserID(r); ok && a.db != nil {
+		properties, propertyErr := newLandlordRentRepository(a.db).listProperties(r.Context(), userID, propertyQuery{Status: "active"})
+		if propertyErr != nil {
+			http.Error(w, propertyErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		for _, row := range properties {
+			expenseProperties = append(expenseProperties, expensePropertyOption{ID: row.ID, Name: row.Name})
+		}
+		rooms, roomErr := newLandlordRentRepository(a.db).listRooms(r.Context(), userID, roomQuery{Status: "active"})
+		if roomErr != nil {
+			http.Error(w, roomErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		for _, row := range rooms {
+			expenseRooms = append(expenseRooms, expenseRoomOption{ID: row.ID, PropertyID: row.PropertyID, Label: row.RoomLabel})
+		}
+	}
 	data := expensePageData{
 		workspaceShell: workspaceShell{
 			ActivePage:    "expenses",
@@ -1098,10 +1186,14 @@ func (a *app) handleExpenses(w http.ResponseWriter, r *http.Request) {
 			IncomeCount:   incomeCount,
 			ExpenseCount:  len(expenses),
 		},
-		Message:      r.URL.Query().Get("message"),
-		Error:        r.URL.Query().Get("error"),
-		Rows:         expenses,
-		ExpenseTotal: formatMoney(sumExpenses(expenses), "EUR", 2),
+		PageKey:       "expenses",
+		CanonicalPath: "/expenses",
+		Message:       r.URL.Query().Get("message"),
+		Error:         r.URL.Query().Get("error"),
+		Rows:          expenses,
+		ExpenseTotal:  formatMoney(sumExpenses(expenses), "EUR", 2),
+		Properties:    expenseProperties,
+		Rooms:         expenseRooms,
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := expenseTemplate.Execute(w, data); err != nil {
@@ -1138,6 +1230,9 @@ func (a *app) persistExpenseRecord(ctx context.Context, r *http.Request, values 
 	if userID, ok := a.currentUserID(r); ok && a.db != nil {
 		input, err := expenseInputFromForm(values, time.Now())
 		if err != nil {
+			return errInvalidExpenseInput
+		}
+		if input.PropertyID == nil {
 			return errInvalidExpenseInput
 		}
 		if _, err := newExpenseService(a.db).createExpense(ctx, userID, input); err != nil {
@@ -1287,13 +1382,13 @@ func (a *app) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		var err error
 		refreshToken, err = a.bankConnections.loadRefreshToken(r.Context(), userID)
 		if err != nil {
-			http.Redirect(w, r, "/billing?reconnect=1&error=no_saved_login", http.StatusFound)
+			http.Redirect(w, r, bankRefreshRedirect(r, "reconnect=1&error=no_saved_login"), http.StatusFound)
 			return
 		}
 	} else {
 		stored, err := a.loadStoredToken()
 		if err != nil {
-			http.Redirect(w, r, "/billing?reconnect=1&error=no_saved_login", http.StatusFound)
+			http.Redirect(w, r, bankRefreshRedirect(r, "reconnect=1&error=no_saved_login"), http.StatusFound)
 			return
 		}
 		refreshToken = stored.RefreshToken
@@ -1301,7 +1396,7 @@ func (a *app) handleRefresh(w http.ResponseWriter, r *http.Request) {
 
 	token, err := a.refreshAccessToken(r.Context(), refreshToken)
 	if err != nil {
-		http.Redirect(w, r, "/billing?reconnect=1&error=refresh_failed", http.StatusFound)
+		http.Redirect(w, r, bankRefreshRedirect(r, "reconnect=1&error=refresh_failed"), http.StatusFound)
 		return
 	}
 	if token.RefreshToken != "" && token.RefreshToken != refreshToken {
@@ -1319,7 +1414,7 @@ func (a *app) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC()
 	from, _, err := syncRequestWindow(bankSyncModeRefresh90d, a.cfg.From, now)
 	if err != nil {
-		http.Redirect(w, r, "/billing?error=data_fetch_failed", http.StatusFound)
+		http.Redirect(w, r, bankRefreshRedirect(r, "error=data_fetch_failed"), http.StatusFound)
 		return
 	}
 	userID, hasUser := a.currentUserID(r)
@@ -1341,7 +1436,7 @@ func (a *app) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err != nil {
-		http.Redirect(w, r, "/billing?error=data_fetch_failed", http.StatusFound)
+		http.Redirect(w, r, bankRefreshRedirect(r, "error=data_fetch_failed"), http.StatusFound)
 		return
 	}
 	if err := a.appendDemoResultLog(result); err != nil {
@@ -1350,14 +1445,14 @@ func (a *app) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 	if hasUser && a.db != nil {
 		if err := newTransactionService(a.db).ingestDemoResult(r.Context(), userID, result); err != nil {
-			http.Redirect(w, r, "/billing?error=data_fetch_failed", http.StatusFound)
+			http.Redirect(w, r, bankRefreshRedirect(r, "error=data_fetch_failed"), http.StatusFound)
 			return
 		}
 		if a.bankConnections != nil && syncResultHasSuccessfulAccount(result) {
 			_ = a.bankConnections.markLastSync(r.Context(), userID)
 		}
 	}
-	http.Redirect(w, r, "/billing?message=refreshed", http.StatusFound)
+	http.Redirect(w, r, bankRefreshRedirect(r, "message=refreshed"), http.StatusFound)
 }
 
 func (a *app) requireAuth(w http.ResponseWriter, r *http.Request) bool {
@@ -2403,6 +2498,10 @@ var expenseTemplate = newWorkspacePageTemplate("expenses", nil, `<!doctype html>
             <option>保险</option>
             <option>其他</option>
           </select>
+          {{if .Properties}}<label for="property_id">房产</label>
+          <select id="property_id" name="property_id" required><option value="">请选择房产</option>{{range .Properties}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
+          <label for="room_id">房间（可选）</label>
+          <select id="room_id" name="room_id"><option value="">房产级支出</option>{{range .Rooms}}<option value="{{.ID}}">{{.Label}}</option>{{end}}</select>{{end}}
           <label for="expense_date">日期</label>
           <input id="expense_date" name="expense_date" type="date">
           <label for="payment_method">付款方式</label>
@@ -2411,6 +2510,8 @@ var expenseTemplate = newWorkspacePageTemplate("expenses", nil, `<!doctype html>
           <input id="room_hint" name="room_hint">
           <label for="tenant_hint">租客备注</label>
           <input id="tenant_hint" name="tenant_hint">
+          <label for="invoice_url">发票链接（可选）</label>
+          <input id="invoice_url" name="invoice_url" type="url" placeholder="https://example.test/invoice">
           <input type="hidden" name="currency" value="EUR">
           <button class="btn primary" type="submit">保存支出</button>
         </form>
@@ -2423,7 +2524,7 @@ var expenseTemplate = newWorkspacePageTemplate("expenses", nil, `<!doctype html>
               <thead><tr><th>描述</th><th>金额</th><th>类别</th><th>日期</th><th>备注</th><th>付款方式</th></tr></thead>
               <tbody>
                 {{range .Rows}}
-                <tr><td><strong>{{.Description}}</strong><br><span class="mono">{{.ID}}</span></td><td class="amount expense">{{.AmountDisplay}}</td><td>{{.Category}}</td><td>{{.DateDisplay}}</td><td>{{if .RoomHint}}房间：{{.RoomHint}}<br>{{end}}{{if .TenantHint}}租客：{{.TenantHint}}{{else if not .RoomHint}}暂无备注{{end}}</td><td>{{.PaymentMethod}}</td></tr>
+                <tr><td><strong>{{.Description}}</strong><br><span class="mono">{{.ID}}</span></td><td class="amount expense">{{.AmountDisplay}}</td><td>{{.Category}}</td><td>{{.DateDisplay}}</td><td>{{if .RoomID}}房间 ID：{{.RoomID}}<br>{{end}}{{if .RoomHint}}房间：{{.RoomHint}}<br>{{end}}{{if .TenantHint}}租客：{{.TenantHint}}{{else if not .RoomHint}}暂无备注{{end}}</td><td>{{.PaymentMethod}}{{if .InvoiceURL}}<br><a href="{{.InvoiceURL}}" target="_blank" rel="noopener noreferrer">发票链接</a>{{end}}</td></tr>
                 {{end}}
               </tbody>
             </table>

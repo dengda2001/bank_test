@@ -11,8 +11,10 @@ import "html/template"
 // they had drifted apart: the two cash-receipt pages rendered no nav-count
 // badges, and the footer line carried three different captions.
 type workspaceShell struct {
-	// ActivePage selects the highlighted nav item: "rent-dashboard", "billing",
-	// "tenants" or "expenses".
+	// ActivePage selects the highlighted nav item. Canonical pages use
+	// "rent-dashboard", "bills", "transactions", "dunning", "properties",
+	// "rooms", "tenants", "tenancies", "cash-receipts", "expenses" or "bank";
+	// "billing" remains the legacy transaction alias.
 	ActivePage  string
 	Username    string
 	Environment string

@@ -3,7 +3,7 @@
   "name": "figma-page-data-routes",
   "title": "Figma 共享页面数据与路由",
   "description": "规范路由、受限读取模型、共享导航与操作流程接入",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

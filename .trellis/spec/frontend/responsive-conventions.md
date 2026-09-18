@@ -33,7 +33,7 @@ const workspacePageCSS = `...`
 const workspaceNav = `{{define "workspace-nav"}}...{{end}}`
 
 type workspaceShell struct {
-    ActivePage    string // "rent-dashboard" | "billing" | "tenants" | "expenses"
+    ActivePage    string // canonical page key: "rent-dashboard" | "bills" | "transactions" | "dunning" | "properties" | "rooms" | "tenants" | "tenancies" | "cash-receipts" | "expenses" | "bank"; legacy "billing" remains supported
     Username      string
     Environment   string
     FootNote      string

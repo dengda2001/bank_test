@@ -39,13 +39,39 @@ func (a *app) renderRentDashboard(w http.ResponseWriter, r *http.Request, action
 	}
 	data := rentDashboardPageData{
 		workspaceShell: workspaceShell{
-			ActivePage:    "rent-dashboard",
+			ActivePage: func() string {
+				if r.URL.Path == "/bills" {
+					return "bills"
+				}
+				if r.URL.Path == "/dunning" {
+					return "dunning"
+				}
+				return "rent-dashboard"
+			}(),
 			Username:      a.displayUsername(r),
 			Environment:   a.cfg.Environment,
 			FootNote:      "月度收租工作台",
 			ShowNavCounts: true,
 			NavLabel:      "主导航",
 		},
+		PageKey: func() string {
+			if r.URL.Path == "/bills" {
+				return "bills"
+			}
+			if r.URL.Path == "/dunning" {
+				return "dunning"
+			}
+			return "rent-dashboard"
+		}(),
+		CanonicalPath: func() string {
+			if r.URL.Path == "/bills" {
+				return "/bills"
+			}
+			if r.URL.Path == "/dunning" {
+				return "/dunning"
+			}
+			return "/rent-dashboard"
+		}(),
 		Period:         periodMonth.Format("2006-01"),
 		PeriodLabel:    fmt.Sprintf("%d年%d月", periodMonth.Year(), periodMonth.Month()),
 		PreviousPeriod: periodMonth.AddDate(0, -1, 0).Format("2006-01"),
@@ -409,7 +435,7 @@ var rentDashboardTemplate = newWorkspacePageTemplate("rent-dashboard", template.
           <div class="table-wrap"><table>
             <thead><tr><th><a class="sort-link{{if .TenantSort.Active}} active{{end}}" href="{{.TenantSort.URL}}">租客{{if .TenantSort.Arrow}}<span class="sort-arrow">{{.TenantSort.Arrow}}</span>{{end}}</a></th><th>房间</th><th><a class="sort-link{{if .DueSort.Active}} active{{end}}" href="{{.DueSort.URL}}">应缴日{{if .DueSort.Arrow}}<span class="sort-arrow">{{.DueSort.Arrow}}</span>{{end}}</a></th><th><a class="sort-link{{if .AmountSort.Active}} active{{end}}" href="{{.AmountSort.URL}}">应收{{if .AmountSort.Arrow}}<span class="sort-arrow">{{.AmountSort.Arrow}}</span>{{end}}</a></th><th>已收</th><th>未收</th><th><a class="sort-link{{if .StatusSort.Active}} active{{end}}" href="{{.StatusSort.URL}}">状态{{if .StatusSort.Arrow}}<span class="sort-arrow">{{.StatusSort.Arrow}}</span>{{end}}</a></th></tr></thead>
             <tbody>{{range .Rows}}
-	            <tr class="rent-row" tabindex="0" role="button" aria-expanded="false" aria-controls="rent-details-{{.ObligationID}}" data-details-target="rent-details-{{.ObligationID}}"><td><a class="tenant-link" href="/tenants/{{.TenantID}}?from_month={{.Period}}&amp;to_month={{.Period}}"><strong>{{.TenantName}}</strong></a>{{if .TenantAlias}}<br><span class="tiny">别名：{{.TenantAlias}}</span>{{end}}</td><td>{{if .RoomLabel}}{{.RoomLabel}}<br>{{end}}{{.RoomAddress}}</td><td class="mono">{{.DueDate}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td><div class="status-actions"><span class="status {{.Status}}">{{.StatusLabel}}</span>{{if gt .ExpectedCents .PaidCents}}<form class="manual-balance-form" method="post" action="/rent-dashboard/settle" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()" onsubmit="return confirm('确认一键平账吗？')"><input type="hidden" name="obligation_id" value="{{.ObligationID}}"><input type="hidden" name="period" value="{{$.Period}}"><input type="hidden" name="search" value="{{$.SearchFilter}}"><input type="hidden" name="status" value="{{$.StatusFilter}}"><input type="hidden" name="sort" value="{{$.SortFilter}}"><input type="hidden" name="page" value="{{$.Page}}"><input type="hidden" name="page_size" value="{{$.PageSize}}"><button class="btn subtle" type="submit">一键平账</button></form>{{end}}</div></td></tr>
+	            <tr class="rent-row" tabindex="0" role="button" aria-expanded="false" aria-controls="rent-details-{{.ObligationID}}" data-details-target="rent-details-{{.ObligationID}}"><td><a class="tenant-link" href="/tenants/{{.TenantID}}?from_month={{.Period}}&amp;to_month={{.Period}}"><strong>{{.TenantName}}</strong></a>{{if .TenantAlias}}<br><span class="tiny">别名：{{.TenantAlias}}</span>{{end}}</td><td>{{if .RoomLabel}}{{.RoomLabel}}<br>{{end}}{{.RoomAddress}}</td><td class="mono">{{.DueDate}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td><div class="status-actions"><span class="status {{.Status}}">{{.StatusLabel}}</span>{{if gt .ExpectedCents .PaidCents}}<form class="manual-balance-form" method="post" action="/rent-dashboard/settle" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()" onsubmit="return confirm('确认一键平账吗？')"><input type="hidden" name="obligation_id" value="{{.ObligationID}}"><input type="hidden" name="period" value="{{$.Period}}"><input type="hidden" name="search" value="{{$.SearchFilter}}"><input type="hidden" name="status" value="{{$.StatusFilter}}"><input type="hidden" name="sort" value="{{$.SortFilter}}"><input type="hidden" name="page" value="{{$.Page}}"><input type="hidden" name="page_size" value="{{$.PageSize}}"><input name="reason" maxlength="512" placeholder="填写平账原因" aria-label="平账原因" required><button class="btn subtle" type="submit">一键平账</button></form>{{end}}</div></td></tr>
               <tr id="rent-details-{{.ObligationID}}" class="rent-details" hidden><td colspan="7"><div class="payment-list"><h3>收款明细 · <a class="tenant-link" href="/cash-receipts/new?tenant_id={{.TenantID}}&amp;period={{.Period}}">补录现金</a></h3>{{if .Payments}}{{range .Payments}}<div class="payment-item"><span class="amount">{{.AmountDisplay}}</span><span class="mono">{{.DateDisplay}}</span><span class="payment-description">{{.Description}}</span><span class="mono">{{if eq .Source "现金"}}现金 · {{end}}{{.ConfirmationSource}}{{if eq .Source "现金"}} · <a class="void-link" href="/cash-receipts/void?receipt_id={{.PaymentID}}">撤销</a>{{end}}</span></div>{{end}}{{else}}<div class="tiny">本月暂无已确认收款。</div>{{end}}</div></td></tr>
             {{end}}</tbody>
   	    </table></div>
@@ -455,10 +481,10 @@ var rentDashboardTemplate = newWorkspacePageTemplate("rent-dashboard", template.
 	          <div class="dunning-candidates">
 	            {{if .Dunning.Candidates}}{{range .Dunning.Candidates}}<label class="dunning-candidate{{if not .Selectable}} is-disabled{{end}}"><input type="checkbox" name="obligation_id" value="{{.ObligationID}}"{{if .Selected}} checked{{end}}{{if not .Selectable}} disabled{{end}}><span><strong>{{.TenantName}}</strong><span class="tiny">{{.Email}}{{if not .EmailValid}} · {{.EmailError}}{{else if .SentToday}} · 今天已发送{{else if .LastDunningStatus}} · 最近：{{dunningDeliveryLabel .LastDunningStatus}}{{end}}</span></span><span class="amount">{{.BalanceAmount}}</span></label>{{end}}{{else}}<div class="empty">当前页没有可催缴账单。</div>{{end}}
 	          </div>
-	          <div class="dunning-actions"><button class="btn subtle" type="submit" formaction="/dunning/preview">预览邮件</button><label><input type="checkbox" name="confirm_resend" value="1">确认同日重发</label><button class="btn" type="submit" formaction="/dunning/send">发送已选</button></div>
+	          <div class="dunning-actions"><button class="btn subtle" type="submit" formaction="/dunning/preview">预览邮件</button><label><input type="checkbox" name="confirm_resend" value="1">确认同日重发</label><button class="btn" type="submit" formaction="/dunning/send" onclick="return confirm('确认发送催收邮件吗？')">发送已选</button></div>
 	        </form>
 	        {{if .Dunning.PreviewRows}}<div class="dunning-preview" aria-live="polite"><div class="label">发送前预览</div>{{range .Dunning.PreviewRows}}<article class="dunning-preview-row"><strong>{{.Candidate.TenantName}}</strong>{{if .Message}}<div>{{.Message.Subject}} · {{.Message.RecipientEmail}}</div><pre>{{.Message.Body}}</pre>{{else}}<div class="result-error">{{.Error}}</div>{{end}}</article>{{end}}</div>{{end}}
-	        {{if .Dunning.Results}}<div class="dunning-results" aria-live="polite"><div class="label">发送结果</div>{{range .Dunning.Results}}<article class="dunning-result-row{{if .Attempt}}{{if eq .Attempt.DeliveryStatus "failed"}} failed{{else if eq .Attempt.DeliveryStatus "skipped"}} skipped{{end}}{{end}}"><strong>{{.Candidate.TenantName}}</strong>{{if .Attempt}}<span>{{dunningDeliveryLabel .Attempt.DeliveryStatus}}</span>{{end}}{{if .Error}}<span class="result-error">{{.Error}}</span>{{end}}{{if and .Attempt (eq .Attempt.DeliveryStatus "failed")}}<form class="dunning-retry" method="post" action="/dunning/send"><input type="hidden" name="period" value="{{$.Dunning.Period}}"><input type="hidden" name="search" value="{{$.Dunning.SearchFilter}}"><input type="hidden" name="status" value="{{$.Dunning.StatusFilter}}"><input type="hidden" name="sort" value="{{$.Dunning.SortFilter}}"><input type="hidden" name="page" value="{{$.Dunning.Page}}"><input type="hidden" name="page_size" value="{{$.Dunning.PageSize}}"><input type="hidden" name="request_key" value="{{.RetryRequestKey}}"><input type="hidden" name="obligation_id" value="{{.Candidate.ObligationID}}"><input type="hidden" name="retry_of_attempt_id" value="{{.Attempt.ID}}"><button class="btn subtle" type="submit">重试此人</button></form>{{end}}</article>{{end}}</div>{{end}}
+        {{if .Dunning.Results}}<div class="dunning-results" aria-live="polite"><div class="label">发送结果</div>{{range .Dunning.Results}}<article class="dunning-result-row{{if .Attempt}}{{if eq .Attempt.DeliveryStatus "failed"}} failed{{else if eq .Attempt.DeliveryStatus "skipped"}} skipped{{end}}{{end}}"><strong>{{.Candidate.TenantName}}</strong>{{if .Attempt}}<span>{{dunningDeliveryLabel .Attempt.DeliveryStatus}}</span>{{end}}{{if .Error}}<span class="result-error">{{.Error}}</span>{{end}}{{if and .Attempt (eq .Attempt.DeliveryStatus "failed")}}<form class="dunning-retry" method="post" action="/dunning/send"><input type="hidden" name="period" value="{{$.Dunning.Period}}"><input type="hidden" name="search" value="{{$.Dunning.SearchFilter}}"><input type="hidden" name="status" value="{{$.Dunning.StatusFilter}}"><input type="hidden" name="sort" value="{{$.Dunning.SortFilter}}"><input type="hidden" name="page" value="{{$.Dunning.Page}}"><input type="hidden" name="page_size" value="{{$.Dunning.PageSize}}"><input type="hidden" name="request_key" value="{{.RetryRequestKey}}"><input type="hidden" name="obligation_id" value="{{.Candidate.ObligationID}}"><input type="hidden" name="retry_of_attempt_id" value="{{.Attempt.ID}}"><button class="btn subtle" type="submit" onclick="return confirm('确认重试催收吗？')">重试此人</button></form>{{end}}</article>{{end}}</div>{{end}}
 	      </section>
 	    </div>
 	  </section>

@@ -39,7 +39,12 @@ func rentWorkspacePageFromData(a *app, r *http.Request, data rentWorkspaceData, 
 	period := monthStart(data.Filters.PeriodMonth)
 	return rentWorkspacePageData{
 		workspaceShell: workspaceShell{
-			ActivePage:    "rent-dashboard",
+			ActivePage: func() string {
+				if r.URL.Path == "/bills" {
+					return "bills"
+				}
+				return "rent-dashboard"
+			}(),
 			Username:      a.displayUsername(r),
 			Environment:   a.cfg.Environment,
 			FootNote:      "月度收租工作台",
