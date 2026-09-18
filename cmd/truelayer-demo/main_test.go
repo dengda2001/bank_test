@@ -1405,9 +1405,11 @@ func TestTenantActiveInMonthUsesRentDatesWithoutProration(t *testing.T) {
 	rentStart := time.Date(2026, 9, 20, 0, 0, 0, 0, time.UTC)
 	rentEnd := time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC)
 	row := tenant{
-		Status:        "active",
-		RentStartDate: rentStart,
-		RentEndDate:   &rentEnd,
+		Status:           "active",
+		MonthlyRentCents: 100000,
+		Currency:         "EUR",
+		RentStartDate:    rentStart,
+		RentEndDate:      &rentEnd,
 	}
 
 	if !tenantActiveInMonth(row, time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)) {
@@ -1424,6 +1426,8 @@ func TestTenantActiveInMonthUsesRentDatesWithoutProration(t *testing.T) {
 func TestTenantActiveInMonthRespectsBillingStartDate(t *testing.T) {
 	row := tenant{
 		Status:           "active",
+		MonthlyRentCents: 100000,
+		Currency:         "EUR",
 		RentStartDate:    time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 		BillingStartDate: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC),
 	}

@@ -288,6 +288,7 @@ func TestMobileDunningUsesSafeBottomSheet(t *testing.T) {
 		`.dunning-drawer { position: fixed; left: 8px; right: 8px; bottom: calc(76px + env(safe-area-inset-bottom));`,
 		`max-height: calc(100vh - 96px - env(safe-area-inset-bottom));`,
 		`overflow: auto;`,
+		`background: var(--surface);`,
 		`data-dunning-open`,
 		`onclick="return confirm('确认发送催收邮件吗？')"`,
 	} {

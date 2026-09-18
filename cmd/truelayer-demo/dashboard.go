@@ -391,7 +391,7 @@ var rentDashboardTemplate = newWorkspacePageTemplate("rent-dashboard", template.
         text-underline-offset: 3px;
       }
 	      .tenant-link:hover { text-decoration-color: currentColor; }
-	      .dunning-drawer { position: fixed; left: 8px; right: 8px; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 50; max-height: calc(100vh - 96px - env(safe-area-inset-bottom)); overflow: auto; margin: 0; padding: 14px; box-shadow: 0 18px 44px rgba(15, 23, 42, 0.24); }
+	      .dunning-drawer { position: fixed; left: 8px; right: 8px; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 50; max-height: calc(100vh - 96px - env(safe-area-inset-bottom)); overflow: auto; margin: 0; padding: 14px; background: var(--surface); box-shadow: 0 18px 44px rgba(15, 23, 42, 0.24); }
 	      .dunning-drawer .dunning-grid { gap: 14px; }
 	      .dunning-drawer .dunning-config { padding-right: 0; padding-bottom: 14px; border-right: 0; border-bottom: 1px solid var(--border); }
 	    }
