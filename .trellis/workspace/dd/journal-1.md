@@ -757,3 +757,37 @@ Completed the existing 09-19 mobile workspace task: five-item bottom navigation 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 22: Complete Figma prototype task tree integration
+
+**Date**: 2026-09-19
+**Task**: Complete Figma prototype task tree integration
+**Branch**: `main`
+
+### Summary
+
+Ran the existing Figma parent integration task after all four child tasks were already archived. Fixed incomplete tenant-date test fixtures, made the mobile dunning sheet opaque above the fixed navigation, verified all canonical desktop/mobile routes and forms with Chrome, captured integration screenshots, and passed go test ./..., go vet ./..., and the cleaned MySQL isolation test. Archived the parent task without touching unrelated run-truelayer-demo.sh or user files.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c155988` | (see git log) |
+| `a5d50ce` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
