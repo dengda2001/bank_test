@@ -323,8 +323,10 @@ var rentDashboardTemplate = newWorkspacePageTemplate("rent-dashboard", template.
 	    @media (max-width: 760px) { .dunning-grid { grid-template-columns: 1fr; } .dunning-config { padding-right: 0; padding-bottom: 16px; border-right: 0; border-bottom: 1px solid var(--border); } .dunning-result-row { align-items: flex-start; } .dunning-retry { width: 100%; margin-left: 0; } }
 	    @media (max-width: 760px) { .payment-item { grid-template-columns: 1fr 1fr; } .payment-item .payment-description { grid-column: 1 / -1; } }
     @media (max-width: 900px) { .dashboard-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-    @media (max-width: 640px) {
-	      .dashboard-summary { grid-template-columns: 1fr; }
+	    @media (max-width: 640px) {
+	      .dashboard-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	      .dashboard-summary .metric strong { font-size: 20px; letter-spacing: -0.05em; white-space: nowrap; }
+	      .topbar .brand-title { font-size: 12px; }
       .dashboard-toolbar { justify-content: stretch; }
       .dashboard-toolbar .period-picker { display: grid; width: 100%; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: 8px; }
       .dashboard-toolbar .period-label { display: none; }
@@ -369,8 +371,11 @@ var rentDashboardTemplate = newWorkspacePageTemplate("rent-dashboard", template.
         text-decoration: underline dashed var(--border-strong);
         text-underline-offset: 3px;
       }
-      .tenant-link:hover { text-decoration-color: currentColor; }
-    }
+	      .tenant-link:hover { text-decoration-color: currentColor; }
+	    }
+	    @media (max-width: 359px) {
+	      .dashboard-summary { grid-template-columns: 1fr; }
+	    }
   </style>
   <script>`+workspaceCalendarScript+`</script>
 </head>
