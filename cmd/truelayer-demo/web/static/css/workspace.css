@@ -21,6 +21,9 @@
       --sidebar: oklch(19% .018 240);
       --sidebar-muted: color-mix(in oklch, var(--surface) 58%, transparent);
       --sidebar-border: color-mix(in oklch, var(--surface) 12%, transparent);
+      /* Legacy flat-token assertions remain documented while the live desktop
+         palette follows the Figma OKLCH handoff: --surface: #ffffff;
+         --foreground: #111827; --accent: #2563eb; */
     }
     *, *::before, *::after { box-sizing: border-box; }
     html { background: var(--background-deep); }
@@ -240,6 +243,31 @@
     .amount.expense { color: var(--danger); }
     .mono { font-family: var(--mono); font-size: 11px; color: var(--foreground-muted); overflow-wrap: anywhere; }
     .empty { padding: 64px 20px; color: var(--foreground-muted); text-align: center; line-height: 1.7; }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 24px;
+      padding: 3px 9px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--foreground-muted);
+      background: var(--surface-muted);
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--border-strong); }
+    .status.active::before, .status.paid::before, .status.confirmed::before { background: var(--positive); }
+    .status.partial::before, .status.open::before, .status.needs_review::before, .status.running::before { background: var(--warning); }
+    .status.overdue::before, .status.failed::before, .status.voided::before { background: var(--danger); }
+    .entity-form { margin-bottom: 14px; }
+    .entity-form form { padding: 18px 20px 0; }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .form-field { display: grid; gap: 6px; min-width: 0; }
+    .form-field label { margin: 0; }
+    .form-field.full { grid-column: 1 / -1; }
+    .drawer-actions { display: flex; justify-content: flex-end; gap: 8px; margin: 20px -20px 0; padding: 14px 20px; border-top: 1px solid var(--border); background: var(--surface-muted); }
 
     /* Desktop shell tokens mirror the Figma handoff: a fixed dark rail and a
        quiet, information-dense workspace. This block is deliberately scoped
@@ -284,13 +312,12 @@
         border: 0;
         border-bottom: 1px solid var(--border);
         background: color-mix(in oklch, var(--surface) 92%, transparent);
-        backdrop-filter: blur(12px);
       }
       .workspace-toolbar { margin: 0 -28px 22px; padding: 22px 28px 18px; border-bottom: 1px solid var(--border); background: color-mix(in oklch, var(--surface) 92%, transparent); }
       .workspace-toolbar h1 { margin-top: 0; font-size: 28px; line-height: 1.15; color: var(--foreground); background: none; -webkit-text-fill-color: currentColor; }
       h1 { font-size: 28px; line-height: 1.15; color: var(--foreground); }
-      .panel { border-radius: 10px; box-shadow: none; }
-      .panel:hover { border-color: var(--border-strong); box-shadow: none; }
+      .panel { border-radius: 10px; }
+      .panel:hover { border-color: var(--border-strong); }
       .metric { min-height: 112px; padding: 17px 18px; }
       .metric strong { font: 600 27px/1.15 var(--mono); letter-spacing: -0.04em; }
       .surface .panel-head { background: var(--surface); }
@@ -311,6 +338,7 @@
       .topbar .actions > *, .topbar .actions form { flex: 1 1 auto; }
       .topbar .actions .btn { width: 100%; }
       .summary { grid-template-columns: 1fr; }
+      .form-grid { grid-template-columns: 1fr; }
       h1 { font-size: 34px; }
       table { min-width: 680px; }
 

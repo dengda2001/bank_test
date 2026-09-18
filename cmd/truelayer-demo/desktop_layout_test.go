@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 )
@@ -33,6 +34,53 @@ func TestWorkspaceNavExposesDesktopSections(t *testing.T) {
 	} {
 		if !strings.Contains(workspaceNav, marker) {
 			t.Fatalf("workspace nav missing %q", marker)
+		}
+	}
+}
+
+func TestDesktopAssetFormsExposeCreateAndEditControls(t *testing.T) {
+	propertyPage := propertyPageData{
+		workspaceShell: workspaceShell{Username: "owner", Environment: "test"},
+		ShowForm:       true,
+		Form:           propertyPageForm{},
+	}
+	var propertyHTML bytes.Buffer
+	if err := propertyPageTemplate.Execute(&propertyHTML, propertyPage); err != nil {
+		t.Fatalf("render property form: %v", err)
+	}
+	for _, marker := range []string{`action="/properties"`, `name="name"`, `name="address"`, `保存房产`} {
+		if !strings.Contains(propertyHTML.String(), marker) {
+			t.Fatalf("property create form missing %q", marker)
+		}
+	}
+
+	roomPage := roomPageData{
+		workspaceShell: workspaceShell{Username: "owner", Environment: "test"},
+		ShowForm:       true,
+		Form:           roomPageForm{PropertyID: 7, ActiveFrom: "2026-09"},
+		Properties:     []propertyPageRow{{ID: 7, Name: "天河一号"}},
+	}
+	var roomHTML bytes.Buffer
+	if err := roomPageTemplate.Execute(&roomHTML, roomPage); err != nil {
+		t.Fatalf("render room form: %v", err)
+	}
+	for _, marker := range []string{`action="/rooms"`, `name="property_id"`, `name="room_label"`, `name="active_from"`, `天河一号`} {
+		if !strings.Contains(roomHTML.String(), marker) {
+			t.Fatalf("room create form missing %q", marker)
+		}
+	}
+
+	var editHTML bytes.Buffer
+	if err := roomEditPageTemplate.Execute(&editHTML, roomEditPageData{
+		workspaceShell: workspaceShell{Username: "owner", Environment: "test"},
+		Form:           roomPageForm{ID: 9, PropertyID: 7, RoomLabel: "B-201", ActiveFrom: "2026-09"},
+		Properties:     []propertyPageRow{{ID: 7, Name: "天河一号"}},
+	}); err != nil {
+		t.Fatalf("render room edit form: %v", err)
+	}
+	for _, marker := range []string{`action="/rooms/9"`, `value="B-201"`, `value="2026-09"`, `selected`} {
+		if !strings.Contains(editHTML.String(), marker) {
+			t.Fatalf("room edit form missing %q", marker)
 		}
 	}
 }

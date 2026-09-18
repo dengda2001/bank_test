@@ -51,9 +51,17 @@ type propertyPageData struct {
 	Period       string
 	PeriodLabel  string
 	Rows         []propertyPageRow
+	Form         propertyPageForm
+	ShowForm     bool
 	Message      string
 	Error        string
 	StatusFilter string
+}
+
+type propertyPageForm struct {
+	ID      uint64
+	Name    string
+	Address string
 }
 
 type propertyDetailPageData struct {
@@ -95,9 +103,25 @@ type roomPageData struct {
 	PeriodLabel string
 	Rows        []roomPageRow
 	Properties  []propertyPageRow
+	Form        roomPageForm
+	ShowForm    bool
 	Message     string
 	Error       string
 	PropertyID  uint64
+}
+
+type roomPageForm struct {
+	ID         uint64
+	PropertyID uint64
+	RoomLabel  string
+	ActiveFrom string
+}
+
+type roomEditPageData struct {
+	workspaceShell
+	Form       roomPageForm
+	Properties []propertyPageRow
+	Error      string
 }
 
 type tenancyPartyView struct {
@@ -335,6 +359,10 @@ func (a *app) handleRoomRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodGet {
+		if r.URL.Query().Get("edit") == "1" {
+			a.handleRoomEdit(w, r, path)
+			return
+		}
 		a.handleRoomDetail(w, r)
 		return
 	}
@@ -343,6 +371,46 @@ func (a *app) handleRoomRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+}
+
+func (a *app) handleRoomEdit(w http.ResponseWriter, r *http.Request, pathID string) {
+	if !a.requireAuth(w, r) {
+		return
+	}
+	roomID, err := parsePositiveUint(pathID)
+	if err != nil || a.db == nil {
+		http.NotFound(w, r)
+		return
+	}
+	userID, ok := a.currentUserID(r)
+	if !ok {
+		http.Error(w, "database session required", http.StatusServiceUnavailable)
+		return
+	}
+	repo := newLandlordRentRepository(a.db)
+	roomRow, err := repo.findRoom(r.Context(), userID, roomID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	properties, err := repo.listProperties(r.Context(), userID, propertyQuery{Status: "active"})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	propertyRows := make([]propertyPageRow, 0, len(properties))
+	for _, propertyRow := range properties {
+		propertyRows = append(propertyRows, propertyPageRow{ID: propertyRow.ID, Name: propertyRow.Name, Address: propertyAddress(propertyRow), Status: propertyRow.Status, StatusLabel: pageStatusLabel(propertyRow.Status)})
+	}
+	data := roomEditPageData{workspaceShell: canonicalPageShell(a, r, "rooms", "房间编辑"), Form: roomPageForm{ID: roomRow.ID, PropertyID: roomRow.PropertyID, RoomLabel: roomRow.RoomLabel, ActiveFrom: roomRow.ActiveFrom.Format("2006-01")}, Properties: propertyRows, Error: r.URL.Query().Get("error")}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := roomEditPageTemplate.Execute(w, data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func (a *app) handlePropertyRoute(w http.ResponseWriter, r *http.Request) {
@@ -471,6 +539,8 @@ func (a *app) handleProperties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data.workspaceShell = canonicalPageShell(a, r, "properties", "房产与房间管理")
+	data.ShowForm = r.URL.Query().Get("add") == "1"
+	data.Form = propertyPageForm{}
 	data.Message, data.Error = r.URL.Query().Get("message"), r.URL.Query().Get("error")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := propertyPageTemplate.Execute(w, data); err != nil {
@@ -699,7 +769,7 @@ func (a *app) handleRooms(w http.ResponseWriter, r *http.Request) {
 	for _, row := range properties {
 		propertyRows = append(propertyRows, propertyPageRow{ID: row.ID, Name: row.Name, Address: propertyAddress(row), Status: row.Status, StatusLabel: pageStatusLabel(row.Status)})
 	}
-	data := roomPageData{workspaceShell: canonicalPageShell(a, r, "rooms", "房间与房产绑定"), Period: period.Format("2006-01"), PeriodLabel: formatMonthLabel(period), Rows: rows, Properties: propertyRows, PropertyID: propertyID, Message: r.URL.Query().Get("message"), Error: r.URL.Query().Get("error")}
+	data := roomPageData{workspaceShell: canonicalPageShell(a, r, "rooms", "房间与房产绑定"), Period: period.Format("2006-01"), PeriodLabel: formatMonthLabel(period), Rows: rows, Properties: propertyRows, PropertyID: propertyID, ShowForm: r.URL.Query().Get("add") == "1", Form: roomPageForm{PropertyID: propertyID, ActiveFrom: period.Format("2006-01")}, Message: r.URL.Query().Get("message"), Error: r.URL.Query().Get("error")}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := roomPageTemplate.Execute(w, data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1010,11 +1080,13 @@ func (a *app) handleManualBalancePreview(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-var propertyPageTemplate = newWorkspacePageTemplate("properties-page", template.FuncMap{"actionMethod": func(action pageActionView) string { return action.Method }}, `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>RentOps Properties</title><style>`+workspacePageCSS+`</style></head><body><div class="app">{{template "workspace-nav" .}}<main class="content"><header class="topbar"><div><div class="brand-title">资产管理</div><h1>房产</h1><div class="tiny">{{.PeriodLabel}} · {{len .Rows}} 套</div></div><a class="btn primary" href="/properties?add=1">新建房产</a></header>{{if .Message}}<div class="notice ok">{{.Message}}</div>{{end}}{{if .Error}}<div class="notice error">{{.Error}}</div>{{end}}<section class="panel surface"><div class="panel-head"><h2>房产列表</h2><form method="get" action="/properties"><label class="tiny">状态<select name="status"><option value="active"{{if eq .StatusFilter "active"}} selected{{end}}>有效</option><option value="inactive"{{if eq .StatusFilter "inactive"}} selected{{end}}>已停用</option><option value="all"{{if eq .StatusFilter "all"}} selected{{end}}>全部</option></select></label></form></div>{{if .Rows}}<div class="table-wrap"><table><thead><tr><th>房产</th><th>房间</th><th>本月应收</th><th>已收</th><th>支出</th><th>状态</th><th>操作</th></tr></thead><tbody>{{range .Rows}}<tr data-page="properties" data-property-id="{{.ID}}"><td><a href="/properties/{{.ID}}"><strong>{{.Name}}</strong></a><br><span class="tiny">{{.Address}}</span></td><td>{{.ActiveRoomCount}} / {{.RoomCount}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.ExpenseAmount}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span></td><td>{{range .Actions}}<form method="post" action="{{.URL}}" style="display:inline"><input type="hidden" name="action" value="{{.Key}}"><button class="btn subtle" type="submit"{{if .RequiresConfirmation}} data-confirm="true"{{end}}>{{.Label}}</button></form>{{end}}</td></tr>{{end}}</tbody></table></div>{{else}}<div class="empty">还没有房产，先创建一套房产。</div>{{end}}</section></main></div></body></html>`)
+var propertyPageTemplate = newWorkspacePageTemplate("properties-page", template.FuncMap{"actionMethod": func(action pageActionView) string { return action.Method }}, `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>RentOps Properties</title><style>`+workspacePageCSS+`</style></head><body><div class="app">{{template "workspace-nav" .}}<main class="content"><header class="topbar"><div><div class="brand-title">资产管理</div><h1>房产</h1><div class="tiny">{{.PeriodLabel}} · {{len .Rows}} 套</div></div><a class="btn primary" href="/properties?add=1">新建房产</a></header>{{if .Message}}<div class="notice ok">{{.Message}}</div>{{end}}{{if .Error}}<div class="notice error">{{.Error}}</div>{{end}}{{if .ShowForm}}<section class="panel surface entity-form" aria-labelledby="property-form-title"><div class="panel-head"><div><h2 id="property-form-title">新建房产</h2><p class="tiny">先建立房产，再绑定房间。</p></div><a class="btn subtle" href="/properties">取消</a></div><form method="post" action="/properties"><input type="hidden" name="action" value="save"><div class="form-grid"><div class="form-field"><label for="property-name">房产名称</label><input id="property-name" name="name" maxlength="191" required></div><div class="form-field"><label for="property-address">地址</label><input id="property-address" name="address" maxlength="1000"></div></div><div class="drawer-actions"><button class="btn primary" type="submit">保存房产</button></div></form></section>{{end}}<section class="panel surface"><div class="panel-head"><h2>房产列表</h2><form method="get" action="/properties"><label class="tiny">状态<select name="status"><option value="active"{{if eq .StatusFilter "active"}} selected{{end}}>有效</option><option value="inactive"{{if eq .StatusFilter "inactive"}} selected{{end}}>已停用</option><option value="all"{{if eq .StatusFilter "all"}} selected{{end}}>全部</option></select></label></form></div>{{if .Rows}}<div class="table-wrap"><table><thead><tr><th>房产</th><th>房间</th><th>本月应收</th><th>已收</th><th>支出</th><th>状态</th><th>操作</th></tr></thead><tbody>{{range .Rows}}<tr data-page="properties" data-property-id="{{.ID}}"><td><a href="/properties/{{.ID}}"><strong>{{.Name}}</strong></a><br><span class="tiny">{{.Address}}</span></td><td>{{.ActiveRoomCount}} / {{.RoomCount}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.ExpenseAmount}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span></td><td>{{range .Actions}}<form method="post" action="{{.URL}}" style="display:inline"><input type="hidden" name="action" value="{{.Key}}"><button class="btn subtle" type="submit"{{if .RequiresConfirmation}} data-confirm="true"{{end}}>{{.Label}}</button></form>{{end}}</td></tr>{{end}}</tbody></table></div>{{else}}<div class="empty">还没有房产，先创建一套房产。</div>{{end}}</section></main></div></body></html>`)
 
-var propertyDetailPageTemplate = newWorkspacePageTemplate("property-detail-page", nil, `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>RentOps Property</title><style>`+workspacePageCSS+`</style></head><body><div class="app">{{template "workspace-nav" .}}<main class="content"><header class="topbar"><div><div class="brand-title">房产详情</div><h1>{{.Property.Name}}</h1><div class="tiny">{{.Property.Address}} · {{.Property.StatusLabel}}</div></div><a class="btn" href="/properties">返回房产</a></header>{{if .Message}}<div class="notice ok">{{.Message}}</div>{{end}}{{if .Error}}<div class="notice error">{{.Error}}</div>{{end}}{{if .Editing}}<section class="panel surface"><div class="panel-head"><h2>编辑房产</h2></div><form method="post" action="/properties/{{.Property.ID}}"><input type="hidden" name="action" value="save"><label for="property-name">名称</label><input id="property-name" name="name" value="{{.Property.Name}}" required maxlength="191"><label for="property-address">地址</label><input id="property-address" name="address" value="{{.Property.Address}}" maxlength="512"><button class="btn primary" type="submit">保存房产</button></form></section>{{end}}<section class="summary"><div class="panel metric"><div class="label">房间</div><strong>{{.Property.ActiveRoomCount}} / {{.Property.RoomCount}}</strong><span>有效／全部</span></div><div class="panel metric"><div class="label">本月应收</div><strong>{{.Property.ExpectedAmount}}</strong></div><div class="panel metric"><div class="label">已收</div><strong>{{.Property.PaidAmount}}</strong></div><div class="panel metric"><div class="label">支出</div><strong>{{.Property.ExpenseAmount}}</strong></div></section><section class="panel surface"><div class="panel-head"><h2>房间</h2><a class="btn primary" href="/rooms?property_id={{.Property.ID}}&amp;add=1">新建房间</a></div>{{if .Rooms}}<div class="table-wrap"><table><thead><tr><th>房间</th><th>入住人</th><th>月租</th><th>状态</th><th>操作</th></tr></thead><tbody>{{range .Rooms}}<tr><td><a href="/rooms/{{.ID}}"><strong>{{.RoomLabel}}</strong></a><br><span class="tiny">{{.PropertyName}}</span></td><td>{{range $index, $name := .TenantNames}}{{if $index}}, {{end}}{{$name}}{{else}}空置{{end}}</td><td class="amount">{{.MonthlyRent}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span></td><td><a class="btn subtle" href="/rooms/{{.ID}}">详情</a></td></tr>{{end}}</tbody></table></div>{{else}}<div class="empty">该房产暂无房间。</div>{{end}}</section><section class="panel surface"><div class="panel-head"><h2>关联支出</h2><span class="tiny">旧未关联记录不会被伪造迁移</span></div>{{if .Expenses}}<div class="table-wrap"><table><thead><tr><th>日期</th><th>描述</th><th>类别</th><th>金额</th><th>发票</th></tr></thead><tbody>{{range .Expenses}}<tr><td>{{.DateDisplay}}</td><td>{{.Description}}</td><td>{{.Category}}</td><td class="amount">{{.AmountDisplay}}</td><td>{{if .InvoiceURL}}<a href="{{.InvoiceURL}}" target="_blank" rel="noopener noreferrer">查看链接</a>{{else}}未提供{{end}}</td></tr>{{end}}</tbody></table></div>{{else}}<div class="empty">该房产暂无关联支出。</div>{{end}}</section></main></div></body></html>`)
+var propertyDetailPageTemplate = newWorkspacePageTemplate("property-detail-page", nil, `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>RentOps Property</title><style>`+workspacePageCSS+`</style></head><body><div class="app">{{template "workspace-nav" .}}<main class="content"><header class="topbar"><div><div class="brand-title">房产详情</div><h1>{{.Property.Name}}</h1><div class="tiny">{{.Property.Address}} · {{.Property.StatusLabel}}</div></div><a class="btn" href="/properties">返回房产</a></header>{{if .Message}}<div class="notice ok">{{.Message}}</div>{{end}}{{if .Error}}<div class="notice error">{{.Error}}</div>{{end}}{{if .Editing}}<section class="panel surface entity-form"><div class="panel-head"><h2>编辑房产</h2></div><form method="post" action="/properties/{{.Property.ID}}"><input type="hidden" name="action" value="save"><div class="form-grid"><div class="form-field"><label for="property-name">名称</label><input id="property-name" name="name" value="{{.Property.Name}}" required maxlength="191"></div><div class="form-field"><label for="property-address">地址</label><input id="property-address" name="address" value="{{.Property.Address}}" maxlength="1000"></div></div><div class="drawer-actions"><button class="btn primary" type="submit">保存房产</button></div></form></section>{{end}}<section class="summary"><div class="panel metric"><div class="label">房间</div><strong>{{.Property.ActiveRoomCount}} / {{.Property.RoomCount}}</strong><span>有效／全部</span></div><div class="panel metric"><div class="label">本月应收</div><strong>{{.Property.ExpectedAmount}}</strong></div><div class="panel metric"><div class="label">已收</div><strong>{{.Property.PaidAmount}}</strong></div><div class="panel metric"><div class="label">支出</div><strong>{{.Property.ExpenseAmount}}</strong></div></section><section class="panel surface"><div class="panel-head"><h2>房间</h2><a class="btn primary" href="/rooms?property_id={{.Property.ID}}&amp;add=1">新建房间</a></div>{{if .Rooms}}<div class="table-wrap"><table><thead><tr><th>房间</th><th>入住人</th><th>月租</th><th>状态</th><th>操作</th></tr></thead><tbody>{{range .Rooms}}<tr><td><a href="/rooms/{{.ID}}"><strong>{{.RoomLabel}}</strong></a><br><span class="tiny">{{.PropertyName}}</span></td><td>{{range $index, $name := .TenantNames}}{{if $index}}, {{end}}{{$name}}{{else}}空置{{end}}</td><td class="amount">{{.MonthlyRent}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span></td><td><a class="btn subtle" href="/rooms/{{.ID}}">详情</a> <a class="btn subtle" href="/rooms/{{.ID}}?edit=1">编辑</a></td></tr>{{end}}</tbody></table></div>{{else}}<div class="empty">该房产暂无房间。</div>{{end}}</section><section class="panel surface"><div class="panel-head"><h2>关联支出</h2><span class="tiny">旧未关联记录不会被伪造迁移</span></div>{{if .Expenses}}<div class="table-wrap"><table><thead><tr><th>日期</th><th>描述</th><th>类别</th><th>金额</th><th>发票</th></tr></thead><tbody>{{range .Expenses}}<tr><td>{{.DateDisplay}}</td><td>{{.Description}}</td><td>{{.Category}}</td><td class="amount">{{.AmountDisplay}}</td><td>{{if .InvoiceURL}}<a href="{{.InvoiceURL}}" target="_blank" rel="noopener noreferrer">查看链接</a>{{else}}未提供{{end}}</td></tr>{{end}}</tbody></table></div>{{else}}<div class="empty">该房产暂无关联支出。</div>{{end}}</section></main></div></body></html>`)
 
-var roomPageTemplate = newWorkspacePageTemplate("rooms-page", nil, `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>RentOps Rooms</title><style>`+workspacePageCSS+`</style></head><body><div class="app">{{template "workspace-nav" .}}<main class="content"><header class="topbar"><div><div class="brand-title">资产管理</div><h1>房间</h1><div class="tiny">{{.PeriodLabel}} · 房产绑定与入住安排</div></div><a class="btn primary" href="/rooms?add=1">新建房间</a></header>{{if .Message}}<div class="notice ok">{{.Message}}</div>{{end}}{{if .Error}}<div class="notice error">{{.Error}}</div>{{end}}<section class="panel surface"><div class="panel-head"><h2>房间列表</h2></div>{{if .Rows}}<div class="table-wrap"><table><thead><tr><th>房间</th><th>房产</th><th>入住人</th><th>固定月租</th><th>本月余额</th><th>状态</th><th>操作</th></tr></thead><tbody>{{range .Rows}}<tr data-page="rooms" data-room-id="{{.ID}}"><td><a href="/rooms/{{.ID}}?period={{$.Period}}"><strong>{{.RoomLabel}}</strong></a><br><span class="tiny">{{.ActiveFrom}}</span></td><td><a href="/properties/{{.PropertyID}}">{{.PropertyName}}</a></td><td>{{range $index, $name := .TenantNames}}{{if $index}}, {{end}}{{$name}}{{else}}空置{{end}}</td><td class="amount">{{.MonthlyRent}}</td><td class="amount">{{.BalanceAmount}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span></td><td><a class="btn subtle" href="/rooms/{{.ID}}">详情</a></td></tr>{{end}}</tbody></table></div>{{else}}<div class="empty">还没有房间，请先创建房产。</div>{{end}}</section></main></div></body></html>`)
+var roomPageTemplate = newWorkspacePageTemplate("rooms-page", nil, `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>RentOps Rooms</title><style>`+workspacePageCSS+`</style></head><body><div class="app">{{template "workspace-nav" .}}<main class="content"><header class="topbar"><div><div class="brand-title">资产管理</div><h1>房间</h1><div class="tiny">{{.PeriodLabel}} · 房产绑定与入住安排</div></div><a class="btn primary" href="/rooms?add=1">新建房间</a></header>{{if .Message}}<div class="notice ok">{{.Message}}</div>{{end}}{{if .Error}}<div class="notice error">{{.Error}}</div>{{end}}{{if .ShowForm}}<section class="panel surface entity-form" aria-labelledby="room-create-title"><div class="panel-head"><div><h2 id="room-create-title">新建房间</h2><p class="tiny">房间必须绑定一个有效房产。</p></div><a class="btn subtle" href="/rooms">取消</a></div><form method="post" action="/rooms"><input type="hidden" name="action" value="save"><div class="form-grid"><div class="form-field"><label for="room-label">房间名称</label><input id="room-label" name="room_label" maxlength="191" required></div><div class="form-field"><label for="room-property">所属房产</label><select id="room-property" name="property_id" required><option value="">请选择房产</option>{{range .Properties}}<option value="{{.ID}}"{{if eq $.Form.PropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></div><div class="form-field"><label for="room-active-from">生效月份</label><input id="room-active-from" name="active_from" type="month" value="{{.Form.ActiveFrom}}" required></div></div><div class="drawer-actions"><button class="btn primary" type="submit">保存房间</button></div></form></section>{{end}}<section class="panel surface"><div class="panel-head"><h2>房间列表</h2></div>{{if .Rows}}<div class="table-wrap"><table><thead><tr><th>房间</th><th>房产</th><th>入住人</th><th>固定月租</th><th>本月余额</th><th>状态</th><th>操作</th></tr></thead><tbody>{{range .Rows}}<tr data-page="rooms" data-room-id="{{.ID}}"><td><a href="/rooms/{{.ID}}?period={{$.Period}}"><strong>{{.RoomLabel}}</strong></a><br><span class="tiny">{{.ActiveFrom}}</span></td><td><a href="/properties/{{.PropertyID}}">{{.PropertyName}}</a></td><td>{{range $index, $name := .TenantNames}}{{if $index}}, {{end}}{{$name}}{{else}}空置{{end}}</td><td class="amount">{{.MonthlyRent}}</td><td class="amount">{{.BalanceAmount}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span></td><td><a class="btn subtle" href="/rooms/{{.ID}}">详情</a> <a class="btn subtle" href="/rooms/{{.ID}}?edit=1">编辑</a></td></tr>{{end}}</tbody></table></div>{{else}}<div class="empty">还没有房间，请先创建房产。</div>{{end}}</section></main></div></body></html>`)
+
+var roomEditPageTemplate = newWorkspacePageTemplate("room-edit-page", nil, `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RentOps Room Edit</title><style>`+workspacePageCSS+`</style></head><body><div class="app">{{template "workspace-nav" .}}<main class="content"><header class="topbar"><div><div class="brand-title">资产管理</div><h1>编辑房间</h1><div class="tiny">更新房产绑定与生效月份</div></div><a class="btn" href="/rooms">返回房间</a></header>{{if .Error}}<div class="notice error">{{.Error}}</div>{{end}}<section class="panel surface entity-form" aria-labelledby="room-form-title"><div class="panel-head"><div><h2 id="room-form-title">房间资料</h2><p class="tiny">房间必须绑定一个有效房产。</p></div></div><form method="post" action="/rooms/{{.Form.ID}}"><input type="hidden" name="action" value="save"><div class="form-grid"><div class="form-field"><label for="room-label">房间名称</label><input id="room-label" name="room_label" value="{{.Form.RoomLabel}}" maxlength="191" required></div><div class="form-field"><label for="room-property">所属房产</label><select id="room-property" name="property_id" required><option value="">请选择房产</option>{{range .Properties}}<option value="{{.ID}}"{{if eq $.Form.PropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></div><div class="form-field"><label for="room-active-from">生效月份</label><input id="room-active-from" name="active_from" type="month" value="{{.Form.ActiveFrom}}" required></div></div><div class="drawer-actions"><button class="btn primary" type="submit">保存房间</button></div></form></section></main></div></body></html>`)
 
 var tenancyPageTemplate = newWorkspacePageTemplate("tenancies-page", nil, `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>RentOps Tenancies</title><style>`+workspacePageCSS+`</style></head><body><div class="app">{{template "workspace-nav" .}}<main class="content"><header class="topbar"><div><div class="brand-title">租住安排</div><h1>自动生成的租住安排</h1><div class="tiny">只读历史视图；新安排从租客入住配置生成</div></div><a class="btn" href="/tenants">管理租客</a></header>{{if .Message}}<div class="notice ok">{{.Message}}</div>{{end}}{{if .Error}}<div class="notice error">{{.Error}}</div>{{end}}<section class="panel surface">{{if .Rows}}<div class="table-wrap"><table><thead><tr><th>房产／房间</th><th>租客责任</th><th>总月租</th><th>租期</th><th>账单日</th><th>状态</th></tr></thead><tbody>{{range .Rows}}<tr data-page="tenancies" data-tenancy-id="{{.ID}}"><td><a href="/rooms/{{.RoomID}}"><strong>{{.PropertyName}}</strong><br>{{.RoomLabel}}</a></td><td>{{range .Parties}}<div>{{.TenantName}} · {{.Responsibility}}</div>{{else}}未绑定租客{{end}}</td><td class="amount">{{.MonthlyRent}}</td><td class="mono">{{.StartDate}}{{if .EndDate}} 至 {{.EndDate}}{{end}}</td><td>每月 {{.DueDay}} 日</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span></td></tr>{{end}}</tbody></table></div>{{else}}<div class="empty">暂无租住安排。新租客可先不绑定房间。</div>{{end}}</section></main></div></body></html>`)
 
