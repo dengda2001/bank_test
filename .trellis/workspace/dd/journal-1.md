@@ -828,3 +828,36 @@ Seeded the local rentops database from the Rosewood rent ledger (4 properties / 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 24: 房间视角金额：改读租客义务，放弃 charge 生产者
+
+**Date**: 2026-09-19
+**Task**: 房间视角金额：改读租客义务，放弃 charge 生产者
+**Branch**: `main`
+
+### Summary
+
+推翻原方案：不补 rent_charge 生产者，改为房间视角直接汇总惰性义务，归属走 agreementParty → tenancyAgreement.RoomID。去掉 rent_charge_id IS NOT NULL 门控；load 先调 ensureMonthlyObligations。检查发现 design §3 的歧义房间 needs_review 标记未实现（单测因歧义租客是唯一租客而无区分度），已补并用混合房间单测钉死（关掉修复会失败）。实机 2026-09 房间树与 /bills 同为 EUR 24,985.00 / 6,510.00，307 条义务逐行未变。另确认 TestDunningDashboardHTTPWorkflowOnMySQL 为既有失败（pristine HEAD 复现）。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `77739ff` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
