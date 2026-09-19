@@ -36,12 +36,20 @@
 
 ## Acceptance Criteria
 
-- [ ] 连续多次加载 `/rent-dashboard`、`/tenants`、`/tenants/{id}`，每个 `(tenant, month)` 始终只有 1 行 active 义务（用 SQL 计数验证，加载前后相等）
-- [ ] 在**带重复数据**的库上执行迁移成功；执行后不存在任何 `(user_id, tenant_id, period_month)` 重复组
-- [ ] 迁移前后 `payment_allocations` / `cash_receipts` / `dunning_send_attempts` 的行数与归属不丢失（remap 后仍指向同组幸存行）
-- [ ] charge 路径不回归：`TestRentLedgerServiceCreatesOneChargeAndStableObligationsOnMySQL` 通过，且同一 `(tenant, month)` 可容纳多条 charge 义务
-- [ ] `go test ./...` 与 `go vet ./...` 通过（含 `RENTOPS_MYSQL_TEST_DSN` 下的 MySQL 测试）
-- [ ] `scripts/run-audit-local.sh` 跑通（即子任务 ① 的 B2 阻塞解除：seeder 不再停在「没有一键匹配建议」）
+- [x] 连续多次加载 `/rent-dashboard`、`/tenants`、`/tenants/{id}`，每个 `(tenant, month)` 始终只有 1 行 active 义务（用 SQL 计数验证，加载前后相等）
+      —— 5 轮 × 3 页面，义务数恒为 9，重复组 0（`implement.md` 实测表）
+- [x] 在**带重复数据**的库上执行迁移成功；执行后不存在任何 `(user_id, tenant_id, period_month)` 重复组
+      —— 248 行 / 9 组 → 9 行 / 0 组；另在全新空库上从 0 跑通 13 条迁移
+- [x] 迁移前后 `payment_allocations` / `cash_receipts` / `dunning_send_attempts` 的行数与归属不丢失（remap 后仍指向同组幸存行）
+      —— 4 条分配全保留；催缴同 key 撞键收敛到幸存行；边界库无孤儿引用
+- [x] charge 路径不回归：`TestRentLedgerServiceCreatesOneChargeAndStableObligationsOnMySQL` 通过，且同一 `(tenant, month)` 可容纳多条 charge 义务
+      —— 实测两条 charge 行（1397/1398）共存
+- [x] `go test ./...` 与 `go vet ./...` 通过（含 `RENTOPS_MYSQL_TEST_DSN` 下的 MySQL 测试）
+      —— 另：HEAD 上 5 条 MySQL 用例失败，本改动后仅剩 1 条，且该条在 HEAD 上同样失败（`design.md` §「既有失败用例的定性」）
+- [ ] **`scripts/run-audit-local.sh` 跑通 —— 未验证。**
+      该脚本的管理连接硬编码 `sudo mysql`（`scripts/run-audit-local.sh:58-60`），不认免密 root、也不接受
+      `MYSQL_PORT` 覆盖，本机无 sudo 终端故无法执行。以真实 HTTP 反复加载三个触发页面作为替代验证
+      （见第 1 条）。**这不是通过，只是未测**；在有 sudo 的机器上应补跑一次。
 
 ## Out of Scope
 
