@@ -642,8 +642,27 @@ from the request. The `Message` query parameter is a *code*, matched with
 link shows arbitrary text in a green success toast inside the trusted UI
 (`html/template` escapes it, so this is content injection, not XSS, but the
 affordance is a system-generated confirmation the user did not cause). Only the
-code form may carry `data-toast`. Recorded 2026-09-20: three pages still used the
-raw form and are tracked in `09-20-mobile-filter-and-duplicate-errors`.
+code form may carry `data-toast`. Recorded 2026-09-20; four pages used the raw form
+and all four are fixed in `09-20-mobile-filter-and-duplicate-errors`.
+
+**The contract is about what gets rendered, not how the template is spelled.** The
+fourth page (`/bills`) passed every source scan: its guard read
+`{{if .Message}}` and its text came from `{{billsNotice .Message}}`, a mapping func
+whose `default:` fell through to `return code`. A scan for the literal `{{.Message}}`
+cannot see a value that reaches the page through a func, so source-shape scanning
+has a blind spot exactly where the indirection is. Two consequences:
+
+- When the interpolated value and the fixed sentence are chosen by different
+  expressions (a guard plus a func, a `default:` arm), assert on the **rendered
+  page** — `TestBillsMessageRendersOnlyWhitelistedCodes` checks that
+  `/bills?message=<unknown>` renders no `.notice.ok` at all — and keep a literal
+  scan only as a backstop for the direct spelling.
+- The **message** leg and the **error** leg may legitimately differ, so do not
+  "unify" them. `/bills`'s `billsMessageText` now returns `""` for an unknown code
+  while `billsErrorText` still returns the code verbatim: that raw fall-through is
+  a pinned contract (`list_pages_alignment_test.go:58`) and a red banner is not the
+  affordance a crafted link abuses. Grep will not tell you which leg you are on —
+  read which notice class the value lands in before tightening the guard.
 
 ### 8.2 The 980 tier must undo the rail's sticky explicitly
 
@@ -661,3 +680,41 @@ makes it win (`.sidebar` in both, equal specificity, the 980 block comes later),
 and the `max-width: 640px` drawer that follows still turns the rail into a `fixed`
 off-canvas panel. Recorded 2026-09-20 after `09-19-shell-alignment` shipped the
 sticky without the reset.
+
+### 8.3 The shared script runs before the page body it has to bind
+
+`workspace-nav.html` renders inside `.app` but **before** `<main class="content">`,
+so a `document.querySelector*` at the top level of its `<script>` executes while
+the page body has not been parsed. Any lookup of a `<main>` element returns an
+empty set and attaches no listener.
+
+The failure is not a dead button, which is what makes it easy to under-report:
+`.object-list-filter-fields` is `display: none` at `max-width: 640px` and only the
+listener adds `.filters-open`, so the whole filter feature was **unreachable** on a
+narrow screen; the fields' `change -> requestSubmit` binding was dead at every
+width, so `/properties` and `/rooms` had no submit path at all on desktop. Both are
+fixed in `09-20-mobile-filter-and-duplicate-errors`.
+
+Contract: **every lookup of a page-body element goes inside `initChrome()`**, which
+is registered on `DOMContentLoaded` (and called directly when
+`document.readyState !== "loading"`, so a late-injected partial still works). That
+includes the bindings that would work anyway, so the block keeps one rule instead
+of a mix. A lookup of an element emitted by the *same partial, above the script* is
+still fine at top level — `#workspace-toast` (`:41`) and `[data-mobile-search]`
+(`:5`) both precede the script at `:42` — and **that is the trap**: because those
+lookups succeed, the block looks healthy while the page-body ones silently bind
+nothing.
+
+The same script owns the object-list filter's **single submit path**
+(`.object-list-filter-fields select/input` -> `change` -> `requestSubmit()`). Pages
+must not add their own `onchange="this.form.submit()"`: two sources means two
+submits per change. When the shared binding was dead, `/properties` and `/rooms`
+carried inline `onchange` as a workaround; both were removed once the shared
+binding was restored.
+
+`TestWorkspaceNavBodyLookupsWaitForDOMContentLoaded` renders the partial **on its
+own** — the minimal page the failure needs — and asserts each known lookup appears
+after `initChrome()`. Note its ceiling: it pins those three lookup strings, so a
+*fourth* page-body lookup added at top level would not be caught. It proves the
+shape, not the behaviour; `probe-0920-independent.mjs` covers the behaviour in a
+real browser. Recorded 2026-09-20.

@@ -57,7 +57,18 @@
   });
   ```
 
-  同一段落里的 `[data-mobile-search]` 绑定（`HEAD:38`）同样在顶层。
+  > **勘误（2026-09-20，主会话实机复核）**：原文此处接着写「同一段落里的
+  > `[data-mobile-search]` 绑定同样在顶层」并把它列为同源受害者，**是错的**。
+  > 它确实在同一个 `<script>` 的顶层，但**它的元素在脚本之前就已经被解析**：
+  > 主 `<script>` 在 `workspace-nav.html:42-153`，而 `data-mobile-search` 按钮在
+  > **第 5 行**（同 partial，早于脚本）。所以那次查找命中，绑定是好的。
+  > 反例才是本缺陷：`.object-list-filter-toggle` 在 `<main>` 里，而整个 partial
+  > 渲染在 `<main>` **之前**，脚本运行时它根本还不存在。
+  > 实机证据（修复前的 `18097` 实例）：`/tenancies` 390×844 点搜索图标后
+  > `.tenancy-filters` 计算样式 `none → grid`，即该绑定修复前就在工作。
+  > 结论：`[data-mobile-search]` 是**回归项**而不是同源受害者 ——
+  > 下文 AC 里那条「≤640 下仍能展开搜索框」的写法（要求它**保持**可用）是对的，
+  > 但不要把它当成「一并修好」的第二个缺陷来叙述。
 - 同一个文件里已经有一个正解可参照：`09-19-shell-alignment` 新写的 toast 脚本
   把查找推迟到 `DOMContentLoaded`，并在注释里写明了这个陷阱
   （`workspace-nav.html:57-59`、`:80`）。修法照它即可，不要另创一套。
@@ -91,9 +102,25 @@
 | `web/templates/pages/cash-receipts.html:51` | 入账金额大于当前未收余额。 |
 | `cash_receipt_handlers.go:216`（内联模板） | 这笔现金会超过该月份的未收余额，请重新核对银行与现金收款。 |
 
-`cash-receipts.html` 的 `:24` 与 `:51` 在同一次渲染里**都**会命中，
-所以用户一次失败看到两条措辞不同的消息。`cash_receipt_handlers.go:216` 那份是
-另一条渲染路径（内联模板），与 `.html` 是并列关系，是否同时可达需在实施时确认。
+`cash-receipts.html` 的 `:24` 与 `:51` 在同一次渲染里**都**会命中。
+`cash_receipt_handlers.go:216` 那份是另一条渲染路径（内联模板），与 `.html`
+是并列关系 —— 实施时确认**两条路径都可达**（`/cash-receipts/new` 路由，
+`cashReceiptFormErrorURL` 在表单没带 `return_to` 时走它），所以两处都必须能显示、
+而全仓库只留一份文案。
+
+> **勘误（2026-09-20，主会话实机实测）**：原文在这里接着说
+> 「所以用户一次失败看到两条措辞不同的消息」。这句话**按档位分**才对 ——
+> 抽屉背板是 `rgba(10,18,24,.22)` 的**半透明**遮罩（`entity-drawers.css:1`），
+> 不是不透明墙。实测（1440×900 与 390×844，`elementsFromPoint` 读绘制栈）：
+>
+> | 档位 | 绘制栈 | 用户实际看到 |
+> |---|---|---|
+> | 1440×900 | 背板 → 页面级提示 → `<main>` | 提示被压暗但**文字完全可读** → **两条都看到** |
+> | 390×844 | 抽屉（底部 sheet，`max-height:min(86dvh,760px)`）→ 背板 → 提示 | **完全盖住** → 只看到一条 |
+>
+> 所以这个重复缺陷**在桌面档是用户可见的**，不是「只脏在源码里」；
+> 而它在移动档不可见，正是它一直没被发现的原因。两种档位下缺陷都成立
+> （同一个错误码一次渲染出两份措辞），只是可见程度不同。
 
 ### 缺陷 3：三处把 URL 查询参数当文本原样渲染成绿色成功提示
 
@@ -119,6 +146,33 @@
 | `page_data_routes.go:1511` `legacyCashReceiptPageTemplate` | **无** —— 全仓库没有任何 `Execute` 调用它，是死模板 | 死代码，但仍是陷阱 |
 | `web/templates/pages/rent-workspace.html:21` | **无** —— `rent_workspace_page.go:146` 直接 `r.URL.Query().Get("message")` 灌进来，全仓库没有任何 redirect 往 `/rent-workspace` 带 `message=` | **不可达但可注入** |
 
+#### 第四处：`/bills`（2026-09-20 由复验 agent 发现并修复，机制相同）
+
+上表是主会话在计划阶段逐条实测出的**字面量**裸回显。同一条机制还有一处
+**函数中介**的回显，字面量扫描看不见，是复验阶段才抓到的：
+
+```
+rent_collection_pages.go:84   {{if .Message}}<div class="notice ok" data-toast>{{billsNotice .Message}}</div>{{end}}
+collection_settle_form.go:151 billsMessageText(code) … default: return code   ← 未知码原样回显
+```
+
+`.Message` 直接来自 `?message=`，所以 `/bills?message=任意文本` 会在绿色 toast 里
+打印任意文本（实测复现）。它逃过 `TestNoQueryParameterIsRenderedAsToastText`
+的原因是那条扫描只匹配字面量 `{{.Message}}`，不认 `{{func .Message}}`。
+
+修法：`billsMessageText` 的 `default:` 由 `return code` 改为 `return ""`，
+模板守卫相应改为 `{{if billsNotice .Message}}`；新增
+`TestBillsMessageRendersOnlyWhitelistedCodes` 钉住。**`billsErrorText` 的红条
+原样回退契约没动** —— 它有 `list_pages_alignment_test.go:58` 明确钉住，且红条
+不是构造链接能冒充的「系统确认」，风险等级不同。三个合法码
+（`manual_balance_saved` / `manual_balance_not_needed` / `bills_generated`）
+的产出方全仓库只有三处，都在白名单内，合法路径零损失。
+
+> **这处为什么收进本任务**：它与缺陷 3 是同一个机制、同一个可达面
+> （「受信 UI 显示攻击者文本的绿色成功提示」），同一个 AC 覆盖。
+> 若判为范围外留下，等于一边宣布该缺陷类已修、一边留着一条已实测复现的同型路径。
+> 复验阶段把它归入本任务并修复，是正确判断。
+
 主会话复核的关键事实：`8c62c3f` **之前**，`page_data_routes.go` 里有 **2 处**
 裸回显、**0 处** `data-toast`。也就是说裸回显是既有缺陷；`8c62c3f`（②）只是给它
 加了 `data-toast`，把它从一条静态横幅**提升成了一条会自己消失的 toast** ——
@@ -142,9 +196,15 @@ toast 比横幅更像系统自己发出的通知，欺骗性更强。所以本�
   - `rent-workspace.html` → 无正规产出方，直接删掉那一行，并把
     `rent_workspace_page.go:82` 的 `message` 形参及其 `:118`、`:146` 的传递一并清掉，
     避免留下一个「永远传空」的死参数。注意 `pageError` 参数仍在使用，不要误删。
+  - `billsMessageText`（第四处，2026-09-20 复验阶段补入）→ 未登记的**消息**码
+    不再原样回退（`default:` 返回 `""`），模板守卫改为 `{{if billsNotice .Message}}`。
+    **`billsErrorText` 不要动** —— 它的原样回退是 `list_pages_alignment_test.go:58`
+    钉住的既有契约，且红条不是构造链接能冒充的「系统确认」。
   - 修完用 `grep -rn '{{if \.Message}}{{\.Message}}\|data-toast>{{\.Message}}' cmd/truelayer-demo/`
-    复核全仓库没有残留的裸回显。
-- 三处修复都要在**真实页面**上验证，不能只看代码。
+    复核全仓库没有残留的裸回显。**注意这条 grep 只抓字面量**：`/bills` 那处是
+    `{{billsNotice .Message}}` 的函数中介形态，grep 抓不到，正是它漏到复验阶段的原因。
+    所以还要有一条**渲染行为**断言，不能只靠 grep。
+- 四处修复都要在**真实页面**上验证，不能只看代码。
 
 ## Acceptance Criteria
 
@@ -172,6 +232,12 @@ toast 比横幅更像系统自己发出的通知，欺骗性更强。所以本�
 - [ ] 构造 `/rent-workspace?message=注入测试文本`，页面不出现绿色成功提示。
 - [ ] `grep -rn 'data-toast>{{\.Message}}' cmd/truelayer-demo/` 无输出 ——
       没有任何查询参数被当作 toast 文本原样渲染。
+- [ ] 构造 `/bills?message=注入测试文本`，页面**不出现**任何绿色成功提示
+      （第四处；这条是渲染行为断言，`grep` 抓不到函数中介形态）；
+      而三个合法码 `bills_generated` / `manual_balance_saved` /
+      `manual_balance_not_needed` 仍各自渲染自己的文案。
+- [ ] 同一改动**未修过头**：`/bills?error=<未知码>` 的红条仍原样回退该码
+      （反向断言，防止把 `billsErrorText` 的既有契约一并改掉）。
 - [ ] 上一条要有**测试**兜住，不能只靠 grep：在 `workspace_shell_test.go` 里
       （`TestOnlySuccessFlashesAreMarkedForTheToast` 旁边）加一条扫描全部模板与
       Go 模板字面量的断言，禁止任何 `data-toast` 附近的裸 `{{.Message}}`。
