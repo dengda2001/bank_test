@@ -33,7 +33,7 @@ const workspacePageCSS = `...`
 const workspaceNav = `{{define "workspace-nav"}}...{{end}}`
 
 type workspaceShell struct {
-    ActivePage    string // canonical page key: "rent-dashboard" | "bills" | "transactions" | "dunning" | "properties" | "rooms" | "tenants" | "tenancies" | "cash-receipts" | "expenses" | "bank"; legacy "billing" remains supported
+    ActivePage    string // canonical page key: "rent-dashboard" | "bills" | "transactions" | "dunning" | "properties" | "rooms" | "tenants" | "tenancies" | "cash-receipts" | "expenses" | "bank" | "more"; legacy "billing" remains supported
     Username      string
     Environment   string
     FootNote      string
@@ -191,6 +191,127 @@ bottom sheet at `max-width: 640px`. The sheet is fixed with 8px side insets,
 `bottom: calc(76px + env(safe-area-inset-bottom))`, a viewport-relative max-height,
 and `overflow: auto`; this leaves the 68px shared navigation plus an 8px gap
 visible. The existing server-side form and confirmation handler remain unchanged.
+
+---
+
+## 3.10 Property and room list views keep responsive markup and route state together
+
+The property and room list pages are embedded documents in
+`web/templates/pages/properties.html` and `rooms.html`; page styles live in
+`web/static/css/pages/object-lists.css`. They render two presentations from the
+same Go view model: `.object-table-wrap` on desktop and `.object-mobile-list`
+cards on narrow screens. At `max-width: 640px`, hide the table wrapper and show
+the cards. Above the breakpoint, do the reverse. Keep the same entity IDs,
+values, and actions in both presentations. Both trees exist in the HTML, so
+browser checks must query visible elements or deliberately scope to the desktop
+`tr` / mobile card; an unscoped row count double-counts each entity.
+
+List navigation state is part of the server-rendered route contract. Detail and
+edit links must carry the selected period and enough source-list filters to
+restore the list after a save or return action. Build mutation redirects with
+`net/url.Values`, and carry the same values in hidden POST fields where the
+mutation handler needs them. Let `html/template` escape query values in links;
+do not concatenate user search text into a redirect URL.
+
+### 1. Scope / Trigger
+
+- Trigger: adding a property/room list filter, detail link, edit action, or
+  responsive list presentation.
+- Why: the template contains both desktop and mobile entities, and a form
+  mutation must return to the exact period/filter the user came from.
+
+### 2. Signatures
+
+- GET `/properties?period=YYYY-MM&status=active|inactive|all&search=text`
+- GET `/rooms?period=YYYY-MM&property_id=id&status=active|inactive|all&search=text`
+- Room detail source context: `from=rooms`, `return_property_id`,
+  `return_status`, and `return_search`.
+- Property detail source context: `list_status` and `list_search`.
+- Go helpers: `filterPropertyPageRows`, `filterRoomPageRows`,
+  `redirectPropertyList`, `redirectRoomList`, `redirectPropertyMutation`, and
+  `copyRoomReturnContext`.
+
+### 3. Contracts
+
+- Property search matches property name and address. Its status defaults to
+  `active`; its month controls the financial columns.
+- Room search matches room name, property name, and current tenant name. Its
+  status defaults to `all`; `property_id` narrows the parent property, and the
+  month controls monthly receipts.
+- Create forms carry `period` plus the originating filters as hidden fields.
+  Room creation also carries the selected destination `property_id` separately
+  from `filter_property_id`.
+- Property detail links carry `period`, `list_status`, and `list_search`.
+  Property edit POST carries those values so a successful save returns to its
+  detail state with the same list source.
+- Room detail links carry `period`, `from=rooms`, and the `return_*` fields.
+  Room edit POST carries the same context; save returns to detail, whose return
+  link restores the source room list.
+- List mutation redirects use `url.Values.Encode()` to preserve search strings
+  containing spaces, ampersands, or other reserved characters.
+
+### 4. Validation & Error Matrix
+
+| Input | Result |
+|---|---|
+| Invalid GET period | HTTP 400; do not silently change the requested month |
+| Property status outside `active`, `inactive`, `all` | HTTP 400 |
+| Room status outside `active`, `inactive`, `all` | HTTP 400 |
+| Invalid room `property_id` query | HTTP 400 |
+| Invalid mutation return period | Mutation redirect uses the current-month fallback |
+| Invalid optional `return_property_id` | Omit the parent filter from the return URL |
+| Search is empty | Omit it from redirect query values; render rows allowed by other filters |
+
+### 5. Good / Base / Bad Cases
+
+- Good: a room searched by tenant opens its detail; edit/save returns to that
+  detail, and the return link restores the tenant search, selected property,
+  status, and period.
+- Base: a property list with default active status and no search returns to
+  `/properties?period=...&status=active` after a create or deactivate action.
+- Bad: rendering both tables and cards and counting `[data-page]` globally in a
+  browser script counts each record twice. Scope checks to a visible table row
+  or mobile card.
+- Bad: dropping hidden `return_*` fields on edit POST makes the detail work but
+  loses the list state after the user goes back.
+
+### 6. Tests Required
+
+- `TestObjectListFiltersSearchAndStatus`: case-insensitive name/address/tenant
+  matching and active/inactive status filtering.
+- `TestObjectListMutationRedirectsPreservePeriodAndFilters`: query state
+  survives property and room server redirects.
+- `TestEmbeddedObjectListsKeepFiltersAndResponsiveDetailLinks`: filter
+  controls, entity IDs, desktop/mobile markup, and detail/edit links render.
+- `TestEmbeddedRoomDetailUsesTypedDisplayFields`: return link and hidden edit
+  context fields render when the source is the room list.
+- Browser verification at 1440×900, 1366×768, and 390×844: filter values,
+  detail return, edit/save return, empty results, no page-level overflow, and
+  only the active responsive presentation is interactable.
+
+### 7. Wrong vs Correct
+
+#### Wrong — lose context or concatenate a search value
+
+```go
+http.Redirect(w, r, "/rooms?period="+period+"&search="+search, http.StatusFound)
+```
+
+#### Correct — carry list state and encode it as query values
+
+```go
+query := url.Values{}
+query.Set("period", validatedPeriodValue(form.Get("period")))
+status := strings.TrimSpace(form.Get("filter_status"))
+if status != "active" && status != "inactive" {
+    status = "all"
+}
+query.Set("status", status)
+if search := strings.TrimSpace(form.Get("search")); search != "" {
+    query.Set("search", search)
+}
+http.Redirect(w, r, "/rooms?"+query.Encode(), http.StatusFound)
+```
 
 ---
 

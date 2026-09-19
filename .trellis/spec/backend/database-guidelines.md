@@ -174,6 +174,104 @@ each handler or service to remember the predicate independently.
 
 ## Scenario: Legacy JSON Storage
 
+## Scenario: Structured Tenant Room Binding
+
+### 1. Scope / Trigger
+
+- Trigger: The authenticated tenant form assigns, moves, or removes a tenant
+  from a structured room arrangement.
+- Applies to `tenantInputFromForm`, `tenantService.updateTenant`, and
+  `syncTenantRoomBindingInTx` in `cmd/truelayer-demo/tenants.go` and
+  `cmd/truelayer-demo/landlord_domain_operations.go`.
+
+### 2. Signatures
+
+- `tenantInputFromForm(values formValues) (tenantInput, error)` parses the
+  submitted `room_id`; a non-zero ID marks the input as structured.
+- `(*tenantService).updateTenant(ctx, userID, tenantID, input)` persists the
+  tenant profile and requested room membership in one GORM transaction.
+- `syncTenantRoomBindingInTx(tx, userID, tenantID, roomID, effectiveMonth,
+  monthlyRentCents, currency, dueDay, tenantStatus) error` versions source and
+  destination room arrangements for the current month.
+- `saveRentArrangementInTx(tx, userID, input)` remains the only writer for
+  versioned room agreements and agreement parties.
+
+### 3. Contracts
+
+- Every tenant, room, agreement, and party query uses the session `userID`.
+- A structured edit applies room membership from `monthStart(time.Now().UTC())`;
+  the historical tenant `rent_start_date` must not backdate an edit.
+- Selecting no room removes the tenant from active current-month room
+  arrangements. Setting the tenant inactive also removes the current binding.
+- Moving rooms updates the old room's party set and destination room's party
+  set inside the same transaction as the profile update. Other source-room
+  tenants remain assigned, and the destination's existing currency and due
+  date are inherited.
+- `listTenants` derives `tenantRecord.RoomID` from the active current-month
+  agreement so `/tenants?edit={id}` displays the saved selection.
+- All agreement writes pass through `saveRentArrangementInTx`; charges for the
+  current or a later month lock the arrangement, and the entire profile/binding
+  transaction rolls back on that error.
+
+### 4. Validation & Error Matrix
+
+- Missing `userID` or `tenantID` -> fail before changing profile or relationship
+  rows.
+- Posted room outside the current user's account -> `gorm.ErrRecordNotFound`
+  from the scoped arrangement write; make no partial update.
+- Inactive tenant with a posted room -> save the profile as inactive and clear
+  its current room membership.
+- Current/future `rent_charges` on any affected room -> return
+  `errArrangementHistoryLocked`; redirect the form to
+  `/tenants?error=tenant_room_locked` and roll back all changes.
+- A destination room already occupied by other tenants -> include the tenant
+  in its next arrangement while retaining the existing room total unless the
+  form supplies a changed total.
+
+### 5. Good/Base/Bad Cases
+
+- Good: Update the tenant profile and source/destination party sets in one
+  transaction and let `saveRentArrangementInTx` enforce history locks.
+- Base: An unbound structured tenant with no room selected remains unbound.
+- Bad: Save the profile and ignore `room_id`, or update
+  `agreement_parties` directly after a rent charge has been generated.
+
+### 6. Tests Required
+
+- Opt-in MySQL test runs the real migrations, assigns an unbound tenant,
+  verifies the edit form's room ID, moves the tenant while retaining its prior
+  room member, and clears the binding.
+- Insert a current-month rent charge and assert a move returns
+  `errArrangementHistoryLocked`, leaves the original membership intact, and
+  does not partially update tenant profile fields.
+
+### 7. Wrong vs Correct
+
+Wrong:
+
+```go
+tx.Model(&tenant{}).Where("id = ?", tenantID).Updates(profileFields)
+// The posted room_id is silently ignored.
+```
+
+Correct:
+
+```go
+return db.Transaction(func(tx *gorm.DB) error {
+	if err := syncTenantRoomBindingInTx(tx, userID, tenantID, input.RoomID, monthStart(now), rent, currency, dueDay, input.Status); err != nil {
+		return err
+	}
+	return tx.Model(&tenantRow).Updates(profileFields).Error
+})
+```
+
+The tenant profile and versioned relationship either both commit or both roll
+back.
+
+---
+
+## Scenario: Legacy JSON Storage
+
 ### 1. Scope / Trigger
 
 - Trigger: Any feature that persists demo data outside the TrueLayer bank log or
