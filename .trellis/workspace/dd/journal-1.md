@@ -791,3 +791,40 @@ Ran the existing Figma parent integration task after all four child tasks were a
 ### Next Steps
 
 - None - task complete
+
+
+## Session 23: Rosewood test data seeding and audit seeder repair
+
+**Date**: 2026-09-19
+**Task**: Rosewood test data seeding and audit seeder repair
+**Branch**: `main`
+
+### Summary
+
+Seeded the local rentops database from the Rosewood rent ledger (4 properties / 25 rooms / 58 tenants / 40 agreements / 63 parties / 186 transactions / 307 obligations), idempotent on re-run, so every page has data to click through. Established that the EUR 0.00 on /rent-dashboard is a product gap rather than a data gap: that route renders the room-centric workspace, whose amounts come only from rent_charges (rent_workspace.go:1118 requires rent_charge_id IS NOT NULL) and no production code writes rent_charges. Withdrew that acceptance criterion and moved it out of scope for a separate task. Repaired three staleness bugs in scripts/audit/seed.mjs, each hiding the next: B1 a regex requiring class immediately after tr, B2 the ignored demo sitting on the one transaction that can render the auto-match suggestion, and B3 four dashboard assertions parsing rent-row, markup that a DB-backed session can never render because renderRentDashboard selects its template by request path. The local audit seeder now completes. Recorded the findings in the desktop-contract task and in the backend spec.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `98a692a` | (see git log) |
+| `ec60726` | (see git log) |
+| `15d49bb` | (see git log) |
+| `abb74ac` | (see git log) |
+| `8e9dc5c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
