@@ -929,3 +929,90 @@ Seeded the local rentops database from the Rosewood rent ledger (4 properties / 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 27: 09-20 移动端筛选开关与重复错误提示修复
+
+**Date**: 2026-09-20
+**Task**: 09-20 移动端筛选开关与重复错误提示修复
+**Branch**: `main`
+
+### Summary
+
+修四个缺陷：≤640 筛选区打不开（共享外壳脚本早于页面正文）、同一错误码两条措辞、查询参数被原样渲染成绿色提示、/bills 函数中介形态的同类泄漏。复验阶段发现第四处并推翻三处计划期误记。
+
+### Main Changes
+
+## 背景
+
+09-19 PC 端还原度对齐的复验阶段报出四个缺陷，本任务收口。四个都是「用户看到的东西不对」，
+没有一个是崩溃或数据错误，所以全部靠实机渲染证据判定，而不是靠读代码。
+
+## 四个缺陷与处置
+
+| # | 现象 | 根因 | 处置 |
+|---|---|---|---|
+| 1 | ≤640 点「筛选」没反应 | 共享外壳 `<script>` 在 partial 顶部，早于它要绑定的页面正文；顶层查找 `.object-list-filter-toggle` 返回 null | 所有页面正文查找推迟到 `DOMContentLoaded`；同时删掉 ④ 为绕行加的 `onchange="this.form.submit()"`，只留外壳一条提交路径 |
+| 2 | 一次失败看到两条不同措辞 | 同一错误码在两处渲染点各有一份文案 | 收敛成一个常量 `cashOverbalanceText` / `cashReceiptFailedText`，只留抽屉一处渲染点 |
+| 3 | 查询参数被原样渲染成绿色成功提示 | `{{if .Message}}{{.Message}}{{end}}` 裸回显 | 改白名单 `{{if eq .Message "code"}}`，句子留在模板里 |
+| 4 | `/bills?message=任意文本` 同样进绿 toast | 同 3，但形态是 `{{billsNotice .Message}}` —— 函数中介，字面量扫描抓不到 | `billsMessageText` 的 `default` 由 `return code` 改 `return ""`，守卫改 `{{if billsNotice .Message}}` |
+
+缺陷 4 是复验阶段才发现的，也是本任务最有价值的一条：**只匹配字面量 `{{.Message}}` 的
+扫描有结构性盲区**。这条已写进 `responsive-conventions.md` §8.1。
+
+## 三处勘误（计划期记录有误，实机推翻）
+
+1. `[data-mobile-search]` 不是同源受害者 —— 它的按钮在 partial 第 5 行，**早于**主脚本，
+   所以那次查找本就命中。它是回归项，不是被同一个 bug 打中的第二个受害者。
+2. 「页面级横幅被抽屉背板挡住所以用户只看得到一条」—— 实测按档位分：背板是
+   `rgba(10,18,24,.22)` 半透明，桌面档横幅压暗但可读，**两条都看得见**；≤640 抽屉变
+   底部 sheet 整个盖住，才只剩一条。用 `elementsFromPoint` 读绘制栈定的案，不是读 CSS 猜的。
+3. `cash_receipt_failed` 不是「同类问题」，是**同一个缺陷本身**（修前三份措辞，
+   与 `cash_overbalance` 逐处对应）。
+
+## 验证
+
+- 主会话独立重写的实机探针 `probe-0920-independent.mjs`：修前 19/29 → 修后 **33/33**。
+- 红证（先证伪再证真）：完整退回 HEAD 版外壳 → 红；只把一条查找提到顶层 → 红；
+  把旧措辞放回 → 红；把 `bankPageTemplate` 改回裸回显 → 红。
+- `probe-integration-review.mjs` 11 页 × 4 档：0 溢出、0 报错；侧栏 800/900/980 档
+  `position=static coversBody=false`；开合 `aria false -> true` 在 `/properties` 与 `/rooms` 都成立。
+- 三笔修复提交各自的树 `go build` / `go vet` / `go test` 全绿（`git worktree` 逐笔验证）。
+
+## 报了但没修（留给后续任务）
+
+- **`?error=` 同样裸回显**：全仓库 7 处，`/bank`、`/bills` 实测可注入。未修的理由是
+  本任务 AC 显式限定在绿色成功提示，而 `billsErrorText` 的原样回退由
+  `list_pages_alignment_test.go:58` 钉住；顺手改会同时改契约并把爆炸面扩到 7 个页面。
+  风险低于绿 toast（红条不会被误认成「系统确认」），但仍是「受信 UI 显示攻击者文本」。
+- **若干页面「任意 `?message=` 都弹固定文案的成功 toast」**（`/properties`、`/rooms`、
+  `/property-detail`、`/room-detail`）：文案由模板选定、不来自请求，不是注入，
+  但构造链接能让用户看到一条他并未触发的「操作已完成」。
+- **`/bank` 正向腿非端到端**：审计账号 `connected=false`，渲染不出同步表单，
+  探针读的是重定向落点而非真的 POST。产出方已静态钉死（`main.go:1684` →
+  `bankRefreshRedirect` → `/bills` 同款 URL），守卫本身已证明生效。
+  残留风险：没有测试把产出方的码字符串与模板的 `{{if eq .Message "refreshed"}}` 绑在一起，
+  将来改了产出方的码会静默失去匹配（toast 消失、测试全绿）。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cb15952` | (see git log) |
+| `0ccf7bf` | (see git log) |
+| `ce1dfeb` | (see git log) |
+| `33758ef` | (see git log) |
+| `ef3924d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
