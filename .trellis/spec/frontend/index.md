@@ -37,8 +37,10 @@ that parse the rendered markup. Those are the things that bite.
 | `cmd/truelayer-demo/web/templates/partials/` | Shared navigation, mobile chrome, and object tabs |
 | `cmd/truelayer-demo/web/templates/pages/` | Extracted server-rendered workspace pages, including property/room lists and details, and transaction details |
 | `cmd/truelayer-demo/web/static/css/` | Shared and page-scoped stylesheets, including transaction detail styles, served from the embedded filesystem |
-| `cmd/truelayer-demo/main.go` | `workspacePageCSS` (shared shell styles, including the `max-width: 640px` block) |
-| `cmd/truelayer-demo/mobile_layout_test.go` | Narrow-screen invariants, asserted against rendered markup and CSS |
+| `cmd/truelayer-demo/main.go` | `workspacePageCSS` = `embeddedWebText("web/static/css/workspace.css")` — the shared sheet, carrying both the `max-width: 1100px` and `max-width: 640px` tiers. Legacy templates concatenate it into `<style>`; embedded pages load the same file by `<link>` |
+| `cmd/truelayer-demo/mobile_layout_test.go` | Narrow-screen and tier-order invariants, asserted against rendered markup and CSS |
+| `cmd/truelayer-demo/desktop_layout_test.go` | Desktop invariants and the CSS tier-order guard |
+| `scripts/audit/desktop-widths.mjs` | The browser-side acceptance probe: 11 pages × 1024/1366/1440/1920, fails on document-level horizontal overflow. Run against `scripts/run-audit-local.sh`, never `:8081` |
 
 ---
 

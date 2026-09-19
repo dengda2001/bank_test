@@ -27,14 +27,14 @@
 
 ## Acceptance Criteria
 
-- [ ] `responsive-conventions.md` 中不再存在"桌面渲染是冻结契约"的无条件表述，取而代之的是可执行的桌面改动规则。
-- [ ] 共享样式表含 `@media (max-width: 1100px)` 档，且该档位于 640 档之前。
-- [ ] 640 档的规则与断言与改动前完全一致（可用 diff 证明）。
-- [ ] 980/981 这一对的处置有明确结论并写入 spec。
-- [ ] `go test ./cmd/truelayer-demo/...` 全部通过。
-- [ ] `go vet ./...` 通过。
-- [ ] 1024 / 1366 / 1440 / 1920 四档下，全部 11 个页面 `scrollWidth === clientWidth`。
-- [ ] 四档截图存入本任务 `research/screenshots/`，作为后续子任务的对照基线。
+- [x] `responsive-conventions.md` 中不再存在"桌面渲染是冻结契约"的无条件表述，取而代之的是可执行的桌面改动规则。
+- [x] 共享样式表含 `@media (max-width: 1100px)` 档，且该档位于 640 档之前。
+- [x] 640 档的规则与断言与改动前完全一致（可用 diff 证明）。
+- [x] 980/981 这一对的处置有明确结论并写入 spec。
+- [x] `go test ./cmd/truelayer-demo/...` 全部通过。
+- [x] `go vet ./...` 通过。
+- [x] 1024 / 1366 / 1440 / 1920 四档下，全部 11 个页面 `scrollWidth === clientWidth`。
+- [x] 四档截图存入本任务 `research/screenshots/`，作为后续子任务的对照基线。
 
 ## Out of Scope
 
@@ -46,3 +46,21 @@
 
 - 本子任务的产物是**基线与规则**，不是视觉成果。它的完成标准是"后续子任务可以合法地改桌面渲染"，而不是"页面变好看了"。
 - 若在梳理 980/981 时发现该档承担了未记录的行为，先记录再决定，不要直接删除。
+
+---
+
+## 验收证据（2026-09-19 收尾时逐条对过）
+
+| 验收项 | 证据 |
+|---|---|
+| 冻结表述已改写 | `responsive-conventions.md` 全文搜 "frozen" 只剩 `:28` 的历史叙述与移动端的 "frozen last column"/"frozen mobile contract"（后者是 ≤640 的绝对契约，应保留） |
+| 1100 档存在且在 640 之前 | `workspace.css:363`（1100）早于 `:367`（640）；`TestWorkspaceCSSOrdersThe1100TierBeforeThe640Tier` 守这条 |
+| 640 档逐字节不变 | 从第一个 640 块到 EOF 的 sha256：`workspace.css` = `7e572e72…f565`，`collection-pages.css` = `75375c16…8a0b` |
+| 980/981 处置已入 spec | §3.1 单列一段说明它只是导航阈值、`.grid-two` 已迁出、≤980 渲染等价 |
+| `go test` / `go vet` | 退出码均为 0（收尾复跑一次确认） |
+| 四档 11 页无文档级横向溢出 | `scripts/audit/desktop-widths.mjs` exit 0，44/44 `overflow=0`；重跑报告与归档报告逐字节相同 |
+| 四档截图 | `research/screenshots/` 44 张 = 11 页 × {1024,1366,1440,1920}，随本任务提交 |
+
+**已知保留问题（不阻塞，但后续任务要知道）**：共享 1100 档目前只装了一条声明（`.grid-two`），
+而它唯一的渲染者是无人引用的 `legacyExpenseTemplate`。**"档位存在"不等于"档位已填满"** ——
+其余原型 1100 折叠是 ②③④⑤ 各自的活。spec §3.1 已写明。
