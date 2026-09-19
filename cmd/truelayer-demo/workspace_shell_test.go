@@ -257,6 +257,62 @@ func TestOnlySuccessFlashesAreMarkedForTheToast(t *testing.T) {
 	}
 }
 
+// A marked notice renders fixed text chosen by the template, never a value taken
+// from the request. The Message query parameter is a *code*, matched with
+// {{if eq .Message "some_code"}}, and the sentence lives in the template; the bare
+// {{if .Message}} guard that prints the value straight back shows whatever the URL
+// said, so a crafted link puts arbitrary text in a green success toast inside the
+// trusted UI. html/template escapes it, so this is content injection rather than
+// XSS -- but the affordance is a system-generated confirmation the user did not
+// cause. Scans every template and Go template literal so a page added later cannot
+// reintroduce it, which is why this fails until the bank page and the two legacy
+// cash receipt templates are guarded.
+func TestNoQueryParameterIsRenderedAsToastText(t *testing.T) {
+	// Both spellings the repository has used for a raw echo: the marked toast, and
+	// the Message guard that prints the value straight back.
+	rawEcho := regexp.MustCompile(`data-toast[^>]*>\s*\{\{\s*\.Message\s*\}\}|\{\{\s*if\s+\.Message\s*\}\}\s*\{\{\s*\.Message\s*\}\}`)
+	// Guard the guard: a regexp that stopped matching the raw form would let the
+	// scan below pass on a reintroduced bug. The sample is spelled in two pieces so
+	// the repository-wide grep for the forbidden form stays empty.
+	sampleRawEcho := `<div class="notice ok" data-toast>` + "{{.Message}}</div>"
+	if !rawEcho.MatchString(sampleRawEcho) {
+		t.Fatal("the scan no longer recognises the raw echo it exists to forbid")
+	}
+	scanned := 0
+	err := filepath.WalkDir(".", func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			if entry.Name() == ".git" {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		name := entry.Name()
+		isTemplate := strings.HasSuffix(name, ".html")
+		isSource := strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go")
+		if !isTemplate && !isSource {
+			return nil
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		scanned++
+		if rawEcho.Match(body) {
+			t.Errorf("%s renders the raw ?message= value as a data-toast; the toast text must be chosen by the template and selected by a message code", path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scanned < 20 {
+		t.Fatalf("scanned only %d files; the scan is not reading the real sources", scanned)
+	}
+}
+
 // The 641 tier gives the rail `position: sticky`, and a `min-width` media query
 // keeps matching above its own threshold -- so the rule is still in force in the
 // 641-980 range, where the 980 tier collapses `.app` to one column. There the

@@ -134,9 +134,20 @@ func (data rentWorkspacePageData) TenantSettleForm(row rentWorkspaceTenantRow) c
 }
 
 // billsMessageText / billsErrorText translate the codes the bills handlers emit.
-// Unrecognised codes fall through verbatim: the raw-code contract that
-// TestBillsPageSurfacesInvalidFilterAndPeriodErrors pins (invalid_dashboard_filter,
-// invalid_period) must keep rendering exactly as before.
+//
+// The two fall through differently on purpose. An unrecognised *error* code
+// renders verbatim, because that raw-code contract is what
+// TestBillsPageSurfacesInvalidFilterAndPeriodErrors pins
+// (invalid_dashboard_filter, invalid_period must keep rendering exactly as
+// before) and it lands in a red error banner.
+//
+// An unrecognised *message* code renders nothing. Its notice is a green success
+// toast marked data-toast, and the message comes straight off the query string,
+// so a verbatim fall-through let a crafted link —
+// /bills?message=anything — print arbitrary text as a system confirmation. The
+// three codes below are the only values any handler redirects to /bills with, so
+// nothing legitimate is lost. This mirrors the whitelist guard the 09-20 task
+// applied to /bank and the cash-receipt templates.
 func billsMessageText(code string) string {
 	switch code {
 	case "manual_balance_saved":
@@ -146,7 +157,7 @@ func billsMessageText(code string) string {
 	case "bills_generated":
 		return "本月账单已生成，重复触发不会产生重复账单。"
 	default:
-		return code
+		return ""
 	}
 }
 

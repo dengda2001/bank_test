@@ -44,3 +44,48 @@ func TestDunningPageRendersFocusedQueueWithoutSavingConfigOnGet(t *testing.T) {
 		t.Fatal("dunning page rendered the unrelated monthly dashboard")
 	}
 }
+
+// /bills renders ?message= into a green success toast marked data-toast, and the
+// value comes straight off the query string. An unrecognised code must therefore
+// render nothing: a verbatim fall-through put arbitrary attacker-chosen text
+// inside a system confirmation (09-20-mobile-filter-and-duplicate-errors found
+// this on /bank and the cash-receipt templates; /bills reached the same toast
+// through a mapping func, which the literal `{{.Message}}` scan cannot see).
+// The three codes any handler actually redirects to /bills with must survive.
+func TestBillsMessageRendersOnlyWhitelistedCodes(t *testing.T) {
+	render := func(message string) string {
+		t.Helper()
+		page, err := executeTemplate(billsPageTemplate, rentDashboardPageData{
+			Period: "2026-09", PeriodLabel: "2026年9月", Message: message,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return page
+	}
+
+	if got := billsMessageText("something_else"); got != "" {
+		t.Fatalf("billsMessageText(%q)=%q; an unknown message code must render nothing", "something_else", got)
+	}
+	injected := render("INJECT-7f3a91")
+	if strings.Contains(injected, "INJECT-7f3a91") {
+		t.Fatalf("the /bills toast echoes ?message= verbatim:\n%s", injected)
+	}
+	if strings.Contains(injected, `class="notice ok"`) {
+		t.Fatal("an unrecognised ?message= must render no success notice at all")
+	}
+
+	for code, want := range map[string]string{
+		"manual_balance_saved":      "平账已完成",
+		"manual_balance_not_needed": "无需平账",
+		"bills_generated":           "本月账单已生成",
+	} {
+		page := render(code)
+		if !strings.Contains(page, `<div class="notice ok" data-toast>`) {
+			t.Fatalf("message %q lost its success toast", code)
+		}
+		if !strings.Contains(page, want) {
+			t.Fatalf("message %q rendered without %q", code, want)
+		}
+	}
+}

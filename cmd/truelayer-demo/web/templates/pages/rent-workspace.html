@@ -18,7 +18,6 @@
       <nav class="workspace-period-mobile" aria-label="选择收租月份"><a class="btn subtle" href="{{workspacePeriodURL .Filters .PreviousPeriod}}" aria-label="上个月">‹</a><strong>{{.PeriodLabel}}</strong><a class="btn subtle" href="{{workspacePeriodURL .Filters .NextPeriod}}" aria-label="下个月">›</a></nav>
     </div>
     {{if eq .Error "invalid_workspace_filter"}}<div class="notice error">筛选条件无效，已恢复安全默认值。</div>{{end}}
-    {{if .Message}}<div class="notice ok" data-toast>{{.Message}}</div>{{end}}
     {{if not .PropertyOptions}}<div class="notice workspace-empty-notice">尚未建立有效房产。旧版租金账单不会自动迁移；你可以先<a href="/properties?add=1">新建房产</a>，或前往<a href="/bills">应收账单</a>查看现有账单。</div>{{end}}
     <section class="workspace-summary" aria-label="月度汇总">
       <div class="panel metric metric-main"><div class="label">本月应收</div><strong>{{.Summary.ExpectedAmount}}</strong><span>{{.Summary.ResponsibilityCount}} 条租客责任</span></div>

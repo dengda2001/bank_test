@@ -36,7 +36,6 @@ type rentWorkspacePageData struct {
 	TotalPages       int
 	Page             int
 	PageSize         int
-	Message          string
 	Error            string
 }
 
@@ -79,7 +78,7 @@ func rentWorkspacePendingItems(rows []paymentTransaction, periodMonth time.Time)
 	return items
 }
 
-func rentWorkspacePageFromData(a *app, r *http.Request, data rentWorkspaceData, message, pageError string) rentWorkspacePageData {
+func rentWorkspacePageFromData(a *app, r *http.Request, data rentWorkspaceData, pageError string) rentWorkspacePageData {
 	period := monthStart(data.Filters.PeriodMonth)
 	return rentWorkspacePageData{
 		workspaceShell: a.fillWorkspaceShell(r, workspaceShell{
@@ -115,7 +114,6 @@ func rentWorkspacePageFromData(a *app, r *http.Request, data rentWorkspaceData, 
 		TotalPages:       data.TotalPages,
 		Page:             data.Page,
 		PageSize:         data.PageSize,
-		Message:          message,
 		Error:            pageError,
 	}
 }
@@ -143,7 +141,7 @@ func (a *app) renderRentWorkspaceDashboard(w http.ResponseWriter, r *http.Reques
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	page := rentWorkspacePageFromData(a, r, data, r.URL.Query().Get("message"), "")
+	page := rentWorkspacePageFromData(a, r, data, "")
 	var pendingTransactions int64
 	if err := a.db.WithContext(r.Context()).Model(&paymentTransaction{}).
 		Where("user_id = ? AND direction = ? AND match_status IN ?", userID, "income", pendingMatchStatuses).
