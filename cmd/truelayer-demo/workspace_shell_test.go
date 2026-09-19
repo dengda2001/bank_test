@@ -313,6 +313,41 @@ func TestNoQueryParameterIsRenderedAsToastText(t *testing.T) {
 	}
 }
 
+// The shared chrome is rendered before the page body, so at parse time <main> and
+// everything in it -- the filter disclosure, its fields, the page's search box --
+// do not exist yet and a top-level querySelectorAll for them comes back empty. The
+// failure is not a dead button: the <=640px filter panel is opened only by that
+// listener, so the filter feature becomes unreachable on a narrow screen, and the
+// fields' change->submit is dead at every width. All page-body lookups therefore
+// live in initChrome(), which runs on DOMContentLoaded; the nav bindings move with
+// them so the block keeps one rule. The toast script above is the same rule applied
+// to the toast notice.
+func TestWorkspaceNavBodyLookupsWaitForDOMContentLoaded(t *testing.T) {
+	// The partial alone is the minimal page the failure needs: it is rendered
+	// on its own, exactly as the chrome is emitted before any <main> exists.
+	chrome := renderWorkspaceNav(t, workspaceShell{ActivePage: "properties", FootNote: "房产管理"})
+	init := strings.Index(chrome, "const initChrome = () => {")
+	if init < 0 {
+		t.Fatal("the shared script must gather its page-body lookups in initChrome()")
+	}
+	if !strings.Contains(chrome, `document.addEventListener("DOMContentLoaded", initChrome)`) {
+		t.Fatal("initChrome() must be registered for DOMContentLoaded; the chrome precedes the page body, so running it at parse time attaches no listeners")
+	}
+	for _, lookup := range []string{
+		`document.querySelector("[data-mobile-search]")`,
+		`document.querySelectorAll(".object-list-filter-toggle")`,
+		`document.querySelectorAll(".object-list-filter-fields select, .object-list-filter-fields input")`,
+	} {
+		at := strings.Index(chrome, lookup)
+		if at < 0 {
+			t.Fatalf("the rendered chrome no longer contains %s; the scan would pass vacuously", lookup)
+		}
+		if at < init {
+			t.Fatalf("%s is looked up before initChrome() runs; the chrome precedes the page body, so the lookup would always be empty", lookup)
+		}
+	}
+}
+
 // The 641 tier gives the rail `position: sticky`, and a `min-width` media query
 // keeps matching above its own threshold -- so the rule is still in force in the
 // 641-980 range, where the 980 tier collapses `.app` to one column. There the

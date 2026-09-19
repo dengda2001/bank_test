@@ -47,9 +47,9 @@
         <label class="object-search"><span class="visually-hidden">搜索当前列表</span><input type="search" name="search" value="{{.Search}}" placeholder="搜索当前列表" aria-label="搜索当前列表"></label>
         <input type="hidden" name="status" value="{{.StatusFilter}}">
         <div class="object-list-filter-fields">
-          <label><span class="visually-hidden">所属房产</span><select name="property_id" aria-label="所属房产" onchange="this.form.submit()"><option value="">全部房产</option>{{range .PropertyOptions}}<option value="{{.ID}}"{{if eq $.PropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
-          <label><span class="visually-hidden">收缴状态</span><select name="collection" aria-label="收缴状态" onchange="this.form.submit()"><option value="all"{{if eq .CollectionFilter "all"}} selected{{end}}>全部状态</option><option value="unpaid"{{if eq .CollectionFilter "unpaid"}} selected{{end}}>未收齐</option><option value="paid"{{if eq .CollectionFilter "paid"}} selected{{end}}>已收齐</option></select></label>
-          <label><span class="visually-hidden">月份</span><select name="period" aria-label="月份" onchange="this.form.submit()">{{range .PeriodOptions}}<option value="{{.Value}}"{{if eq $.Period .Value}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+          <label><span class="visually-hidden">所属房产</span><select name="property_id" aria-label="所属房产"><option value="">全部房产</option>{{range .PropertyOptions}}<option value="{{.ID}}"{{if eq $.PropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+          <label><span class="visually-hidden">收缴状态</span><select name="collection" aria-label="收缴状态"><option value="all"{{if eq .CollectionFilter "all"}} selected{{end}}>全部状态</option><option value="unpaid"{{if eq .CollectionFilter "unpaid"}} selected{{end}}>未收齐</option><option value="paid"{{if eq .CollectionFilter "paid"}} selected{{end}}>已收齐</option></select></label>
+          <label><span class="visually-hidden">月份</span><select name="period" aria-label="月份">{{range .PeriodOptions}}<option value="{{.Value}}"{{if eq $.Period .Value}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
         </div>
         <button class="btn subtle object-list-filter-toggle" type="button" aria-expanded="false">筛选</button>
         <span class="object-list-demo-note">演示数据 · EUR</span>

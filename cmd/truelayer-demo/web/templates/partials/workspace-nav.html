@@ -82,52 +82,73 @@
           show();
         }
       })();
+      // The chrome is rendered before the page body: at parse time <main> and
+      // everything in it -- the filter disclosure, its fields, the page's search box
+      // -- do not exist yet, so a top-level querySelectorAll for them comes back
+      // empty and attaches no listeners. The consequence is not a dead button: the
+      // <=640px filter panel is only opened by that listener, so the filter feature
+      // is unreachable on a narrow screen, and the fields' change->submit is dead at
+      // every width. Every lookup of a page-body element waits for
+      // DOMContentLoaded; the nav bindings move with them so the block keeps one
+      // rule instead of two.
       (() => {
-        const mobileNav = document.querySelector(".mobile-bottom-nav");
-        const menus = [...document.querySelectorAll(".mobile-flyout")];
-        document.querySelector("[data-mobile-search]")?.addEventListener("click", () => {
-          const input = document.querySelector("main input[type=search]");
-          if (!input) return;
-          const form = input.closest("form");
-          if (form?.classList.contains("mobile-search-open")) {
-            form.classList.remove("mobile-search-open");
-            return;
-          }
-          const disclosure = form?.closest("details");
-          if (disclosure) disclosure.open = true;
-          if (form && getComputedStyle(form).display === "none") form.classList.add("mobile-search-open");
-          input.focus({ preventScroll: true });
-          input.scrollIntoView({ block: "center", behavior: "smooth" });
-        });
-        document.querySelectorAll(".object-list-filter-toggle").forEach((button) => {
-          button.addEventListener("click", () => {
-            const form = button.closest(".object-list-filters");
-            if (!form) return;
-            const open = form.classList.toggle("filters-open");
+        const initChrome = () => {
+          const mobileNav = document.querySelector(".mobile-bottom-nav");
+          const menus = [...document.querySelectorAll(".mobile-flyout")];
+          document.querySelector("[data-mobile-search]")?.addEventListener("click", () => {
+            const input = document.querySelector("main input[type=search]");
+            if (!input) return;
+            const form = input.closest("form");
+            if (form?.classList.contains("mobile-search-open")) {
+              form.classList.remove("mobile-search-open");
+              return;
+            }
+            const disclosure = form?.closest("details");
+            if (disclosure) disclosure.open = true;
+            if (form && getComputedStyle(form).display === "none") form.classList.add("mobile-search-open");
+            input.focus({ preventScroll: true });
+            input.scrollIntoView({ block: "center", behavior: "smooth" });
+          });
+          document.querySelectorAll(".object-list-filter-toggle").forEach((button) => {
+            button.addEventListener("click", () => {
+              const form = button.closest(".object-list-filters");
+              if (!form) return;
+              const open = form.classList.toggle("filters-open");
+              button.setAttribute("aria-expanded", String(open));
+            });
+          });
+          // The single submit path for the object-list filter fields. Those pages
+          // ship no submit button, so a field change has to submit the form itself;
+          // letting the pages add their own onchange="this.form.submit()" would give
+          // a form two submit sources and two submits per change. Pages therefore
+          // rely on this shared binding and must not carry their own.
+          document.querySelectorAll(".object-list-filter-fields select, .object-list-filter-fields input").forEach((control) => {
+            control.addEventListener("change", () => control.form?.requestSubmit());
+          });
+          const closeMenus = () => {
+            menus.forEach((menu) => { menu.hidden = true; });
+            mobileNav?.querySelectorAll("[data-mobile-menu]").forEach((button) => button.setAttribute("aria-expanded", "false"));
+          };
+          mobileNav?.addEventListener("click", (event) => {
+            const button = event.target.closest("[data-mobile-menu]");
+            if (!button) return;
+            const menu = document.getElementById("mobile-menu-" + button.dataset.mobileMenu);
+            if (!menu) return;
+            const open = menu.hidden;
+            closeMenus();
+            menu.hidden = !open;
             button.setAttribute("aria-expanded", String(open));
           });
-        });
-        document.querySelectorAll(".object-list-filter-fields select, .object-list-filter-fields input").forEach((control) => {
-          control.addEventListener("change", () => control.form?.requestSubmit());
-        });
-        const closeMenus = () => {
-          menus.forEach((menu) => { menu.hidden = true; });
-          mobileNav?.querySelectorAll("[data-mobile-menu]").forEach((button) => button.setAttribute("aria-expanded", "false"));
+          document.addEventListener("click", (event) => {
+            if (!event.target.closest(".mobile-bottom-nav, .mobile-flyout")) closeMenus();
+          });
+          document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeMenus(); });
         };
-        mobileNav?.addEventListener("click", (event) => {
-          const button = event.target.closest("[data-mobile-menu]");
-          if (!button) return;
-          const menu = document.getElementById("mobile-menu-" + button.dataset.mobileMenu);
-          if (!menu) return;
-          const open = menu.hidden;
-          closeMenus();
-          menu.hidden = !open;
-          button.setAttribute("aria-expanded", String(open));
-        });
-        document.addEventListener("click", (event) => {
-          if (!event.target.closest(".mobile-bottom-nav, .mobile-flyout")) closeMenus();
-        });
-        document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeMenus(); });
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", initChrome);
+        } else {
+          initChrome();
+        }
       })();
     </script>
     <script>
