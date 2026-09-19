@@ -1265,6 +1265,17 @@ atomically, and recomputes the ledger projection from those rows.
 - Applies to the database-backed monthly obligations, effective rent/cash
   payment projection, bank arrival transactions, allocations, and sync runs.
 
+> **Surface note (verified 2026-09-19).** `renderRentDashboard` serves
+> **`/bills`** (`page_data_routes.go:439` -> `renderRentDashboard`) and serves
+> `/rent-dashboard` **only** when no database-backed user session exists
+> (`dashboard.go:15-19`). That second case is a legacy, no-database fallback.
+> With a database configured — every normal session — `/rent-dashboard` renders
+> the room-centric workspace instead, whose read model is **not** the one
+> described in this scenario. See
+> "Scenario: Room-Centric Rent Workspace Read Model" below. Earlier revisions
+> of this file attributed the obligation-based model to `/rent-dashboard`
+> without that distinction.
+
 ### 2. Signatures
 
 - `rentDashboardFiltersFromQuery(url.Values)` parses and validates typed search,
@@ -1354,3 +1365,168 @@ summary.Rows, summary.TotalPages = paginateRentDashboardRows(filtered, filters.P
 
 The monthly bill remains the source of rent-period truth; bank arrival month is
 used only for pending and other-income navigation.
+
+## Scenario: Room-Centric Rent Workspace Read Model
+
+### 1. Scope / Trigger
+
+- Trigger: Any authenticated `/rent-dashboard` request while `a.db != nil`
+  (`dashboard.go:15-19`) — that is, every database-backed session. The legacy
+  no-database fallback renders the obligation-based model instead.
+- Governs the monthly summary cards, the per-property cards, the room tree and
+  its per-room tenant counts, and the room status chips.
+
+### 2. Signatures
+
+- `app.renderRentWorkspaceDashboard(w, r)` — `rent_workspace_page.go:91`.
+- `rentWorkspaceData` / `rentWorkspaceRoomAggregate` — the loader's typed input
+  and the per-room aggregate.
+- `rentLedgerService.ensureRentCharge(ctx, userID, propertyID, roomID, period)`
+  — `landlord_rent_ledger.go:244`; the only writer of `rent_charges`.
+
+### 3. Contracts
+
+- **Room amounts are charge-gated.** The workspace obligation query carries
+  `AND rent_charge_id IS NOT NULL` (`rent_workspace.go:1118`); the projection
+  loop additionally skips rows whose `RentChargeID` is nil
+  (`rent_workspace.go:433`); and the per-room aggregation is entered only when
+  a charge exists for that room (`rent_workspace.go:461`). A room's
+  expected/paid/balance therefore comes **only** from obligations backed by a
+  `rent_charges` row. Lazy obligations (`rent_charge_id IS NULL`) are invisible
+  here even though `/bills` lists them at full value.
+- `ensureRentCharge` has **no production caller** — it is reached only from
+  `landlord_rent_ledger_test.go` and `rent_workspace_test.go`. Nothing in a
+  running server writes `rent_charges`, so `chargeByRoom` stays empty and every
+  room reports zero amounts. This is a product gap, not a data gap: no seeding
+  can close it.
+- Occupancy is computed from the agreement/party model
+  (`activePartyCountByRoom`), independently of charges. A room can therefore
+  show a correct tenant count with all-zero amounts; the two numbers do not
+  share a source and must not be validated against each other.
+- A room that has an active agreement and an active party but no charge is
+  reported as `needs_review` (`rent_workspace.go:508-509`), never as `vacant`
+  and never as settled.
+
+### 4. Validation & Error Matrix
+
+- No charge for a room with an active agreement and active party ->
+  `needs_review` with zero amounts; never render it as vacant or settled.
+- No charge and no agreement -> `vacant`.
+- Charge present but no obligations linked to it -> `needs_review` rather than
+  a zero-paid room (`rent_workspace.go:505-507`).
+- Non-EUR obligation currency -> `needs_review`; never convert into EUR
+  silently.
+
+### 5. Good/Base/Bad Cases
+
+- Good: create the charge first, link obligations to it, then read room totals
+  from the charge-backed rows.
+- Base: a room with one charge and one linked EUR obligation reports that
+  obligation's expected/paid/balance.
+- Bad: reading an all-zero room total as "no rent is due this month", or
+  closing the gap by seeding `rent_charges` while leaving
+  `tenants.monthly_rent_cents > 0` (see the warning below).
+
+### 6. Tests Required
+
+- Database tests must assert that room totals come from charge-backed
+  obligations and that lazy obligations contribute nothing to them.
+- A test must pin `needs_review` for a room with an agreement and an active
+  party but no charge.
+- Run `go test ./... -count=1` and `go vet ./...` after changing workspace
+  reads.
+
+### 7. Wrong vs Correct
+
+Wrong:
+
+```go
+// Lazy obligations are silently assumed to be part of the room totals.
+rows := loadActiveMonthlyObligations(userID, periodMonth)
+summary.ExpectedCents += sumByRoom(rows)
+```
+
+Correct:
+
+```go
+// The workspace reads only charge-backed obligations; a parallel lazy
+// population backs /bills and must not be merged into this read.
+db.Where("user_id = ? AND period_month = ? AND record_status = ? AND rent_charge_id IS NOT NULL",
+    userID, periodMonth, obligationRecordActive).Find(&input.Obligations)
+```
+
+> **Do not close this gap by seeding `rent_charges` alone.** With
+> `tenants.monthly_rent_cents > 0`, `ensureMonthlyObligations` still inserts a
+> lazy row for the same `(tenant_id, period_month)`. A charge-backed row's
+> generated `lazy_period_month` is NULL, and NULLs are distinct in a MySQL
+> unique index, so neither unique key collides and the pair becomes two rows —
+> breaking the lazy uniqueness invariant established by migration 013.
+> Verified by direct SQL experiment on 2026-09-19.
+
+## Scenario: Local Test Data Seeding
+
+### 1. Scope / Trigger
+
+- Trigger: Preparing or refreshing a local, disposable database so the
+  authenticated pages have rows to render.
+- Applies to `test-data/**` fixtures and `scripts/seed-*.sh` loaders. It does
+  not apply to production data, and never to `:8081` / the live host.
+
+### 2. Signatures
+
+- `scripts/seed-rosewood.sh --stage={data|match|all} [--database=...]
+  [--mysql-host=...] [--mysql-port=...]` — idempotent two-stage loader.
+- `test-data/rosewood/extract.py` — regenerates the fixture JSON and the two
+  SQL stages from `收租明细_Rosewood_20260916.xlsx`.
+- Fixture outputs: `properties.json`, `rooms.json`, `tenants.json`,
+  `agreements.json`, `payments.json`, `review.json`, `seed-data.sql`,
+  `seed-match.sql`.
+
+### 3. Contracts
+
+- Fixtures are **generated, never hand-edited**. Change `extract.py` and rerun
+  it; a hand edit is lost on the next regeneration.
+- Every stage is idempotent: rerunning produces identical row counts. Verified
+  for `--stage=all` on 2026-09-19 (4/25/58/40/63/31/186/53/307 unchanged).
+- Deletion is **scoped, never a truncate**: only the four known property
+  addresses, the known tenant-name set, and rows carrying the `ROSEWOOD-`
+  prefix are removed. An unscoped `DELETE` here would destroy hand-made local
+  data.
+- The loader refuses `:8081`, non-loopback hosts, database names outside the
+  local `rentops*` set, unknown stages, unknown flags, and invalid or missing
+  user ids.
+- Seeding cascades: `rent_obligations` rows are deleted and lazily rebuilt on
+  the next load of `/rent-dashboard`, `/tenants`, or `/tenants/{id}`. A freshly
+  seeded database therefore has **no** obligations until one of those pages is
+  requested.
+- The fixture writes `tenants.monthly_rent_cents > 0`, which selects the lazy
+  obligation path. Room-centric amounts on `/rent-dashboard` stay zero — see
+  "Scenario: Room-Centric Rent Workspace Read Model"; that is expected, not a
+  seeding failure.
+- `tenants.room_label` / `room_address` / `property_hint` are denormalized
+  copies and must agree with `properties` + `rooms`; the page list and the room
+  tree read different sources.
+
+### 4. Validation & Error Matrix
+
+- Non-loopback host or `:8081` -> refuse and exit non-zero before any write.
+- Database name outside `rentops*` -> refuse.
+- Unknown stage, unknown flag, bad or missing uid -> refuse.
+- Rerun on an already-seeded database -> no row-count change; not an error.
+
+### 5. Good/Base/Bad Cases
+
+- Good: regenerate from `extract.py`, run `--stage=all` against local `rentops`,
+  then load a page to let the lazy obligations rebuild.
+- Base: rerunning `--stage=all` leaves all counts identical.
+- Bad: hand-editing `seed-data.sql`, truncating tables instead of scoped
+  deletion, or pointing the loader at a shared database.
+
+### 6. Tests Required
+
+- `bash -n scripts/seed-rosewood.sh` plus a rerun-idempotency check comparing
+  per-table counts before and after.
+- After seeding, assert zero duplicate `(user_id, tenant_id, period_month)`
+  groups among lazy obligations.
+- Run `go test ./... -count=1` and `go vet ./...` before committing loader or
+  fixture changes.

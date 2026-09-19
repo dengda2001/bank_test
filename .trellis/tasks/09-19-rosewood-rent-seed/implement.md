@@ -21,7 +21,9 @@ python3 ./.trellis/scripts/task.py current   # 确认当前任务
    应用到本机 `rentops`，此前它只有 `001`–`012`）
 7. [x] 灌 `match` 阶段，核对义务无重复、账单页出现三种收款状态
 8. [x] 跑验收清单（见下方「验收结果」）
-9. [ ] 更新 `.trellis/spec/` 中与本地数据准备相关的说明；提交（留给主会话）
+9. [x] 更新 `.trellis/spec/`：新增「Room-Centric Rent Workspace Read Model」（记录 charge 门控
+   与 `/bills` 的分流，并修正原来把义务视角记成 `/rent-dashboard` 读模型的那节）与
+   「Local Test Data Seeding」（本步骤的字面交付物）
 
 ## 验证命令
 
@@ -93,11 +95,22 @@ scripts/seed-rosewood.sh --stage=data && mysql ... -e "SELECT COUNT(*) FROM tena
 本任务按 R2/R4 写的是 legacy 路（`tenants.monthly_rent_cents` = 源表「应收」），
 所以拿不到房间树的金额。
 
-要让该项也通过，需要二者之一（本次均**未**实施）：
+### 处置决定（2026-09-19，用户已确认）
+
+**只记录，不在本任务修；另开独立任务处理 charge 路径。**
+
+理由：房间视角该不该改用 charge 模型是**产品语义决策**，不是灌数据能解决的；
+塞进本任务会让「哪条改动为哪件事负责」变模糊。本任务交付的 3 个产物
+（extract.py / seed-rosewood.sh / 任务记录）本身是对的，覆盖了 11 个页面中的 10 个。
+
+本次**未**实施的两个候选方案（留给后续任务，此处仅存档）：
+
 1. 种子额外写 `rent_charges` + charge 背书义务，并让 `tenants.monthly_rent_cents` 保持 >0 ——
    但那样 `ensureMonthlyObligations` 会在每次加载页面时再插一条惰性义务，
    `(tenant, month)` 变成 2 行，违反硬不变量。已用 SQL 实验验证（charge 背书行的
    `lazy_period_month` 为 NULL，`INSERT ... ON DUPLICATE KEY UPDATE` 不会命中）。
 2. 在 `ensureMonthlyObligations` 里加一句「该 (tenant, month) 已有 charge 背书义务则跳过」，
-   再配合方案 1。这会修改应用代码（`obligations.go`），超出本任务「3 个交付物」的范围，
-   留给主会话/用户决定。
+   再配合方案 1。这会修改应用代码（`obligations.go`）。
+
+**后续任务至少要回答**：房间视角与租客视角是否应该共用同一份义务数据？
+若共用，惰性义务要不要补 `rent_charge_id`；若继续并行，则要明确谁在什么时机写 `rent_charges`。

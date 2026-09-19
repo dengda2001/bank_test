@@ -53,13 +53,21 @@
 
 ## Acceptance Criteria
 
-- [ ] `properties` = 4，`rooms` = 25，地址与房间号与源表一致
-- [ ] `/properties`、`/rooms`、`/tenants`、`/tenancies` 四个列表页均有数据且可翻页/筛选
-- [ ] 至少一个房间呈现合租（同月 ≥2 名租客，且 `/rent-dashboard` 房间树里该房间人数与之一致）
-- [ ] `/rent-dashboard` 切换 2026-05 ~ 2026-12 各月，应收合计不为 0 且随月份变化
-- [ ] `/tenants/{id}` 详情页显示房间、月租、租期，无「未填写」占位
-- [ ] 每个 `(tenant, month)` 在 `rent_obligations` 中恰好 1 行（依赖 `09-19-rent-obligation-dedup` 先完成）
-- [ ] 重跑灌数据脚本，各表行数不变（幂等）
+- [x] `properties` = 4，`rooms` = 25，地址与房间号与源表一致
+- [x] `/properties`、`/rooms`、`/tenants`、`/tenancies` 四个列表页均有数据且可翻页/筛选
+      —— 4 房产 / 25 房间 / 58 租客 / 40 租约
+- [x] 至少一个房间呈现合租（同月 ≥2 名租客，且 `/rent-dashboard` 房间树里该房间人数与之一致）
+      —— 2026-05 有 13 个房间 ≥2 人；房间树渲染 1 人 ×12 / 2 人 ×12 / 3 人 ×1
+- [ ] **`/rent-dashboard` 切换 2026-05 ~ 2026-12 各月，应收合计不为 0 且随月份变化 —— 不通过。
+      该验收项靠灌数据无法满足**：该路由在有库时渲染房间视角，其取义务的查询自带
+      `rent_charge_id IS NOT NULL`（`rent_workspace.go:1118`），而没有任何生产代码写
+      `rent_charges`。根因与处置见 `implement.md`「验收结果」与「处置决定」。
+      本条验收项本身写得有误——它假定该页读义务表，实际读的是 charge。
+- [x] `/tenants/{id}` 详情页显示房间、月租、租期，无「未填写」占位
+      —— 房间 `2 · 72 Walkinstown Rd Dublin 12`、月租 `EUR 580.00`、租期 `2026-05-01 至 2026-12-31`
+- [x] 每个 `(tenant, month)` 在 `rent_obligations` 中恰好 1 行（依赖 `09-19-rent-obligation-dedup` 先完成）
+      —— 307 条义务，重复组 0
+- [x] 重跑灌数据脚本，各表行数不变（幂等）
 
 ## Out of Scope
 
