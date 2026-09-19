@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "核对本任务的 spec 更新是否与既有读模型契约一致，且没有把「renderRentDashboard 已死」这类错误结论写进去。"}
+{"file": ".trellis/spec/frontend/responsive-conventions.md", "reason": "核对被改指向的移动端/桌面测试仍然在断言断点契约本身，而不是被等价重述成恒真断言。"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "核对删除后的代码符合本仓库的质量约定（错误处理、不静默降级），并据以判断 §3.1 的报错写法是否恰当。"}
+{"file": ".trellis/tasks/09-19-legacy-dashboard-template-removal/design.md", "reason": "本次检查的主要依据：§6 的 17 项处置表是逐项核对的清单，§5 与 §7 是两处「不许悄悄删」的红线。"}

@@ -23,7 +23,8 @@
     "09-19-shell-alignment",
     "09-19-dashboard-alignment",
     "09-19-list-pages-alignment",
-    "09-19-detail-pages-alignment"
+    "09-19-detail-pages-alignment",
+    "09-19-legacy-dashboard-template-removal"
   ],
   "parent": null,
   "relatedFiles": [],

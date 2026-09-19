@@ -861,3 +861,37 @@ Seeded the local rentops database from the Rosewood rent ledger (4 properties / 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 25: 桌面契约解冻与 1100 断点（子任务 ①）
+
+**Date**: 2026-09-19
+**Task**: 桌面契约解冻与 1100 断点（子任务 ①）
+**Branch**: `main`
+
+### Summary
+
+完成 09-19-pc-ui-fidelity-alignment 的子任务 ①，并规划删除任务。① ：把「桌面渲染是冻结契约」改写为三条可审的桌面改动条件；新增 @media (max-width:1100px) 档（基准之后、640 之前）；640 档逐字节不变（sha256 证明）；980/981 保留并明确为导航阈值；断言为改指向而非削弱（逐条 diff + 注入反证）；44 张四档截图；desktop-widths.mjs 11 页×4 档 exit 0 无文档级横向溢出。诚实结论已入 spec：共享 1100 档只装一条声明且其唯一渲染者是死模板，档位存在≠档位填满。新增任务 09-19-legacy-dashboard-template-removal（父任务第 6 个子任务）并完成规划：查证 rentDashboardTemplate 是死代码但其宿主函数 renderRentDashboard 是 /bills、/dunning 的活渲染体（差点误删）；/rent-dashboard/settle 与 handleDashboardManualBalance 保留给 ③；催收抽屉只存在于待删模板，登记为原型功能缺口；停机门 1.1（催收链路鉴权）开工前已通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c944538` | (see git log) |
+| `3951263` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "该文件已记录「有库时 rentDashboardTemplate 不可达」；本任务要把这条记录变成删除，并新增「renderRentDashboard 是 /bills、/dunning 的活渲染体」与「催收抽屉在真实路径上缺失」两条，防止后来者误判。"}
+{"file": ".trellis/spec/frontend/responsive-conventions.md", "reason": "移动端/桌面断点与安全区的契约来源。mobile_layout_test.go 的 9 项改指向必须仍然符合它（该文件刚被 09-19-desktop-contract-1100 改过），不能为了删模板而放松断点断言。"}
+{"file": ".trellis/tasks/09-19-pc-ui-fidelity-alignment/prd.md", "reason": "父任务的原型功能清单（含一键平账 C 系列、催收抽屉）。用来判定哪些测试是「原型功能的载体」而非「模板专属标记」——前者不许悄悄删，后者才随模板走。"}
