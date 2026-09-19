@@ -71,3 +71,19 @@ go test ./cmd/truelayer-demo/ -run 'PageData|RentCollection|Billing|Rooms'
 编写的，用户对整批子任务给了执行授权，但未逐行读过。其中一处产品决定值得留意 ——
 filterbar 按页渲染（`/tenants`、`/bank` 不加月份下拉），理由与核查实据见 `prd.md`
 「已确认的决策」。
+
+## 收尾补正（2026-09-20，主会话）
+
+实施者在回报里把 `/transactions` 的行内操作列为「文案没动」，理由是 `import bank file`
+不在本子任务范围。**这个理由把两件事混了**：`prd.md` 的页面表里「导入银行文件」是
+**页头主操作**那一栏（父任务已排除，且代码里从未建过这个入口），而 `处理` 是
+**行内操作**那一栏 —— 同一张表里明明白白写着 `/transactions` 的行内操作应当是
+**「查看详情」**。九个页面都统一了，只有这一页漏了。
+
+- 已改：`billing_page.go:297` 的 `>处理</a>` → `>查看详情</a>`。
+- `处理流水`（`billing_page.go:340`、`workspace-nav.html:32` 等）**未动** —— 那是
+  `/transactions` 的**页面名**，不是行内操作文案。改它会动到侧边栏导航与多处页面标题。
+- 已补测试 `TestTransactionRouteActionColumnSaysViewDetails`（`list_pages_alignment_test.go`）。
+  该测试经反向验证：把文案改回 `处理` 会失败，不是空断言。
+
+**页头主操作**：`/transactions` 依父任务决定不渲染任何页头主操作，实施者的实现与之一致。

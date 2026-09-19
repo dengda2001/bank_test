@@ -292,6 +292,33 @@ func TestListPageTemplatesKeepHeadActionAndActionColumn(t *testing.T) {
 	}
 }
 
+// The action column must read the same on every list page. /transactions is
+// rendered by billing_page.go rather than one of the page templates above, and
+// this subtask left its row action as "处理" while every other page said
+// "查看详情" -- the one row its own PRD asked for and did not get. Pinned
+// separately so the next pass cannot quietly leave it behind again.
+func TestTransactionRouteActionColumnSaysViewDetails(t *testing.T) {
+	page := renderBillingPage(t, billingPageData{
+		workspaceShell: workspaceShell{ActivePage: "transactions", CompactTitle: "流水处理"},
+		PageKey:        "transactions", CanonicalPath: "/transactions", TransactionScope: "pending", PendingCount: 1,
+		TransactionRows: []transactionPageRow{{
+			ID: "7", InternalID: "7", DetailKey: "7", DetailURL: "/transactions?detail=7&match_status=pending",
+			Direction: "income", PayerName: "WAHAJULLAH KHAN", AmountDisplay: "€1,250.00",
+			MatchStatus: "candidate", MatchStatusLabel: "待确认",
+		}},
+	})
+	// html/template escapes the & in the href to &amp;, so pin the two halves
+	// rather than the literal URL the row was handed.
+	for _, marker := range []string{`>状态 / 操作</th>`, `>查看详情</a>`, `/transactions?detail=7`} {
+		if !strings.Contains(page, marker) {
+			t.Fatalf("transactions action column missing %q", marker)
+		}
+	}
+	if strings.Contains(page, `>处理</a>`) {
+		t.Fatal(`the transactions row action still reads 处理; it must match the other nine pages`)
+	}
+}
+
 // The three unimplemented dispositions must stop before any write: no income
 // transaction, no allocation, no obligation change -- only the notice. The
 // implemented branch (empty disposition == 匹配现有收款) is what the page used
