@@ -1,0 +1,62 @@
+[
+  {
+    "id": "audit-expense-insurance",
+    "description": "Annual buildings and contents insurance premium for the three rental units at Wexford Street, paid by direct debit",
+    "category": "保险",
+    "amount": 350.0,
+    "currency": "EUR",
+    "expense_date": "2026-09-08",
+    "payment_method": "Bank Transfer",
+    "room_hint": "Wexford Street portfolio",
+    "tenant_hint": "",
+    "created_at": "2026-09-08T06:05:00Z"
+  },
+  {
+    "id": "audit-expense-waste",
+    "description": "Wexford County Council waste water and refuse charges for September 2026",
+    "category": "水电",
+    "amount": 1234.56,
+    "currency": "EUR",
+    "expense_date": "2026-09-09",
+    "payment_method": "Direct Debit",
+    "room_hint": "",
+    "tenant_hint": "",
+    "created_at": "2026-09-09T06:35:00Z"
+  },
+  {
+    "id": "audit-expense-repair",
+    "description": "更换浦东某某花园3号楼2单元1802室厨房水槽及龙头的人工与材料费用",
+    "category": "维修",
+    "amount": 286.4,
+    "currency": "EUR",
+    "expense_date": "2026-09-03",
+    "payment_method": "现金",
+    "room_hint": "3号楼2单元1802室",
+    "tenant_hint": "张伟明",
+    "created_at": "2026-09-03T09:00:00Z"
+  },
+  {
+    "id": "audit-expense-cleaning",
+    "description": "Common area cleaning service",
+    "category": "清洁",
+    "amount": 45.0,
+    "currency": "EUR",
+    "expense_date": "2026-09-05",
+    "payment_method": "Card",
+    "room_hint": "",
+    "tenant_hint": "",
+    "created_at": "2026-09-05T08:00:00Z"
+  },
+  {
+    "id": "audit-expense-property-tax",
+    "description": "Local property tax instalment for the Riverside Quarter apartment, second of four instalments",
+    "category": "房产税",
+    "amount": 4321.09,
+    "currency": "EUR",
+    "expense_date": "2026-09-10",
+    "payment_method": "Bank Transfer",
+    "room_hint": "Apartment 12 Riverside Quarter",
+    "tenant_hint": "Alexandria Catherine Montgomery-Wellington",
+    "created_at": "2026-09-10T10:30:00Z"
+  }
+]
