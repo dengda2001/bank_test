@@ -273,6 +273,9 @@ func TestListPageTemplatesKeepHeadActionAndActionColumn(t *testing.T) {
 		{"tenancies", func() (string, error) {
 			return executeTemplate(tenancyPageTemplate, tenancyPageData{TableRows: []tenancyPageRow{{ID: 3, RoomID: 2, RoomLabel: "A-01"}}})
 		}, []string{`href="/tenancies?period=`, `>新建租约<`, `>操作</th>`, `>查看详情</a>`}},
+		{"tenants", func() (string, error) {
+			return executeTemplate(tenantTemplate, tenantPageData{Rows: []tenantRecord{{ID: "7", Name: "Aoife Murphy"}}})
+		}, []string{`href="/tenants?add=1">添加租客</a>`, `>操作</th>`, `>查看详情</a>`}},
 		{"expenses", func() (string, error) {
 			return executeTemplate(expenseTemplate, expensePageData{Rows: []expenseRecord{{ID: "1", Description: "维修"}}})
 		}, []string{`href="/expenses?period=`, `>新增支出<`, `>操作</th>`, `>绑定发票</a>`}},
