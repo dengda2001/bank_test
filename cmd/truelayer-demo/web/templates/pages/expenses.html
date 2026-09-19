@@ -18,7 +18,7 @@
         <a class="btn primary" href="/expenses?period={{.Period}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}&amp;add=1"><span class="expense-desktop-copy">新增支出</span><span class="expense-mobile-copy">新增</span></a>
       </header>
 
-      {{if eq .Message "expense_added"}}<div class="notice ok">支出记录已保存。</div>{{else if eq .Message "invoice_bound"}}<div class="notice ok">发票已绑定，历史版本已保留。</div>{{end}}
+      {{if eq .Message "expense_added"}}<div class="notice ok" data-toast>支出记录已保存。</div>{{else if eq .Message "invoice_bound"}}<div class="notice ok" data-toast>发票已绑定，历史版本已保留。</div>{{end}}
       {{if eq .Error "invalid_invoice"}}<div class="notice error">发票未保存，请检查编号、开票方、日期、金额和文件格式（PDF、JPG、PNG 或 WebP，最大 8 MB）。</div>{{else if .Error}}<div class="notice error">支出记录未保存，请检查描述、金额和房产。</div>{{end}}
 
       <form class="expense-filters" method="get" action="/expenses">

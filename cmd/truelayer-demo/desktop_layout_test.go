@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -20,16 +21,33 @@ func TestDesktopWorkspaceShellUsesFigmaTokens(t *testing.T) {
 		}
 	}
 	// The desktop head may be aligned to the prototype (responsive-conventions.md
-	// §1), but the frozen-column mechanism is still mobile-only: the desktop shell
-	// breadcrumb is `position: fixed`, never sticky.
-	if strings.Contains(strings.Split(workspacePageCSS, "@media (max-width: 640px)")[0], "position: sticky") {
-		t.Fatal("the stylesheet above the 640 tier contains a sticky rule; the frozen column is mobile-only")
+	// §1), but the frozen-column mechanism is still mobile-only. This assertion
+	// used to read "no sticky above 640 at all"; it was retargeted when the
+	// desktop sidebar became sticky on purpose — prd.md「用户报告的滚动缺陷」
+	// requires the prototype's `.sidebar{position:sticky;top:0;height:100vh}` so
+	// the rail no longer scrolls away with the page. What must stay mobile-only
+	// is the sticky *table cell* (right:0), not sticky positioning as such.
+	aboveMobile := strings.Split(workspacePageCSS, "@media (max-width: 640px)")[0]
+	if !strings.Contains(aboveMobile, "position: sticky;\n        top: 0;") {
+		t.Fatal("the desktop sidebar must be sticky at top:0 so it stays pinned while the page scrolls")
+	}
+	if strings.Contains(aboveMobile, "position: sticky;\n        right: 0;") {
+		t.Fatal("a table cell freezes above the 640 tier; the frozen column is mobile-only")
 	}
 }
 
 func TestWorkspaceNavExposesDesktopSections(t *testing.T) {
+	// The single "工作台" label became the prototype's three groups
+	// (figma/rentops-desktop-suite.html: the 收租决策 / 资产与关系 / 资金与系统
+	// headings), and each group owns its own <nav aria-label> so the sections are
+	// navigable landmarks rather than decoration.
 	for _, marker := range []string{
-		`<div class="nav-label">工作台</div>`,
+		`<div class="nav-label">收租决策</div>`,
+		`<nav class="nav" aria-label="收租决策">`,
+		`<div class="nav-label">资产与关系</div>`,
+		`<nav class="nav" aria-label="资产与关系">`,
+		`<div class="nav-label">资金与系统</div>`,
+		`<nav class="nav" aria-label="资金与系统">`,
 		`href="/bills"`,
 		`href="/transactions"`,
 		`href="/properties"`,
@@ -37,6 +55,14 @@ func TestWorkspaceNavExposesDesktopSections(t *testing.T) {
 	} {
 		if !strings.Contains(workspaceNav, marker) {
 			t.Fatalf("workspace nav missing %q", marker)
+		}
+	}
+	// The prototype numbers all eleven items 01..11. Asserting the whole run, not
+	// a sample, is what catches a renumbering later.
+	for index := 1; index <= 11; index++ {
+		marker := `<span class="nav-icon">` + fmt.Sprintf("%02d", index) + `</span>`
+		if !strings.Contains(workspaceNav, marker) {
+			t.Fatalf("workspace nav missing the prototype's two-digit icon %q", marker)
 		}
 	}
 }

@@ -148,12 +148,12 @@ func cashReceiptErrorCode(err error) string {
 func (a *app) loadCashReceiptFormData(ctx context.Context, r *http.Request, userID, tenantID uint64, period time.Time) (cashReceiptFormData, error) {
 	period = monthStart(period)
 	data := cashReceiptFormData{
-		workspaceShell: workspaceShell{
+		workspaceShell: a.fillWorkspaceShell(r, workspaceShell{
 			ActivePage:  "tenants",
 			Username:    a.displayUsername(r),
 			Environment: a.cfg.Environment,
 			FootNote:    "现金租金补录",
-		},
+		}),
 		TenantID:       strconv.FormatUint(tenantID, 10),
 		Period:         period.Format("2006-01"),
 		Currency:       ledgerCurrencyEUR,
@@ -375,7 +375,7 @@ func (a *app) handleCashReceiptVoid(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		data := cashReceiptVoidPageData{workspaceShell: workspaceShell{ActivePage: "tenants", Username: a.displayUsername(r), Environment: a.cfg.Environment, FootNote: "现金收款纠正"}, Receipt: receipt, Tenant: tenantRow, AmountDisplay: formatMoney(centsToMoney(receipt.AmountCents), receipt.Currency, 2), DateDisplay: receipt.ReceivedAt.Format(dateLayout), Error: r.URL.Query().Get("error"), AlreadyVoided: receipt.Status == cashReceiptStatusVoided}
+		data := cashReceiptVoidPageData{workspaceShell: a.fillWorkspaceShell(r, workspaceShell{ActivePage: "tenants", Username: a.displayUsername(r), Environment: a.cfg.Environment, FootNote: "现金收款纠正"}), Receipt: receipt, Tenant: tenantRow, AmountDisplay: formatMoney(centsToMoney(receipt.AmountCents), receipt.Currency, 2), DateDisplay: receipt.ReceivedAt.Format(dateLayout), Error: r.URL.Query().Get("error"), AlreadyVoided: receipt.Status == cashReceiptStatusVoided}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := cashReceiptVoidTemplate.Execute(w, data); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

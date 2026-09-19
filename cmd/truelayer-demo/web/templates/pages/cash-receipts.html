@@ -18,8 +18,8 @@
         <a class="btn primary" href="/cash-receipts?period={{.Period}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}&amp;add=1">录入现金收款</a>
       </header>
 
-      {{if eq .Message "cash_receipt_saved"}}<div class="notice ok">现金收款已登记。</div>{{end}}
-      {{if eq .Message "cash_receipt_voided"}}<div class="notice ok">现金收款已撤销，原始收据仍保留。</div>{{end}}
+      {{if eq .Message "cash_receipt_saved"}}<div class="notice ok" data-toast>现金收款已登记。</div>{{end}}
+      {{if eq .Message "cash_receipt_voided"}}<div class="notice ok" data-toast>现金收款已撤销，原始收据仍保留。</div>{{end}}
       {{if eq .Error "cash_receipt_failed"}}<div class="notice error">现金补录失败，请检查租客、月份、金额和日期。</div>{{end}}
       {{if eq .Error "cash_overbalance"}}<div class="notice error">这笔现金会超过该月份未收余额，请核对已有收款。</div>{{end}}
 

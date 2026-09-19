@@ -18,7 +18,7 @@
         <a class="btn primary" href="/properties?add=1&amp;period={{.Period}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}&amp;collection={{.CollectionFilter}}"><span class="desktop-object-action">新增房产</span><span class="mobile-object-action">新增</span></a>
       </header>
       {{template "workspace-object-tabs" .}}
-      {{if .Message}}<div class="notice ok">{{if eq .Message "property_saved"}}房产资料已保存。{{else if eq .Message "property_deactivated"}}房产已停用。{{else}}操作已完成。{{end}}</div>{{end}}
+      {{if .Message}}<div class="notice ok" data-toast>{{if eq .Message "property_saved"}}房产资料已保存。{{else if eq .Message "property_deactivated"}}房产已停用。{{else}}操作已完成。{{end}}</div>{{end}}
       {{if .Error}}<div class="notice error">房产操作未完成，请检查资料后重试。</div>{{end}}
 
       {{if .ShowForm}}
@@ -42,8 +42,8 @@
         <label class="object-search"><span class="visually-hidden">搜索当前列表</span><input type="search" name="search" value="{{.Search}}" placeholder="搜索当前列表" aria-label="搜索当前列表"></label>
         <input type="hidden" name="status" value="{{.StatusFilter}}">
         <div class="object-list-filter-fields">
-          <label><span class="visually-hidden">收缴状态</span><select name="collection" aria-label="收缴状态"><option value="all"{{if eq .CollectionFilter "all"}} selected{{end}}>全部状态</option><option value="unpaid"{{if eq .CollectionFilter "unpaid"}} selected{{end}}>未收齐</option><option value="paid"{{if eq .CollectionFilter "paid"}} selected{{end}}>已收齐</option></select></label>
-          <label><span class="visually-hidden">月份</span><select name="period" aria-label="月份">{{range .PeriodOptions}}<option value="{{.Value}}"{{if eq $.Period .Value}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+          <label><span class="visually-hidden">收缴状态</span><select name="collection" aria-label="收缴状态" onchange="this.form.submit()"><option value="all"{{if eq .CollectionFilter "all"}} selected{{end}}>全部状态</option><option value="unpaid"{{if eq .CollectionFilter "unpaid"}} selected{{end}}>未收齐</option><option value="paid"{{if eq .CollectionFilter "paid"}} selected{{end}}>已收齐</option></select></label>
+          <label><span class="visually-hidden">月份</span><select name="period" aria-label="月份" onchange="this.form.submit()">{{range .PeriodOptions}}<option value="{{.Value}}"{{if eq $.Period .Value}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
         </div>
         <button class="btn subtle object-list-filter-toggle" type="button" aria-expanded="false">筛选</button>
         <span class="object-list-demo-note">演示数据 · EUR</span>

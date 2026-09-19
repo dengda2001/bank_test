@@ -3,7 +3,7 @@
   "name": "shell-alignment",
   "title": "全局外壳对齐",
   "description": "侧边栏三组分组/数字图标/计数/底部状态卡/页脚；顶栏搜索与主操作；toast 组件。",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

@@ -18,7 +18,7 @@
         <a class="btn primary" href="/rooms?add=1&amp;period={{.Period}}{{if .PropertyID}}&amp;property_id={{.PropertyID}}{{end}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}&amp;collection={{.CollectionFilter}}"><span class="desktop-object-action">新增房间</span><span class="mobile-object-action">新增</span></a>
       </header>
       {{template "workspace-object-tabs" .}}
-      {{if .Message}}<div class="notice ok">房间资料已保存。</div>{{end}}
+      {{if .Message}}<div class="notice ok" data-toast>房间资料已保存。</div>{{end}}
       {{if .Error}}<div class="notice error">房间操作未完成，请检查资料后重试。</div>{{end}}
 
       {{if .ShowForm}}
@@ -47,9 +47,9 @@
         <label class="object-search"><span class="visually-hidden">搜索当前列表</span><input type="search" name="search" value="{{.Search}}" placeholder="搜索当前列表" aria-label="搜索当前列表"></label>
         <input type="hidden" name="status" value="{{.StatusFilter}}">
         <div class="object-list-filter-fields">
-          <label><span class="visually-hidden">所属房产</span><select name="property_id" aria-label="所属房产"><option value="">全部房产</option>{{range .PropertyOptions}}<option value="{{.ID}}"{{if eq $.PropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
-          <label><span class="visually-hidden">收缴状态</span><select name="collection" aria-label="收缴状态"><option value="all"{{if eq .CollectionFilter "all"}} selected{{end}}>全部状态</option><option value="unpaid"{{if eq .CollectionFilter "unpaid"}} selected{{end}}>未收齐</option><option value="paid"{{if eq .CollectionFilter "paid"}} selected{{end}}>已收齐</option></select></label>
-          <label><span class="visually-hidden">月份</span><select name="period" aria-label="月份">{{range .PeriodOptions}}<option value="{{.Value}}"{{if eq $.Period .Value}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+          <label><span class="visually-hidden">所属房产</span><select name="property_id" aria-label="所属房产" onchange="this.form.submit()"><option value="">全部房产</option>{{range .PropertyOptions}}<option value="{{.ID}}"{{if eq $.PropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+          <label><span class="visually-hidden">收缴状态</span><select name="collection" aria-label="收缴状态" onchange="this.form.submit()"><option value="all"{{if eq .CollectionFilter "all"}} selected{{end}}>全部状态</option><option value="unpaid"{{if eq .CollectionFilter "unpaid"}} selected{{end}}>未收齐</option><option value="paid"{{if eq .CollectionFilter "paid"}} selected{{end}}>已收齐</option></select></label>
+          <label><span class="visually-hidden">月份</span><select name="period" aria-label="月份" onchange="this.form.submit()">{{range .PeriodOptions}}<option value="{{.Value}}"{{if eq $.Period .Value}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
         </div>
         <button class="btn subtle object-list-filter-toggle" type="button" aria-expanded="false">筛选</button>
         <span class="object-list-demo-note">演示数据 · EUR</span>
@@ -58,7 +58,7 @@
       <section class="panel surface object-list-panel" aria-labelledby="room-list-title">
         {{if .Rows}}
         <div class="table-wrap object-table-wrap"><table class="object-table room-table"><thead><tr><th>房间</th><th>所属房产</th><th>当前责任人</th><th>月度应收</th><th>月度实收</th><th>人数</th><th>本月状态</th><th>操作</th></tr></thead><tbody>
-          {{range .Rows}}<tr data-page="rooms" data-room-id="{{.ID}}"><td><a class="object-primary-link" href="/rooms/{{.ID}}?period={{$.Period}}&amp;from=rooms&amp;return_property_id={{$.PropertyID}}&amp;return_status={{$.StatusFilter}}&amp;return_search={{$.Search}}&amp;return_collection={{$.CollectionFilter}}">{{.RoomLabel}}</a><small>自 {{.ActiveFrom}}</small></td><td><a href="/properties/{{.PropertyID}}?period={{$.Period}}">{{.PropertyName}}</a></td><td>{{range $index, $name := .TenantNames}}{{if $index}}、{{end}}{{$name}}{{else}}空置{{end}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td>{{len .TenantNames}}</td><td><span class="status {{.CollectionStatus}}">{{.CollectionStatusLabel}}</span></td><td><a class="object-detail-link" href="/rooms/{{.ID}}?period={{$.Period}}&amp;from=rooms&amp;return_property_id={{$.PropertyID}}&amp;return_status={{$.StatusFilter}}&amp;return_search={{$.Search}}&amp;return_collection={{$.CollectionFilter}}">查看详情</a></td></tr>{{end}}
+          {{range .Rows}}<tr data-page="rooms" data-room-id="{{.ID}}"><td><a class="object-primary-link" href="/rooms/{{.ID}}?period={{$.Period}}&amp;from=rooms&amp;return_property_id={{$.PropertyID}}&amp;return_status={{$.StatusFilter}}&amp;return_search={{$.Search}}&amp;return_collection={{$.CollectionFilter}}">{{.RoomLabel}}</a>{{if .ActiveFrom}}<small>自 {{.ActiveFrom}}</small>{{end}}</td><td><a href="/properties/{{.PropertyID}}?period={{$.Period}}">{{.PropertyName}}</a></td><td>{{range $index, $name := .TenantNames}}{{if $index}}、{{end}}{{$name}}{{else}}空置{{end}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td>{{len .TenantNames}}</td><td><span class="status {{.CollectionStatus}}">{{.CollectionStatusLabel}}</span></td><td><a class="object-detail-link" href="/rooms/{{.ID}}?period={{$.Period}}&amp;from=rooms&amp;return_property_id={{$.PropertyID}}&amp;return_status={{$.StatusFilter}}&amp;return_search={{$.Search}}&amp;return_collection={{$.CollectionFilter}}">查看详情</a></td></tr>{{end}}
         </tbody></table></div>
         <div class="object-mobile-list">{{range .Rows}}<article class="object-mobile-card" data-page="rooms" data-room-id="{{.ID}}">
           <div class="object-mobile-card-main"><span class="object-mobile-chevron" aria-hidden="true">›</span><div><a class="object-primary-link" href="/rooms/{{.ID}}?period={{$.Period}}&amp;from=rooms&amp;return_property_id={{$.PropertyID}}&amp;return_status={{$.StatusFilter}}&amp;return_search={{$.Search}}&amp;return_collection={{$.CollectionFilter}}">{{.RoomLabel}}</a><p>{{.PropertyName}} · {{range $index, $name := .TenantNames}}{{if $index}}、{{end}}{{$name}}{{else}}空置{{end}}</p></div><div class="object-mobile-balance"><strong>{{.BalanceAmount}}</strong><small>未收</small></div></div>

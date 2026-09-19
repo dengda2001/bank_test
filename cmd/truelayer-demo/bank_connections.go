@@ -49,6 +49,25 @@ func (s *bankConnectionStore) hasRefreshToken(ctx context.Context, userID uint64
 	return strings.TrimSpace(row.RefreshTokenCiphertext) != "", nil
 }
 
+// status reports what the sidebar's data-status card shows: whether this user
+// has a bank authorization and when that authorization last synced. It is a
+// single read of the same row hasRefreshToken reads, and it is the card's only
+// data source — the shell never renders a status it could not read.
+func (s *bankConnectionStore) status(ctx context.Context, userID uint64) (bool, *time.Time, error) {
+	if userID == 0 {
+		return false, nil, errors.New("userID is required")
+	}
+	var row bankConnection
+	err := s.db.WithContext(ctx).Where("user_id = ? AND provider = ? AND environment = ?", userID, "truelayer", s.cfg.Environment).First(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil, nil
+	}
+	if err != nil {
+		return false, nil, err
+	}
+	return strings.TrimSpace(row.RefreshTokenCiphertext) != "", row.LastSyncAt, nil
+}
+
 func newBankConnectionStore(db *gorm.DB, cfg config) *bankConnectionStore {
 	return &bankConnectionStore{db: db, cfg: cfg}
 }

@@ -4,18 +4,18 @@
 
 ## 执行顺序
 
-1. [ ] 逐页清点现有 filterbar 控件，标出哪些有真实数据支撑、哪些没有
-2. [ ] 逐页统一为「页头 + filterbar + 表格 + 操作列」，按 design.md §2.1 只渲染有效控件
-3. [ ] 补齐各页行内操作
-4. [ ] 修复 `rooms.html:61` 的孤立「自」字
-5. [ ] `/bills` 平账表单补齐字段（不改已有字段名与 action）
-6. [ ] 处理方式下拉按 design.md §2.2 只启用「匹配现有收款」
-7. [ ] `/bills`「生成本月账单」改显式动作，保持幂等
-8. [ ] `/dunning` 主操作文案改「批量发送提醒」
-9. [ ] `/bank` 补「添加银行账户」、「同步银行流水」改「立即同步」
-10. [ ] 十页 × 四档截图
-11. [ ] 跑全量测试与 vet
-12. [ ] 提交
+1. [x] 逐页清点现有 filterbar 控件，标出哪些有真实数据支撑、哪些没有
+2. [x] 逐页统一为「页头 + filterbar + 表格 + 操作列」，按 design.md §2.1 只渲染有效控件
+3. [x] 补齐各页行内操作
+4. [x] 修复 `rooms.html:61` 的孤立「自」字
+5. [x] `/bills` 平账表单补齐字段（不改已有字段名与 action）
+6. [x] 处理方式下拉按 design.md §2.2 只启用「匹配现有收款」
+7. [x] `/bills`「生成本月账单」改显式动作，保持幂等
+8. [x] `/dunning` 主操作文案改「批量发送提醒」
+9. [x] `/bank` 补「添加银行账户」、「同步银行流水」改「立即同步」
+10. [x] 十页 × 四档截图
+11. [x] 跑全量测试与 vet
+12. [ ] 提交（不在本代理职责内）
 
 第 1 步必须先做：不先清点就统一结构，会直接滑向"复制同一段 filterbar"，即 A1 禁止的假控件。
 
@@ -44,7 +44,30 @@ go test ./cmd/truelayer-demo/ -run 'PageData|RentCollection|Billing|Rooms'
 
 ## 开工前检查
 
-- [ ] 子任务 ① 已完成
+- [x] 子任务 ① 已完成（`c944538`，已归档）
 - [ ] 用户已审阅本子任务的 `prd.md` / `design.md` / `implement.md`
-- [ ] 已知悉 filterbar 按页渲染真实维度：`/tenants`、`/bank` 不加月份下拉（已确认决策，见 `prd.md`）
-- [ ] 已确认平账/生成账单的验证在本机自有实例上进行，**不对生产实例发起写入**
+- [x] 已知悉 filterbar 按页渲染真实维度：`/tenants`、`/bank` 不加月份下拉（已确认决策，见 `prd.md`）
+- [x] 已确认平账/生成账单的验证在本机自有实例上进行，**不对生产实例发起写入**
+
+## 与 ②③⑤ 的并行边界（2026-09-19 主会话补记）
+
+本子任务与 `09-19-shell-alignment`（②）**并跑**。已核：本子任务对 ② 的任何交付物
+（toast / 搜索框 / 计数 / 外壳 / 导航）引用均为 **0 处**，文件写入面也不重叠。
+
+**但本子任务与 `09-19-detail-pages-alignment`（⑤）共用两个样式文件**，两边计划里都没提：
+
+| 共享文件 | 本子任务在用 | ⑤ 在用 |
+|---|---|---|
+| `web/static/css/pages/entity-drawers.css` | `rooms.html`、`properties.html` | `room-detail.html`、`property-detail.html`、`tenancies.html` |
+| `web/static/css/pages/object-navigation.css` | `rooms.html`、`properties.html` | `room-detail.html` |
+
+⇒ 为免提交时无法分离，**⑤ 排在本子任务之后**。若确实需要改这两个文件，在回报里
+**点名写出改了哪几条规则**，便于日后与 ⑤ 的改动对照。
+
+**端口**：本子任务用 `APP_PORT=18091`（② 占着 18090）。
+`MYSQL_PORT=3306`，仍然**绝不允许**指向 `:8081` / `bank.ddpl.top`。
+
+**尚未由用户逐行审阅**：本子任务的 `prd.md` / `design.md` / `implement.md` 是主会话此前
+编写的，用户对整批子任务给了执行授权，但未逐行读过。其中一处产品决定值得留意 ——
+filterbar 按页渲染（`/tenants`、`/bank` 不加月份下拉），理由与核查实据见 `prd.md`
+「已确认的决策」。

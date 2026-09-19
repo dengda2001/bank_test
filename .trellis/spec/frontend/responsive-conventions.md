@@ -61,15 +61,33 @@ type workspaceShell struct {
     Username      string
     Environment   string
     FootNote      string
+    CompactTitle  string // mobile-only page/object context beside "RentOps"
     ShowNavCounts bool   // false on pages that never rendered count badges
-    NavLabel      string // only the dashboard sets one
     TenantCount   int
     IncomeCount   int
     ExpenseCount  int
+
+    // Filled by (*app).fillWorkspaceShell, which every shell construction site
+    // wraps its literal in. All three fields are best-effort: an unset one
+    // renders nothing rather than a placeholder (see §8).
+    TopSearch          topbarSearch // topbar list search; zero on pages without a ?search= list
+    PendingReviewCount int          // topbar count button; rendered only with PendingReviewURL
+    PendingReviewURL   string
+    StatusTitle        string // sidebar data-status card; no card when empty
+    StatusUpdatedAt    string
 }
+
+// fillWorkspaceShell completes the shell's real-data widgets. It is called from
+// canonicalPageShell and from every inline workspaceShell literal, so a new page
+// gets the topbar and the status card by construction.
+func (a *app) fillWorkspaceShell(r *http.Request, shell workspaceShell) workspaceShell
 
 func newWorkspacePageTemplate(name string, functs template.FuncMap, body string) *template.Template
 ```
+
+`NavLabel` was removed: the sidebar's single 「工作台」 label became the
+prototype's three group headings (收租决策 / 资产与关系 / 资金与系统), so no page
+sets a label any more.
 
 ---
 
@@ -579,3 +597,40 @@ High-risk action buttons expose `data-confirm="true"` so the shared delegated
 submit guard can confirm keyboard and pointer submissions. Dunning opens its
 drawer with focus moved into the first control, closes on Escape, and restores
 focus to the launch button.
+
+### 8.1 The rail is sticky; the shell invents no copy
+
+The desktop sidebar is `position: sticky; top: 0; height: 100vh` inside the
+`@media (min-width: 641px)` tier, matching the prototype
+(`figma/rentops-desktop-suite.html:20`). Do not write `relative` there: the rail
+then scrolls away with the document, and `top: 0` on a relative box offsets
+nothing. `body { overflow-x: hidden }` is not an obstacle — that overflow
+propagates to the viewport, so `body` never becomes the scroll container and
+sticky keeps working. `TestFrozenLastColumnIsMobileOnly` allows exactly this one
+sticky rule above the 640 tier and rejects a sticky `right: 0` table cell.
+
+The shell's own widgets are real data or nothing. No status card when the bank
+authorization could not be read, no count button when the pending count could
+not be read, no search box on a page that cannot filter a list. Do not paste the
+prototype's demo copy (`测试数据已载入` / `Rosewood 收租明细` / `更新于 …`) or its
+`reload the sample data` CTA into the shell: `figma/DESIGN-HANDOFF.md:9,37`
+reserves those for the prototype.
+
+Post-redirect operation feedback is rendered twice from one source. A success
+flash (`notice ok`) renders its notice exactly as before, marked `data-toast`; the
+shared stylesheet hides `.js .notice[data-toast]` and the shared script copies the
+text into `#workspace-toast`, dismissing it after 2.2s. Without scripting the root
+never gets the `js` class, so the notice stays visible: the notice is the fallback,
+the toast is the enhancement. If a page ever renders two marked notices the script
+adopts only the first and strips the marker from the rest, so no message can be
+hidden without being shown.
+
+The marker is never put on an error banner. It is an opt-in on the block, not a
+positional guess, and it is success-only: an error usually carries text the user
+has to read and act on, and 2.2s is not enough for that. The prototype agrees —
+its toast is a save confirmation (`showToast("操作已完成")`,
+`figma/rentops-desktop-suite.html:286`). The block that sits in a form or a drawer
+(e.g. the inline error inside the cash-receipt sheet) is not marked either, so the
+same failure is never announced twice. `TestOnlySuccessFlashesAreMarkedForTheToast`
+scans every template and Go template literal, so a page added later cannot quietly
+mark an error.

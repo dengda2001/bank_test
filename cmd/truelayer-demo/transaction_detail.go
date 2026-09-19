@@ -297,7 +297,7 @@ func (a *app) demoTransactionDetailPageData(r *http.Request, row transactionPage
 	row.DetailURL = ""
 	backURL := transactionListURL(r.URL.Path, r.URL.Query())
 	return transactionDetailPageData{
-		workspaceShell:  workspaceShell{ActivePage: pageActiveTransactionKey(r), Username: a.displayUsername(r), Environment: a.cfg.Environment, FootNote: "银行流水与租金关联", CompactTitle: "流水详情", NavLabel: "主导航", ShowNavCounts: true},
+		workspaceShell:  a.fillWorkspaceShell(r, workspaceShell{ActivePage: pageActiveTransactionKey(r), Username: a.displayUsername(r), Environment: a.cfg.Environment, FootNote: "银行流水与租金关联", CompactTitle: "流水详情", ShowNavCounts: true}),
 		Transaction:     row,
 		Title:           row.AmountDisplay + " · " + row.DirectionLabel,
 		Subtitle:        row.AccountName + " · " + row.DateDisplay,

@@ -29,13 +29,23 @@
 .collection-settle > summary { list-style: none; cursor: pointer; }
 .collection-settle > summary::-webkit-details-marker { display: none; }
 .collection-settle[open] { z-index: 2; }
-.collection-settle[open] .collection-balance-form { position: absolute; top: calc(100% + 5px); right: 0; z-index: 3; min-width: 280px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); box-shadow: 0 8px 24px rgba(25,35,30,.12); }
+.collection-settle[open] .collection-balance-form { position: absolute; top: calc(100% + 5px); right: 0; z-index: 3; width: 306px; max-width: 340px; max-height: 72vh; overflow: auto; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); box-shadow: 0 8px 24px rgba(25,35,30,.12); }
 .collection-filters input,.collection-filters select { width: 100%; min-height: 40px; }
 .collection-table { min-width: 940px; }
 .collection-table .amount { white-space: nowrap; }
 .collection-row-actions { display: grid; justify-items: start; gap: 7px; }
-.collection-balance-form { display: flex; align-items: center; gap: 6px; }
-.collection-balance-form input { width: 130px; min-height: 36px; }
+/* The settle form is now the prototype's full field set (待平账责任 / 处理方式 /
+   平账金额 / 生效日期 / 处理说明), so it stacks instead of sitting in one row.
+   The markup itself lives in web/templates/partials/collection-settle-form.html
+   so /bills and the rent workspace tenant view render the same thing. */
+.collection-balance-form { display: grid; gap: 8px; }
+.collection-balance-form > .btn { justify-self: start; }
+.collection-balance-fact { display: grid; gap: 3px; margin: 0; }
+.collection-balance-field { display: grid; gap: 4px; margin: 0; }
+.collection-balance-fact span, .collection-balance-field > span { color: var(--foreground-muted); font-size: 11px; }
+.collection-balance-fact strong { font-size: 12px; overflow-wrap: anywhere; }
+.collection-balance-form input, .collection-balance-form select, .collection-balance-form textarea { width: 100%; min-width: 0; min-height: 36px; font-size: 13px; }
+.collection-balance-form textarea { min-height: 52px; resize: vertical; }
 .collection-pager { display: flex; justify-content: flex-end; align-items: center; gap: 12px; padding: 16px 20px; }
 .collection-pager form { display: none; }
 .collection-pager > div { display: flex; gap: 8px; }
@@ -52,6 +62,7 @@
 .candidate-balance > strong { font: 700 15px var(--mono); }
 .dunning-candidate.disabled { opacity: .58; cursor: default; }
 .candidate-warning { color: var(--danger); }
+.dunning-candidate-detail { justify-self: start; color: var(--foreground-muted); text-decoration: underline; }
 .dunning-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; padding: 14px 20px; background: var(--surface-muted); }
 .resend-confirm { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; color: var(--foreground-muted); font-size: 12px; }
 .dunning-config form { display: grid; gap: 14px; padding: 20px; }
@@ -75,7 +86,9 @@
   .collection-toolbar { align-items: stretch; }
   .collection-primary-actions { width: 100%; }
   .bills-desktop-action { display: none; }
+  .bills-generate-action { display: none; }
   .bills-mobile-action { display: inline-flex; }
+  .dunning-batch-action { width: 100%; min-height: 44px; }
   .bills-filters { grid-template-columns: minmax(0,1fr) minmax(120px,.7fr); }
   .bills-filters .bills-search { grid-column: 1 / -1; }
   .bills-filters label:nth-of-type(3), .bills-filters > .btn, .bills-filters > .btn.subtle { display: none; }
@@ -105,8 +118,9 @@
   .collection-bill-actions .collection-balance-form { position: static; min-width: 0; display: grid; gap: 7px; margin-top: 8px; box-shadow: none; }
   .collection-list .panel-head { align-items: flex-start; }
   .collection-row-actions { justify-items: stretch; }
-  .collection-balance-form { display: grid; grid-template-columns: minmax(0,1fr) auto; }
-  .collection-balance-form input { width: 100%; min-width: 0; }
+  .collection-balance-form { display: grid; grid-template-columns: minmax(0,1fr); }
+  .collection-balance-form input, .collection-balance-form select, .collection-balance-form textarea { width: 100%; min-width: 0; }
+  .collection-balance-form > .btn { width: 100%; min-height: 44px; justify-self: stretch; }
   .collection-pager { justify-content: space-between; flex-wrap: wrap; padding: 14px; }
   .dunning-candidate { grid-template-columns: 20px minmax(0,1fr); padding: 13px 14px; }
   .candidate-balance { grid-column: 2; display: flex; justify-content: space-between; justify-items: initial; }

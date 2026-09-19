@@ -156,6 +156,44 @@
       line-height: 1.55;
       overflow-wrap: anywhere;
     }
+    /* The prototype labels each nav group and numbers its items 01–11 in mono
+       (figma/rentops-desktop-suite.html:29-48). The group label reuses the
+       existing .nav-label, which the mobile tier already hides. */
+    .nav-icon {
+      display: grid;
+      place-items: center;
+      width: 22px;
+      color: var(--foreground-muted);
+      font: 700 11px var(--mono);
+      letter-spacing: 0.04em;
+    }
+    /* The sidebar's data-status card. It renders only when the shell could read
+       a real status (see workspaceShell.StatusTitle); an empty shell shows no
+       card rather than the prototype's demo copy. */
+    .side-status {
+      display: grid;
+      gap: 3px;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--foreground-muted);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    .side-status strong { color: var(--foreground); font-size: 12px; }
+    .side-user { display: flex; align-items: center; gap: 9px; margin-top: 12px; }
+    .avatar {
+      display: grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      color: var(--accent);
+      background: var(--surface-accent);
+      font-weight: 700;
+    }
+    .side-user-copy { display: grid; gap: 1px; font-size: 12px; }
+    .side-user-copy small { color: var(--foreground-muted); }
     .topbar {
       display: flex;
       justify-content: space-between;
@@ -208,6 +246,34 @@
     .notice { margin-bottom: 14px; padding: 13px 15px; border-radius: 8px; border: 1px solid var(--border); color: var(--foreground-subtle); background: var(--surface-muted); }
     .notice.error { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
     .notice.ok { border-color: #a7f3d0; background: #ecfdf5; color: #065f46; }
+    /* The shared toast. It is server-rendered into the workspace chrome so every
+       page has one, and the shared script fills it from the page's marked notice
+       and dismisses it after 2.2 seconds, matching the prototype's showToast
+       (figma/rentops-desktop-suite.html:52). */
+    .workspace-toast {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      z-index: 60;
+      max-width: min(360px, calc(100vw - 32px));
+      padding: 12px 16px;
+      border-radius: 8px;
+      color: var(--surface);
+      background: var(--foreground);
+      font-size: 13px;
+      font-weight: 600;
+      opacity: 0;
+      transform: translateY(8px);
+      pointer-events: none;
+      transition: opacity 200ms ease, transform 200ms ease;
+    }
+    .workspace-toast.show { opacity: 1; transform: none; }
+    .workspace-toast.error { background: var(--danger); }
+    /* A notice marked data-toast is the no-script fallback. Once scripting is
+       available the shared toast owns the message, so the block it was read from
+       must not also be on screen: one message, one rendering. Without scripting
+       the .js class is never set and the block stays visible. */
+    .js .notice[data-toast] { display: none; }
     .grid-two { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 18px; align-items: start; }
     .form { padding: 18px; }
     .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
@@ -277,10 +343,23 @@
     @media (min-width: 641px) {
       body { font-size: 14px; background: var(--background-deep); }
       .app { width: 100%; max-width: none; padding: 0; grid-template-columns: 236px minmax(0, 1fr); }
+      /* 桌面档侧边栏必须钉在视口顶部：原型写的是 position:sticky
+         （figma/rentops-desktop-suite.html:20 `.sidebar{position:sticky;top:0;
+         height:100vh;...}`），移植时把它写成了 relative，于是页面一滚动侧边栏
+         就跟着滚走（用户 2026-09-19 报告）。relative 下 top:0 只是「相对自身
+         原位偏移 0」，height:100vh 也只给自身高度，都不产生吸顶。
+         body 的 overflow-x:hidden（:36）不是障碍：overflow 会传播给视口，
+         body 自己不成滚动容器，sticky 照常生效（已在真实页面上实测）。
+         gap:0 同样是原型的取值：它的 .sidebar 只有 flex-direction:column，分组
+         间距全由 .nav-label 的 padding 提供，页脚靠 .side-foot{margin-top:auto}
+         贴底。基准档那条 gap:20px 是抽屉版留下的，原型从来没有；在 100vh 的栏里
+         它多出 7×20=140px，把 .side-foot 顶到栏外 —— 实测 1440×900 下页脚底边
+         931px、栏底 900px，用户区整块看不见。去掉后 768px 与 900px 两档都装得下。 */
       .sidebar {
-        position: relative;
+        position: sticky;
         top: 0;
         height: 100vh;
+        gap: 0;
         border: 0;
         border-radius: 0;
         padding: 20px 14px;
@@ -299,9 +378,17 @@
       .nav a.active { color: var(--foreground); background: var(--surface); }
       .glyph { color: color-mix(in oklch, var(--surface) 82%, transparent); background: color-mix(in oklch, var(--surface) 12%, transparent); }
       .nav a.active .glyph { color: var(--accent); background: var(--surface-accent); }
+      .nav-icon { color: color-mix(in oklch, var(--surface) 70%, transparent); }
+      .nav a:hover .nav-icon { color: var(--surface); }
+      .nav a.active .nav-icon { color: var(--accent); }
       .nav-count { color: color-mix(in oklch, var(--surface) 72%, transparent); background: color-mix(in oklch, var(--surface) 12%, transparent); }
       .nav a.active .nav-count { color: var(--accent); background: var(--surface-accent); }
       .side-foot { color: var(--sidebar-muted); border-top-color: var(--sidebar-border); }
+      .side-status { border-color: color-mix(in oklch, var(--surface) 16%, transparent); color: color-mix(in oklch, var(--surface) 72%, transparent); }
+      .side-status strong { color: var(--surface); }
+      .side-user-copy { color: var(--surface); }
+      .side-user-copy small { color: color-mix(in oklch, var(--surface) 55%, transparent); }
+      .avatar { color: color-mix(in oklch, var(--accent) 70%, white); background: var(--surface-accent); }
       .content { min-height: 100vh; border: 0; border-radius: 0; padding: 0 28px 56px; background: var(--background-deep); }
       .topbar {
         position: relative;
@@ -349,6 +436,33 @@
         font-size: 12px;
       }
       .workspace-page-topbar-separator { color: var(--border-strong); }
+      .workspace-page-topbar-crumb { display: inline-flex; align-items: center; gap: 8px; min-width: 0; margin-right: auto; }
+      /* The prototype's topbar controls: a 36px search input and a 36px square
+         icon button (figma/rentops-desktop-suite.html:52, `.input` / `.icon-btn`). */
+      .workspace-topsearch { display: flex; align-items: center; min-width: 0; }
+      .workspace-topsearch input {
+        width: 240px;
+        height: 36px;
+        min-height: 36px;
+        padding: 0 11px;
+        border-radius: 7px;
+        background: var(--surface);
+        font-size: 13px;
+      }
+      .workspace-topbar-count {
+        display: grid;
+        place-items: center;
+        min-width: 36px;
+        height: 36px;
+        padding: 0 9px;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        color: var(--foreground);
+        background: var(--surface);
+        font: 600 13px var(--mono);
+        text-decoration: none;
+      }
+      .workspace-topbar-count:hover { border-color: var(--border-strong); background: var(--surface-muted); }
       .content { padding-top: 88px; }
     }
 
@@ -362,6 +476,11 @@
        声明由各页面自己的 1100 块实现，做法见 §3.1 与 §3.3。 */
     @media (max-width: 1100px) {
       .grid-two { grid-template-columns: 1fr; }
+      /* 原型的 1100 档声明 `.input{min-width:160px}`
+         （figma/rentops-desktop-suite.html:21）：顶栏搜索框在 1024–1100 收窄，
+         让出横向空间给页头的主操作。写在 min-width:981 块之后，同等优先级
+         后者胜出，所以这一档确实生效（§3.1、§3.3）。 */
+      .workspace-topsearch input { width: 160px; }
     }
 
     @media (max-width: 640px) {
@@ -375,6 +494,14 @@
       .form-grid { grid-template-columns: 1fr; }
       h1 { font-size: 34px; }
       table { min-width: 680px; }
+
+      /* 移动端底部导航占 68px，toast 抬到它上面并留 8px 间隙。 */
+      .workspace-toast {
+        right: 8px;
+        left: 8px;
+        bottom: calc(76px + env(safe-area-inset-bottom));
+        max-width: none;
+      }
 
       /* ---- 抽屉：紧凑栏 + 汉堡 ---- */
       .nav-compact-bar {

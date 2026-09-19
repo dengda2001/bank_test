@@ -3,7 +3,7 @@
   "name": "list-pages-alignment",
   "title": "列表页对齐",
   "description": "十个列表页的页头/filterbar/表格/操作列；/bills 平账表单补全；/bank 添加银行账户。",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

@@ -206,6 +206,8 @@ func TestBillsPageSurfacesInvalidFilterAndPeriodErrors(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			// The error banner deliberately carries no data-toast marker, so this
+			// stays a plain notice and is not promoted into the toast.
 			if !strings.Contains(page, `<div class="notice error">`+code+`</div>`) {
 				t.Fatalf("bills page does not surface %q as an error notice: %s", code, page)
 			}

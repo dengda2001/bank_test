@@ -50,7 +50,7 @@ type rentWorkspacePendingItem struct {
 func rentWorkspacePageFromData(a *app, r *http.Request, data rentWorkspaceData, message, pageError string) rentWorkspacePageData {
 	period := monthStart(data.Filters.PeriodMonth)
 	return rentWorkspacePageData{
-		workspaceShell: workspaceShell{
+		workspaceShell: a.fillWorkspaceShell(r, workspaceShell{
 			ActivePage: func() string {
 				if r.URL.Path == "/bills" {
 					return "bills"
@@ -62,9 +62,8 @@ func rentWorkspacePageFromData(a *app, r *http.Request, data rentWorkspaceData, 
 			FootNote:      "月度收租工作台",
 			CompactTitle:  "本月收租",
 			ShowNavCounts: true,
-			NavLabel:      "主导航",
 			TenantCount:   len(data.TenantRows),
-		},
+		}),
 		Filters:          data.Filters,
 		Period:           period.Format("2006-01"),
 		PeriodLabel:      formatMonthLabel(period),
@@ -121,6 +120,11 @@ func (a *app) renderRentWorkspaceDashboard(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	page.PendingCount = int(pendingTransactions)
+	// The topbar button and the panel below it are two views of one number, so the
+	// button takes the panel's count verbatim rather than re-running the query and
+	// risking a different answer (the shell's own fill already ran it once).
+	page.PendingReviewCount = page.PendingCount
+	page.PendingReviewURL = "/rent-dashboard?period=" + url.QueryEscape(filters.PeriodMonth.Format("2006-01")) + "#pending-review"
 	var pendingRows []paymentTransaction
 	if err := a.db.WithContext(r.Context()).
 		Where("user_id = ? AND direction = ? AND match_status IN ?", userID, "income", pendingMatchStatuses).
@@ -328,7 +332,7 @@ func (a *app) handleRoomDetail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	data.workspaceShell = workspaceShell{ActivePage: "rooms", Username: a.displayUsername(r), Environment: a.cfg.Environment, FootNote: "房间详情", CompactTitle: data.PropertyName + " · 房间 " + data.RoomLabel, ShowNavCounts: true, NavLabel: "主导航"}
+	data.workspaceShell = a.fillWorkspaceShell(r, workspaceShell{ActivePage: "rooms", Username: a.displayUsername(r), Environment: a.cfg.Environment, FootNote: "房间详情", CompactTitle: data.PropertyName + " · 房间 " + data.RoomLabel, ShowNavCounts: true})
 	data.Message, data.Error = r.URL.Query().Get("message"), roomMutationErrorMessage(r.URL.Query().Get("error"))
 	data.Editing = r.URL.Query().Get("edit") == "1"
 	data.ReturnURL = rentWorkspaceURL(data.Filters, 1)

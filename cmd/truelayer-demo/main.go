@@ -464,6 +464,7 @@ func newAppMux(a *app) *http.ServeMux {
 	mux.HandleFunc("/rent-dashboard", a.handleRentDashboard)
 	mux.HandleFunc("/rent-dashboard/settle", a.handleDashboardManualBalance)
 	mux.HandleFunc("/bills", a.handleBills)
+	mux.HandleFunc("/bills/generate", a.handleBillsGenerate)
 	mux.HandleFunc("/bills/settle/preview", a.handleManualBalancePreview)
 	mux.HandleFunc("/bills/settle", a.handleDashboardManualBalance)
 	mux.HandleFunc("/transactions", a.handleTransactions)
@@ -835,7 +836,7 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 	}
 	sortURL := func(sortValue string) string { return billingSortURL(r.URL.Query(), sortValue, r.URL.Path) }
 	data := billingPageData{
-		workspaceShell: workspaceShell{
+		workspaceShell: a.fillWorkspaceShell(r, workspaceShell{
 			ActivePage: func() string {
 				if r.URL.Path == "/transactions" {
 					return "transactions"
@@ -850,7 +851,7 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 			IncomeCount:   int(totalTransactions),
 			TenantCount:   tenantCount,
 			ExpenseCount:  expenseCount,
-		},
+		}),
 		PageKey: func() string {
 			if r.URL.Path == "/transactions" {
 				return "transactions"
@@ -1085,7 +1086,7 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 	}
 	showForm := editing || r.URL.Query().Get("add") == "1"
 	data := tenantPageData{
-		workspaceShell: workspaceShell{
+		workspaceShell: a.fillWorkspaceShell(r, workspaceShell{
 			ActivePage:    "tenants",
 			Username:      a.displayUsername(r),
 			Environment:   a.cfg.Environment,
@@ -1095,7 +1096,7 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 			TenantCount:   len(tenants),
 			IncomeCount:   incomeCount,
 			ExpenseCount:  expenseCount,
-		},
+		}),
 		PageKey:       "tenants",
 		CanonicalPath: "/tenants",
 		Message:       r.URL.Query().Get("message"),
@@ -1362,7 +1363,7 @@ func (a *app) handleExpenses(w http.ResponseWriter, r *http.Request) {
 	totalExpenseCount := len(expenses)
 	expenses = filterExpensePageRows(expenses, period, statusFilter, search)
 	data := expensePageData{
-		workspaceShell: workspaceShell{
+		workspaceShell: a.fillWorkspaceShell(r, workspaceShell{
 			ActivePage:    "expenses",
 			Username:      a.displayUsername(r),
 			Environment:   a.cfg.Environment,
@@ -1372,7 +1373,7 @@ func (a *app) handleExpenses(w http.ResponseWriter, r *http.Request) {
 			TenantCount:   tenantCount,
 			IncomeCount:   incomeCount,
 			ExpenseCount:  totalExpenseCount,
-		},
+		}),
 		PageKey:       "expenses",
 		CanonicalPath: "/expenses",
 		Message:       r.URL.Query().Get("message"),
@@ -2612,8 +2613,8 @@ var tenantTemplate = newWorkspacePageTemplate("tenants", nil, `<!doctype html>
       </header>
       {{template "workspace-object-tabs" .}}
 
-      {{if eq .Message "tenant_added"}}<div class="notice ok">租客资料已保存。</div>{{end}}
-      {{if eq .Message "tenant_updated"}}<div class="notice ok">租客资料已更新。</div>{{end}}
+      {{if eq .Message "tenant_added"}}<div class="notice ok" data-toast>租客资料已保存。</div>{{end}}
+      {{if eq .Message "tenant_updated"}}<div class="notice ok" data-toast>租客资料已更新。</div>{{end}}
 		{{if eq .Error "tenant_has_payments"}}<div class="notice error">无法提前结束租期：结束月之后的账单已有有效收款，请先更正或撤销相关收款。</div>{{else if eq .Error "tenant_room_locked"}}<div class="notice error">当前月或之后已有房间账单，无法更改租客的房间绑定。</div>{{else if .Error}}<div class="notice error">请检查租客姓名、邮箱格式、日期关系、月租金额和房间地址。</div>{{end}}
 
       <section class="summary" aria-label="Tenant summary">
@@ -2804,7 +2805,7 @@ var legacyExpenseTemplate = newWorkspacePageTemplate("expenses-legacy", nil, `<!
         <form method="post" action="/logout"><button class="btn danger" type="submit">退出登录</button></form>
       </header>
 
-      {{if eq .Message "expense_added"}}<div class="notice ok">支出记录已保存。</div>{{end}}
+      {{if eq .Message "expense_added"}}<div class="notice ok" data-toast>支出记录已保存。</div>{{end}}
       {{if .Error}}<div class="notice error">支出描述和正数金额为必填项。</div>{{end}}
 
       <section class="summary" aria-label="Expense summary">
@@ -3450,8 +3451,8 @@ var legacyBillingTemplate = template.Must(template.New("billing-legacy").Parse(`
 
         {{if .NeedsReconnect}}<div class="notice error">Bank access needs a new authorization. Bind the bank account again to continue refreshing transactions.</div>{{end}}
         {{if eq .Error "data_fetch_failed"}}<div class="notice error">Bank data refresh failed. The app did not save this refresh; bind the bank account again if the bank requires new authorization.</div>{{end}}
-        {{if eq .Message "bank_connected"}}<div class="notice ok">Bank account connected. Latest transactions were fetched.</div>{{end}}
-        {{if eq .Message "refreshed"}}<div class="notice ok">Bank data refreshed with saved login.</div>{{end}}
+        {{if eq .Message "bank_connected"}}<div class="notice ok" data-toast>Bank account connected. Latest transactions were fetched.</div>{{end}}
+        {{if eq .Message "refreshed"}}<div class="notice ok" data-toast>Bank data refreshed with saved login.</div>{{end}}
 
         <section class="summary" aria-label="Bank income summary">
           <div class="panel metric" data-spotlight><div class="label">Income total</div><strong>{{.IncomeTotal}}</strong><span>credits and positive amounts from the latest sync</span></div>

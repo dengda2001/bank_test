@@ -46,3 +46,26 @@ go test ./cmd/truelayer-demo/ -run 'TenantProfile|RoomDetail|PropertyDetail|Tran
 - [ ] 用户已审阅本子任务的 `prd.md` / `design.md` / `implement.md`
 - [ ] 已确认「未分配」与「未覆盖」在数据层可区分（不可区分则先记录再决定，见 design.md §2.2）
 - [ ] 已确认不会对生产实例发起写入
+
+## 执行次序与并行边界（2026-09-19 主会话补记）
+
+本子任务**排在 `09-19-list-pages-alignment`（④）之后**执行，不与它并跑。
+
+原因是**共用样式文件**，两边原计划里都没提：
+
+| 共享文件 | ④ 在用 | 本子任务在用 |
+|---|---|---|
+| `web/static/css/pages/entity-drawers.css` | `rooms.html`、`properties.html` | `room-detail.html`、`property-detail.html`、`tenancies.html` |
+| `web/static/css/pages/object-navigation.css` | `rooms.html`、`properties.html` | `room-detail.html` |
+
+并跑会导致提交时（Phase 3.4）无法把两个任务的改动分开。文件不相交时
+`git add <路径>` 就能干净分离；共用一个文件就只能人工挑。
+
+**开工前先读 ④ 的回报**：若 ④ 改过上述两个文件，它会在回报里点名写出改了哪几条规则，
+本子任务在此基础上继续，避免互相覆盖。
+
+**与 ② 的关系**：本子任务与 `09-19-shell-alignment`（②）的写入面不重叠，
+② 先跑只是为了让截图基线稳定，不是文件冲突。
+
+**端口**：轮到本子任务时用 `APP_PORT=18092`（18090 / 18091 可能仍被占用）。
+`MYSQL_PORT=3306`，仍然**绝不允许**指向 `:8081` / `bank.ddpl.top`。

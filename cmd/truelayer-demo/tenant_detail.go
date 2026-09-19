@@ -277,10 +277,10 @@ var tenantDetailTemplate = newWorkspacePageTemplate("tenant-detail", nil, `<!doc
   <main class="content">
 	<div class="tenant-detail-page">
 <header class="tenant-detail-head"><a class="tenant-detail-back" href="/tenants">← 返回租客管理</a><div class="tenant-identity-row"><div class="tenant-identity"><div class="identity-mark">TN</div><div><div class="brand-title">租客详情</div><h1>{{if .Tenant.DisplayAlias}}{{.Tenant.DisplayAlias}}{{else}}{{.Tenant.Name}}{{end}}</h1><div class="tenant-identity-meta"><span>正式姓名：{{.Tenant.Name}}</span><span>{{if .Tenant.RoomLabel}}{{.Tenant.RoomLabel}}{{else}}{{.Tenant.RoomAddress}}{{end}}</span><span class="detail-status {{.Tenant.Status}}">{{if eq .Tenant.Status "active"}}有效租约{{else}}已停用{{end}}</span></div></div></div><div class="actions"><a class="btn" href="/tenants?edit={{.Tenant.ID}}">编辑资料</a><a class="btn primary" href="/cash-receipts?add=1&amp;tenant_id={{.Tenant.ID}}&amp;period={{.CurrentPeriod}}">录入现金收款</a></div></div></header>
-	{{if eq .Message "cash_receipt_saved"}}<div class="notice ok">现金收款已入账，并计入对应租金月份。</div>{{end}}
-	{{if eq .Message "cash_receipt_voided"}}<div class="notice ok">现金收款已撤销，原始记录与撤销原因已保留。</div>{{end}}
-    {{if eq .Message "payer_added"}}<div class="notice ok">付款人关系已保存。</div>{{end}}
-    {{if eq .Message "payer_removed"}}<div class="notice ok">付款人关系已移除，历史记录未改变。</div>{{end}}
+	{{if eq .Message "cash_receipt_saved"}}<div class="notice ok" data-toast>现金收款已入账，并计入对应租金月份。</div>{{end}}
+	{{if eq .Message "cash_receipt_voided"}}<div class="notice ok" data-toast>现金收款已撤销，原始记录与撤销原因已保留。</div>{{end}}
+    {{if eq .Message "payer_added"}}<div class="notice ok" data-toast>付款人关系已保存。</div>{{end}}
+    {{if eq .Message "payer_removed"}}<div class="notice ok" data-toast>付款人关系已移除，历史记录未改变。</div>{{end}}
     {{if eq .Error "invalid_payer"}}<div class="notice error">付款人名称不能为空，且字段长度必须有效。</div>{{end}}
 	<div class="tenant-metrics" aria-label="本月租金摘要"><div class="panel metric"><div class="label">本月个人责任</div><strong>{{.Tenant.RentDisplay}}</strong><span>{{if .Tenant.RoomLabel}}{{.Tenant.RoomLabel}}{{else}}月度租金责任{{end}}</span></div><div class="panel metric"><div class="label">个人责任已覆盖</div><strong>{{if .HasCurrentBilling}}{{.CurrentBilling.PaidAmount}}{{else}}—{{end}}</strong><span>银行收款与现金收款</span></div><div class="panel metric"><div class="label">本月未收</div><strong>{{if .HasCurrentBilling}}{{.CurrentBilling.BalanceAmount}}{{else}}—{{end}}</strong><span>按个人租金责任计算</span></div><div class="panel metric"><div class="label">本月状态</div><strong class="tenant-metric-state">{{if .HasCurrentBilling}}{{.CurrentBilling.StatusLabel}}{{else}}暂无账单{{end}}</strong><span>{{.CurrentPeriod}}</span></div></div>
 	<div class="detail-grid"><section class="panel surface tenant-history-panel" aria-labelledby="history-title"><div class="panel-head"><h2 id="history-title">缴费历史</h2><span class="tiny">{{.History.TotalRows}} 个适用月份</span></div>
@@ -336,13 +336,13 @@ func (a *app) handleTenantDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := tenantDetailPageData{
-		workspaceShell: workspaceShell{
+		workspaceShell: a.fillWorkspaceShell(r, workspaceShell{
 			ActivePage:   "tenants",
 			Username:     a.displayUsername(r),
 			Environment:  a.cfg.Environment,
 			FootNote:     "租客缴费详情",
 			CompactTitle: firstNonEmpty(tenantRow.DisplayAlias, tenantRow.Name),
-		},
+		}),
 		CurrentPeriod: monthStart(time.Now().UTC()).Format("2006-01"),
 		Message:       r.URL.Query().Get("message"),
 		Error:         r.URL.Query().Get("error"),

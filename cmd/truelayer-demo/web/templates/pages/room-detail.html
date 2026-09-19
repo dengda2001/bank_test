@@ -29,7 +29,7 @@
           <a class="btn primary" href="/dunning?period={{.Period}}">提醒未付款租客</a>
         </div>
       </header>
-      {{if .Message}}<div class="notice ok">资料已保存。</div>{{end}}
+      {{if .Message}}<div class="notice ok" data-toast>资料已保存。</div>{{end}}
       {{if .Error}}<div class="notice error">{{.Error}}</div>{{end}}
 
       {{if .Editing}}

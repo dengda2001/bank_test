@@ -127,28 +127,43 @@ func (a *app) handleDashboardManualBalance(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "database session required", http.StatusBadRequest)
 		return
 	}
+	// The form is submitted from /bills, so the redirect has to come back to
+	// /bills with the same filters rather than to /rent-dashboard.
+	listPath := "/rent-dashboard"
+	if strings.HasPrefix(r.URL.Path, "/bills") {
+		listPath = "/bills"
+	}
 	if err := r.ParseForm(); err != nil {
-		http.Redirect(w, r, dashboardManualBalanceRedirect(r.Form, "", "invalid_manual_balance"), http.StatusFound)
+		http.Redirect(w, r, listManualBalanceRedirect(listPath, r.Form, "", "invalid_manual_balance"), http.StatusFound)
 		return
 	}
 	obligationID, err := parsePositiveUint(r.Form.Get("obligation_id"))
 	if err != nil {
-		http.Redirect(w, r, dashboardManualBalanceRedirect(r.Form, "", "invalid_manual_balance"), http.StatusFound)
+		http.Redirect(w, r, listManualBalanceRedirect(listPath, r.Form, "", "invalid_manual_balance"), http.StatusFound)
 		return
 	}
 	reason := strings.TrimSpace(firstNonEmpty(r.Form.Get("reason"), r.Form.Get("manual_balance_reason")))
 	if reason == "" {
-		http.Redirect(w, r, dashboardManualBalanceRedirect(r.Form, "", "manual_balance_reason_required"), http.StatusFound)
+		http.Redirect(w, r, listManualBalanceRedirect(listPath, r.Form, "", "manual_balance_reason_required"), http.StatusFound)
+		return
+	}
+	// "处理方式" defaults to 匹配现有收款, which is exactly what
+	// settleRentObligation already did. The other three options exist in the
+	// form for prototype parity but have no accounting rule behind them yet, so
+	// they must stop here -- before any write -- and say so.
+	disposition := strings.TrimSpace(r.Form.Get("disposition"))
+	if !settleDispositionImplemented(disposition) {
+		http.Redirect(w, r, listManualBalanceRedirect(listPath, r.Form, "", "manual_balance_disposition_unimplemented"), http.StatusFound)
 		return
 	}
 	_, err = newTransactionService(a.db).settleRentObligation(r.Context(), userID, obligationID, reason)
 	switch {
 	case err == nil:
-		http.Redirect(w, r, dashboardManualBalanceRedirect(r.Form, "manual_balance_saved", ""), http.StatusFound)
+		http.Redirect(w, r, listManualBalanceRedirect(listPath, r.Form, "manual_balance_saved", ""), http.StatusFound)
 	case errors.Is(err, errManualBalanceNotNeeded):
-		http.Redirect(w, r, dashboardManualBalanceRedirect(r.Form, "manual_balance_not_needed", ""), http.StatusFound)
+		http.Redirect(w, r, listManualBalanceRedirect(listPath, r.Form, "manual_balance_not_needed", ""), http.StatusFound)
 	default:
-		http.Redirect(w, r, dashboardManualBalanceRedirect(r.Form, "", "manual_balance_failed"), http.StatusFound)
+		http.Redirect(w, r, listManualBalanceRedirect(listPath, r.Form, "", "manual_balance_failed"), http.StatusFound)
 	}
 }
 

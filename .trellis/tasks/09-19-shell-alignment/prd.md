@@ -29,6 +29,7 @@
 - 新增服务端渲染的 toast 容器，挂在共享外壳内，使全部页面自动具备；由共享内联 script 负责显示与 2.2 秒自动消失。
 - toast 与现有 notice 块不得同时可见 —— 同一条消息只能出现一次。保留 notice 作为无脚本降级。
 - 侧边栏在 1024–1100 档按原型收紧（配合子任务 ① 的 1100 断点）。
+- **侧边栏在桌面档滚动时不得随页面移走**（用户于 2026-09-19 报告；见下方「用户报告的滚动缺陷」）。
 
 ## Acceptance Criteria
 
@@ -42,6 +43,9 @@
 - [ ] 11 个页面在外壳改动后全部正常渲染（`TestEveryWorkspacePageRendersTheSharedChromeOnce` 通过）。
 - [ ] 1024 / 1366 / 1440 / 1920 四档下侧边栏与顶栏无横向溢出，全页面 `scrollWidth === clientWidth`。
 - [ ] 四档截图存入 `research/screenshots/`。
+- [ ] **桌面档（≥641px）页面滚动时侧边栏保持钉在视口顶部**，滚动前后
+      `getBoundingClientRect().top` 不变（见下方「用户报告的滚动缺陷」）。
+      在**真实页面**上量，不只在合成页面上量。
 
 ## Out of Scope
 
@@ -56,3 +60,42 @@
 理由：把页头主操作复制进顶栏会产生两个渲染点、两个可点击控件执行同一动作，日后加权限校验或二次确认时两处都得改，漏一处即是可绕过的入口。
 
 **代价（显式接受）**：顶栏比原型窄一块，与原型不逐像素一致。这是父任务 Out of Scope 中「重新载入测试数据不做成产品功能」的直接后果，记入本子任务的已知偏差。
+
+## 用户报告的滚动缺陷（2026-09-19）
+
+用户报告：**滚动页面时侧边栏跟着一起滚走**。这不是本子任务引入的，是既有缺陷，但属于外壳，
+由本子任务一并修复。
+
+**根因**（已定位到行）：`workspace.css` 的 `@media (min-width: 641px)` 档里，桌面侧边栏写的是
+
+```css
+.sidebar { position: relative; top: 0; height: 100vh; overflow: auto; ... }
+```
+
+`position: relative` 让侧边栏留在正常文档流里，因此随文档滚动。`top: 0` 对 `relative` 是
+「相对自身原位偏移 0」，等于没写；`height: 100vh` 只给了它自己的高度，不产生吸顶效果。
+
+**原型写的是 `sticky`**（`figma/rentops-desktop-suite.html` 内联 CSS）：
+`.sidebar{position:sticky;top:0;height:100vh;...}`。除这一个词外两边规则逐字相同 ——
+移植时把 `sticky` 写成了 `relative`。
+
+**已验证的修法**（真 Chrome 最小复现，1366×768，内容高 3000px）：
+
+| 变体 | 滚动前 top | 滚 600px 后 top | 结果 |
+|---|---|---|---|
+| 现状 `relative` | 0 | −600 | ❌ 复现 |
+| 只改 `sticky` | 0 | 0 | ✅ 钉住 |
+| `sticky` + `overflow-x: clip` | 0 | 0 | ✅ 钉住 |
+
+⇒ **只需把该档的 `relative` 改成 `sticky`**，不必动 `body` 的 `overflow-x: hidden`。
+
+**一个曾被怀疑但不成立的原因**：`body { overflow-x: hidden }`（`workspace.css:36`）通常被当作
+`position: sticky` 的杀手。此例不成立 —— `body` 的 overflow 会传播给视口，`body` 自己不成
+滚动容器，sticky 照常生效。上表第三行是实测反证。**不要**为了"修 sticky"而去改 `overflow-x`。
+
+**验证要求**：必须在**真实页面**上量（`scripts/run-audit-local.sh` + `scripts/audit/launch.mjs`），
+不能用合成页面替代 —— 真实页面的祖先链更复杂，可能有别的 `overflow` 祖先。对至少两个页面、
+在 ≥641px 的档位上，滚动前后各取一次 `getBoundingClientRect().top` 比对。
+
+**640 档无需改动**：`@media (max-width: 640px)` 里侧边栏是 `position: fixed` 的抽屉，行为正确。
+980 档不设 `position`。

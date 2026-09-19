@@ -18,7 +18,7 @@
         <a class="btn primary" href="/tenancies?period={{.Period}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}&amp;add=1"><span class="tenancy-desktop-copy">新建租约</span><span class="tenancy-mobile-copy">新增</span></a>
       </header>
 
-      {{if eq .Message "lease_saved"}}<div class="notice ok">租约已保存，房间和租客责任已更新。</div>{{end}}
+      {{if eq .Message "lease_saved"}}<div class="notice ok" data-toast>租约已保存，房间和租客责任已更新。</div>{{end}}
       {{if eq .Error "lease_locked"}}<div class="notice error">该房间从所选月份起已有账单，不能覆盖已生成的租金责任。</div>{{end}}
       {{if eq .Error "lease_failed"}}<div class="notice error">租约未保存，请核对房间、日期、金额和责任分配。</div>{{end}}
 
@@ -40,7 +40,7 @@
             <td><span class="tenancy-date">合同 {{.ContractDate}}</span><small>入住 {{.MoveInDate}}</small>{{if .EndDate}}<small>退租 {{.EndDate}}</small>{{end}}</td>
             <td class="amount">{{.Responsibility}}</td>
             <td>租约档案</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span></td>
-            <td><a class="btn subtle" href="/rooms/{{.RoomID}}?period={{$.Period}}">查看</a></td>
+            <td><a class="btn subtle" href="/rooms/{{.RoomID}}?period={{$.Period}}">查看详情</a></td>
           </tr>{{end}}
         </tbody></table></div>
         <div class="tenancy-mobile-list">{{range .Rows}}<article class="tenancy-mobile-card" data-page="tenancies" data-tenancy-id="{{.ID}}">

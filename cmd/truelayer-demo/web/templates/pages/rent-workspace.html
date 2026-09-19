@@ -17,7 +17,7 @@
       <nav class="workspace-period-mobile" aria-label="选择收租月份"><a class="btn subtle" href="{{workspacePeriodURL .Filters .PreviousPeriod}}" aria-label="上个月">‹</a><strong>{{.PeriodLabel}}</strong><a class="btn subtle" href="{{workspacePeriodURL .Filters .NextPeriod}}" aria-label="下个月">›</a></nav>
     </div>
     {{if eq .Error "invalid_workspace_filter"}}<div class="notice error">筛选条件无效，已恢复安全默认值。</div>{{end}}
-    {{if .Message}}<div class="notice ok">{{.Message}}</div>{{end}}
+    {{if .Message}}<div class="notice ok" data-toast>{{.Message}}</div>{{end}}
     {{if not .PropertyOptions}}<div class="notice workspace-empty-notice">尚未建立有效房产。旧版租金账单不会自动迁移；你可以先<a href="/properties?add=1">新建房产</a>，或前往<a href="/bills">应收账单</a>查看现有账单。</div>{{end}}
     <section class="workspace-summary" aria-label="月度汇总">
       <div class="panel metric"><div class="label">本月应收</div><strong>{{.Summary.ExpectedAmount}}</strong><span>{{.Summary.ResponsibilityCount}} 条租客责任</span></div>
@@ -25,7 +25,7 @@
       <div class="panel metric metric-warning"><div class="label">剩余未收</div><strong>{{.Summary.BalanceAmount}}</strong><span>{{.Summary.FollowupCount}} 条需继续跟进</span></div>
       <div class="panel metric"><div class="label">本月支出</div><strong>{{.Summary.ExpenseAmount}}</strong><span>{{len .PropertyOptions}} 套房产均摊</span></div>
     </section>
-    <section class="panel surface workspace-action-queue" aria-label="待人工处理流水">
+    <section class="panel surface workspace-action-queue" id="pending-review" aria-label="待人工处理流水">
       <div class="panel-head"><div><h2>待人工处理流水</h2><p class="tiny">核对付款人与租金责任，处理后同步更新收缴结果。</p></div><span class="workspace-queue-count">{{.PendingCount}}</span></div>
       {{if .PendingItems}}<div class="workspace-queue-list">{{range .PendingItems}}<article class="workspace-queue-item"><div><strong>{{.Title}}</strong><small>{{.Subtitle}}</small></div><strong class="workspace-queue-amount">{{.Amount}}</strong><div class="workspace-queue-actions"><a class="btn subtle" href="{{.DetailURL}}">查看建议</a><a class="btn primary" href="{{.ListURL}}">处理流水</a></div></article>{{end}}</div>{{if gt .PendingCount (len .PendingItems)}}<a class="workspace-queue-more" href="/transactions?period={{.Period}}&amp;match_status=pending">查看全部待处理流水</a>{{end}}{{else}}<div class="workspace-empty workspace-queue-empty">当前没有待处理流水。</div>{{end}}
     </section>

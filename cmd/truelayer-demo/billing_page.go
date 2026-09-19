@@ -260,13 +260,13 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
       {{if eq .Error "invalid_payer_confirmation"}}<div class="notice error">付款人确认请求无效。</div>{{end}}
       {{if eq .Error "payer_confirmation_failed"}}<div class="notice error">付款人确认失败，请重新检查月份和账单余额。</div>{{end}}
       {{if eq .Error "invalid_filter"}}<div class="notice error">筛选条件无效。</div>{{end}}
-      {{if eq .Message "bank_connected"}}<div class="notice ok">银行账户已连接，流水已导入。</div>{{end}}
-      {{if eq .Message "refreshed"}}<div class="notice ok">银行数据已刷新。</div>{{end}}
-      {{if eq .Message "rent_confirmed"}}<div class="notice ok">租金已确认，符合条件的同名流水也已关联。</div>{{end}}
-      {{if eq .Message "allocation_saved"}}<div class="notice ok">流水归类已保存。</div>{{end}}
-      {{if eq .Message "transaction_action_saved"}}<div class="notice ok">流水操作已保存。</div>{{end}}
-      {{if eq .Message "payer_confirmed"}}<div class="notice ok">历史流水已逐笔确认。</div>{{end}}
-      {{if eq .Message "legacy_imported"}}<div class="notice ok">旧版 JSON 和 JSONL 数据已导入。</div>{{end}}
+      {{if eq .Message "bank_connected"}}<div class="notice ok" data-toast>银行账户已连接，流水已导入。</div>{{end}}
+      {{if eq .Message "refreshed"}}<div class="notice ok" data-toast>银行数据已刷新。</div>{{end}}
+      {{if eq .Message "rent_confirmed"}}<div class="notice ok" data-toast>租金已确认，符合条件的同名流水也已关联。</div>{{end}}
+      {{if eq .Message "allocation_saved"}}<div class="notice ok" data-toast>流水归类已保存。</div>{{end}}
+      {{if eq .Message "transaction_action_saved"}}<div class="notice ok" data-toast>流水操作已保存。</div>{{end}}
+      {{if eq .Message "payer_confirmed"}}<div class="notice ok" data-toast>历史流水已逐笔确认。</div>{{end}}
+      {{if eq .Message "legacy_imported"}}<div class="notice ok" data-toast>旧版 JSON 和 JSONL 数据已导入。</div>{{end}}
       {{if eq .Error "legacy_import_failed"}}<div class="notice error">旧数据导入失败，请检查源文件。</div>{{end}}
       {{if eq .PageKey "transactions"}}
       <form class="transaction-route-quickfilter" method="get" action="/transactions" aria-label="快速筛选流水">

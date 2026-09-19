@@ -25,7 +25,7 @@
         <div class="actions"><a class="btn" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}&amp;edit=1">编辑房产</a><a class="btn" href="/expenses?period={{.Period}}&amp;property_id={{.Property.ID}}&amp;add=1">新增支出</a><a class="btn primary" href="/dunning?period={{.Period}}">提醒未收租客</a></div>
       </header>
 
-      {{if .Message}}<div class="notice ok">资料已保存。</div>{{end}}
+      {{if .Message}}<div class="notice ok" data-toast>资料已保存。</div>{{end}}
       {{if .Error}}<div class="notice error">{{.Error}}</div>{{end}}
       {{if .Editing}}
       <div class="entity-drawer-backdrop">

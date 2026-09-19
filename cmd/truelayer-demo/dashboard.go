@@ -40,7 +40,7 @@ func (a *app) renderRentDashboard(w http.ResponseWriter, r *http.Request, action
 		period = periodMonth.Format("2006-01")
 	}
 	data := rentDashboardPageData{
-		workspaceShell: workspaceShell{
+		workspaceShell: a.fillWorkspaceShell(r, workspaceShell{
 			ActivePage: func() string {
 				if r.URL.Path == "/bills" {
 					return "bills"
@@ -55,8 +55,7 @@ func (a *app) renderRentDashboard(w http.ResponseWriter, r *http.Request, action
 			FootNote:      "月度收租工作台",
 			CompactTitle:  "本月收租",
 			ShowNavCounts: true,
-			NavLabel:      "主导航",
-		},
+		}),
 		PageKey: func() string {
 			if r.URL.Path == "/bills" {
 				return "bills"

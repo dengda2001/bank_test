@@ -130,6 +130,10 @@ func TestEveryWorkspacePageRendersTheSharedChromeOnce(t *testing.T) {
 			`class="nav-compact-bar"`:       1,
 			`class="nav-scrim"`:             1,
 			`class="workspace-page-topbar"`: 1,
+			// The toast ships with the chrome, so "every page has one" is the same
+			// contract as the rest of this map -- and one page having two would make
+			// the shared script write into whichever it found first.
+			`id="workspace-toast"`: 1,
 		} {
 			if got := strings.Count(page, marker); got != want {
 				t.Fatalf("%s renders %q %d times, want %d", name, marker, got, want)
@@ -398,11 +402,19 @@ func TestMobileSimpleTablesStackAsCards(t *testing.T) {
 // (responsive-conventions.md §1) may carry desktop alignment; it may not carry a
 // frozen column, because freezing one at 1024px would pin the action cell over
 // the columns that fit there.
+//
+// The rule above is about the frozen *table cell*. The desktop sidebar rail is
+// the one sticky rule allowed above 640 (prd.md「用户报告的滚动缺陷」: the
+// prototype pins the rail with `position:sticky;top:0`), so this test asserts the
+// sticky rule it finds there is the top-anchored rail and not a `right:0` cell.
 func TestFrozenLastColumnIsMobileOnly(t *testing.T) {
 	base, mobile := splitWorkspaceCSS(t)
 
-	if strings.Contains(base, "sticky") {
-		t.Fatal("a sticky declaration reached the stylesheet above the 640 tier; the frozen column is mobile-only")
+	if !strings.Contains(base, "position: sticky;\n        top: 0;") {
+		t.Fatal("the desktop sidebar rail lost its sticky top anchor; it must stay pinned while the page scrolls")
+	}
+	if strings.Contains(base, "position: sticky;\n        right: 0;") {
+		t.Fatal("a frozen table cell reached the stylesheet above the 640 tier; the frozen column is mobile-only")
 	}
 	for _, expected := range []string{
 		".table-wrap > table > thead > tr > th:last-child,",
