@@ -7,3 +7,13 @@ log.json
 /truelayer-demo
 /demo-run.log
 truelayer-token.json
+
+# Editor / OS noise
+.DS_Store
+
+# Audit harness dependencies (scripts themselves are tracked)
+node_modules/
+
+# Ad-hoc archives
+*.zip
+
