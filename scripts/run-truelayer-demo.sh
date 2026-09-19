@@ -57,6 +57,45 @@ if [[ "${TL_ENV}" == "live" && -z "${BANK_TOKEN_ENCRYPTION_KEY:-}" ]]; then
   exit 1
 fi
 
+stop_existing_listener() {
+  local port="$1"
+  local pids
+
+  if ! command -v lsof >/dev/null 2>&1; then
+    printf 'Cannot check port %s: lsof is not installed\n' "$port" >&2
+    return 1
+  fi
+
+  pids="$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)"
+  if [[ -z "$pids" ]]; then
+    return 0
+  fi
+
+  printf 'Stopping process(es) listening on port %s: %s\n' "$port" "${pids//$'\n'/ }" >&2
+  while IFS= read -r pid; do
+    [[ -n "$pid" ]] && kill "$pid" 2>/dev/null || true
+  done <<< "$pids"
+
+  for _ in {1..50}; do
+    if ! lsof -tiTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.1
+  done
+
+  printf 'Port %s is still occupied after stopping the existing process\n' "$port" >&2
+  return 1
+}
+
+port="${TL_ADDR##*:}"
+if [[ ! "$port" =~ ^[0-9]+$ ]]; then
+  printf 'Cannot determine the listening port from TL_ADDR=%s\n' "$TL_ADDR" >&2
+  exit 1
+fi
+if ! stop_existing_listener "$port"; then
+  exit 1
+fi
+
 cat <<EOF
 Starting TrueLayer demo
   URL:          http://localhost${TL_ADDR}

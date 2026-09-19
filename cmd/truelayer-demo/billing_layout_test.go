@@ -8,11 +8,45 @@ import (
 
 func renderBillingPage(t *testing.T, data billingPageData) string {
 	t.Helper()
+	if data.CanonicalPath == "" {
+		data.CanonicalPath = "/billing"
+	}
 	var body strings.Builder
 	if err := billingTemplate.Execute(&body, data); err != nil {
 		t.Fatal(err)
 	}
 	return body.String()
+}
+
+func TestTransactionRouteUsesPrototypeQueueAndKeepsLocalReturnPath(t *testing.T) {
+	page := renderBillingPage(t, billingPageData{
+		workspaceShell: workspaceShell{ActivePage: "transactions", CompactTitle: "流水处理"},
+		PageKey:        "transactions", CanonicalPath: "/transactions", TransactionScope: "pending", PendingCount: 2,
+		TransactionRows: []transactionPageRow{{
+			ID: "7", InternalID: "7", DetailKey: "7", DetailURL: "/transactions?detail=7&match_status=pending",
+			Direction: "income", DirectionLabel: "收入", PayerName: "WAHAJULLAH KHAN", AmountDisplay: "€1,250.00",
+			RemainingAmountDisplay: "€1,250.00", AllocationUseDisplay: "同住代付", DateDisplay: "01 Sep 2026",
+			Description: "RENT SEPT", AccountName: "AIB", MatchStatus: "candidate", MatchStatusLabel: "待确认",
+			CandidateTenantName: "WAHAJULLAH KHAN", CandidateRentObligationID: 301, CandidatePeriod: "2026-09", CanConfirm: true,
+		}},
+	})
+	for _, marker := range []string{
+		`class="content transaction-route-page"`,
+		`<span class="transaction-mobile-copy">流水处理</span>`,
+		`class="transaction-route-tabs"`,
+		`href="/transactions?match_status=pending"`,
+		`href="/transactions?match_status=matched"`,
+		`href="/transactions?scope=all"`,
+		`class="transaction-route-mobile-list"`,
+		`class="transaction-review-card"`,
+		`action="/transactions/confirm"`,
+		`name="return_to" value="/transactions"`,
+		`href="/transactions?detail=7&amp;match_status=pending"`,
+	} {
+		if !strings.Contains(page, marker) {
+			t.Errorf("transaction route missing %q", marker)
+		}
+	}
 }
 
 // The filter bar carried thirteen controls, including a 排序 dropdown and a 每页
@@ -41,6 +75,13 @@ func TestBillingFilterBarKeepsOnlyTheSixQuestions(t *testing.T) {
 	matchStatus := markupBetween(t, filterBar, `<select id="match_status"`, `</select>`)
 	if !strings.Contains(matchStatus, `<option value="pending" selected>待处理`) {
 		t.Fatalf("匹配状态 does not absorb the 待处理 filter: %s", matchStatus)
+	}
+}
+
+func TestBillingCalendarPopoverStaysInsideTheDesktopViewport(t *testing.T) {
+	page := renderBillingPage(t, billingPageData{Page: 1, PageSize: 50})
+	if !strings.Contains(page, "@media (min-width: 641px) { .filterbar .calendar-popover { left: auto; right: 0; transform-origin: top right; } }") {
+		t.Fatal("desktop transaction month picker must open toward the content area instead of extending past the viewport")
 	}
 }
 

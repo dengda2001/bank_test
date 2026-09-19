@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
+	"sort"
 	"time"
 
 	"gorm.io/gorm"
@@ -72,6 +74,71 @@ func splitRentAmountEvenly(totalCents int64, tenantIDs []uint64) ([]rentResponsi
 		return nil, err
 	}
 	return responsibilities, nil
+}
+
+func scaleRentResponsibilities(totalCents int64, current []rentResponsibilityInput) ([]rentResponsibilityInput, error) {
+	if totalCents <= 0 {
+		return nil, errors.New("rent amount must be positive")
+	}
+	if len(current) == 0 {
+		return nil, nil
+	}
+	const maxInt64 = int64(^uint64(0) >> 1)
+	var currentTotal int64
+	for _, row := range current {
+		if row.AmountCents <= 0 || row.AmountCents > maxInt64-currentTotal {
+			return nil, errors.New("current rent responsibilities are invalid")
+		}
+		currentTotal += row.AmountCents
+	}
+	if err := validateRentResponsibilityPlan(currentTotal, current); err != nil {
+		return nil, err
+	}
+
+	type scaledShare struct {
+		row       rentResponsibilityInput
+		remainder *big.Int
+	}
+	newTotal := big.NewInt(totalCents)
+	oldTotal := big.NewInt(currentTotal)
+	shares := make([]scaledShare, 0, len(current))
+	var assigned int64
+	for _, row := range current {
+		numerator := new(big.Int).Mul(newTotal, big.NewInt(row.AmountCents))
+		quotient, remainder := new(big.Int), new(big.Int)
+		quotient.QuoRem(numerator, oldTotal, remainder)
+		if !quotient.IsInt64() {
+			return nil, errors.New("scaled rent responsibility is outside the supported range")
+		}
+		cents := quotient.Int64()
+		if cents > totalCents-assigned {
+			return nil, errors.New("scaled rent responsibilities exceed the new room rent")
+		}
+		assigned += cents
+		shares = append(shares, scaledShare{row: rentResponsibilityInput{TenantID: row.TenantID, AmountCents: cents}, remainder: remainder})
+	}
+	leftover := totalCents - assigned
+	if leftover < 0 || leftover >= int64(len(shares)) {
+		return nil, errors.New("scaled rent remainder is invalid")
+	}
+	sort.Slice(shares, func(i, j int) bool {
+		if comparison := shares[i].remainder.Cmp(shares[j].remainder); comparison != 0 {
+			return comparison > 0
+		}
+		return shares[i].row.TenantID < shares[j].row.TenantID
+	})
+	for index := int64(0); index < leftover; index++ {
+		shares[index].row.AmountCents++
+	}
+	result := make([]rentResponsibilityInput, len(shares))
+	for index := range shares {
+		result[index] = shares[index].row
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].TenantID < result[j].TenantID })
+	if err := validateRentResponsibilityPlan(totalCents, result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func validateRentResponsibilityPlan(totalCents int64, responsibilities []rentResponsibilityInput) error {

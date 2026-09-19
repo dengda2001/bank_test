@@ -6,7 +6,10 @@ type property struct {
 	ID           uint64 `gorm:"primaryKey"`
 	UserID       uint64
 	Name         string
+	CityRegion   string
 	Address      *string
+	Timezone     string
+	Notes        *string
 	Status       string `gorm:"default:active"`
 	InactiveFrom *time.Time
 	CreatedAt    time.Time
@@ -18,15 +21,20 @@ func (property) TableName() string {
 }
 
 type room struct {
-	ID           uint64 `gorm:"primaryKey"`
-	UserID       uint64
-	PropertyID   uint64
-	RoomLabel    string
-	Status       string `gorm:"default:active"`
-	ActiveFrom   time.Time
-	InactiveFrom *time.Time
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID               uint64 `gorm:"primaryKey"`
+	UserID           uint64
+	PropertyID       uint64
+	RoomLabel        string
+	RoomType         string
+	Capacity         int
+	MonthlyRentCents int64
+	DueDay           int `gorm:"default:1"`
+	Notes            *string
+	Status           string `gorm:"default:active"`
+	ActiveFrom       time.Time
+	InactiveFrom     *time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 func (room) TableName() string {
@@ -37,6 +45,8 @@ type tenancyAgreement struct {
 	ID               uint64 `gorm:"primaryKey"`
 	UserID           uint64
 	RoomID           uint64
+	ContractDate     *time.Time
+	MoveInDate       *time.Time
 	StartDate        time.Time
 	EndDate          *time.Time
 	MonthlyRentCents int64

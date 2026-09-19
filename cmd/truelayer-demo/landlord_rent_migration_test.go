@@ -88,6 +88,23 @@ func TestLandlordRentMigrationKeepsNewFactsUserScopedAndIdempotent(t *testing.T)
 	}
 }
 
+func TestPrototypeRoomRentMigrationPersistsRoomDefaultRentAndDueDay(t *testing.T) {
+	body, err := os.ReadFile(filepath.Join("..", "..", "migrations", "012_prototype_room_rent_defaults.sql"))
+	if err != nil {
+		t.Fatalf("read prototype room rent migration: %v", err)
+	}
+	sql := strings.ToLower(string(body))
+	for _, fragment := range []string{
+		"alter table rooms",
+		"add column monthly_rent_cents bigint not null default 0",
+		"add column due_day int not null default 1",
+	} {
+		if !strings.Contains(sql, fragment) {
+			t.Fatalf("room rent migration missing %q", fragment)
+		}
+	}
+}
+
 func TestLandlordRentModelsUseMigrationTableNames(t *testing.T) {
 	cases := []struct {
 		name string

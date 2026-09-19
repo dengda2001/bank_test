@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RentOps 现金补录</title>
+  <link rel="stylesheet" href="/static/css/workspace.css">
+  <link rel="stylesheet" href="/static/css/pages/collection-pages.css">
+  <link rel="stylesheet" href="/static/css/pages/entity-drawers.css">
+  <link rel="stylesheet" href="/static/css/pages/cash-receipts.css">
+</head>
+<body>
+  <div class="app">
+    {{template "workspace-nav" .}}
+    <main class="content workspace cash-receipt-page">
+      <header class="collection-toolbar cash-receipt-heading">
+        <div><div class="eyebrow">RentOps · 现金补录</div><h1>现金补录</h1><p class="tiny"><span class="cash-desktop-subtitle">补录线下收款，并明确关联责任月份与租客。</span><span class="cash-mobile-subtitle">补录线下收款，关联责任月份和租客。</span></p></div>
+        <a class="btn primary" href="/cash-receipts?period={{.Period}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}&amp;add=1">录入现金收款</a>
+      </header>
+
+      {{if eq .Message "cash_receipt_saved"}}<div class="notice ok">现金收款已登记。</div>{{end}}
+      {{if eq .Message "cash_receipt_voided"}}<div class="notice ok">现金收款已撤销，原始收据仍保留。</div>{{end}}
+      {{if eq .Error "cash_receipt_failed"}}<div class="notice error">现金补录失败，请检查租客、月份、金额和日期。</div>{{end}}
+      {{if eq .Error "cash_overbalance"}}<div class="notice error">这笔现金会超过该月份未收余额，请核对已有收款。</div>{{end}}
+
+      <form class="cash-receipt-filters" method="get" action="/cash-receipts">
+        <label class="cash-receipt-search"><span>搜索当前列表</span><input type="search" name="search" value="{{.Search}}" placeholder="租客、收据号或备注"></label>
+        <label><span>状态</span><select name="status"><option value="all"{{if eq .StatusFilter "all"}} selected{{end}}>全部状态</option><option value="confirmed"{{if eq .StatusFilter "confirmed"}} selected{{end}}>已确认</option><option value="voided"{{if eq .StatusFilter "voided"}} selected{{end}}>已作废</option></select></label>
+        <label><span>月份</span><input type="month" name="period" value="{{.Period}}"></label>
+        <button class="btn subtle" type="submit">筛选</button>
+      </form>
+
+      <section class="panel surface cash-receipt-list" aria-label="现金补录列表">
+        {{if .Rows}}
+        <div class="cash-receipt-table-wrap table-wrap"><table class="cash-receipt-table"><thead><tr><th>日期</th><th>租客</th><th>房间</th><th class="amount">金额</th><th>对应月份</th><th>数据说明</th><th>状态</th><th>操作</th></tr></thead><tbody>
+          {{range .Rows}}<tr data-page="cash-receipts" data-receipt-id="{{.ID}}"><td class="mono">{{.ReceivedAt}}</td><td><a href="/tenants/{{.TenantID}}">{{.TenantName}}</a><small>{{.ReceiptNumber}}</small></td><td>{{if .RoomLabel}}{{.RoomLabel}}{{else}}—{{end}}</td><td class="amount">{{.Amount}}</td><td class="mono">{{.Period}}</td><td>{{if .Note}}{{.Note}}{{else}}线下现金收款{{end}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span></td><td>{{if eq .Status "confirmed"}}<a class="btn subtle" href="{{.VoidURL}}">撤销</a>{{else if .VoidReason}}<small>{{.VoidReason}}</small>{{else}}—{{end}}</td></tr>{{end}}
+        </tbody></table></div>
+        <div class="cash-receipt-mobile-list">{{range .Rows}}<article class="cash-receipt-mobile-card" data-page="cash-receipts" data-receipt-id="{{.ID}}">
+          <div class="cash-receipt-mobile-head"><div><h3>{{.TenantName}}</h3><p>{{.ReceivedAt}} · {{.ReceiptNumber}}</p></div><strong class="amount">{{.Amount}}</strong></div>
+          <div class="cash-receipt-mobile-meta"><div><span>对应月份</span><strong>{{.Period}}</strong></div><div><span>房间</span><strong>{{if .RoomLabel}}{{.RoomLabel}}{{else}}—{{end}}</strong></div></div>
+          <p class="cash-receipt-mobile-note">{{if .Note}}{{.Note}}{{else}}现金收款已关联至租客账单。{{end}}</p>
+          <div class="cash-receipt-mobile-actions"><span class="status {{.Status}}">{{.StatusLabel}}</span>{{if eq .Status "confirmed"}}<a class="btn subtle" href="{{.VoidURL}}">撤销</a>{{else if .VoidReason}}<span class="tiny">{{.VoidReason}}</span>{{end}}</div>
+        </article>{{end}}</div>
+        {{else}}<div class="workspace-empty">当前月份暂无现金收款记录。{{if ne .Search ""}}请调整搜索条件。{{end}}</div>{{end}}
+      </section>
+
+      {{if .ShowForm}}
+      <div class="entity-drawer-backdrop">
+        <section class="entity-drawer cash-receipt-drawer" role="dialog" aria-modal="true" aria-labelledby="cash-receipt-create-title">
+          <div class="panel-head"><div><h2 id="cash-receipt-create-title">{{if .Form.Preview}}确认现金入账{{else}}录入现金收款{{end}}</h2><p class="tiny">现金只计入租金余额，不会创建银行流水。</p></div><a class="drawer-close" href="/cash-receipts?period={{.Period}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}" aria-label="关闭现金收款抽屉">×</a></div>
+          {{if eq .Error "cash_receipt_failed"}}<div class="notice error">请检查租客、月份、金额和日期。</div>{{end}}{{if eq .Error "cash_overbalance"}}<div class="notice error">入账金额大于当前未收余额。</div>{{end}}
+          {{if .Form.Preview}}
+          <div class="cash-preview-summary"><div><span>本月应收</span><strong>{{.Form.ExpectedAmount}}</strong></div><div><span>当前已收</span><strong>{{.Form.CurrentPaidAmount}}</strong></div><div><span>本次现金</span><strong>{{.Form.Amount}} {{.Form.Currency}}</strong></div><div><span>入账后未收</span><strong>{{.Form.AfterRemaining}}</strong></div></div>
+          <dl class="cash-preview-facts"><dt>租客 / 月份</dt><dd>{{.Form.Tenant.Name}} · {{.Form.Period}}</dd><dt>收款日期</dt><dd>{{.Form.ReceivedAt}}</dd><dt>备注</dt><dd>{{if .Form.Note}}{{.Form.Note}}{{else}}无{{end}}</dd><dt>收据请求号</dt><dd class="mono">{{.Form.IdempotencyKey}}</dd></dl>
+          <form class="cash-receipt-form" method="post" action="/cash-receipts">
+            <input type="hidden" name="tenant_id" value="{{.Form.TenantID}}"><input type="hidden" name="period" value="{{.Form.Period}}"><input type="hidden" name="amount" value="{{.Form.Amount}}"><input type="hidden" name="currency" value="{{.Form.Currency}}"><input type="hidden" name="received_at" value="{{.Form.ReceivedAt}}"><input type="hidden" name="note" value="{{.Form.Note}}"><input type="hidden" name="idempotency_key" value="{{.Form.IdempotencyKey}}">
+            <input type="hidden" name="return_to" value="cash-receipts"><input type="hidden" name="list_period" value="{{.Period}}"><input type="hidden" name="list_status" value="{{.StatusFilter}}"><input type="hidden" name="list_search" value="{{.Search}}">
+            <div class="drawer-actions"><a class="btn subtle" href="/cash-receipts?period={{.Period}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}&amp;add=1&amp;tenant_id={{.Form.TenantID}}">返回修改</a><button class="btn primary" type="submit">确认入账</button></div>
+          </form>
+          {{else}}
+          <form class="cash-receipt-form" method="post" action="/cash-receipts/preview">
+            <input type="hidden" name="return_to" value="cash-receipts"><input type="hidden" name="list_period" value="{{.Period}}"><input type="hidden" name="list_status" value="{{.StatusFilter}}"><input type="hidden" name="list_search" value="{{.Search}}">
+            <div class="form-field"><label for="cash-tenant">租客</label><select id="cash-tenant" name="tenant_id" required><option value="">请选择租客</option>{{range .Form.Tenants}}<option value="{{.ID}}"{{if eq .ID $.Form.Tenant.ID}} selected{{end}}>{{.Name}}{{if .RoomLabel}} · {{.RoomLabel}}{{end}}</option>{{end}}</select></div>
+            <div class="cash-receipt-form-grid"><div class="form-field"><label for="cash-period">租金月份</label><input id="cash-period" name="period" type="month" value="{{.Form.Period}}" required></div><div class="form-field"><label for="cash-amount">现金金额</label><input id="cash-amount" name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="例如 400.00" value="{{.Form.Amount}}" required></div><div class="form-field"><label for="cash-date">实际收款日期</label><input id="cash-date" name="received_at" type="date" value="{{.Form.ReceivedAt}}" required></div><div class="form-field"><label for="cash-currency">币种</label><input id="cash-currency" name="currency" value="{{.Form.Currency}}" readonly></div></div>
+            <div class="form-field"><label for="cash-note">备注（可选）</label><textarea id="cash-note" name="note" maxlength="512" placeholder="例如 现金交付，已核对收据">{{.Form.Note}}</textarea></div>
+            <input type="hidden" name="idempotency_key" value="{{.Form.IdempotencyKey}}">
+            <div class="drawer-actions"><a class="btn subtle" href="/cash-receipts?period={{.Period}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}">取消</a><button class="btn primary" type="submit">预览入账</button></div>
+          </form>
+          {{end}}
+        </section>
+      </div>
+      {{end}}
+    </main>
+  </div>
+  {{if .ShowForm}}<script>
+    (() => {
+      const backdrop = document.querySelector(".cash-receipt-drawer")?.parentElement;
+      if (!backdrop) return;
+      const close = backdrop.querySelector(".drawer-close");
+      backdrop.querySelector("input:not([type=hidden]), select")?.focus();
+      backdrop.addEventListener("click", (event) => { if (event.target === backdrop && close) window.location.assign(close.href); });
+      document.addEventListener("keydown", (event) => { if (event.key === "Escape" && close) window.location.assign(close.href); });
+    })();
+  </script>{{end}}
+</body>
+</html>

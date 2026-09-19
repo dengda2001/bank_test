@@ -558,6 +558,7 @@ func rentPaymentDetailFromRow(row rentPaymentDetailRow) rentPaymentDetail {
 	}
 	return rentPaymentDetail{
 		PaymentID:          row.PaymentID,
+		AmountCents:        row.AmountCents,
 		AmountDisplay:      formatMoney(centsToMoney(row.AmountCents), firstNonEmpty(row.Currency, "EUR"), 2),
 		DateDisplay:        dateDisplay,
 		Description:        firstNonEmpty(row.Description, "No description"),

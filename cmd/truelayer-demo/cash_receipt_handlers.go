@@ -285,22 +285,30 @@ func (a *app) handleCashReceiptPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Redirect(w, r, "/cash-receipts/new?error=cash_receipt_failed", http.StatusFound)
+		if r.URL.Query().Get("return_to") == "cash-receipts" {
+			http.Redirect(w, r, "/cash-receipts?error=cash_receipt_failed&add=1", http.StatusFound)
+		} else {
+			http.Redirect(w, r, "/cash-receipts/new?error=cash_receipt_failed", http.StatusFound)
+		}
 		return
 	}
 	input, draft, err := a.cashReceiptInputForPeriod(r.Context(), userID, r.Form)
 	if err != nil {
-		http.Redirect(w, r, cashReceiptNewURL(draft, "cash_receipt_failed"), http.StatusFound)
+		http.Redirect(w, r, cashReceiptFormErrorURL(r.Form, draft, "cash_receipt_failed"), http.StatusFound)
 		return
 	}
 	preview, err := newCashReceiptService(a.db).previewCashReceipt(r.Context(), input)
 	if err != nil {
-		http.Redirect(w, r, cashReceiptNewURL(draft, cashReceiptErrorCode(err)), http.StatusFound)
+		http.Redirect(w, r, cashReceiptFormErrorURL(r.Form, draft, cashReceiptErrorCode(err)), http.StatusFound)
 		return
 	}
 	data, err := a.cashReceiptFormDataFromPreview(r.Context(), r, preview)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if r.Form.Get("return_to") == "cash-receipts" {
+		a.renderCashReceiptDrawerPreview(w, r, userID, data)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -328,11 +336,15 @@ func (a *app) handleCashReceiptCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	input, draft, err := a.cashReceiptInputForPeriod(r.Context(), userID, r.Form)
 	if err != nil {
-		http.Redirect(w, r, cashReceiptNewURL(draft, "cash_receipt_failed"), http.StatusFound)
+		http.Redirect(w, r, cashReceiptFormErrorURL(r.Form, draft, "cash_receipt_failed"), http.StatusFound)
 		return
 	}
 	if _, err := newCashReceiptService(a.db).recordCashReceipt(r.Context(), input); err != nil {
-		http.Redirect(w, r, cashReceiptNewURL(draft, cashReceiptErrorCode(err)), http.StatusFound)
+		http.Redirect(w, r, cashReceiptFormErrorURL(r.Form, draft, cashReceiptErrorCode(err)), http.StatusFound)
+		return
+	}
+	if r.Form.Get("return_to") == "cash-receipts" {
+		http.Redirect(w, r, cashReceiptListReturnURL(r.Form, "", "cash_receipt_saved", false, ""), http.StatusFound)
 		return
 	}
 	http.Redirect(w, r, fmt.Sprintf("/tenants/%d?message=cash_receipt_saved&from_month=%s&to_month=%s", draft.TenantID, draft.Period.Format("2006-01"), draft.Period.Format("2006-01")), http.StatusFound)

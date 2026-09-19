@@ -9,6 +9,7 @@ import (
 )
 
 const (
+	dunningActionPage    = "page"
 	dunningActionConfig  = "config"
 	dunningActionPreview = "preview"
 	dunningActionSend    = "send"
@@ -175,7 +176,7 @@ func (a *app) dunningDrawerForDashboard(ctx context.Context, userID uint64, peri
 		view.ConfigurationError = "请先保存房东发件配置；SMTP 服务发件地址还需要通过 DUNNING_SMTP_FROM 配置。"
 	}
 	selected := make(map[uint64]bool)
-	if action != nil {
+	if action != nil && action.Kind != dunningActionPage {
 		for _, id := range action.SelectedIDs {
 			selected[id] = true
 		}
@@ -191,6 +192,9 @@ func (a *app) dunningDrawerForDashboard(ctx context.Context, userID uint64, peri
 		view.Candidates[index].Selected = selected[view.Candidates[index].ObligationID]
 	}
 	if action == nil {
+		return view, nil
+	}
+	if action.Kind == dunningActionPage {
 		return view, nil
 	}
 

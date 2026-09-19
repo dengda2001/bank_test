@@ -31,6 +31,16 @@ func TestTenantInputDefaultsBillingStartToRentStart(t *testing.T) {
 	}
 }
 
+func TestTenantEditFormDefaultsRentFromBoundRoomWhenProfileRentIsEmpty(t *testing.T) {
+	record := tenantRecord{RoomID: 11, Currency: "EUR"}
+	got := tenantEditFormRecordWithRoomDefaults(record, []tenantRoomOption{{
+		ID: 11, MonthlyRentValue: "1200.00", Currency: "GBP",
+	}})
+	if got.MonthlyRent != 1200 || got.Currency != "GBP" || got.RoomID != 11 {
+		t.Fatalf("tenant edit defaults=%+v, want room rent 1200 GBP and room 11", got)
+	}
+}
+
 func TestValidateTenantInputRejectsBillingOutsideRentPeriod(t *testing.T) {
 	input := validTenantInputForProfile()
 	input.RentStartDate = "2026-09-20"

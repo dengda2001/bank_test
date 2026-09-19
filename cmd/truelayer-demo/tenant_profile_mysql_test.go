@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -107,4 +108,149 @@ func TestTenantLifecycleVoidsUnpaidFutureBillsButRejectsPaidOnMySQL(t *testing.T
 	if stillActive != 1 {
 		t.Fatal("paid future obligation was partially changed after rejected update")
 	}
+}
+
+func TestTenantRoomBindingUpdatesOnMySQL(t *testing.T) {
+	db, sqlDB := openLedgerMySQLTestDB(t)
+	if err := runMigrations(sqlDB, "../../migrations"); err != nil {
+		t.Fatalf("run migrations: %v", err)
+	}
+	ctx := context.Background()
+	owner := user{Username: fmt.Sprintf("tenant-room-binding-%d", time.Now().UnixNano()), PasswordHash: "test"}
+	if err := db.WithContext(ctx).Create(&owner).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.WithContext(ctx).Delete(&user{}, owner.ID) })
+
+	domain := newLandlordDomainService(db)
+	propertyRow, err := domain.createProperty(ctx, owner.ID, propertyInput{Name: "Binding test home"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	period := monthStart(time.Now().UTC())
+	firstRoom, err := domain.createRoom(ctx, owner.ID, roomInput{PropertyID: propertyRow.ID, RoomLabel: "A-01", ActiveFrom: period})
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondRoom, err := domain.createRoom(ctx, owner.ID, roomInput{PropertyID: propertyRow.ID, RoomLabel: "A-02", ActiveFrom: period})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	service := newTenantService(db)
+	unboundInput := validTenantInputForProfile()
+	unboundInput.Name = "Room binding target"
+	unboundInput.RentStartDate = period.Format(dateLayout)
+	unboundInput.BillingStartDate = period.Format(dateLayout)
+	unboundInput.Structured = true
+	target, err := service.createTenant(ctx, owner.ID, unboundInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	siblingInput := unboundInput
+	siblingInput.Name = "Existing room tenant"
+	sibling, err := service.createTenant(ctx, owner.ID, siblingInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := domain.saveRentArrangement(ctx, owner.ID, rentArrangementInput{
+		RoomID: firstRoom.ID, EffectiveMonth: period, MonthlyRentCents: 120000,
+		Currency: "EUR", DueDay: 5, TenantIDs: []uint64{sibling.ID},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	bindInput := unboundInput
+	bindInput.RoomID = firstRoom.ID
+	bindInput.MonthlyRent = 1200
+	if _, err := service.updateTenant(ctx, owner.ID, target.ID, bindInput); err != nil {
+		t.Fatalf("bind tenant to room: %v", err)
+	}
+	var current tenancyAgreement
+	if err := db.Where("user_id = ? AND room_id = ? AND status = ?", owner.ID, firstRoom.ID, "active").First(&current).Error; err != nil {
+		t.Fatal(err)
+	}
+	var parties []agreementParty
+	if err := db.Where("user_id = ? AND agreement_id = ? AND status = ?", owner.ID, current.ID, "active").Order("tenant_id ASC").Find(&parties).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(parties) != 2 || parties[0].TenantID != target.ID && parties[1].TenantID != target.ID || parties[0].TenantID != sibling.ID && parties[1].TenantID != sibling.ID {
+		t.Fatalf("bound room parties=%+v, want target and existing tenant", parties)
+	}
+	records, err := service.listTenants(ctx, owner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := tenantRoomIDForTest(records, target.ID); got != firstRoom.ID {
+		t.Fatalf("tenant edit room selection=%d, want %d", got, firstRoom.ID)
+	}
+
+	moveInput := bindInput
+	moveInput.RoomID = secondRoom.ID
+	moveInput.MonthlyRent = 800
+	moveInput.Name = "Edited while moving"
+	lockedCharge := rentCharge{
+		UserID: owner.ID, PropertyID: propertyRow.ID, RoomID: firstRoom.ID,
+		TenancyAgreementID: current.ID, PeriodMonth: period,
+		DueDate: period.AddDate(0, 0, 5), ExpectedAmountCents: 120000,
+		Currency: "EUR", RecordStatus: "active",
+	}
+	if err := db.WithContext(ctx).Create(&lockedCharge).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.updateTenant(ctx, owner.ID, target.ID, moveInput); !errors.Is(err, errArrangementHistoryLocked) {
+		t.Fatalf("move with a generated current-month charge error=%v, want arrangement history lock", err)
+	}
+	var unchanged tenant
+	if err := db.Where("id = ? AND user_id = ?", target.ID, owner.ID).First(&unchanged).Error; err != nil {
+		t.Fatal(err)
+	}
+	if unchanged.Name != "Room binding target" {
+		t.Fatalf("tenant profile partially updated after locked move: name=%q", unchanged.Name)
+	}
+	if err := db.Where("id = ? AND user_id = ?", lockedCharge.ID, owner.ID).Delete(&rentCharge{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.updateTenant(ctx, owner.ID, target.ID, moveInput); err != nil {
+		t.Fatalf("move tenant to second room: %v", err)
+	}
+	var firstRoomCurrent tenancyAgreement
+	if err := db.Where("user_id = ? AND room_id = ? AND status = ?", owner.ID, firstRoom.ID, "active").First(&firstRoomCurrent).Error; err != nil {
+		t.Fatal(err)
+	}
+	var firstRoomParties []agreementParty
+	if err := db.Where("user_id = ? AND agreement_id = ? AND status = ?", owner.ID, firstRoomCurrent.ID, "active").Find(&firstRoomParties).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(firstRoomParties) != 1 || firstRoomParties[0].TenantID != sibling.ID {
+		t.Fatalf("source room parties after move=%+v, want only sibling %d", firstRoomParties, sibling.ID)
+	}
+	records, err = service.listTenants(ctx, owner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := tenantRoomIDForTest(records, target.ID); got != secondRoom.ID {
+		t.Fatalf("tenant room selection after move=%d, want %d", got, secondRoom.ID)
+	}
+
+	moveInput.RoomID = 0
+	if _, err := service.updateTenant(ctx, owner.ID, target.ID, moveInput); err != nil {
+		t.Fatalf("clear tenant room binding: %v", err)
+	}
+	records, err = service.listTenants(ctx, owner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := tenantRoomIDForTest(records, target.ID); got != 0 {
+		t.Fatalf("tenant room selection after unbinding=%d, want 0", got)
+	}
+}
+
+func tenantRoomIDForTest(records []tenantRecord, tenantID uint64) uint64 {
+	for _, record := range records {
+		if record.ID == fmt.Sprint(tenantID) {
+			return record.RoomID
+		}
+	}
+	return 0
 }

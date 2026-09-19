@@ -268,6 +268,7 @@
     .form-field label { margin: 0; }
     .form-field.full { grid-column: 1 / -1; }
     .drawer-actions { display: flex; justify-content: flex-end; gap: 8px; margin: 20px -20px 0; padding: 14px 20px; border-top: 1px solid var(--border); background: var(--surface-muted); }
+    .workspace-page-topbar { display: none; }
     .mobile-bottom-nav, .mobile-flyout { display: none; }
 
     /* Desktop shell tokens mirror the Figma handoff: a fixed dark rail and a
@@ -331,9 +332,29 @@
       .content { border-radius: 0 0 12px 12px; }
       .grid-two { grid-template-columns: 1fr; }
     }
+    @media (min-width: 981px) {
+      .workspace-page-topbar {
+        position: fixed;
+        top: 0;
+        right: 0;
+        left: 236px;
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 64px;
+        padding: 0 28px;
+        border-bottom: 1px solid var(--border);
+        color: var(--foreground-muted);
+        background: color-mix(in oklch, var(--surface) 94%, transparent);
+        font-size: 12px;
+      }
+      .workspace-page-topbar-separator { color: var(--border-strong); }
+      .content { padding-top: 88px; }
+    }
     @media (max-width: 640px) {
-      .app { padding: 8px; }
-      .content { border-radius: 12px; padding: 14px; }
+      .app { display: flex; flex-direction: column; padding: 8px; }
+      .content { border: 0; border-radius: 0; padding: 8px 8px 94px; background: var(--background-deep); }
       .topbar { flex-direction: column; }
       .topbar .actions { width: 100%; justify-content: stretch; }
       .topbar .actions > *, .topbar .actions form { flex: 1 1 auto; }
@@ -347,17 +368,24 @@
       .nav-compact-bar {
         display: flex;
         align-items: center;
-        gap: 10px;
-        height: 56px;
-        margin: 0 0 8px;
-        padding: 0 12px;
-        border: 1px solid var(--border);
-        border-radius: 12px;
+        justify-content: space-between;
+        gap: 12px;
+        height: 62px;
+        margin: -8px -8px 8px;
+        padding: 0 16px;
+        border: 0;
+        border-bottom: 1px solid var(--border);
+        border-radius: 0;
         background: var(--surface);
-        cursor: pointer;
       }
-      .nav-compact-bar .mark { width: 30px; height: 30px; font-size: 14px; }
-      .nav-burger { margin-left: auto; font-size: 20px; line-height: 1; }
+      .nav-compact-brand { display: flex; align-items: center; gap: 9px; min-width: 0; cursor: pointer; }
+      .nav-compact-bar .mark { width: 34px; height: 34px; flex: 0 0 auto; border-radius: 8px; color: var(--surface); background: var(--sidebar); font-size: 14px; }
+      .nav-compact-copy { display: grid; gap: 1px; min-width: 0; line-height: 1.1; }
+      .nav-compact-copy .brand-title { overflow: hidden; color: var(--foreground); font-size: 16px; text-overflow: ellipsis; white-space: nowrap; }
+      .nav-compact-copy small { overflow: hidden; color: var(--foreground-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+      .nav-compact-actions { display: flex; align-items: center; gap: 8px; }
+      .nav-compact-action { display: grid; place-items: center; width: 44px; height: 44px; min-height: 44px; border: 1px solid var(--border); border-radius: 8px; color: var(--foreground); background: var(--surface); font-size: 23px; line-height: 1; text-decoration: none; }
+      .nav-compact-action svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
       .nav-label { display: none; }
       /* 键盘也要能开抽屉。复选框原本带 hidden 属性（= display:none），聚焦不了，
          于是 <=640 的导航变成了只能点、不能按 Tab 到达——比改造前更差，改造前

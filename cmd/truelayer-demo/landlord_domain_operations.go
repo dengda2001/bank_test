@@ -22,14 +22,23 @@ var (
 )
 
 type propertyInput struct {
-	Name    string
-	Address string
+	Name       string
+	CityRegion string
+	Address    string
+	Timezone   string
+	Notes      string
 }
 
 type roomInput struct {
-	PropertyID uint64
-	RoomLabel  string
-	ActiveFrom time.Time
+	PropertyID       uint64
+	RoomLabel        string
+	RoomType         string
+	Capacity         int
+	MonthlyRentCents int64
+	DueDay           int
+	Notes            string
+	ActiveFrom       time.Time
+	EffectiveMonth   time.Time
 }
 
 // rentArrangementInput is the write contract for a versioned room rent plan.
@@ -39,6 +48,8 @@ type roomInput struct {
 type rentArrangementInput struct {
 	RoomID           uint64
 	EffectiveMonth   time.Time
+	ContractDate     *time.Time
+	MoveInDate       *time.Time
 	StartDate        time.Time
 	EndDate          *time.Time
 	MonthlyRentCents int64
@@ -64,10 +75,14 @@ func (s *landlordDomainService) createProperty(ctx context.Context, userID uint6
 	if input.Name == "" {
 		return property{}, errPropertyNameRequired
 	}
-	if len([]rune(input.Name)) > 191 || len([]rune(input.Address)) > 1000 {
+	if len([]rune(input.Name)) > 191 || len([]rune(input.CityRegion)) > 191 || len([]rune(input.Address)) > 1000 || len([]rune(input.Timezone)) > 64 || len([]rune(input.Notes)) > 2000 {
 		return property{}, errors.New("property fields are too long")
 	}
-	row := property{UserID: userID, Name: input.Name, Address: nullableString(strings.TrimSpace(input.Address)), Status: "active"}
+	timezone := firstNonEmpty(strings.TrimSpace(input.Timezone), "Europe/Dublin")
+	if _, err := time.LoadLocation(timezone); err != nil {
+		return property{}, errors.New("property timezone is invalid")
+	}
+	row := property{UserID: userID, Name: input.Name, CityRegion: strings.TrimSpace(input.CityRegion), Address: nullableString(strings.TrimSpace(input.Address)), Timezone: timezone, Notes: nullableString(strings.TrimSpace(input.Notes)), Status: "active"}
 	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
 		return property{}, err
 	}
@@ -82,15 +97,19 @@ func (s *landlordDomainService) updateProperty(ctx context.Context, userID, prop
 	if input.Name == "" {
 		return property{}, errPropertyNameRequired
 	}
-	if len([]rune(input.Name)) > 191 || len([]rune(input.Address)) > 1000 {
+	if len([]rune(input.Name)) > 191 || len([]rune(input.CityRegion)) > 191 || len([]rune(input.Address)) > 1000 || len([]rune(input.Timezone)) > 64 || len([]rune(input.Notes)) > 2000 {
 		return property{}, errors.New("property fields are too long")
+	}
+	input.Timezone = firstNonEmpty(strings.TrimSpace(input.Timezone), "Europe/Dublin")
+	if _, err := time.LoadLocation(input.Timezone); err != nil {
+		return property{}, errors.New("property timezone is invalid")
 	}
 	var row property
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", propertyID, userID).First(&row).Error; err != nil {
 			return err
 		}
-		return tx.Model(&row).Updates(map[string]any{"name": input.Name, "address": nullableString(strings.TrimSpace(input.Address))}).Error
+		return tx.Model(&row).Updates(map[string]any{"name": input.Name, "city_region": strings.TrimSpace(input.CityRegion), "address": nullableString(strings.TrimSpace(input.Address)), "timezone": input.Timezone, "notes": nullableString(strings.TrimSpace(input.Notes))}).Error
 	})
 	return row, err
 }
@@ -106,6 +125,19 @@ func (s *landlordDomainService) createRoom(ctx context.Context, userID uint64, i
 	if len([]rune(input.RoomLabel)) > 191 {
 		return room{}, errors.New("room label is too long")
 	}
+	if len([]rune(input.RoomType)) > 64 || len([]rune(input.Notes)) > 2000 || input.Capacity < 0 || input.Capacity > 100 || input.MonthlyRentCents < 0 {
+		return room{}, errors.New("room details are invalid")
+	}
+	input.RoomType = firstNonEmpty(strings.TrimSpace(input.RoomType), "其他")
+	if input.Capacity == 0 {
+		input.Capacity = 1
+	}
+	if input.DueDay == 0 {
+		input.DueDay = 1
+	}
+	if input.DueDay < 1 || input.DueDay > 31 {
+		return room{}, errors.New("due day must be between 1 and 31")
+	}
 	activeFrom := input.ActiveFrom
 	if activeFrom.IsZero() {
 		activeFrom = monthStart(time.Now().UTC())
@@ -120,7 +152,7 @@ func (s *landlordDomainService) createRoom(ctx context.Context, userID uint64, i
 		if !propertyActiveInMonth(propertyRow, activeFrom) {
 			return errors.New("property is not active for room start month")
 		}
-		row = room{UserID: userID, PropertyID: input.PropertyID, RoomLabel: input.RoomLabel, Status: "active", ActiveFrom: activeFrom}
+		row = room{UserID: userID, PropertyID: input.PropertyID, RoomLabel: input.RoomLabel, RoomType: strings.TrimSpace(input.RoomType), Capacity: input.Capacity, MonthlyRentCents: input.MonthlyRentCents, DueDay: input.DueDay, Notes: nullableString(strings.TrimSpace(input.Notes)), Status: "active", ActiveFrom: activeFrom}
 		return tx.Create(&row).Error
 	})
 	return row, err
@@ -133,6 +165,16 @@ func (s *landlordDomainService) updateRoom(ctx context.Context, userID, roomID u
 	input.RoomLabel = strings.TrimSpace(input.RoomLabel)
 	if input.RoomLabel == "" {
 		return room{}, errRoomLabelRequired
+	}
+	if len([]rune(input.RoomType)) > 64 || len([]rune(input.Notes)) > 2000 || input.Capacity < 0 || input.Capacity > 100 || input.MonthlyRentCents < 0 {
+		return room{}, errors.New("room details are invalid")
+	}
+	input.RoomType = firstNonEmpty(strings.TrimSpace(input.RoomType), "其他")
+	if input.Capacity == 0 {
+		input.Capacity = 1
+	}
+	if input.DueDay < 0 || input.DueDay > 31 {
+		return room{}, errors.New("due day must be between 1 and 31")
 	}
 	var row room
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -155,9 +197,103 @@ func (s *landlordDomainService) updateRoom(ctx context.Context, userID, roomID u
 				return errors.New("property is not active")
 			}
 		}
-		return tx.Model(&row).Updates(map[string]any{"property_id": input.PropertyID, "room_label": input.RoomLabel}).Error
+		if err := tx.Model(&row).Updates(map[string]any{"property_id": input.PropertyID, "room_label": input.RoomLabel, "room_type": strings.TrimSpace(input.RoomType), "capacity": input.Capacity, "notes": nullableString(strings.TrimSpace(input.Notes))}).Error; err != nil {
+			return err
+		}
+		if !input.EffectiveMonth.IsZero() {
+			return updateRoomRentArrangementInTx(tx, userID, roomID, input)
+		}
+		if input.MonthlyRentCents > 0 || input.DueDay > 0 {
+			defaults := map[string]any{}
+			if input.MonthlyRentCents > 0 {
+				defaults["monthly_rent_cents"] = input.MonthlyRentCents
+			}
+			if input.DueDay > 0 {
+				defaults["due_day"] = input.DueDay
+			}
+			if len(defaults) > 0 {
+				return tx.Model(&room{}).Where("id = ? AND user_id = ?", roomID, userID).Updates(defaults).Error
+			}
+		}
+		return nil
 	})
 	return row, err
+}
+
+func updateRoomRentArrangementInTx(tx *gorm.DB, userID, roomID uint64, input roomInput) error {
+	effectiveMonth := monthStart(input.EffectiveMonth)
+	var existing []tenancyAgreement
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND room_id = ? AND status = ? AND start_date <= ? AND (end_date IS NULL OR end_date >= ?)", userID, roomID, "active", effectiveMonth.AddDate(0, 1, -1), effectiveMonth).Order("start_date DESC, id DESC").Find(&existing).Error; err != nil {
+		return err
+	}
+	if len(existing) == 0 {
+		if input.DueDay > 0 && (input.DueDay < 1 || input.DueDay > 31) {
+			return errors.New("due day must be between 1 and 31")
+		}
+		defaults := map[string]any{}
+		if input.MonthlyRentCents > 0 {
+			defaults["monthly_rent_cents"] = input.MonthlyRentCents
+		}
+		if input.DueDay > 0 {
+			defaults["due_day"] = input.DueDay
+		}
+		if len(defaults) == 0 {
+			return nil
+		}
+		return tx.Model(&room{}).Where("id = ? AND user_id = ?", roomID, userID).Updates(defaults).Error
+	}
+
+	current := existing[0]
+	newRent := input.MonthlyRentCents
+	if newRent == 0 {
+		newRent = current.MonthlyRentCents
+	}
+	newDueDay := input.DueDay
+	if newDueDay == 0 {
+		newDueDay = current.DueDay
+	}
+	if newRent <= 0 || newDueDay < 1 || newDueDay > 31 {
+		return errors.New("room rent and due day are invalid")
+	}
+	if newRent == current.MonthlyRentCents && newDueDay == current.DueDay {
+		return tx.Model(&room{}).Where("id = ? AND user_id = ?", roomID, userID).Updates(map[string]any{"monthly_rent_cents": current.MonthlyRentCents, "due_day": current.DueDay}).Error
+	}
+
+	responsibilitiesByTenant := make(map[uint64]int64)
+	const maxInt64 = int64(^uint64(0) >> 1)
+	for _, agreement := range existing {
+		var parties []agreementParty
+		if err := tx.Where("user_id = ? AND agreement_id = ? AND status = ?", userID, agreement.ID, "active").Find(&parties).Error; err != nil {
+			return err
+		}
+		for _, party := range parties {
+			if !agreementPartyActiveInMonth(party, effectiveMonth) {
+				continue
+			}
+			if party.TenantID == 0 || party.ResponsibilityCents <= 0 || responsibilitiesByTenant[party.TenantID] > maxInt64-party.ResponsibilityCents {
+				return errors.New("current rent responsibilities are invalid")
+			}
+			responsibilitiesByTenant[party.TenantID] += party.ResponsibilityCents
+		}
+	}
+	currentPlan := make([]rentResponsibilityInput, 0, len(responsibilitiesByTenant))
+	for tenantID, cents := range responsibilitiesByTenant {
+		currentPlan = append(currentPlan, rentResponsibilityInput{TenantID: tenantID, AmountCents: cents})
+	}
+	sort.Slice(currentPlan, func(i, j int) bool { return currentPlan[i].TenantID < currentPlan[j].TenantID })
+	responsibilities := currentPlan
+	if newRent != current.MonthlyRentCents && len(currentPlan) > 0 {
+		var err error
+		responsibilities, err = scaleRentResponsibilities(newRent, currentPlan)
+		if err != nil {
+			return err
+		}
+	}
+	_, err := saveRentArrangementInTx(tx, userID, rentArrangementInput{
+		RoomID: roomID, EffectiveMonth: effectiveMonth, MonthlyRentCents: newRent, DueDay: newDueDay,
+		Responsibilities: responsibilities,
+	})
+	return err
 }
 
 func (s *landlordDomainService) deactivateProperty(ctx context.Context, userID, propertyID uint64, effectiveMonth time.Time) error {
@@ -272,9 +408,11 @@ func saveRentArrangementInTx(tx *gorm.DB, userID uint64, input rentArrangementIn
 	var inheritedRent int64
 	var inheritedCurrency string
 	var inheritedDueDay int
+	var inheritedContractDate, inheritedMoveInDate *time.Time
 	for _, agreement := range existing {
 		if inheritedRent == 0 {
 			inheritedRent, inheritedCurrency, inheritedDueDay = agreement.MonthlyRentCents, agreement.Currency, agreement.DueDay
+			inheritedContractDate, inheritedMoveInDate = agreement.ContractDate, agreement.MoveInDate
 		}
 		endDate := effectiveMonth.AddDate(0, 0, -1)
 		status := agreement.Status
@@ -339,7 +477,21 @@ func saveRentArrangementInTx(tx *gorm.DB, userID uint64, input rentArrangementIn
 			return tenancyAgreement{}, errTenantRoomConflict
 		}
 	}
-	agreement := tenancyAgreement{UserID: userID, RoomID: input.RoomID, StartDate: startDate, EndDate: input.EndDate, MonthlyRentCents: monthlyRent, Currency: currency, DueDay: dueDay, Status: "active"}
+	contractDate := input.ContractDate
+	if contractDate == nil {
+		contractDate = inheritedContractDate
+	}
+	if contractDate == nil {
+		contractDate = &startDate
+	}
+	moveInDate := input.MoveInDate
+	if moveInDate == nil {
+		moveInDate = inheritedMoveInDate
+	}
+	if moveInDate == nil {
+		moveInDate = &startDate
+	}
+	agreement := tenancyAgreement{UserID: userID, RoomID: input.RoomID, ContractDate: contractDate, MoveInDate: moveInDate, StartDate: startDate, EndDate: input.EndDate, MonthlyRentCents: monthlyRent, Currency: currency, DueDay: dueDay, Status: "active"}
 	if err := tx.Create(&agreement).Error; err != nil {
 		return tenancyAgreement{}, err
 	}
@@ -349,6 +501,9 @@ func saveRentArrangementInTx(tx *gorm.DB, userID uint64, input rentArrangementIn
 		if err := tx.Create(&party).Error; err != nil {
 			return tenancyAgreement{}, err
 		}
+	}
+	if err := tx.Model(&room{}).Where("id = ? AND user_id = ?", input.RoomID, userID).Updates(map[string]any{"monthly_rent_cents": monthlyRent, "due_day": dueDay}).Error; err != nil {
+		return tenancyAgreement{}, err
 	}
 	return agreement, nil
 }
@@ -423,6 +578,120 @@ func (s *landlordDomainService) moveTenant(ctx context.Context, userID, tenantID
 		return err
 	})
 	return destination, err
+}
+
+// syncTenantRoomBindingInTx changes the current-month room membership for a
+// tenant while keeping each room's versioned rent arrangement intact. All
+// arrangement writes go through saveRentArrangementInTx so generated charges
+// continue to lock the affected month and every change rolls back together.
+func syncTenantRoomBindingInTx(tx *gorm.DB, userID, tenantID, roomID uint64, effectiveMonth time.Time, monthlyRentCents int64, currency string, dueDay int, tenantStatus string) error {
+	if userID == 0 || tenantID == 0 {
+		return errors.New("userID and tenantID are required")
+	}
+	effectiveMonth = monthStart(effectiveMonth)
+	if tenantStatus != "active" {
+		roomID = 0
+	}
+
+	type membership struct {
+		RoomID uint64
+	}
+	var memberships []membership
+	periodEnd := effectiveMonth.AddDate(0, 1, 0).Add(-time.Nanosecond)
+	if err := tx.Table("tenancy_agreements AS ta").
+		Joins("JOIN agreement_parties AS ap ON ap.agreement_id = ta.id AND ap.user_id = ta.user_id").
+		Where("ta.user_id = ? AND ap.tenant_id = ? AND ta.status = ? AND ap.status = ? AND ta.start_date <= ? AND (ta.end_date IS NULL OR ta.end_date >= ?) AND (ap.joined_at IS NULL OR ap.joined_at <= ?) AND (ap.left_at IS NULL OR ap.left_at >= ?)", userID, tenantID, "active", "active", periodEnd, effectiveMonth, periodEnd, effectiveMonth).
+		Select("ta.room_id").Order("ta.room_id ASC").Find(&memberships).Error; err != nil {
+		return err
+	}
+
+	roomIDs := make([]uint64, 0, len(memberships))
+	seenRooms := make(map[uint64]struct{}, len(memberships))
+	alreadyBound := false
+	for _, row := range memberships {
+		if row.RoomID == roomID && roomID != 0 {
+			alreadyBound = true
+		}
+		if _, seen := seenRooms[row.RoomID]; seen {
+			continue
+		}
+		seenRooms[row.RoomID] = struct{}{}
+		roomIDs = append(roomIDs, row.RoomID)
+	}
+	if alreadyBound && len(roomIDs) == 1 {
+		return nil
+	}
+
+	loadCurrentArrangement := func(targetRoomID uint64) (tenancyAgreement, []agreementParty, error) {
+		var arrangement tenancyAgreement
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("user_id = ? AND room_id = ? AND status = ? AND start_date <= ? AND (end_date IS NULL OR end_date >= ?)", userID, targetRoomID, "active", periodEnd, effectiveMonth).
+			Order("start_date DESC, id DESC").First(&arrangement).Error
+		if err != nil {
+			return tenancyAgreement{}, nil, err
+		}
+		var parties []agreementParty
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("user_id = ? AND agreement_id = ? AND status = ? AND (joined_at IS NULL OR joined_at <= ?) AND (left_at IS NULL OR left_at >= ?)", userID, arrangement.ID, "active", periodEnd, effectiveMonth).
+			Order("tenant_id ASC, id ASC").Find(&parties).Error; err != nil {
+			return tenancyAgreement{}, nil, err
+		}
+		return arrangement, parties, nil
+	}
+
+	for _, sourceRoomID := range roomIDs {
+		if sourceRoomID == roomID && roomID != 0 {
+			continue
+		}
+		arrangement, parties, err := loadCurrentArrangement(sourceRoomID)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		remainingTenantIDs := make([]uint64, 0, len(parties))
+		for _, party := range parties {
+			if party.TenantID != tenantID {
+				remainingTenantIDs = append(remainingTenantIDs, party.TenantID)
+			}
+		}
+		if _, err := saveRentArrangementInTx(tx, userID, rentArrangementInput{
+			RoomID: sourceRoomID, EffectiveMonth: effectiveMonth,
+			MonthlyRentCents: arrangement.MonthlyRentCents, Currency: arrangement.Currency,
+			DueDay: arrangement.DueDay, TenantIDs: remainingTenantIDs,
+		}); err != nil {
+			return err
+		}
+	}
+
+	if roomID == 0 || alreadyBound {
+		return nil
+	}
+	destinationTenantIDs := []uint64{tenantID}
+	destinationHasArrangement := false
+	if _, parties, err := loadCurrentArrangement(roomID); err == nil {
+		destinationHasArrangement = true
+		for _, party := range parties {
+			if party.TenantID != tenantID {
+				destinationTenantIDs = append(destinationTenantIDs, party.TenantID)
+			}
+		}
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	destinationCurrency, destinationDueDay := currency, dueDay
+	if destinationHasArrangement {
+		// The room owns its currency and due date. The tenant form can adjust
+		// the room total, but its profile values must not overwrite these fields.
+		destinationCurrency, destinationDueDay = "", 0
+	}
+	_, err := saveRentArrangementInTx(tx, userID, rentArrangementInput{
+		RoomID: roomID, EffectiveMonth: effectiveMonth,
+		MonthlyRentCents: monthlyRentCents, Currency: destinationCurrency,
+		DueDay: destinationDueDay, TenantIDs: destinationTenantIDs,
+	})
+	return err
 }
 
 func (s *landlordDomainService) endTenantArrangement(ctx context.Context, userID, tenantID uint64, effectiveMonth time.Time) error {

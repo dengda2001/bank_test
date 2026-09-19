@@ -1,5 +1,8 @@
 {{define "workspace-nav"}}<input type="checkbox" id="nav-drawer" class="nav-drawer-input">
-    <label for="nav-drawer" class="nav-compact-bar" aria-label="展开导航"><span class="mark">R</span><span class="brand-title">RentOps</span><span class="nav-burger">☰</span></label>
+    <div class="nav-compact-bar" aria-label="RentOps 移动导航">
+      <label for="nav-drawer" class="nav-compact-brand" aria-label="打开导航"><span class="mark">R</span><span class="nav-compact-copy"><span class="brand-title">RentOps</span><small>{{if .CompactTitle}}{{.CompactTitle}}{{else}}{{.FootNote}}{{end}}</small></span></label>
+      <div class="nav-compact-actions"><button class="nav-compact-action" type="button" data-mobile-search aria-label="搜索当前页面"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.5"></circle><path d="m16 16 4 4"></path></svg></button><a class="nav-compact-action" href="/more" aria-label="更多">⋯</a></div>
+    </div>
     <label for="nav-drawer" class="nav-scrim" aria-hidden="true"></label>
     <aside class="sidebar" aria-label="Main navigation">
       <div class="side-brand"><div class="mark">R</div><div><div class="brand-title">RentOps</div><div class="brand-meta">{{.Environment}} workspace</div></div></div>
@@ -12,26 +15,51 @@
         <a href="/properties"{{if eq .ActivePage "properties"}} class="active"{{end}}><span class="glyph">产</span><span>房产管理</span></a>
         <a href="/rooms"{{if eq .ActivePage "rooms"}} class="active"{{end}}><span class="glyph">房</span><span>房间管理</span></a>
         <a href="/tenants"{{if eq .ActivePage "tenants"}} class="active"{{end}}><span class="glyph">租</span><span>租客管理</span>{{if .ShowNavCounts}}<span class="nav-count">{{.TenantCount}}</span>{{end}}</a>
-        <a href="/tenancies"{{if eq .ActivePage "tenancies"}} class="active"{{end}}><span class="glyph">约</span><span>租住安排</span></a>
+        <a href="/tenancies"{{if eq .ActivePage "tenancies"}} class="active"{{end}}><span class="glyph">约</span><span>租约管理</span></a>
         <a href="/cash-receipts"{{if eq .ActivePage "cash-receipts"}} class="active"{{end}}><span class="glyph">现</span><span>现金补录</span></a>
         <a href="/expenses"{{if eq .ActivePage "expenses"}} class="active"{{end}}><span class="glyph">支</span><span>费用支出</span>{{if .ShowNavCounts}}<span class="nav-count">{{.ExpenseCount}}</span>{{end}}</a>
         <a href="/bank"{{if eq .ActivePage "bank"}} class="active"{{end}}><span class="glyph">银</span><span>银行设置</span></a>
       </nav>
       <div class="side-foot">当前用户：{{.Username}}<br>{{.FootNote}}</div>
     </aside>
+    <div class="workspace-page-topbar" aria-label="页面路径"><span>RentOps</span><span class="workspace-page-topbar-separator">/</span><span>{{.FootNote}}</span></div>
     <nav class="mobile-bottom-nav" aria-label="移动端主要导航">
       <a class="mobile-bottom-nav-item{{if eq .ActivePage "rent-dashboard"}} active{{end}}" href="/rent-dashboard"><span class="mobile-nav-glyph">总</span><span>首页</span></a>
       <a class="mobile-bottom-nav-item{{if eq .ActivePage "bills"}} active{{end}}" href="/bills"><span class="mobile-nav-glyph">账</span><span>账单</span></a>
       <a class="mobile-bottom-nav-item{{if eq .ActivePage "transactions"}} active{{end}}" href="/transactions"><span class="mobile-nav-glyph">流</span><span>流水</span></a>
       <button class="mobile-bottom-nav-item mobile-bottom-nav-menu{{if or (eq .ActivePage "properties") (eq .ActivePage "rooms") (eq .ActivePage "tenants")}} active{{end}}" type="button" data-mobile-menu="objects" aria-expanded="false"><span class="mobile-nav-glyph">物</span><span>对象</span></button>
-      <button class="mobile-bottom-nav-item mobile-bottom-nav-menu{{if or (eq .ActivePage "tenancies") (eq .ActivePage "dunning") (eq .ActivePage "cash-receipts") (eq .ActivePage "expenses") (eq .ActivePage "bank")}} active{{end}}" type="button" data-mobile-menu="more" aria-expanded="false"><span class="mobile-nav-glyph">更</span><span>更多</span></button>
+      <a class="mobile-bottom-nav-item{{if eq .ActivePage "more"}} active{{end}}" href="/more"><span class="mobile-nav-glyph">更</span><span>更多</span></a>
     </nav>
     <div class="mobile-flyout" id="mobile-menu-objects" hidden aria-label="对象菜单"><a href="/properties">房产</a><a href="/rooms">房间</a><a href="/tenants">租客</a></div>
-    <div class="mobile-flyout" id="mobile-menu-more" hidden aria-label="更多菜单"><a href="/tenancies">租住安排</a><a href="/dunning">催收任务</a><a href="/cash-receipts">现金补录</a><a href="/expenses">费用支出</a><a href="/bank">银行设置</a></div>
     <script>
       (() => {
         const mobileNav = document.querySelector(".mobile-bottom-nav");
         const menus = [...document.querySelectorAll(".mobile-flyout")];
+        document.querySelector("[data-mobile-search]")?.addEventListener("click", () => {
+          const input = document.querySelector("main input[type=search]");
+          if (!input) return;
+          const form = input.closest("form");
+          if (form?.classList.contains("mobile-search-open")) {
+            form.classList.remove("mobile-search-open");
+            return;
+          }
+          const disclosure = form?.closest("details");
+          if (disclosure) disclosure.open = true;
+          if (form && getComputedStyle(form).display === "none") form.classList.add("mobile-search-open");
+          input.focus({ preventScroll: true });
+          input.scrollIntoView({ block: "center", behavior: "smooth" });
+        });
+        document.querySelectorAll(".object-list-filter-toggle").forEach((button) => {
+          button.addEventListener("click", () => {
+            const form = button.closest(".object-list-filters");
+            if (!form) return;
+            const open = form.classList.toggle("filters-open");
+            button.setAttribute("aria-expanded", String(open));
+          });
+        });
+        document.querySelectorAll(".object-list-filter-fields select, .object-list-filter-fields input").forEach((control) => {
+          control.addEventListener("change", () => control.form?.requestSubmit());
+        });
         const closeMenus = () => {
           menus.forEach((menu) => { menu.hidden = true; });
           mobileNav?.querySelectorAll("[data-mobile-menu]").forEach((button) => button.setAttribute("aria-expanded", "false"));
@@ -58,3 +86,4 @@
         if (trigger && !window.confirm("确认执行此高风险操作吗？")) event.preventDefault();
       });
     </script>{{end}}
+{{define "workspace-object-tabs"}}<nav class="object-tabs" aria-label="对象类型"><a href="/properties"{{if eq .ActivePage "properties"}} class="active" aria-current="page"{{end}}>房产</a><a href="/rooms"{{if eq .ActivePage "rooms"}} class="active" aria-current="page"{{end}}>房间</a><a href="/tenants"{{if eq .ActivePage "tenants"}} class="active" aria-current="page"{{end}}>租客</a></nav>{{end}}

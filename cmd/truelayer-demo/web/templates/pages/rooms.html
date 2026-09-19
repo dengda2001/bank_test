@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RentOps 房间管理</title>
+  <link rel="stylesheet" href="/static/css/workspace.css">
+  <link rel="stylesheet" href="/static/css/pages/object-navigation.css">
+  <link rel="stylesheet" href="/static/css/pages/entity-drawers.css">
+  <link rel="stylesheet" href="/static/css/pages/object-lists.css">
+</head>
+<body>
+  <div class="app">
+    {{template "workspace-nav" .}}
+    <main class="content workspace object-list-page">
+      <header class="object-list-heading">
+        <div><div class="eyebrow desktop-object-eyebrow">RentOps · 房间管理</div><div class="eyebrow mobile-object-eyebrow">资产与关系</div><h1 class="desktop-object-title">房间管理</h1><h1 class="mobile-object-title">对象管理</h1><p class="desktop-object-subtitle">按月查看房间、租客关系与责任收款。</p><p class="mobile-object-subtitle">按房产、房间或租客查找。</p></div>
+        <a class="btn primary" href="/rooms?add=1&amp;period={{.Period}}{{if .PropertyID}}&amp;property_id={{.PropertyID}}{{end}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}&amp;collection={{.CollectionFilter}}"><span class="desktop-object-action">新增房间</span><span class="mobile-object-action">新增</span></a>
+      </header>
+      {{template "workspace-object-tabs" .}}
+      {{if .Message}}<div class="notice ok">房间资料已保存。</div>{{end}}
+      {{if .Error}}<div class="notice error">房间操作未完成，请检查资料后重试。</div>{{end}}
+
+      {{if .ShowForm}}
+      <div class="entity-drawer-backdrop">
+        <section class="entity-drawer" role="dialog" aria-modal="true" aria-labelledby="room-create-title">
+          <div class="panel-head"><div><h2 id="room-create-title">新建房间</h2><p class="tiny">房间必须绑定一个有效房产。</p></div><a class="drawer-close" href="/rooms?period={{.Period}}{{if .PropertyID}}&amp;property_id={{.PropertyID}}{{end}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}&amp;collection={{.CollectionFilter}}" aria-label="关闭新增房间">×</a></div>
+          <form method="post" action="/rooms">
+            <input type="hidden" name="action" value="save"><input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="filter_status" value="{{.StatusFilter}}"><input type="hidden" name="search" value="{{.Search}}"><input type="hidden" name="filter_property_id" value="{{.PropertyID}}"><input type="hidden" name="collection" value="{{.CollectionFilter}}">
+            <div class="room-meta-form-grid">
+              <div class="form-field"><label for="room-label">房间名称</label><input id="room-label" name="room_label" maxlength="191" required autofocus></div>
+              <div class="form-field"><label for="room-property">所属房产</label><select id="room-property" name="property_id" required><option value="">请选择房产</option>{{range .Properties}}<option value="{{.ID}}"{{if eq $.Form.PropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></div>
+              <div class="form-field"><label for="room-type">房间类型</label><select id="room-type" name="room_type" required><option value="">请选择</option><option>单人间</option><option>双人间</option><option>整租单元</option><option>其他</option></select></div>
+              <div class="form-field"><label for="room-capacity">可住人数</label><input id="room-capacity" name="capacity" type="number" min="1" max="100" value="1" required></div>
+              <div class="form-field"><label for="room-monthly-rent">月度房间应收</label><input id="room-monthly-rent" name="monthly_rent" type="number" min="0.01" step="0.01" placeholder="0.00" inputmode="decimal"></div>
+              <div class="form-field"><label for="room-due-day">账单日</label><input id="room-due-day" name="due_day" type="number" min="1" max="31" value="{{if .Form.DueDay}}{{.Form.DueDay}}{{else}}1{{end}}" required></div>
+            </div>
+            <div class="form-field"><label for="room-active-from">生效月份</label><input id="room-active-from" name="active_from" type="month" value="{{.Form.ActiveFrom}}" required></div>
+            <div class="form-field"><label for="room-notes">房间备注</label><textarea id="room-notes" name="notes" maxlength="2000"></textarea></div>
+            <div class="drawer-actions"><a class="btn subtle" href="/rooms?period={{.Period}}{{if .PropertyID}}&amp;property_id={{.PropertyID}}{{end}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}&amp;collection={{.CollectionFilter}}">取消</a><button class="btn primary" type="submit">保存房间</button></div>
+          </form>
+        </section>
+      </div>
+      {{end}}
+
+      <form class="object-list-filters room-list-filters" method="get" action="/rooms">
+        <label class="object-search"><span class="visually-hidden">搜索当前列表</span><input type="search" name="search" value="{{.Search}}" placeholder="搜索当前列表" aria-label="搜索当前列表"></label>
+        <input type="hidden" name="status" value="{{.StatusFilter}}">
+        <div class="object-list-filter-fields">
+          <label><span class="visually-hidden">所属房产</span><select name="property_id" aria-label="所属房产"><option value="">全部房产</option>{{range .PropertyOptions}}<option value="{{.ID}}"{{if eq $.PropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+          <label><span class="visually-hidden">收缴状态</span><select name="collection" aria-label="收缴状态"><option value="all"{{if eq .CollectionFilter "all"}} selected{{end}}>全部状态</option><option value="unpaid"{{if eq .CollectionFilter "unpaid"}} selected{{end}}>未收齐</option><option value="paid"{{if eq .CollectionFilter "paid"}} selected{{end}}>已收齐</option></select></label>
+          <label><span class="visually-hidden">月份</span><select name="period" aria-label="月份">{{range .PeriodOptions}}<option value="{{.Value}}"{{if eq $.Period .Value}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+        </div>
+        <button class="btn subtle object-list-filter-toggle" type="button" aria-expanded="false">筛选</button>
+        <span class="object-list-demo-note">演示数据 · EUR</span>
+      </form>
+
+      <section class="panel surface object-list-panel" aria-labelledby="room-list-title">
+        {{if .Rows}}
+        <div class="table-wrap object-table-wrap"><table class="object-table room-table"><thead><tr><th>房间</th><th>所属房产</th><th>当前责任人</th><th>月度应收</th><th>月度实收</th><th>人数</th><th>本月状态</th><th>操作</th></tr></thead><tbody>
+          {{range .Rows}}<tr data-page="rooms" data-room-id="{{.ID}}"><td><a class="object-primary-link" href="/rooms/{{.ID}}?period={{$.Period}}&amp;from=rooms&amp;return_property_id={{$.PropertyID}}&amp;return_status={{$.StatusFilter}}&amp;return_search={{$.Search}}&amp;return_collection={{$.CollectionFilter}}">{{.RoomLabel}}</a><small>自 {{.ActiveFrom}}</small></td><td><a href="/properties/{{.PropertyID}}?period={{$.Period}}">{{.PropertyName}}</a></td><td>{{range $index, $name := .TenantNames}}{{if $index}}、{{end}}{{$name}}{{else}}空置{{end}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td>{{len .TenantNames}}</td><td><span class="status {{.CollectionStatus}}">{{.CollectionStatusLabel}}</span></td><td><a class="object-detail-link" href="/rooms/{{.ID}}?period={{$.Period}}&amp;from=rooms&amp;return_property_id={{$.PropertyID}}&amp;return_status={{$.StatusFilter}}&amp;return_search={{$.Search}}&amp;return_collection={{$.CollectionFilter}}">查看详情</a></td></tr>{{end}}
+        </tbody></table></div>
+        <div class="object-mobile-list">{{range .Rows}}<article class="object-mobile-card" data-page="rooms" data-room-id="{{.ID}}">
+          <div class="object-mobile-card-main"><span class="object-mobile-chevron" aria-hidden="true">›</span><div><a class="object-primary-link" href="/rooms/{{.ID}}?period={{$.Period}}&amp;from=rooms&amp;return_property_id={{$.PropertyID}}&amp;return_status={{$.StatusFilter}}&amp;return_search={{$.Search}}&amp;return_collection={{$.CollectionFilter}}">{{.RoomLabel}}</a><p>{{.PropertyName}} · {{range $index, $name := .TenantNames}}{{if $index}}、{{end}}{{$name}}{{else}}空置{{end}}</p></div><div class="object-mobile-balance"><strong>{{.BalanceAmount}}</strong><small>未收</small></div></div>
+          <dl class="object-mobile-money"><div><dt>应收</dt><dd>{{.ExpectedAmount}}</dd></div><div><dt>实收</dt><dd>{{.PaidAmount}}</dd></div><div><dt>未收</dt><dd>{{.BalanceAmount}}</dd></div></dl>
+          <div class="object-mobile-card-footer"><span class="status {{.CollectionStatus}}">{{.CollectionStatusLabel}}</span><div class="object-row-actions"><a class="btn subtle" href="/rooms/{{.ID}}?period={{$.Period}}&amp;from=rooms&amp;return_property_id={{$.PropertyID}}&amp;return_status={{$.StatusFilter}}&amp;return_search={{$.Search}}&amp;return_collection={{$.CollectionFilter}}">查看详情</a></div></div>
+        </article>{{end}}</div>
+        {{else}}<div class="object-list-empty">{{if and (eq .Search "") (eq .StatusFilter "all")}}还没有房间，请先建立房产。<a href="/properties">管理房产</a>{{else}}当前筛选条件下没有房间。{{end}}</div>{{end}}
+      </section>
+    </main>
+  </div>
+</body>
+</html>

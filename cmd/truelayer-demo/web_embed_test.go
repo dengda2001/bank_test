@@ -13,10 +13,17 @@ func TestEmbeddedWorkspaceResourcesArePresentAndReferenceSameOrigin(t *testing.T
 		"web/templates/partials/workspace-nav.html",
 		"web/templates/pages/rent-workspace.html",
 		"web/templates/pages/room-detail.html",
+		"web/templates/pages/property-detail.html",
+		"web/templates/pages/properties.html",
+		"web/templates/pages/rooms.html",
 		"web/static/css/workspace.css",
 		"web/static/css/calendar.css",
 		"web/static/css/pages/rent-workspace.css",
 		"web/static/css/pages/room-detail.css",
+		"web/static/css/pages/property-detail.css",
+		"web/static/css/pages/object-navigation.css",
+		"web/static/css/pages/entity-drawers.css",
+		"web/static/css/pages/object-lists.css",
 		"web/static/js/calendar.js",
 	} {
 		if contents := embeddedWebText(path); strings.TrimSpace(contents) == "" {
@@ -39,6 +46,86 @@ func TestEmbeddedWorkspaceResourcesArePresentAndReferenceSameOrigin(t *testing.T
 	}
 }
 
+func TestEmbeddedObjectListsKeepFiltersAndResponsiveDetailLinks(t *testing.T) {
+	propertyPage, err := executeTemplate(propertyPageTemplate, propertyPageData{
+		workspaceShell: workspaceShell{ActivePage: "properties"},
+		Period:         "2026-09", PeriodLabel: "2026年9月", PeriodOptions: []pagePeriodOption{{Value: "2026-09", Label: "2026 年 9 月"}}, StatusFilter: "all", CollectionFilter: "unpaid", Search: "Canal",
+		Rows: []propertyPageRow{{ID: 4, Name: "Canal House", Address: "1 Main Street", ResponsibilityCount: 2, RoomCount: 3, ExpectedAmount: "EUR 1,000.00", PaidAmount: "EUR 800.00", Status: "active", StatusLabel: "有效", CollectionStatus: "partial", CollectionStatusLabel: "部分未收"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{`name="search"`, `name="status"`, `name="collection"`, `name="period"`, `aria-expanded="false"`, `data-property-id="4"`, `class="object-mobile-list"`, `class="object-mobile-money"`, `/properties/4?period=2026-09`, `部分未收`, "ResponsibilityCount"} {
+		if expected == "ResponsibilityCount" {
+			if !strings.Contains(propertyPage, ">2</td>") {
+				t.Fatal("property list does not render its responsibility count")
+			}
+			continue
+		}
+		if !strings.Contains(propertyPage, expected) {
+			t.Fatalf("property list is missing %q", expected)
+		}
+	}
+
+	roomPage, err := executeTemplate(roomPageTemplate, roomPageData{
+		workspaceShell: workspaceShell{ActivePage: "rooms"},
+		Period:         "2026-09", PeriodLabel: "2026年9月", PeriodOptions: []pagePeriodOption{{Value: "2026-09", Label: "2026 年 9 月"}}, StatusFilter: "active", CollectionFilter: "paid", Search: "A-01", PropertyID: 2,
+		Rows: []roomPageRow{{ID: 9, PropertyID: 2, PropertyName: "Canal House", RoomLabel: "A-01", TenantNames: []string{"Aoife Murphy"}, ExpectedAmount: "EUR 1,000.00", PaidAmount: "EUR 800.00", BalanceAmount: "EUR 200.00", Status: "active", StatusLabel: "有效", CollectionStatus: "partial", CollectionStatusLabel: "部分未收"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{`name="search"`, `name="property_id"`, `name="status"`, `name="collection"`, `name="period"`, `data-room-id="9"`, `class="object-mobile-list"`, `class="object-mobile-money"`, `/rooms/9?period=2026-09&amp;from=rooms`, `return_collection=paid`, "Aoife Murphy"} {
+		if !strings.Contains(roomPage, expected) {
+			t.Fatalf("room list is missing %q", expected)
+		}
+	}
+}
+
+func TestPropertyDetailEditDrawerMatchesPrototypeFieldLayout(t *testing.T) {
+	page, err := executeTemplate(propertyDetailPageTemplate, propertyDetailPageData{
+		workspaceShell: workspaceShell{ActivePage: "properties"},
+		Period:         "2026-09", PeriodLabel: "2026年9月", Editing: true,
+		Property: propertyPageRow{ID: 12, Name: "Canal House", CityRegion: "Dublin 2", Address: "1 Main Street", Timezone: "Europe/Dublin", Notes: "Canal-side house"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := -1
+	for _, marker := range []string{`name="name"`, `name="city_region"`, `name="address"`, `name="timezone"`, `name="notes"`} {
+		position := strings.Index(page, marker)
+		if position < 0 {
+			t.Fatalf("property edit drawer is missing prototype field %q", marker)
+		}
+		if position <= previous {
+			t.Fatalf("property edit field %q is out of prototype order", marker)
+		}
+		previous = position
+	}
+	for _, marker := range []string{`class="property-edit-grid"`, `class="drawer-eyebrow">编辑资料</div>`, `保存更改`} {
+		if !strings.Contains(page, marker) {
+			t.Fatalf("property edit drawer is missing prototype layout marker %q", marker)
+		}
+	}
+}
+
+func TestEmbeddedPropertyDetailRendersCollectionAndFactsPanels(t *testing.T) {
+	page, err := executeTemplate(propertyDetailPageTemplate, propertyDetailPageData{
+		workspaceShell: workspaceShell{ActivePage: "properties"},
+		Period:         "2026-09", PeriodLabel: "2026年9月", ListCollection: "paid",
+		Property: propertyPageRow{ID: 1, Name: "Canal House", Address: "1 Main Street", Status: "active", StatusLabel: "有效", ActiveRoomCount: 1, RoomCount: 1, ExpectedAmount: "EUR 1,000.00", PaidAmount: "EUR 600.00", ExpenseAmount: "EUR 100.00", NetAmount: "EUR 500.00"},
+		Rooms:    []roomPageRow{{ID: 2, RoomLabel: "A-01", PropertyName: "Canal House", TenantNames: []string{"Aoife Murphy"}, MonthlyRent: "EUR 1,000.00", ExpectedAmount: "EUR 1,000.00", PaidAmount: "EUR 600.00", BalanceAmount: "EUR 400.00", BalanceCents: 40000, Status: "active", StatusLabel: "有效"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"Canal House", "房产资料", "房间收款概览", "Aoife Murphy", "EUR 400.00", "经营净额", `list_collection=paid`} {
+		if !strings.Contains(page, expected) {
+			t.Fatalf("property detail is missing %q", expected)
+		}
+	}
+}
+
 func TestEmbeddedRentWorkspaceUsesOneViewModelForDesktopAndMobileLists(t *testing.T) {
 	data := rentWorkspacePageData{
 		workspaceShell: workspaceShell{ActivePage: "rent-dashboard", Environment: "test"},
@@ -47,20 +134,20 @@ func TestEmbeddedRentWorkspaceUsesOneViewModelForDesktopAndMobileLists(t *testin
 		View:           rentWorkspaceViewProperties,
 		Filters:        defaultRentWorkspaceFilters(parseTestPeriod(t, "2026-09")),
 		Summary:        rentWorkspaceSummary{ExpectedAmount: "EUR 1,000.00"},
-		PropertyRows: []rentWorkspacePropertyRow{{
+		PropertyTreeRows: []rentWorkspacePropertyTreeRow{{Property: rentWorkspacePropertyRow{
 			PropertyID: 1, Name: "Shared view model house", TotalRooms: 3,
 			ExpectedAmount: "EUR 1,000.00", Status: "open", StatusLabel: "未缴纳",
-		}},
+		}}},
 	}
 
 	page, err := executeTemplate(rentWorkspaceTemplate, data)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Count(page, `class="workspace-desktop-list"`); got != 1 {
+	if got := strings.Count(page, `class="workspace-desktop-list workspace-tree-list"`); got != 1 {
 		t.Fatalf("desktop list count=%d want 1", got)
 	}
-	if got := strings.Count(page, `class="workspace-mobile-list"`); got != 1 {
+	if got := strings.Count(page, `class="workspace-mobile-list workspace-tree-mobile-list"`); got != 1 {
 		t.Fatalf("mobile list count=%d want 1", got)
 	}
 	if got := strings.Count(page, "Shared view model house"); got != 2 {
@@ -90,21 +177,29 @@ func TestEmbeddedRentWorkspaceUsesOneViewModelForDesktopAndMobileLists(t *testin
 
 func TestEmbeddedRoomDetailUsesTypedDisplayFields(t *testing.T) {
 	data := rentRoomDetailPageData{
-		workspaceShell:  workspaceShell{ActivePage: "rent-dashboard", Environment: "test"},
-		Filters:         defaultRentWorkspaceFilters(parseTestPeriod(t, "2026-09")),
-		PeriodLabel:     "2026年9月",
-		RoomLabel:       "A-01",
-		PropertyName:    "Typed property",
-		PropertyAddress: "1 Main Street",
-		Summary:         rentWorkspaceRoomRow{Status: "paid", StatusLabel: "已缴清"},
-		Expenses:        []rentWorkspaceExpenseView{{Description: "Repairs", Category: "Maintenance", ExpenseDate: "2026-09-04", Amount: "EUR 10.00"}},
+		workspaceShell:   workspaceShell{ActivePage: "rent-dashboard", Environment: "test"},
+		Filters:          defaultRentWorkspaceFilters(parseTestPeriod(t, "2026-09")),
+		ReturnURL:        "/rooms?period=2026-09&status=all&search=A-01",
+		FromList:         true,
+		ReturnPropertyID: 3,
+		ReturnStatus:     "all",
+		ReturnSearch:     "A-01",
+		Editing:          true,
+		RoomID:           5,
+		Form:             roomPageForm{ID: 5, PropertyID: 3, RoomLabel: "A-01", ActiveFrom: "2026-01"},
+		PeriodLabel:      "2026年9月",
+		RoomLabel:        "A-01",
+		PropertyName:     "Typed property",
+		PropertyAddress:  "1 Main Street",
+		Summary:          rentWorkspaceRoomRow{Status: "paid", StatusLabel: "已缴清"},
+		Expenses:         []rentWorkspaceExpenseView{{Description: "Repairs", Category: "Maintenance", ExpenseDate: "2026-09-04", Amount: "EUR 10.00"}},
 	}
 
 	page, err := executeTemplate(rentRoomDetailTemplate, data)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"A-01", "Typed property", "1 Main Street", "2026-09-04", "EUR 10.00"} {
+	for _, expected := range []string{"A-01", "Typed property", "Typed property · A-01", "2026-09-04", "EUR 10.00", `href="/rooms?period=2026-09&amp;status=all&amp;search=A-01"`, `name="return_property_id" value="3"`} {
 		if !strings.Contains(page, expected) {
 			t.Fatalf("room detail missing typed display field %q", expected)
 		}

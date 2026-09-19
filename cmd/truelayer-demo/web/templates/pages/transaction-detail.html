@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>流水详情 · RentOps</title>
+  <link rel="stylesheet" href="/static/css/pages/transaction-detail.css">
+</head>
+<body>
+  <div class="app">
+    {{template "workspace-nav" .}}
+    <main class="content transaction-detail-page">
+      <div class="transaction-detail-toolbar">
+        <a class="btn subtle" href="{{.BackURL}}">← 返回流水</a>
+        <a class="btn primary" href="{{.BackRowURL}}">返回此笔处理</a>
+      </div>
+      <header class="transaction-detail-head">
+        <div class="transaction-detail-identity">
+          <div class="transaction-detail-mark">流</div>
+          <div>
+            <p class="transaction-detail-eyebrow">银行流水详情</p>
+            <h1>{{.Title}}</h1>
+            <div class="transaction-detail-meta">
+              <span>{{.Subtitle}}</span>
+              <span class="status {{.StatusClass}}">{{.Transaction.MatchStatusLabel}}</span>
+            </div>
+          </div>
+        </div>
+        <a class="btn" href="{{.BackRowURL}}">在流水列表中处理</a>
+      </header>
+
+      <section class="transaction-detail-metrics" aria-label="流水金额摘要">
+        <article class="panel metric transaction-primary-metric">
+          <span class="label">流水金额</span>
+          <strong>{{.Transaction.AmountDisplay}}</strong>
+          <span>{{.Transaction.DirectionLabel}} · {{.Transaction.AccountName}}</span>
+        </article>
+        <article class="panel metric">
+          <span class="label">处理状态</span>
+          <strong>{{.Transaction.MatchStatusLabel}}</strong>
+          <span>{{if .Transaction.MatchReason}}{{.Transaction.MatchReason}}{{else}}当前流水状态{{end}}</span>
+        </article>
+        <article class="panel metric">
+          <span class="label">已分配金额</span>
+          <strong>{{.AllocatedAmount}}</strong>
+          <span>{{.AllocationCount}} 条有效分配</span>
+        </article>
+        <article class="panel metric">
+          <span class="label">未分配余额</span>
+          <strong>{{.RemainingAmount}}</strong>
+          <span>流水金额减去有效分配</span>
+        </article>
+      </section>
+
+      <div class="transaction-detail-grid">
+        <div class="transaction-detail-stack">
+          <section class="panel" aria-labelledby="transaction-suggestion-title">
+            <div class="panel-head">
+              <div>
+                <h2 id="transaction-suggestion-title">匹配建议</h2>
+                <p class="tiny">核对付款人与对应的租金责任后，再从流水列表确认。</p>
+              </div>
+              {{if .Suggestion.Status}}<span class="status {{if .Suggestion.Available}}candidate{{else}}needs_review{{end}}">{{.Suggestion.Status}}</span>{{end}}
+            </div>
+            <div class="transaction-suggestion-body">
+              {{if .Suggestion.Available}}
+                <div class="transaction-suggestion-target">
+                  <strong>{{.Suggestion.Title}}</strong>
+                  {{if .Suggestion.Subtitle}}<span>{{.Suggestion.Subtitle}}</span>{{end}}
+                </div>
+                <p>{{.Suggestion.Reason}}</p>
+              {{else if .Allocations}}
+                <p>这笔流水已有分配记录，当前记录列在下方。</p>
+              {{else}}
+                <p>{{if .Suggestion.Reason}}{{.Suggestion.Reason}}{{else}}当前没有可直接确认的租金匹配建议。{{end}}</p>
+              {{end}}
+              <a class="transaction-inline-link" href="{{.BackRowURL}}">前往流水列表查看可用操作</a>
+            </div>
+          </section>
+
+          <section class="panel" aria-labelledby="transaction-allocations-title">
+            <div class="panel-head">
+              <div>
+                <h2 id="transaction-allocations-title">关联账单与对象</h2>
+                <p class="tiny">按分配记录回溯到租客责任、房间与账单月份。</p>
+              </div>
+              <span class="tiny">{{len .Allocations}} 条记录</span>
+            </div>
+            {{if .Allocations}}
+              <div class="transaction-allocation-table-wrap table-wrap">
+                <table class="transaction-allocation-table">
+                  <thead><tr><th>责任对象</th><th>对应账单</th><th>分类</th><th>分配金额</th><th>状态</th></tr></thead>
+                  <tbody>{{range .Allocations}}
+                    <tr class="{{if not .Effective}}allocation-inactive{{end}}">
+                      <td>
+                        {{if .TenantURL}}<a class="transaction-inline-link" href="{{.TenantURL}}">{{.TenantName}}</a>{{else}}<strong>{{.TenantName}}</strong>{{end}}
+                        {{if or .PropertyName .RoomLabel}}<small>{{if .PropertyName}}{{.PropertyName}}{{end}}{{if and .PropertyName .RoomLabel}} · {{end}}{{if .RoomURL}}<a href="{{.RoomURL}}">{{.RoomLabel}}</a>{{else}}{{.RoomLabel}}{{end}}</small>{{end}}
+                      </td>
+                      <td>{{if .BillURL}}<a href="{{.BillURL}}">{{.BillLabel}}</a>{{else}}{{.BillLabel}}{{end}}{{if .Period}}<small>{{.Period}}{{if .DueDate}} · 到期 {{.DueDate}}{{end}}</small>{{end}}</td>
+                      <td>{{.KindLabel}}{{if .Note}}<small>{{.Note}}</small>{{end}}</td>
+                      <td class="amount">{{.Amount}}{{if .ExpectedAmount}}<small>账单应收 {{.ExpectedAmount}}</small>{{end}}</td>
+                      <td><span class="status {{.StatusClass}}">{{.StatusLabel}}</span></td>
+                    </tr>
+                  {{end}}</tbody>
+                </table>
+              </div>
+              <div class="transaction-allocation-cards">
+                {{range .Allocations}}
+                  <article class="transaction-allocation-card{{if not .Effective}} allocation-inactive{{end}}">
+                    <div class="transaction-allocation-card-head">
+                      <div><strong>{{if .TenantURL}}<a href="{{.TenantURL}}">{{.TenantName}}</a>{{else}}{{.TenantName}}{{end}}</strong><span>{{if .PropertyName}}{{.PropertyName}} · {{end}}{{if .RoomURL}}<a href="{{.RoomURL}}">{{.RoomLabel}}</a>{{else}}{{.RoomLabel}}{{end}}{{if .Period}} · {{.Period}}{{end}}</span></div>
+                      <span class="status {{.StatusClass}}">{{.StatusLabel}}</span>
+                    </div>
+                    <dl>
+                      <div><dt>对应账单</dt><dd>{{if .BillURL}}<a href="{{.BillURL}}">{{.BillLabel}}</a>{{else}}{{.BillLabel}}{{end}}{{if .DueDate}}<small>到期 {{.DueDate}}</small>{{end}}</dd></div>
+                      <div><dt>分类</dt><dd>{{.KindLabel}}</dd></div>
+                      <div><dt>本次分配</dt><dd class="amount">{{.Amount}}</dd></div>
+                    </dl>
+                    {{if .Note}}<p>{{.Note}}</p>{{end}}
+                  </article>
+                {{end}}
+              </div>
+            {{else}}
+              <div class="transaction-detail-empty">还没有确认的分配记录。</div>
+            {{end}}
+          </section>
+
+          <section class="panel" aria-labelledby="transaction-history-title">
+            <div class="panel-head">
+              <div><h2 id="transaction-history-title">处理记录</h2><p class="tiny">仅显示系统中留存的流水、分配与人工操作记录。</p></div>
+            </div>
+            {{if .Events}}
+              <ol class="transaction-event-list">
+                {{range .Events}}
+                  <li class="transaction-event {{.Status}}">
+                    <time>{{.Timestamp}}</time><span class="transaction-event-dot" aria-hidden="true"></span>
+                    <div><strong>{{.Title}}</strong>{{if .Detail}}<p>{{.Detail}}</p>{{end}}</div>
+                  </li>
+                {{end}}
+              </ol>
+            {{else}}
+              <div class="transaction-detail-empty">暂无处理记录。</div>
+            {{end}}
+          </section>
+        </div>
+
+        <aside class="transaction-detail-stack">
+          <section class="panel" aria-labelledby="transaction-source-title">
+            <div class="panel-head"><h2 id="transaction-source-title">付款信息</h2></div>
+            <dl class="transaction-facts">
+              <div><dt>付款人</dt><dd>{{.Transaction.PayerName}}</dd></div>
+              <div><dt>付款人编号</dt><dd>{{.Transaction.PayerID}}</dd></div>
+              <div><dt>银行账户</dt><dd>{{.Transaction.AccountName}}</dd></div>
+              <div><dt>账户标识</dt><dd>{{if .Transaction.AccountID}}{{.Transaction.AccountID}}{{else}}—{{end}}</dd></div>
+              <div><dt>银行流水号</dt><dd>{{.ProviderID}}</dd></div>
+              <div><dt>数据来源</dt><dd>{{.SourceLabel}}</dd></div>
+              <div><dt>参考信息</dt><dd>{{.Reference}}</dd></div>
+              <div><dt>识别租金月份</dt><dd>{{if .ParsedPeriod}}{{.ParsedPeriod}}{{else}}未识别{{end}}{{if .ParsedPeriodNote}}<small>{{.ParsedPeriodNote}}</small>{{end}}</dd></div>
+              <div><dt>原始描述</dt><dd>{{.Transaction.Description}}</dd></div>
+            </dl>
+          </section>
+          {{if .HasRawRecord}}
+            <details class="panel transaction-raw-record">
+              <summary>查看银行原始记录</summary>
+              <pre>{{.RawRecord}}</pre>
+            </details>
+          {{end}}
+        </aside>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

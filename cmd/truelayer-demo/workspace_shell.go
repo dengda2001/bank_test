@@ -13,13 +13,18 @@ import "html/template"
 type workspaceShell struct {
 	// ActivePage selects the highlighted nav item. Canonical pages use
 	// "rent-dashboard", "bills", "transactions", "dunning", "properties",
-	// "rooms", "tenants", "tenancies", "cash-receipts", "expenses" or "bank";
+	// "rooms", "tenants", "tenancies", "cash-receipts", "expenses", "bank"
+	// or "more";
 	// "billing" remains the legacy transaction alias.
 	ActivePage  string
 	Username    string
 	Environment string
 	// FootNote is the second line of the sidebar footer, after "当前用户：<user>".
 	FootNote string
+	// CompactTitle is the object/page context shown beside RentOps on mobile.
+	// It is separate from FootNote because a detail view shows the object name,
+	// while the desktop sidebar keeps its stable page caption.
+	CompactTitle string
 	// ShowNavCounts is false on the pages that never rendered the count badges
 	// (cash receipt entry, cash receipt void, tenant detail). Rendering them
 	// there would change those pages' desktop appearance.

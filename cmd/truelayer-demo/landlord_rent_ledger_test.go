@@ -27,6 +27,53 @@ func TestSplitRentAmountEvenlyProducesDeterministicCents(t *testing.T) {
 	}
 }
 
+func TestScaleRentResponsibilitiesPreservesSharesAndDistributesRemainderCents(t *testing.T) {
+	got, err := scaleRentResponsibilities(1001, []rentResponsibilityInput{
+		{TenantID: 22, AmountCents: 2500},
+		{TenantID: 11, AmountCents: 5000},
+		{TenantID: 33, AmountCents: 2500},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []rentResponsibilityInput{{TenantID: 11, AmountCents: 501}, {TenantID: 22, AmountCents: 250}, {TenantID: 33, AmountCents: 250}}
+	if len(got) != len(want) {
+		t.Fatalf("scaled responsibilities = %+v; want %+v", got, want)
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			t.Fatalf("scaled responsibilities = %+v; want %+v", got, want)
+		}
+	}
+
+	if _, err = scaleRentResponsibilities(1, []rentResponsibilityInput{{TenantID: 22, AmountCents: 1}, {TenantID: 11, AmountCents: 1}}); err == nil {
+		t.Fatal("a total smaller than the number of tenants must not create zero-value responsibilities")
+	}
+}
+
+func TestScaleRentResponsibilitiesRejectsInvalidPlans(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		plan []rentResponsibilityInput
+	}{
+		{name: "empty", plan: nil},
+		{name: "duplicate tenant", plan: []rentResponsibilityInput{{TenantID: 11, AmountCents: 1}, {TenantID: 11, AmountCents: 1}}},
+		{name: "zero amount", plan: []rentResponsibilityInput{{TenantID: 11, AmountCents: 0}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.name == "empty" {
+				if got, err := scaleRentResponsibilities(100, nil); err != nil || len(got) != 0 {
+					t.Fatalf("empty responsibilities = %+v, %v; want empty plan", got, err)
+				}
+				return
+			}
+			if _, err := scaleRentResponsibilities(100, tc.plan); err == nil {
+				t.Fatal("invalid responsibility plan was accepted")
+			}
+		})
+	}
+}
+
 func TestValidateRentResponsibilityPlanRequiresExactUniquePositiveOwnership(t *testing.T) {
 	valid := []rentResponsibilityInput{{TenantID: 11, AmountCents: 60000}, {TenantID: 12, AmountCents: 40000}}
 	if err := validateRentResponsibilityPlan(100000, valid); err != nil {

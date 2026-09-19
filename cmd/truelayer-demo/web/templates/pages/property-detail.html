@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RentOps 房产详情</title>
+  <link rel="stylesheet" href="/static/css/workspace.css">
+  <link rel="stylesheet" href="/static/css/pages/entity-drawers.css">
+  <link rel="stylesheet" href="/static/css/pages/property-detail.css">
+</head>
+<body>
+  <div class="app">
+    {{template "workspace-nav" .}}
+    <main class="content workspace property-detail-page">
+      <nav class="detail-toolbar" aria-label="房产详情导航"><a class="detail-back detail-back-desktop" href="/properties?period={{.Period}}&amp;status={{.ListStatus}}&amp;search={{.ListSearch}}&amp;collection={{.ListCollection}}">← 返回房产管理</a><a class="detail-back detail-back-mobile" href="/properties?period={{.Period}}&amp;status={{.ListStatus}}&amp;search={{.ListSearch}}&amp;collection={{.ListCollection}}" aria-label="返回房产管理">‹</a><a class="btn detail-mobile-edit" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}&amp;edit=1">编辑</a></nav>
+      <header class="property-detail-head">
+        <div class="property-identity">
+          <div class="identity-mark">{{.Property.Mark}}</div>
+          <div>
+            <div class="eyebrow">房产详情</div>
+            <h1>{{.Property.Name}}</h1>
+            <div class="identity-meta"><span>{{.Property.CityRegion}}</span><span>{{.Property.RoomCount}} 个房间</span><span>{{.Property.ResponsibilityCount}} 条责任记录</span><span class="detail-status {{.Property.CollectionStatus}}">{{if .Property.CollectionStatusLabel}}{{.Property.CollectionStatusLabel}}{{else}}{{.Property.StatusLabel}}{{end}}</span></div>
+          </div>
+        </div>
+        <div class="actions"><a class="btn" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}&amp;edit=1">编辑房产</a><a class="btn" href="/expenses?period={{.Period}}&amp;property_id={{.Property.ID}}&amp;add=1">新增支出</a><a class="btn primary" href="/dunning?period={{.Period}}">提醒未收租客</a></div>
+      </header>
+
+      {{if .Message}}<div class="notice ok">资料已保存。</div>{{end}}
+      {{if .Error}}<div class="notice error">{{.Error}}</div>{{end}}
+      {{if .Editing}}
+      <div class="entity-drawer-backdrop">
+        <section class="entity-drawer" role="dialog" aria-modal="true" aria-labelledby="property-edit-title">
+          <div class="panel-head"><div><div class="drawer-eyebrow">编辑资料</div><h2 id="property-edit-title">编辑房产资料</h2></div><a class="drawer-close" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}" aria-label="关闭编辑房产">×</a></div>
+          <form method="post" action="/properties/{{.Property.ID}}"><input type="hidden" name="action" value="save"><input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="list_status" value="{{.ListStatus}}"><input type="hidden" name="list_search" value="{{.ListSearch}}"><input type="hidden" name="list_collection" value="{{.ListCollection}}">
+            <div class="property-edit-grid">
+              <div class="form-field"><label for="property-name">房产名称</label><input id="property-name" name="name" value="{{.Property.Name}}" required maxlength="191" autofocus></div>
+              <div class="form-field"><label for="property-region">城市 / 区域</label><input id="property-region" name="city_region" value="{{.Property.CityRegion}}" maxlength="191"></div>
+              <div class="form-field"><label for="property-address">完整地址</label><input id="property-address" name="address" value="{{.Property.Address}}" maxlength="1000"></div>
+              <div class="form-field"><label for="property-timezone">时区</label><select id="property-timezone" name="timezone"><option value="Europe/Dublin"{{if eq .Property.Timezone "Europe/Dublin"}} selected{{end}}>Europe/Dublin</option><option value="Europe/London"{{if eq .Property.Timezone "Europe/London"}} selected{{end}}>Europe/London</option><option value="Europe/Paris"{{if eq .Property.Timezone "Europe/Paris"}} selected{{end}}>Europe/Paris</option><option value="Asia/Shanghai"{{if eq .Property.Timezone "Asia/Shanghai"}} selected{{end}}>Asia/Shanghai</option></select></div>
+              <div class="form-field full"><label for="property-notes">房产备注</label><textarea id="property-notes" name="notes" maxlength="2000">{{.Property.Notes}}</textarea></div>
+            </div>
+            <div class="drawer-actions"><a class="btn subtle" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}">取消</a><button class="btn primary" type="submit">保存更改</button></div>
+          </form>
+        </section>
+      </div>
+      {{end}}
+
+      <section class="property-metrics" aria-label="房产月度汇总">
+        <article class="panel metric metric-primary"><div class="label">本月应收</div><strong>{{.Property.ExpectedAmount}}</strong><span>{{.Property.RoomCount}} 间房 · {{.Property.ActiveRoomCount}} 间有效</span></article>
+        <article class="panel metric metric-success"><div class="label">已收租金</div><strong>{{.Property.PaidAmount}}</strong><span>收缴率 {{.Property.CollectionPercent}}%</span></article>
+        <article class="panel metric property-mobile-unpaid"><div class="label">未收</div><strong>{{.Property.BalanceAmount}}</strong><span>本月尚未覆盖</span></article>
+        <article class="panel metric"><div class="label">本月支出</div><strong>{{.Property.ExpenseAmount}}</strong><span>有效房产与房间支出</span></article>
+        <article class="panel metric"><div class="label">经营净额</div><strong>{{.Property.NetAmount}}</strong><span>已确认收入 − 有效支出</span></article>
+      </section>
+
+      <div class="property-detail-grid">
+        <div class="property-detail-stack">
+          <section class="panel surface property-room-overview">
+            <div class="panel-head"><div><h2><span class="property-room-title-desktop">房间收款概览</span><span class="property-room-title-mobile">房间收缴</span></h2><p class="tiny">查看房间入住、租金和当月未收情况。</p></div><div class="actions"><a class="btn subtle" href="/rooms?property_id={{.Property.ID}}&amp;period={{.Period}}&amp;add=1">新增房间</a><a class="btn subtle" href="/rooms?property_id={{.Property.ID}}&amp;period={{.Period}}">查看全部房间</a></div></div>
+            {{if .Rooms}}<div class="table-wrap property-room-table-wrap"><table class="property-room-table"><thead><tr><th>房间</th><th>入住人</th><th>月租</th><th>应收</th><th>已收</th><th>未收</th><th>状态</th><th>操作</th></tr></thead><tbody>
+              {{range .Rooms}}<tr><td><a href="/rooms/{{.ID}}?period={{$.Period}}"><strong>{{.RoomLabel}}</strong></a><br><span class="tiny">{{.PropertyName}}</span></td><td>{{range $index, $name := .TenantNames}}{{if $index}}, {{end}}{{$name}}{{else}}空置{{end}}</td><td class="amount">{{.MonthlyRent}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span></td><td><div class="property-room-actions"><a class="btn subtle" href="/rooms/{{.ID}}?period={{$.Period}}">详情</a><a class="btn subtle" href="/rooms/{{.ID}}?period={{$.Period}}&amp;edit=1">编辑</a></div></td></tr>{{end}}
+            </tbody></table></div><div class="property-room-mobile-list">{{range .Rooms}}<article class="property-room-card"><div class="property-room-card-head"><span><a href="/rooms/{{.ID}}?period={{$.Period}}"><strong>{{.RoomLabel}}</strong></a><small>{{range $index, $name := .TenantNames}}{{if $index}}, {{end}}{{$name}}{{else}}空置{{end}}</small></span><span class="status {{.Status}}">{{.StatusLabel}}</span></div><dl><div><dt>月租</dt><dd>{{.MonthlyRent}}</dd></div><div><dt>应收</dt><dd>{{.ExpectedAmount}}</dd></div><div><dt>已收</dt><dd>{{.PaidAmount}}</dd></div><div><dt>未收</dt><dd>{{.BalanceAmount}}</dd></div></dl><div class="property-room-actions"><a class="btn subtle" href="/rooms/{{.ID}}?period={{$.Period}}">详情</a><a class="btn subtle" href="/rooms/{{.ID}}?period={{$.Period}}&amp;edit=1">编辑</a></div></article>{{end}}</div>{{else}}<div class="workspace-empty">该房产还没有房间。<a href="/rooms?property_id={{.Property.ID}}&amp;period={{.Period}}&amp;add=1">现在新增房间</a></div>{{end}}
+            <div class="property-room-prototype-list">{{range .Rooms}}<a class="property-room-prototype-row" href="/rooms/{{.ID}}?period={{$.Period}}"><span><strong>房间 {{.RoomLabel}}{{range $index, $name := .TenantNames}}{{if eq $index 0}} · {{end}}{{if $index}}, {{end}}{{$name}}{{end}}</strong><small>{{.StatusLabel}}</small></span><strong class="amount">{{.ExpectedAmount}}</strong></a>{{end}}</div>
+          </section>
+
+          <section class="panel surface">
+            <div class="panel-head"><div><h2>关联支出</h2><p class="tiny">只展示明确归属该房产或房间的支出。</p></div><a class="btn subtle" href="/expenses">查看全部支出</a></div>
+            {{if .Expenses}}<div class="table-wrap"><table><thead><tr><th>日期</th><th>描述</th><th>类别</th><th>金额</th><th>凭证</th></tr></thead><tbody>{{range .Expenses}}<tr><td>{{.DateDisplay}}</td><td>{{.Description}}</td><td>{{.Category}}</td><td class="amount">{{.AmountDisplay}}</td><td>{{if .InvoiceURL}}<a href="{{.InvoiceURL}}" target="_blank" rel="noopener noreferrer">查看链接</a>{{else}}未提供{{end}}</td></tr>{{end}}</tbody></table></div>{{else}}<div class="workspace-empty">该房产暂无关联支出。</div>{{end}}
+          </section>
+        </div>
+
+        <aside class="property-detail-stack">
+          <section class="panel surface property-desktop-facts"><div class="panel-head"><h2>房产资料</h2></div><dl class="property-facts">
+            <div><dt>完整地址</dt><dd>{{.Property.Address}}</dd></div>
+            <div><dt>城市 / 区域</dt><dd>{{.Property.CityRegion}}</dd></div>
+            <div><dt>时区</dt><dd>{{.Property.Timezone}}</dd></div>
+            <div><dt>状态</dt><dd><span class="detail-status {{.Property.Status}}">{{.Property.StatusLabel}}</span></dd></div>
+            <div><dt>房间数</dt><dd>{{.Property.ActiveRoomCount}} 间有效 / {{.Property.RoomCount}} 间全部</dd></div>
+            <div><dt>账单月份</dt><dd>{{.PeriodLabel}}</dd></div>
+            <div><dt>收缴率</dt><dd>{{.Property.CollectionPercent}}%</dd></div>
+            {{if .Property.Notes}}<div><dt>房产备注</dt><dd>{{.Property.Notes}}</dd></div>{{end}}
+          </dl></section>
+          <section class="panel surface property-mobile-facts"><div class="panel-head"><h2>基础信息</h2></div><dl class="property-facts"><div><dt>房产支出</dt><dd>{{.Property.ExpenseAmount}}</dd></div><div><dt>经营净额</dt><dd>{{.Property.NetAmount}}</dd></div><div><dt>账务时区</dt><dd>{{.Property.Timezone}}</dd></div></dl></section>
+          <section class="panel surface property-attention"><div class="panel-head"><div><h2>需要关注</h2><p class="tiny">按当月未收金额列出房间。</p></div></div>
+            {{if .Rooms}}<div class="attention-list">{{range .Rooms}}{{if gt .BalanceCents 0}}<a class="attention-row" href="/rooms/{{.ID}}?period={{$.Period}}"><span><strong>{{.RoomLabel}}</strong><small>{{range $index, $name := .TenantNames}}{{if $index}}, {{end}}{{$name}}{{else}}空置{{end}}</small></span><strong class="amount">{{.BalanceAmount}}</strong></a>{{end}}{{end}}</div>{{else}}<div class="workspace-empty">暂无需要关注的房间。</div>{{end}}
+          </section>
+          <div class="risk-note property-desktop-risk">公共房产支出只计入房产经营净额，不会拆分到某一个房间。</div>
+          <section class="panel surface property-mobile-recent"><div class="panel-head"><h2>最近记录</h2></div>{{if .Expenses}}<div class="attention-list">{{range .Expenses}}<div class="property-room-prototype-row"><span><strong>{{.Description}}</strong><small>{{.DateDisplay}} · {{.Category}}</small></span><strong class="amount">{{.AmountDisplay}}</strong></div>{{end}}</div>{{else}}<div class="workspace-empty">暂无近期记录。</div>{{end}}</section>
+        </aside>
+      </div>
+      <div class="property-detail-mobile-actions"><a class="btn subtle" href="/properties?period={{.Period}}&amp;status={{.ListStatus}}&amp;search={{.ListSearch}}&amp;collection={{.ListCollection}}">返回列表</a><a class="btn primary" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}&amp;edit=1">编辑资料</a></div>
+    </main>
+  </div>
+</body>
+</html>

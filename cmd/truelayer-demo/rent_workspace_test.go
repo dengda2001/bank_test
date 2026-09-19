@@ -82,6 +82,31 @@ func TestRentWorkspaceMonthFormPreservesWorkspaceContext(t *testing.T) {
 	}
 }
 
+func TestRentWorkspaceShowsDimensionsBeforePropertySetup(t *testing.T) {
+	filters := defaultRentWorkspaceFilters(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
+	page, err := executeTemplate(rentWorkspaceTemplate, rentWorkspacePageData{
+		Filters:  filters,
+		Period:   "2026-09",
+		View:     filters.View,
+		PageSize: filters.PageSize,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"房产视角",
+		"房间视角",
+		"租客视角",
+		"尚未建立有效房产",
+		`href="/properties?add=1"`,
+		`href="/bills"`,
+	} {
+		if !strings.Contains(page, expected) {
+			t.Fatalf("uninitialized workspace is missing %q", expected)
+		}
+	}
+}
+
 func TestRentWorkspaceTenantViewExplainsCompleteThirdPartyPayment(t *testing.T) {
 	filters := defaultRentWorkspaceFilters(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
 	filters.View = rentWorkspaceViewTenants
@@ -183,6 +208,29 @@ func TestBuildRentWorkspaceSeparatesVacantMissingChargeAndPaidRooms(t *testing.T
 	if len(data.TenantRows) != 2 || !data.TenantRows[1].PaidByOther || data.TenantRows[0].PaidByOther {
 		t.Fatalf("tenant rows=%+v", data.TenantRows)
 	}
+	if len(data.PropertyTreeRows) != 2 || len(data.RoomTreeRows) != 3 {
+		t.Fatalf("nested workspace rows: properties=%d rooms=%d", len(data.PropertyTreeRows), len(data.RoomTreeRows))
+	}
+	var propertyTree *rentWorkspacePropertyTreeRow
+	for index := range data.PropertyTreeRows {
+		if data.PropertyTreeRows[index].Property.PropertyID == propertyOne.ID {
+			propertyTree = &data.PropertyTreeRows[index]
+			break
+		}
+	}
+	if propertyTree == nil || len(propertyTree.Rooms) != 2 || len(propertyTree.Rooms[0].Tenants) != 2 {
+		t.Fatalf("property tree=%+v", data.PropertyTreeRows)
+	}
+	var paidRoomTree *rentWorkspaceRoomTreeRow
+	for index := range data.RoomTreeRows {
+		if data.RoomTreeRows[index].Room.RoomID == roomPaid.ID {
+			paidRoomTree = &data.RoomTreeRows[index]
+			break
+		}
+	}
+	if paidRoomTree == nil || len(paidRoomTree.Tenants) != 2 {
+		t.Fatalf("room tree=%+v", data.RoomTreeRows)
+	}
 }
 
 func TestBuildRentWorkspaceStatusFilterAndSearchDoNotChangeSummary(t *testing.T) {
@@ -229,23 +277,67 @@ func TestRentWorkspaceTemplateRendersThreeViewsAndRoomDrilldownWithoutReferenceN
 		Summary:         rentWorkspaceSummary{ExpectedAmount: "EUR 1,000.00", PaidAmount: "EUR 1,000.00", BalanceAmount: "EUR 0.00", NetAmount: "EUR 850.00", TotalRooms: 2, PaidRooms: 1, VacantRooms: 1},
 		PropertyOptions: []rentWorkspacePropertyOption{{ID: 1, Name: "Canal House"}},
 		PropertyRows:    []rentWorkspacePropertyRow{{PropertyID: 1, Name: "Canal House", TotalRooms: 2, PaidRooms: 1, ExpectedAmount: "EUR 1,000.00", PaidAmount: "EUR 1,000.00", BalanceAmount: "EUR 0.00", ExpenseAmount: "EUR 150.00", NetAmount: "EUR 850.00", Status: "paid", StatusLabel: "已缴清"}},
-		TotalRows:       1,
-		FilteredCount:   1,
-		TotalPages:      1,
-		Page:            1,
-		PageSize:        dashboardDefaultPageSize,
+		PropertyTreeRows: []rentWorkspacePropertyTreeRow{{
+			Property: rentWorkspacePropertyRow{PropertyID: 1, Name: "Canal House", TotalRooms: 1, ExpectedAmount: "EUR 1,000.00", PaidAmount: "EUR 0.00", BalanceAmount: "EUR 1,000.00", Status: "open", StatusLabel: "待缴"},
+			Rooms: []rentWorkspaceRoomTreeRow{{
+				Room:    rentWorkspaceRoomRow{RoomID: 11, PropertyID: 1, RoomLabel: "A-01", TenantCount: 1, ExpectedAmount: "EUR 1,000.00", PaidAmount: "EUR 0.00", BalanceAmount: "EUR 1,000.00", Status: "open", StatusLabel: "待缴"},
+				Tenants: []rentWorkspaceTenantRow{{TenantName: "Sample tenant", ExpectedAmount: "EUR 1,000.00", PaidAmount: "EUR 0.00", BalanceAmount: "EUR 1,000.00", Status: "open", StatusLabel: "待缴"}},
+			}},
+		}},
+		TotalRows:     1,
+		FilteredCount: 1,
+		TotalPages:    1,
+		Page:          1,
+		PageSize:      dashboardDefaultPageSize,
 	}
 	if err := rentWorkspaceTemplate.Execute(&body, data); err != nil {
 		t.Fatal(err)
 	}
 	page := body.String()
-	for _, expected := range []string{"房产视角", "房间视角", "租客视角", "Canal House", "经营净额", "workspace-property"} {
+	for _, expected := range []string{"房产视角", "房间视角", "租客视角", "Canal House", "A-01", "Sample tenant", "查看房产详情", "workspace-property", "<details"} {
 		if !strings.Contains(page, expected) {
 			t.Fatalf("workspace missing %q: %s", expected, page)
 		}
 	}
 	if strings.Contains(page, "参考号") || strings.Contains(page, "rent-2026-09") {
 		t.Fatalf("workspace must not render payment reference number: %s", page)
+	}
+	data.View = rentWorkspaceViewRooms
+	data.RoomTreeRows = []rentWorkspaceRoomTreeRow{{
+		Room:    rentWorkspaceRoomRow{RoomID: 11, PropertyID: 1, PropertyName: "Canal House", RoomLabel: "A-01", TenantCount: 1, Status: "open", StatusLabel: "待缴"},
+		Tenants: []rentWorkspaceTenantRow{{TenantName: "Sample tenant", ExpectedAmount: "EUR 1,000.00", Status: "open", StatusLabel: "待缴"}},
+	}}
+	body.Reset()
+	if err := rentWorkspaceTemplate.Execute(&body, data); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body.String(), `class="workspace-tree-item workspace-room-item"`) || !strings.Contains(body.String(), "Sample tenant") {
+		t.Fatalf("room view must render an expandable room with tenant responsibility: %s", body.String())
+	}
+}
+
+func TestRentWorkspaceNestedRowsStayWithinTheirRoomAndProperty(t *testing.T) {
+	properties := []rentWorkspacePropertyRow{{PropertyID: 1, Name: "House One", TotalRooms: 1}}
+	rooms := []rentWorkspaceRoomRow{
+		{RoomID: 11, PropertyID: 1, RoomLabel: "A-01"},
+		{RoomID: 12, PropertyID: 1, RoomLabel: "A-02"},
+		{RoomID: 11, PropertyID: 2, RoomLabel: "Other property room"},
+	}
+	tenants := []rentWorkspaceTenantRow{
+		{RoomID: 11, PropertyID: 1, TenantName: "Tenant One"},
+		{RoomID: 11, PropertyID: 2, TenantName: "Other property tenant"},
+		{RoomID: 12, PropertyID: 1, TenantName: "Tenant Two"},
+	}
+	filters := defaultRentWorkspaceFilters(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
+	tree := workspacePropertyTreeRows(properties, rooms, tenants, filters)
+	if len(tree) != 1 || len(tree[0].Rooms) != 2 {
+		t.Fatalf("property tree=%+v", tree)
+	}
+	if got := tree[0].Rooms[0]; got.Room.RoomID != 11 || len(got.Tenants) != 1 || got.Tenants[0].TenantName != "Tenant One" {
+		t.Fatalf("first room tree=%+v", got)
+	}
+	if got := tree[0].Rooms[1]; got.Room.RoomID != 12 || len(got.Tenants) != 1 || got.Tenants[0].TenantName != "Tenant Two" {
+		t.Fatalf("second room tree=%+v", got)
 	}
 }
 
@@ -324,6 +416,12 @@ func TestRentWorkspaceServiceAggregatesPropertiesRoomsAndDetailOnMySQL(t *testin
 	if len(data.PropertyRows) != 2 || data.Summary.ExpectedCents != 100000 || data.Summary.PaidCents != 100000 || data.Summary.ExpenseCents != 10000 || data.PropertyRows[0].Status != "paid" {
 		t.Fatalf("workspace data=%+v", data)
 	}
+	if len(data.PropertyTreeRows) == 0 || data.PropertyTreeRows[0].Property.PropertyID != propertyOne.ID || len(data.PropertyTreeRows[0].Rooms) != 1 {
+		t.Fatalf("property tree=%+v", data.PropertyTreeRows)
+	}
+	if tenants := data.PropertyTreeRows[0].Rooms[0].Tenants; len(tenants) != 1 || tenants[0].TenantID != primaryTenant.ID {
+		t.Fatalf("property nested tenants=%+v", data.PropertyTreeRows[0].Rooms[0].Tenants)
+	}
 	roomFilters := defaultRentWorkspaceFilters(period)
 	roomFilters.View = rentWorkspaceViewRooms
 	roomFilters.PropertyID = propertyOne.ID
@@ -333,6 +431,9 @@ func TestRentWorkspaceServiceAggregatesPropertiesRoomsAndDetailOnMySQL(t *testin
 	}
 	if len(roomData.RoomRows) != 1 || roomData.RoomRows[0].RoomID != roomOne.ID || roomData.RoomRows[0].Status != "paid" {
 		t.Fatalf("room data=%+v", roomData.RoomRows)
+	}
+	if len(roomData.RoomTreeRows) != 1 || len(roomData.RoomTreeRows[0].Tenants) != 1 || roomData.RoomTreeRows[0].Tenants[0].TenantID != primaryTenant.ID {
+		t.Fatalf("room nested tenants=%+v", roomData.RoomTreeRows)
 	}
 	detail, err := service.loadRoomDetail(ctx, owner.ID, roomOne.ID, period)
 	if err != nil || len(detail.Tenants) != 1 || len(detail.Expenses) != 0 {

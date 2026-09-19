@@ -85,6 +85,47 @@ func TestDesktopAssetFormsExposeCreateAndEditControls(t *testing.T) {
 	}
 }
 
+func TestRoomDetailEditDrawerIncludesPrototypeFields(t *testing.T) {
+	var page bytes.Buffer
+	err := rentRoomDetailTemplate.Execute(&page, rentRoomDetailPageData{
+		workspaceShell: workspaceShell{ActivePage: "rooms", Username: "owner", Environment: "test"},
+		Period:         "2026-09",
+		PeriodLabel:    "2026 年 9 月",
+		RoomID:         9,
+		RoomLabel:      "03",
+		RoomType:       "双人间",
+		Capacity:       2,
+		MonthlyRent:    "€1,250",
+		DueDay:         1,
+		RoomActiveFrom: "2026-09",
+		Editing:        true,
+		Form:           roomPageForm{ID: 9, PropertyID: 7, RoomLabel: "03", RoomType: "双人间", Capacity: 2, MonthlyRentValue: "1250.00", DueDay: 1, Notes: "两人同住", ActiveFrom: "2026-09"},
+		Properties:     []propertyPageRow{{ID: 7, Name: "78 Old County Road"}},
+		Summary:        rentWorkspaceRoomRow{PropertyID: 7},
+	})
+	if err != nil {
+		t.Fatalf("render room detail edit state: %v", err)
+	}
+	html := page.String()
+	previous := -1
+	for _, marker := range []string{`name="room_label"`, `name="property_id"`, `name="room_type"`, `name="capacity"`, `name="monthly_rent"`, `name="due_day"`, `name="notes"`} {
+		position := strings.Index(html, marker)
+		if position < 0 {
+			t.Fatalf("room edit drawer is missing prototype field %q", marker)
+		}
+		if position <= previous {
+			t.Fatalf("room edit field %q is out of prototype order", marker)
+		}
+		previous = position
+	}
+	if strings.Contains(html, `name="active_from"`) {
+		t.Fatal("room edit drawer should not expose the active-from field omitted by the prototype")
+	}
+	if !strings.Contains(html, `class="room-edit-grid"`) {
+		t.Fatal("room edit fields should use the prototype's paired desktop layout")
+	}
+}
+
 func TestTenantCreateFormCanBindAnExistingRoom(t *testing.T) {
 	var page bytes.Buffer
 	if err := tenantTemplate.Execute(&page, tenantPageData{

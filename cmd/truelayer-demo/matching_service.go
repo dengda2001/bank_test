@@ -138,8 +138,10 @@ func (s *transactionService) listTransactionPageRowsWithTotal(ctx context.Contex
 	}
 	rows := make([]transactionPageRow, 0, len(transactions))
 	tenantNames := make(map[uint64]string, len(tenants))
+	tenantByID := make(map[uint64]tenant, len(tenants))
 	for _, tenantRow := range tenants {
 		tenantNames[tenantRow.ID] = tenantRow.Name
+		tenantByID[tenantRow.ID] = tenantRow
 	}
 	for _, transaction := range transactions {
 		allocations := allocationsByTransaction[transaction.ID]
@@ -160,11 +162,23 @@ func (s *transactionService) listTransactionPageRowsWithTotal(ctx context.Contex
 				row.CanConfirm = decision.TenantID != 0 && decision.RentObligationID != 0
 			case "candidate":
 				row.TenantID = decision.TenantID
+				row.CandidateTenantID = decision.TenantID
+				row.CandidateTenantName = tenantNames[decision.TenantID]
 				row.NeedsMonthChoice = decision.TenantID != 0
 			}
 		}
 		if row.NeedsMonthChoice && len(row.MonthOptions) == 0 {
 			row.MonthOptions = rentMonthOptionsForTenant(transaction, obligations, row.TenantID)
+		}
+		contextTenantID := row.CandidateTenantID
+		if contextTenantID == 0 {
+			contextTenantID = row.TenantID
+		}
+		if contextTenant, ok := tenantByID[contextTenantID]; ok {
+			row.ObjectLabel = transactionTenantObjectLabel(contextTenant)
+			if strings.TrimSpace(contextTenant.RoomLabel) != "" {
+				row.RoomOnlyLabel = "房间 " + strings.TrimSpace(contextTenant.RoomLabel)
+			}
 		}
 		if transaction.Direction == "income" && summary.AllocatedCents == 0 && transaction.MatchStatus != "ignored" && !row.CanConfirm && !row.NeedsMonthChoice {
 			row.ManualMatchOptions = availableRentMatchOptions(transaction, obligations, tenantNames, transaction.AmountCents, 0)
@@ -178,6 +192,24 @@ func (s *transactionService) listTransactionPageRowsWithTotal(ctx context.Contex
 		rows = append(rows, row)
 	}
 	return rows, total, nil
+}
+
+func transactionTenantObjectLabel(row tenant) string {
+	property := strings.TrimSpace(row.RoomAddress)
+	if property == "" {
+		property = strings.TrimSpace(stringValue(row.PropertyHint))
+	}
+	room := strings.TrimSpace(row.RoomLabel)
+	if room != "" {
+		room = "房间 " + room
+	}
+	if property == "" {
+		return room
+	}
+	if room == "" {
+		return property
+	}
+	return property + " · " + room
 }
 
 func availableRentMatchOptions(source paymentTransaction, obligations []rentObligation, tenantNames map[uint64]string, amountCents int64, excludedObligationID uint64) []billingRentMatchOption {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -11,12 +12,9 @@ func (a *app) handleRentDashboard(w http.ResponseWriter, r *http.Request) {
 	if !a.requireAuth(w, r) {
 		return
 	}
-	if userID, ok := a.currentUserID(r); ok && a.db != nil {
-		var propertyCount int64
-		if err := a.db.WithContext(r.Context()).Model(&property{}).Where("user_id = ? AND status = ?", userID, "active").Count(&propertyCount).Error; err == nil && propertyCount > 0 {
-			a.renderRentWorkspaceDashboard(w, r)
-			return
-		}
+	if _, ok := a.currentUserID(r); ok && a.db != nil {
+		a.renderRentWorkspaceDashboard(w, r)
+		return
 	}
 	a.renderRentDashboard(w, r, nil)
 }
@@ -43,7 +41,7 @@ func (a *app) renderRentDashboard(w http.ResponseWriter, r *http.Request, action
 				if r.URL.Path == "/bills" {
 					return "bills"
 				}
-				if r.URL.Path == "/dunning" {
+				if strings.HasPrefix(r.URL.Path, "/dunning") {
 					return "dunning"
 				}
 				return "rent-dashboard"
@@ -51,6 +49,7 @@ func (a *app) renderRentDashboard(w http.ResponseWriter, r *http.Request, action
 			Username:      a.displayUsername(r),
 			Environment:   a.cfg.Environment,
 			FootNote:      "月度收租工作台",
+			CompactTitle:  "本月收租",
 			ShowNavCounts: true,
 			NavLabel:      "主导航",
 		},
@@ -58,7 +57,7 @@ func (a *app) renderRentDashboard(w http.ResponseWriter, r *http.Request, action
 			if r.URL.Path == "/bills" {
 				return "bills"
 			}
-			if r.URL.Path == "/dunning" {
+			if strings.HasPrefix(r.URL.Path, "/dunning") {
 				return "dunning"
 			}
 			return "rent-dashboard"
@@ -67,7 +66,7 @@ func (a *app) renderRentDashboard(w http.ResponseWriter, r *http.Request, action
 			if r.URL.Path == "/bills" {
 				return "/bills"
 			}
-			if r.URL.Path == "/dunning" {
+			if strings.HasPrefix(r.URL.Path, "/dunning") {
 				return "/dunning"
 			}
 			return "/rent-dashboard"
@@ -166,7 +165,14 @@ func (a *app) renderRentDashboard(w http.ResponseWriter, r *http.Request, action
 		data.PeriodLabel = fmt.Sprintf("%d年%d月", periodMonth.Year(), periodMonth.Month())
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := rentDashboardTemplate.Execute(w, data); err != nil {
+	templateForPath := rentDashboardTemplate
+	switch {
+	case r.URL.Path == "/bills":
+		templateForPath = billsPageTemplate
+	case strings.HasPrefix(r.URL.Path, "/dunning"):
+		templateForPath = dunningPageTemplate
+	}
+	if err := templateForPath.Execute(w, data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -468,7 +474,7 @@ var rentDashboardTemplate = newWorkspacePageTemplate("rent-dashboard", template.
             <thead><tr><th><a class="sort-link{{if .TenantSort.Active}} active{{end}}" href="{{.TenantSort.URL}}">租客{{if .TenantSort.Arrow}}<span class="sort-arrow">{{.TenantSort.Arrow}}</span>{{end}}</a></th><th>房间</th><th><a class="sort-link{{if .DueSort.Active}} active{{end}}" href="{{.DueSort.URL}}">应缴日{{if .DueSort.Arrow}}<span class="sort-arrow">{{.DueSort.Arrow}}</span>{{end}}</a></th><th><a class="sort-link{{if .AmountSort.Active}} active{{end}}" href="{{.AmountSort.URL}}">应收{{if .AmountSort.Arrow}}<span class="sort-arrow">{{.AmountSort.Arrow}}</span>{{end}}</a></th><th>已收</th><th>未收</th><th><a class="sort-link{{if .StatusSort.Active}} active{{end}}" href="{{.StatusSort.URL}}">状态{{if .StatusSort.Arrow}}<span class="sort-arrow">{{.StatusSort.Arrow}}</span>{{end}}</a></th></tr></thead>
             <tbody>{{range .Rows}}
 	            <tr class="rent-row" tabindex="0" role="button" aria-expanded="false" aria-controls="rent-details-{{.ObligationID}}" data-details-target="rent-details-{{.ObligationID}}"><td><a class="tenant-link" href="/tenants/{{.TenantID}}?from_month={{.Period}}&amp;to_month={{.Period}}"><strong>{{.TenantName}}</strong></a>{{if .TenantAlias}}<br><span class="tiny">别名：{{.TenantAlias}}</span>{{end}}</td><td>{{if .RoomLabel}}{{.RoomLabel}}<br>{{end}}{{.RoomAddress}}</td><td class="mono">{{.DueDate}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td><div class="status-actions"><span class="status {{.Status}}">{{.StatusLabel}}</span>{{if gt .ExpectedCents .PaidCents}}<form class="manual-balance-form" method="post" action="/rent-dashboard/settle" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()" onsubmit="return confirm('确认一键平账吗？')"><input type="hidden" name="obligation_id" value="{{.ObligationID}}"><input type="hidden" name="period" value="{{$.Period}}"><input type="hidden" name="search" value="{{$.SearchFilter}}"><input type="hidden" name="status" value="{{$.StatusFilter}}"><input type="hidden" name="sort" value="{{$.SortFilter}}"><input type="hidden" name="page" value="{{$.Page}}"><input type="hidden" name="page_size" value="{{$.PageSize}}"><input name="reason" maxlength="512" placeholder="填写平账原因" aria-label="平账原因" required><button class="btn subtle" type="submit">一键平账</button></form>{{end}}</div></td></tr>
-              <tr id="rent-details-{{.ObligationID}}" class="rent-details" hidden><td colspan="7"><div class="payment-list"><h3>收款明细 · <a class="tenant-link" href="/cash-receipts/new?tenant_id={{.TenantID}}&amp;period={{.Period}}">补录现金</a></h3>{{if .Payments}}{{range .Payments}}<div class="payment-item"><span class="amount">{{.AmountDisplay}}</span><span class="mono">{{.DateDisplay}}</span><span class="payment-description">{{.Description}}</span><span class="mono">{{if eq .Source "现金"}}现金 · {{end}}{{.ConfirmationSource}}{{if eq .Source "现金"}} · <a class="void-link" href="/cash-receipts/void?receipt_id={{.PaymentID}}">撤销</a>{{end}}</span></div>{{end}}{{else}}<div class="tiny">本月暂无已确认收款。</div>{{end}}</div></td></tr>
+              <tr id="rent-details-{{.ObligationID}}" class="rent-details" hidden><td colspan="7"><div class="payment-list"><h3>收款明细 · <a class="tenant-link" href="/cash-receipts?add=1&amp;tenant_id={{.TenantID}}&amp;period={{.Period}}">补录现金</a></h3>{{if .Payments}}{{range .Payments}}<div class="payment-item"><span class="amount">{{.AmountDisplay}}</span><span class="mono">{{.DateDisplay}}</span><span class="payment-description">{{.Description}}</span><span class="mono">{{if eq .Source "现金"}}现金 · {{end}}{{.ConfirmationSource}}{{if eq .Source "现金"}} · <a class="void-link" href="/cash-receipts/void?receipt_id={{.PaymentID}}">撤销</a>{{end}}</span></div>{{end}}{{else}}<div class="tiny">本月暂无已确认收款。</div>{{end}}</div></td></tr>
             {{end}}</tbody>
   	    </table></div>
   	    {{else if gt .FilteredCount 0}}<div class="empty">当前页没有账单，请返回上一页。</div>

@@ -1,0 +1,6 @@
+.object-tabs { display: none; }
+@media (max-width: 640px) {
+  .object-tabs { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 3px; margin: 0 0 12px; padding: 4px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+  .object-tabs a { display: grid; place-items: center; min-height: 42px; border-radius: 7px; color: var(--foreground-muted); font-size: 13px; font-weight: 700; text-decoration: none; }
+  .object-tabs a.active { color: var(--surface); background: var(--sidebar); }
+}

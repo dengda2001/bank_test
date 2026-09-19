@@ -169,37 +169,51 @@ type rentWorkspaceInput struct {
 }
 
 type rentWorkspaceSummary struct {
-	ExpectedCents     int64
-	PaidCents         int64
-	BalanceCents      int64
-	ExpenseCents      int64
-	OtherIncomeCents  int64
-	NetCents          int64
-	CollectionPercent int
-	TotalRooms        int
-	PaidRooms         int
-	UnpaidRooms       int
-	VacantRooms       int
-	ExpectedAmount    string
-	PaidAmount        string
-	BalanceAmount     string
-	ExpenseAmount     string
-	OtherIncomeAmount string
-	NetAmount         string
+	ExpectedCents       int64
+	PaidCents           int64
+	BalanceCents        int64
+	ExpenseCents        int64
+	OtherIncomeCents    int64
+	NetCents            int64
+	CollectionPercent   int
+	TotalRooms          int
+	PaidRooms           int
+	UnpaidRooms         int
+	VacantRooms         int
+	ResponsibilityCount int
+	FollowupCount       int
+	ExpectedAmount      string
+	PaidAmount          string
+	BalanceAmount       string
+	ExpenseAmount       string
+	OtherIncomeAmount   string
+	NetAmount           string
 }
 
 type rentWorkspaceData struct {
-	Filters         rentWorkspaceFilters
-	Summary         rentWorkspaceSummary
-	PropertyOptions []rentWorkspacePropertyOption
-	PropertyRows    []rentWorkspacePropertyRow
-	RoomRows        []rentWorkspaceRoomRow
-	TenantRows      []rentWorkspaceTenantRow
-	TotalRows       int
-	FilteredCount   int
-	TotalPages      int
-	Page            int
-	PageSize        int
+	Filters          rentWorkspaceFilters
+	Summary          rentWorkspaceSummary
+	PropertyOptions  []rentWorkspacePropertyOption
+	PropertyRows     []rentWorkspacePropertyRow
+	PropertyTreeRows []rentWorkspacePropertyTreeRow
+	RoomRows         []rentWorkspaceRoomRow
+	RoomTreeRows     []rentWorkspaceRoomTreeRow
+	TenantRows       []rentWorkspaceTenantRow
+	TotalRows        int
+	FilteredCount    int
+	TotalPages       int
+	Page             int
+	PageSize         int
+}
+
+type rentWorkspacePropertyTreeRow struct {
+	Property rentWorkspacePropertyRow
+	Rooms    []rentWorkspaceRoomTreeRow
+}
+
+type rentWorkspaceRoomTreeRow struct {
+	Room    rentWorkspaceRoomRow
+	Tenants []rentWorkspaceTenantRow
 }
 
 type rentWorkspacePropertyOption struct {
@@ -562,6 +576,12 @@ func buildRentWorkspace(input rentWorkspaceInput, filters rentWorkspaceFilters) 
 		summary.UnpaidRooms += row.UnpaidRooms
 		summary.VacantRooms += row.VacantRooms
 	}
+	for _, tenantRow := range tenantRows {
+		summary.ResponsibilityCount++
+		if tenantRow.BalanceCents > 0 {
+			summary.FollowupCount++
+		}
+	}
 	summary.NetCents = summary.PaidCents + summary.OtherIncomeCents - summary.ExpenseCents
 	summary.CollectionPercent = collectionPercent(summary.ExpectedCents, summary.PaidCents)
 	summary.ExpectedAmount = formatWorkspaceAmount(summary.ExpectedCents)
@@ -582,6 +602,8 @@ func buildRentWorkspace(input rentWorkspaceInput, filters rentWorkspaceFilters) 
 	propertyTotalRows := len(propertyRows)
 	roomTotalRows := len(roomRows)
 	tenantTotalRows := len(tenantRows)
+	allRoomRows := append([]rentWorkspaceRoomRow(nil), roomRows...)
+	allTenantRows := append([]rentWorkspaceTenantRow(nil), tenantRows...)
 	propertyRows = filterAndSortWorkspaceProperties(propertyRows, filters)
 	roomRows = filterAndSortWorkspaceRooms(roomRows, filters)
 	tenantRows = filterAndSortWorkspaceTenants(tenantRows, filters)
@@ -589,20 +611,74 @@ func buildRentWorkspace(input rentWorkspaceInput, filters rentWorkspaceFilters) 
 	propertyRows, propertyPages := paginateWorkspaceProperties(propertyRows, filters.Page, filters.PageSize)
 	roomRows, roomPages := paginateWorkspaceRooms(roomRows, filters.Page, filters.PageSize)
 	tenantRows, tenantPages := paginateWorkspaceTenants(tenantRows, filters.Page, filters.PageSize)
+	roomTreeRows := workspaceRoomTreeRows(roomRows, allTenantRows)
+	propertyTreeRows := workspacePropertyTreeRows(propertyRows, allRoomRows, allTenantRows, filters)
 	totalRows, filteredCount, totalPages := workspacePageCounts(filters.View, propertyPages, roomPages, tenantPages, propertyTotalRows, roomTotalRows, tenantTotalRows, propertyFilteredCount, roomFilteredCount, tenantFilteredCount)
 	return rentWorkspaceData{
-		Filters:         filters,
-		Summary:         summary,
-		PropertyOptions: propertyOptions,
-		PropertyRows:    propertyRows,
-		RoomRows:        roomRows,
-		TenantRows:      tenantRows,
-		TotalRows:       totalRows,
-		FilteredCount:   filteredCount,
-		TotalPages:      totalPages,
-		Page:            filters.Page,
-		PageSize:        filters.PageSize,
+		Filters:          filters,
+		Summary:          summary,
+		PropertyOptions:  propertyOptions,
+		PropertyRows:     propertyRows,
+		PropertyTreeRows: propertyTreeRows,
+		RoomRows:         roomRows,
+		RoomTreeRows:     roomTreeRows,
+		TenantRows:       tenantRows,
+		TotalRows:        totalRows,
+		FilteredCount:    filteredCount,
+		TotalPages:       totalPages,
+		Page:             filters.Page,
+		PageSize:         filters.PageSize,
 	}, nil
+}
+
+func workspaceRoomTreeRows(rooms []rentWorkspaceRoomRow, tenants []rentWorkspaceTenantRow) []rentWorkspaceRoomTreeRow {
+	type workspaceRoomKey struct {
+		propertyID uint64
+		roomID     uint64
+	}
+	tenantsByRoom := make(map[workspaceRoomKey][]rentWorkspaceTenantRow, len(rooms))
+	for _, tenantRow := range tenants {
+		key := workspaceRoomKey{propertyID: tenantRow.PropertyID, roomID: tenantRow.RoomID}
+		tenantsByRoom[key] = append(tenantsByRoom[key], tenantRow)
+	}
+	tree := make([]rentWorkspaceRoomTreeRow, 0, len(rooms))
+	for _, roomRow := range rooms {
+		key := workspaceRoomKey{propertyID: roomRow.PropertyID, roomID: roomRow.RoomID}
+		children := append([]rentWorkspaceTenantRow(nil), tenantsByRoom[key]...)
+		sort.SliceStable(children, func(i, j int) bool {
+			if strings.ToLower(children[i].TenantName) != strings.ToLower(children[j].TenantName) {
+				return strings.ToLower(children[i].TenantName) < strings.ToLower(children[j].TenantName)
+			}
+			return children[i].ObligationID < children[j].ObligationID
+		})
+		tree = append(tree, rentWorkspaceRoomTreeRow{Room: roomRow, Tenants: children})
+	}
+	return tree
+}
+
+func workspacePropertyTreeRows(properties []rentWorkspacePropertyRow, rooms []rentWorkspaceRoomRow, tenants []rentWorkspaceTenantRow, filters rentWorkspaceFilters) []rentWorkspacePropertyTreeRow {
+	roomTreesByProperty := make(map[uint64][]rentWorkspaceRoomTreeRow)
+	for _, roomTree := range workspaceRoomTreeRows(rooms, tenants) {
+		if filters.RoomID != 0 && roomTree.Room.RoomID != filters.RoomID {
+			continue
+		}
+		roomTreesByProperty[roomTree.Room.PropertyID] = append(roomTreesByProperty[roomTree.Room.PropertyID], roomTree)
+	}
+	tree := make([]rentWorkspacePropertyTreeRow, 0, len(properties))
+	for _, propertyRow := range properties {
+		propertyRooms := append([]rentWorkspaceRoomTreeRow(nil), roomTreesByProperty[propertyRow.PropertyID]...)
+		sort.SliceStable(propertyRooms, func(i, j int) bool {
+			if strings.ToLower(propertyRooms[i].Room.RoomLabel) != strings.ToLower(propertyRooms[j].Room.RoomLabel) {
+				return strings.ToLower(propertyRooms[i].Room.RoomLabel) < strings.ToLower(propertyRooms[j].Room.RoomLabel)
+			}
+			return propertyRooms[i].Room.RoomID < propertyRooms[j].Room.RoomID
+		})
+		tree = append(tree, rentWorkspacePropertyTreeRow{
+			Property: propertyRow,
+			Rooms:    propertyRooms,
+		})
+	}
+	return tree
 }
 
 func workspaceScopeMatches(propertyID, roomID uint64, filters rentWorkspaceFilters) bool {

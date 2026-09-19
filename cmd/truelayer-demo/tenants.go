@@ -452,6 +452,18 @@ func (s *tenantService) updateTenant(ctx context.Context, userID, tenantID uint6
 		if err := voidFutureTenantObligations(tx.WithContext(ctx), userID, tenantID, row.RentEndDate, rentEnd, userID); err != nil {
 			return err
 		}
+		if input.Structured {
+			dueDay := input.DueDay
+			if dueDay == 0 {
+				dueDay = 1
+			}
+			if err := syncTenantRoomBindingInTx(
+				tx.WithContext(ctx), userID, tenantID, input.RoomID,
+				monthStart(time.Now().UTC()), moneyToCents(input.MonthlyRent), currency, dueDay, input.Status,
+			); err != nil {
+				return err
+			}
+		}
 		updates := map[string]any{
 			"name":               input.Name,
 			"display_alias":      input.DisplayAlias,
@@ -524,9 +536,30 @@ func (s *tenantService) listTenants(ctx context.Context, userID uint64) ([]tenan
 	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Order("name ASC").Find(&rows).Error; err != nil {
 		return nil, err
 	}
+	type tenantRoomBinding struct {
+		TenantID uint64
+		RoomID   uint64
+	}
+	currentMonth := monthStart(time.Now().UTC())
+	periodEnd := currentMonth.AddDate(0, 1, 0).Add(-time.Nanosecond)
+	var bindings []tenantRoomBinding
+	if err := s.db.WithContext(ctx).Table("tenancy_agreements AS ta").
+		Joins("JOIN agreement_parties AS ap ON ap.agreement_id = ta.id AND ap.user_id = ta.user_id").
+		Where("ta.user_id = ? AND ta.status = ? AND ap.status = ? AND ta.start_date <= ? AND (ta.end_date IS NULL OR ta.end_date >= ?) AND (ap.joined_at IS NULL OR ap.joined_at <= ?) AND (ap.left_at IS NULL OR ap.left_at >= ?)", userID, "active", "active", periodEnd, currentMonth, periodEnd, currentMonth).
+		Select("ap.tenant_id, ta.room_id").Order("ap.tenant_id ASC, ta.start_date DESC, ta.id DESC").Find(&bindings).Error; err != nil {
+		return nil, err
+	}
+	roomByTenant := make(map[uint64]uint64, len(bindings))
+	for _, binding := range bindings {
+		if _, exists := roomByTenant[binding.TenantID]; !exists {
+			roomByTenant[binding.TenantID] = binding.RoomID
+		}
+	}
 	records := make([]tenantRecord, 0, len(rows))
 	for _, row := range rows {
-		records = append(records, tenantRecordFromModel(row))
+		record := tenantRecordFromModel(row)
+		record.RoomID = roomByTenant[row.ID]
+		records = append(records, record)
 	}
 	return records, nil
 }

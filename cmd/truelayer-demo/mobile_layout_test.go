@@ -40,6 +40,12 @@ func TestEveryWorkspacePageRendersTheSharedChromeOnce(t *testing.T) {
 		"rent-dashboard": func() (string, error) {
 			return executeTemplate(rentDashboardTemplate, rentDashboardPageData{})
 		},
+		"more": func() (string, error) {
+			return executeTemplate(morePageTemplate, morePageData{})
+		},
+		"transaction-detail": func() (string, error) {
+			return executeTemplate(transactionDetailPageTemplate, transactionDetailPageData{})
+		},
 		"tenants": func() (string, error) {
 			return executeTemplate(tenantTemplate, tenantPageData{})
 		},
@@ -63,10 +69,11 @@ func TestEveryWorkspacePageRendersTheSharedChromeOnce(t *testing.T) {
 			t.Fatalf("%s: %v", name, err)
 		}
 		for marker, want := range map[string]int{
-			`id="nav-drawer"`:         1,
-			`<aside class="sidebar"`:  1,
-			`class="nav-compact-bar"`: 1,
-			`class="nav-scrim"`:       1,
+			`id="nav-drawer"`:               1,
+			`<aside class="sidebar"`:        1,
+			`class="nav-compact-bar"`:       1,
+			`class="nav-scrim"`:             1,
+			`class="workspace-page-topbar"`: 1,
 		} {
 			if got := strings.Count(page, marker); got != want {
 				t.Fatalf("%s renders %q %d times, want %d", name, marker, got, want)
@@ -75,11 +82,23 @@ func TestEveryWorkspacePageRendersTheSharedChromeOnce(t *testing.T) {
 	}
 }
 
+func TestDesktopWorkspaceBreadcrumbHasMatchingContentOffset(t *testing.T) {
+	if !strings.Contains(workspacePageCSS, "@media (min-width: 981px)") || !strings.Contains(workspacePageCSS, "left: 236px;") || !strings.Contains(workspacePageCSS, ".content { padding-top: 88px; }") {
+		t.Fatal("desktop page breadcrumb and content offset must share the 236px sidebar, 64px header, and 24px page gutter")
+	}
+	if !strings.Contains(workspacePageCSS, ".workspace-page-topbar { display: none; }") {
+		t.Fatal("workspace breadcrumb must be suppressed outside the desktop breakpoint")
+	}
+}
+
 // The drawer is pure CSS: a hidden checkbox holds the open state and the sidebar
 // slides in on :checked. It has to keep working with JavaScript disabled, so the
 // rules live in the stylesheet and not in a script.
 func TestWorkspaceCSSDrawerIsCSSOnlyAndMobileScoped(t *testing.T) {
 	base, mobile := splitWorkspaceCSS(t)
+	if !strings.Contains(mobile, ".app { display: flex; flex-direction: column; padding: 8px; }") {
+		t.Fatal("mobile workspace content must follow the compact navigation without an empty grid row")
+	}
 
 	for _, forbidden := range []string{"#nav-drawer", "translateX", "nav-burger"} {
 		if strings.Contains(base, forbidden) {
@@ -122,7 +141,7 @@ func TestWorkspaceCSSDrawerIsCSSOnlyAndMobileScoped(t *testing.T) {
 	}
 }
 
-func TestMobileBottomNavExposesFiveSectionsAndFlyouts(t *testing.T) {
+func TestMobileBottomNavExposesFiveSectionsAndObjectsMenu(t *testing.T) {
 	page, err := executeTemplate(rentDashboardTemplate, rentDashboardPageData{workspaceShell: workspaceShell{ActivePage: "rent-dashboard"}})
 	if err != nil {
 		t.Fatal(err)
@@ -133,21 +152,38 @@ func TestMobileBottomNavExposesFiveSectionsAndFlyouts(t *testing.T) {
 		`href="/bills"`,
 		`href="/transactions"`,
 		`data-mobile-menu="objects"`,
-		`data-mobile-menu="more"`,
+		`href="/more"`,
 		`id="mobile-menu-objects"`,
 		`href="/properties"`,
 		`href="/rooms"`,
 		`href="/tenants"`,
-		`id="mobile-menu-more"`,
-		`href="/dunning"`,
-		`href="/bank"`,
 	} {
 		if !strings.Contains(page, marker) {
 			t.Fatalf("mobile shell missing %q", marker)
 		}
 	}
+	if strings.Contains(page, `id="mobile-menu-more"`) {
+		t.Fatal("more navigation should open its own page instead of a flyout")
+	}
 	if strings.Contains(strings.Split(workspacePageCSS, "@media (max-width: 640px)")[0], "mobile-bottom-nav {") {
 		t.Fatal("bottom navigation rules must stay mobile-only")
+	}
+}
+
+func TestMorePageMatchesMobilePrototypeAndKeepsMoreNavigationActive(t *testing.T) {
+	page, err := executeTemplate(morePageTemplate, morePageData{workspaceShell: workspaceShell{ActivePage: "more"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, marker := range []string{
+		`class="mobile-bottom-nav-item active" href="/more"`,
+		`class="more-page-grid"`,
+		`href="/tenancies"`, `href="/dunning"`, `href="/cash-receipts"`,
+		`href="/expenses"`, `href="/bank"`, `低频操作集中在这里。`, `租约管理`, `到期、续约与责任周期`,
+	} {
+		if !strings.Contains(page, marker) {
+			t.Fatalf("more page missing %q", marker)
+		}
 	}
 }
 
@@ -222,7 +258,8 @@ func TestMobileExpenseListUsesCards(t *testing.T) {
 	for _, marker := range []string{
 		`class="expense-mobile-list"`,
 		`class="expense-mobile-card panel"`,
-		`查看发票链接`,
+		`class="expense-mobile-invoice"`,
+		`绑定发票`,
 		`class="expense-table-wrap table-wrap"`,
 	} {
 		if !strings.Contains(page, marker) {

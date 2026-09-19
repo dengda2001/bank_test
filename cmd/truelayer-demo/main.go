@@ -151,6 +151,7 @@ type billingPageData struct {
 	// MatchStatusSelection is what the 匹配状态 dropdown shows; it can be the
 	// synthetic "pending" option even though MatchStatusFilter itself is empty.
 	MatchStatusSelection string
+	TransactionScope     string
 	Page                 int
 	PageSize             int
 	TotalTransactions    int64
@@ -222,22 +223,32 @@ type tenantRoomOption struct {
 }
 
 type expenseRecord struct {
-	ID            string  `json:"id"`
-	PropertyID    string  `json:"property_id,omitempty"`
-	RoomID        string  `json:"room_id,omitempty"`
-	Description   string  `json:"description"`
-	Category      string  `json:"category"`
-	Amount        float64 `json:"amount"`
-	Currency      string  `json:"currency"`
-	ExpenseDate   string  `json:"expense_date"`
-	PaymentMethod string  `json:"payment_method"`
-	RoomHint      string  `json:"room_hint,omitempty"`
-	TenantHint    string  `json:"tenant_hint,omitempty"`
-	InvoiceURL    string  `json:"invoice_url,omitempty"`
-	CreatedAt     string  `json:"created_at"`
+	ID                   string  `json:"id"`
+	PropertyID           string  `json:"property_id,omitempty"`
+	RoomID               string  `json:"room_id,omitempty"`
+	PropertyName         string  `json:"-"`
+	RoomLabel            string  `json:"-"`
+	Description          string  `json:"description"`
+	Category             string  `json:"category"`
+	Amount               float64 `json:"amount"`
+	Currency             string  `json:"currency"`
+	ExpenseDate          string  `json:"expense_date"`
+	PaymentMethod        string  `json:"payment_method"`
+	RoomHint             string  `json:"room_hint,omitempty"`
+	TenantHint           string  `json:"tenant_hint,omitempty"`
+	InvoiceURL           string  `json:"invoice_url,omitempty"`
+	InvoiceLinked        bool    `json:"-"`
+	InvoiceNumber        string  `json:"-"`
+	InvoiceVendor        string  `json:"-"`
+	InvoiceDateDisplay   string  `json:"-"`
+	InvoiceAmountDisplay string  `json:"-"`
+	InvoiceDownloadURL   string  `json:"-"`
+	InvoiceActionURL     string  `json:"-"`
+	CreatedAt            string  `json:"created_at"`
 
 	AmountDisplay string `json:"-"`
 	DateDisplay   string `json:"-"`
+	PeriodDisplay string `json:"-"`
 }
 
 type tenantPageData struct {
@@ -261,7 +272,14 @@ type expensePageData struct {
 	Message       string
 	Error         string
 	Rows          []expenseRecord
+	FilteredCount int
+	Period        string
+	StatusFilter  string
+	Search        string
+	ShowForm      bool
+	InvoiceForm   *expenseInvoiceFormView
 	ExpenseTotal  string
+	Today         string
 	Properties    []expensePropertyOption
 	Rooms         []expenseRoomOption
 }
@@ -343,6 +361,7 @@ type rentDashboardRow struct {
 
 type rentPaymentDetail struct {
 	PaymentID          uint64
+	AmountCents        int64
 	AmountDisplay      string
 	DateDisplay        string
 	Description        string
@@ -461,6 +480,7 @@ func newAppMux(a *app) *http.ServeMux {
 	mux.HandleFunc("/properties", a.handleProperties)
 	mux.HandleFunc("/properties/", a.handlePropertyRoute)
 	mux.HandleFunc("/tenancies", a.handleTenancies)
+	mux.HandleFunc("/more", a.handleMore)
 	mux.HandleFunc("/dunning", a.handleDunningPage)
 	mux.HandleFunc("/dunning/config", a.handleDunningConfig)
 	mux.HandleFunc("/dunning/preview", a.handleDunningPreview)
@@ -482,6 +502,8 @@ func newAppMux(a *app) *http.ServeMux {
 	mux.HandleFunc("/cash-receipts/void", a.handleCashReceiptVoid)
 	mux.HandleFunc("/cash-receipts", a.handleCashReceipts)
 	mux.HandleFunc("/expenses", a.handleExpenses)
+	mux.HandleFunc("/expenses/invoices", a.handleExpenseInvoice)
+	mux.HandleFunc("/expenses/invoices/", a.handleExpenseInvoiceFile)
 	mux.HandleFunc("/bank", a.handleBank)
 	mux.HandleFunc("/bank/connect", a.handleLogin)
 	mux.HandleFunc("/bank/sync", a.handleRefresh)
@@ -704,7 +726,22 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 	if !a.requireAuth(w, r) {
 		return
 	}
+	if detailKey := strings.TrimSpace(r.URL.Query().Get("detail")); detailKey != "" {
+		a.renderTransactionDetail(w, r, detailKey)
+		return
+	}
 	filters := filtersFromQuery(r.URL.Query())
+	transactionScope := ""
+	if r.URL.Path == "/transactions" {
+		transactionScope = firstNonEmpty(strings.TrimSpace(r.URL.Query().Get("scope")), matchStatusSelection(filters))
+		if transactionScope == "all" {
+			filters.PendingOnly = false
+			filters.MatchStatus = ""
+		} else if transactionScope == "" {
+			filters.PendingOnly = true
+			transactionScope = pendingMatchStatusFilter
+		}
+	}
 	filterError := ""
 	if err := validateTransactionFilters(filters); err != nil {
 		filterError = "invalid_filter"
@@ -756,11 +793,17 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 		lastSync = result.FetchedAt
 		rows = fallbackTransactionPageRows(result, filters)
 		totalTransactions = int64(len(rows))
+		for _, row := range rows {
+			if row.Direction == "income" && isPendingMatchStatus(row.MatchStatus) {
+				pendingCount++
+			}
+		}
 		tenants, _ := a.loadTenants()
 		expenses, _ := a.loadExpenses()
 		tenantCount = len(tenants)
 		expenseCount = len(expenses)
 	}
+	setTransactionDetailLinks(r.URL.Path, r.URL.Query(), rows)
 	page := filters.Page
 	if page <= 0 {
 		page = 1
@@ -775,10 +818,10 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 	}
 	previousPageURL, nextPageURL := "", ""
 	if page > 1 {
-		previousPageURL = billingPageURL(r.URL.Query(), page-1)
+		previousPageURL = billingPageURL(r.URL.Query(), page-1, r.URL.Path)
 	}
 	if totalPages > 0 && page < totalPages {
-		nextPageURL = billingPageURL(r.URL.Query(), page+1)
+		nextPageURL = billingPageURL(r.URL.Query(), page+1, r.URL.Path)
 	}
 	connected := a.hasStoredToken()
 	if userID, ok := a.currentUserID(r); ok && a.bankConnections != nil {
@@ -790,7 +833,7 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 	if activeSort == "" {
 		activeSort = "arrival_desc"
 	}
-	sortURL := func(sortValue string) string { return billingSortURL(r.URL.Query(), sortValue) }
+	sortURL := func(sortValue string) string { return billingSortURL(r.URL.Query(), sortValue, r.URL.Path) }
 	data := billingPageData{
 		workspaceShell: workspaceShell{
 			ActivePage: func() string {
@@ -802,6 +845,7 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 			Username:      a.displayUsername(r),
 			Environment:   a.cfg.Environment,
 			FootNote:      "银行流水与租金关联",
+			CompactTitle:  "流水",
 			ShowNavCounts: true,
 			IncomeCount:   int(totalTransactions),
 			TenantCount:   tenantCount,
@@ -841,6 +885,7 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 		AmountSort:        sortLinkFor(sortURL, activeSort, "amount_desc", "amount_asc"),
 
 		MatchStatusSelection: matchStatusSelection(filters),
+		TransactionScope:     transactionScope,
 		Page:                 page,
 		PageSize:             pageSize,
 		TotalTransactions:    totalTransactions,
@@ -859,19 +904,19 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func billingPageURL(query url.Values, page int) string {
+func billingPageURL(query url.Values, page int, paths ...string) string {
 	values := url.Values{}
 	for key, items := range query {
 		values[key] = append([]string(nil), items...)
 	}
 	values.Set("page", strconv.Itoa(page))
-	return "/billing?" + values.Encode()
+	return transactionListPath(firstNonEmptyPath(paths)) + "?" + values.Encode()
 }
 
 // billingSortURL rebuilds the current filter set with a different column sort.
 // It drops page: the rows the reader was on do not survive a re-sort, so a
 // heading click always lands on the first page.
-func billingSortURL(query url.Values, sortValue string) string {
+func billingSortURL(query url.Values, sortValue string, paths ...string) string {
 	values := url.Values{}
 	for key, items := range query {
 		values[key] = append([]string(nil), items...)
@@ -882,7 +927,14 @@ func billingSortURL(query url.Values, sortValue string) string {
 	} else {
 		values.Set("sort", sortValue)
 	}
-	return "/billing?" + values.Encode()
+	return transactionListPath(firstNonEmptyPath(paths)) + "?" + values.Encode()
+}
+
+func firstNonEmptyPath(paths []string) string {
+	if len(paths) > 0 && strings.TrimSpace(paths[0]) == "/transactions" {
+		return "/transactions"
+	}
+	return "/billing"
 }
 
 func (a *app) handleRentMatchConfirmation(w http.ResponseWriter, r *http.Request) {
@@ -899,12 +951,12 @@ func (a *app) handleRentMatchConfirmation(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Redirect(w, r, "/billing?error=invalid_confirmation", http.StatusFound)
+		redirectTransactionResult(w, r, "error", "invalid_confirmation")
 		return
 	}
 	transactionID, err := transactionID(r.Form.Get("transaction_id"))
 	if err != nil {
-		http.Redirect(w, r, "/billing?error=invalid_confirmation", http.StatusFound)
+		redirectTransactionResult(w, r, "error", "invalid_confirmation")
 		return
 	}
 	rememberPayer := r.Form.Get("remember_payer") != "0"
@@ -912,35 +964,35 @@ func (a *app) handleRentMatchConfirmation(w http.ResponseWriter, r *http.Request
 	if value := strings.TrimSpace(r.Form.Get("rent_obligation_id")); value != "" {
 		rentObligationID, parseErr := parsePositiveUint(value)
 		if parseErr != nil {
-			http.Redirect(w, r, "/billing?error=invalid_confirmation", http.StatusFound)
+			redirectTransactionResult(w, r, "error", "invalid_confirmation")
 			return
 		}
 		if err := service.confirmRentMatchToObligation(r.Context(), userID, transactionID, rentObligationID, rememberPayer); err != nil {
-			http.Redirect(w, r, "/billing?error=confirmation_failed", http.StatusFound)
+			redirectTransactionResult(w, r, "error", "confirmation_failed")
 			return
 		}
-		http.Redirect(w, r, "/billing?message=rent_confirmed", http.StatusFound)
+		redirectTransactionResult(w, r, "message", "rent_confirmed")
 		return
 	}
 	tenantID, err := strconv.ParseUint(r.Form.Get("tenant_id"), 10, 64)
 	if err != nil || tenantID == 0 {
-		http.Redirect(w, r, "/billing?error=invalid_confirmation", http.StatusFound)
+		redirectTransactionResult(w, r, "error", "invalid_confirmation")
 		return
 	}
 	var period *time.Time
 	if value := strings.TrimSpace(r.Form.Get("period")); value != "" {
 		parsed, err := parsePeriodMonth(value)
 		if err != nil {
-			http.Redirect(w, r, "/billing?error=invalid_confirmation", http.StatusFound)
+			redirectTransactionResult(w, r, "error", "invalid_confirmation")
 			return
 		}
 		period = &parsed
 	}
 	if err := service.confirmRentMatch(r.Context(), userID, transactionID, tenantID, period, rememberPayer); err != nil {
-		http.Redirect(w, r, "/billing?error=confirmation_failed", http.StatusFound)
+		redirectTransactionResult(w, r, "error", "confirmation_failed")
 		return
 	}
-	http.Redirect(w, r, "/billing?message=rent_confirmed", http.StatusFound)
+	redirectTransactionResult(w, r, "message", "rent_confirmed")
 }
 
 func (a *app) requestCounts(ctx context.Context, r *http.Request) (tenantCount, transactionCount, expenseCount int, err error) {
@@ -1028,6 +1080,9 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	if editing {
+		formRecord = tenantEditFormRecordWithRoomDefaults(formRecord, roomOptions)
+	}
 	showForm := editing || r.URL.Query().Get("add") == "1"
 	data := tenantPageData{
 		workspaceShell: workspaceShell{
@@ -1035,6 +1090,7 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 			Username:      a.displayUsername(r),
 			Environment:   a.cfg.Environment,
 			FootNote:      "租客资料：" + a.cfg.TenantFile,
+			CompactTitle:  "对象管理",
 			ShowNavCounts: true,
 			TenantCount:   len(tenants),
 			IncomeCount:   incomeCount,
@@ -1065,6 +1121,10 @@ func (a *app) createTenant(w http.ResponseWriter, r *http.Request) {
 	if err := a.persistTenantRecord(r.Context(), r, r.Form); err != nil {
 		if errors.Is(err, errTenantLifecycleConflict) {
 			http.Redirect(w, r, "/tenants?error=tenant_has_payments", http.StatusFound)
+			return
+		}
+		if errors.Is(err, errArrangementHistoryLocked) {
+			http.Redirect(w, r, "/tenants?error=tenant_room_locked", http.StatusFound)
 			return
 		}
 		if errors.Is(err, errInvalidTenantInput) {
@@ -1185,6 +1245,17 @@ func (a *app) handleExpenses(w http.ResponseWriter, r *http.Request) {
 		a.createExpense(w, r)
 		return
 	}
+	period, err := parsePeriodMonth(strings.TrimSpace(r.URL.Query().Get("period")))
+	if err != nil {
+		http.Error(w, "period is invalid", http.StatusBadRequest)
+		return
+	}
+	statusFilter := firstNonEmpty(strings.TrimSpace(r.URL.Query().Get("status")), "all")
+	if statusFilter != "all" && statusFilter != "invoice_linked" && statusFilter != "invoice_missing" {
+		http.Error(w, "expense status is invalid", http.StatusBadRequest)
+		return
+	}
+	search := strings.TrimSpace(r.URL.Query().Get("search"))
 	expenses, err := a.listExpenseRecords(r.Context(), r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1198,41 +1269,123 @@ func (a *app) handleExpenses(w http.ResponseWriter, r *http.Request) {
 	prepareExpenses(expenses)
 	var expenseProperties []expensePropertyOption
 	var expenseRooms []expenseRoomOption
+	propertyNames := make(map[string]string)
+	roomNames := make(map[string]string)
 	if userID, ok := a.currentUserID(r); ok && a.db != nil {
-		properties, propertyErr := newLandlordRentRepository(a.db).listProperties(r.Context(), userID, propertyQuery{Status: "active"})
+		properties, propertyErr := newLandlordRentRepository(a.db).listProperties(r.Context(), userID, propertyQuery{})
 		if propertyErr != nil {
 			http.Error(w, propertyErr.Error(), http.StatusInternalServerError)
 			return
 		}
 		for _, row := range properties {
-			expenseProperties = append(expenseProperties, expensePropertyOption{ID: row.ID, Name: row.Name})
+			propertyNames[strconv.FormatUint(row.ID, 10)] = row.Name
+			if row.Status == "active" {
+				expenseProperties = append(expenseProperties, expensePropertyOption{ID: row.ID, Name: row.Name})
+			}
 		}
-		rooms, roomErr := newLandlordRentRepository(a.db).listRooms(r.Context(), userID, roomQuery{Status: "active"})
+		rooms, roomErr := newLandlordRentRepository(a.db).listRooms(r.Context(), userID, roomQuery{})
 		if roomErr != nil {
 			http.Error(w, roomErr.Error(), http.StatusInternalServerError)
 			return
 		}
 		for _, row := range rooms {
-			expenseRooms = append(expenseRooms, expenseRoomOption{ID: row.ID, PropertyID: row.PropertyID, Label: row.RoomLabel})
+			roomNames[strconv.FormatUint(row.ID, 10)] = row.RoomLabel
+			if row.Status == "active" {
+				expenseRooms = append(expenseRooms, expenseRoomOption{ID: row.ID, PropertyID: row.PropertyID, Label: row.RoomLabel})
+			}
 		}
 	}
+	for index := range expenses {
+		expenses[index].PropertyName = propertyNames[expenses[index].PropertyID]
+		expenses[index].RoomLabel = roomNames[expenses[index].RoomID]
+	}
+	var invoiceForm *expenseInvoiceFormView
+	if userID, ok := a.currentUserID(r); ok && a.db != nil {
+		expenseIDs := make([]uint64, 0, len(expenses))
+		expenseByID := make(map[string]expenseRecord, len(expenses))
+		for _, expense := range expenses {
+			id, parseErr := strconv.ParseUint(expense.ID, 10, 64)
+			if parseErr != nil || id == 0 {
+				continue
+			}
+			expenseIDs = append(expenseIDs, id)
+			expenseByID[expense.ID] = expense
+		}
+		currentInvoices, invoiceErr := a.loadCurrentExpenseInvoices(r.Context(), userID, expenseIDs)
+		if invoiceErr != nil {
+			http.Error(w, invoiceErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		for index := range expenses {
+			expense := &expenses[index]
+			expenseID, parseErr := strconv.ParseUint(expense.ID, 10, 64)
+			invoice, found := currentInvoices[expenseID]
+			if parseErr == nil && found {
+				expense.InvoiceLinked = true
+				expense.InvoiceNumber = invoice.InvoiceNumber
+				expense.InvoiceVendor = invoice.Vendor
+				expense.InvoiceDateDisplay = invoice.InvoiceDate.Format(dateLayout)
+				expense.InvoiceAmountDisplay = formatMoney(centsToMoney(invoice.AmountCents), invoice.Currency, 2)
+				expense.InvoiceDownloadURL = fmt.Sprintf("/expenses/invoices/%d", invoice.ID)
+			} else if strings.TrimSpace(expense.InvoiceURL) != "" {
+				expense.InvoiceLinked = true
+				expense.InvoiceDownloadURL = expense.InvoiceURL
+			}
+			expense.InvoiceActionURL = expenseInvoiceActionURL(expense.ID, period.Format("2006-01"), statusFilter, search)
+		}
+		if rawID := strings.TrimSpace(r.URL.Query().Get("invoice")); rawID != "" {
+			if _, parseErr := strconv.ParseUint(rawID, 10, 64); parseErr != nil {
+				http.Error(w, "expense invoice target is invalid", http.StatusBadRequest)
+				return
+			}
+			selected, found := expenseByID[rawID]
+			if !found {
+				http.NotFound(w, r)
+				return
+			}
+			invoiceForm, invoiceErr = a.expenseInvoiceForm(r.Context(), userID, selected, period.Format("2006-01"), statusFilter, search)
+			if invoiceErr != nil {
+				http.Error(w, invoiceErr.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+	}
+	for index := range expenses {
+		if !expenses[index].InvoiceLinked && strings.TrimSpace(expenses[index].InvoiceURL) != "" {
+			expenses[index].InvoiceLinked = true
+			expenses[index].InvoiceDownloadURL = expenses[index].InvoiceURL
+		}
+		if expenses[index].InvoiceActionURL == "" {
+			expenses[index].InvoiceActionURL = expenseInvoiceActionURL(expenses[index].ID, period.Format("2006-01"), statusFilter, search)
+		}
+	}
+	totalExpenseCount := len(expenses)
+	expenses = filterExpensePageRows(expenses, period, statusFilter, search)
 	data := expensePageData{
 		workspaceShell: workspaceShell{
 			ActivePage:    "expenses",
 			Username:      a.displayUsername(r),
 			Environment:   a.cfg.Environment,
 			FootNote:      "支出资料：" + a.cfg.ExpenseFile,
+			CompactTitle:  "费用支出",
 			ShowNavCounts: true,
 			TenantCount:   tenantCount,
 			IncomeCount:   incomeCount,
-			ExpenseCount:  len(expenses),
+			ExpenseCount:  totalExpenseCount,
 		},
 		PageKey:       "expenses",
 		CanonicalPath: "/expenses",
 		Message:       r.URL.Query().Get("message"),
 		Error:         r.URL.Query().Get("error"),
 		Rows:          expenses,
+		FilteredCount: len(expenses),
+		Period:        period.Format("2006-01"),
+		StatusFilter:  statusFilter,
+		Search:        search,
+		ShowForm:      r.URL.Query().Get("add") == "1" || (r.URL.Query().Get("error") != "" && r.URL.Query().Get("error") != "invalid_invoice"),
+		InvoiceForm:   invoiceForm,
 		ExpenseTotal:  formatMoney(sumExpenses(expenses), "EUR", 2),
+		Today:         time.Now().UTC().Format(dateLayout),
 		Properties:    expenseProperties,
 		Rooms:         expenseRooms,
 	}
@@ -1244,18 +1397,52 @@ func (a *app) handleExpenses(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) createExpense(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		http.Redirect(w, r, "/expenses?error=invalid_form", http.StatusFound)
+		http.Redirect(w, r, expensePageURL(r.Form, "", "invalid_form", true), http.StatusFound)
 		return
 	}
 	if err := a.persistExpenseRecord(r.Context(), r, r.Form); err != nil {
 		if errors.Is(err, errInvalidExpenseInput) {
-			http.Redirect(w, r, "/expenses?error=invalid_expense", http.StatusFound)
+			http.Redirect(w, r, expensePageURL(r.Form, "", "invalid_expense", true), http.StatusFound)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/expenses?message=expense_added", http.StatusFound)
+	http.Redirect(w, r, expensePageURL(r.Form, "expense_added", "", false), http.StatusFound)
+}
+
+func expensePageURL(values url.Values, message, errorCode string, showForm bool) string {
+	query := url.Values{}
+	if period := strings.TrimSpace(values.Get("period")); period != "" {
+		query.Set("period", validatedPeriodValue(period))
+	}
+	status := strings.TrimSpace(values.Get("status"))
+	if status == "all" || status == "invoice_linked" || status == "invoice_missing" {
+		query.Set("status", status)
+	}
+	if search := strings.TrimSpace(values.Get("search")); search != "" {
+		query.Set("search", search)
+	}
+	if showForm {
+		query.Set("add", "1")
+	}
+	if errorCode != "" {
+		if invoiceID := strings.TrimSpace(values.Get("expense_id")); invoiceID != "" {
+			if _, err := strconv.ParseUint(invoiceID, 10, 64); err == nil {
+				query.Set("invoice", invoiceID)
+			}
+		}
+	}
+	if message != "" {
+		query.Set("message", message)
+	}
+	if errorCode != "" {
+		query.Set("error", errorCode)
+	}
+	if len(query) == 0 {
+		return "/expenses"
+	}
+	return "/expenses?" + query.Encode()
 }
 
 var errInvalidExpenseInput = errors.New("invalid expense input")
@@ -2064,12 +2251,59 @@ func prepareTenants(rows []tenantRecord) {
 	}
 }
 
+func tenantEditFormRecordWithRoomDefaults(record tenantRecord, rooms []tenantRoomOption) tenantRecord {
+	if record.RoomID == 0 || record.MonthlyRent > 0 {
+		return record
+	}
+	for _, option := range rooms {
+		if option.ID != record.RoomID {
+			continue
+		}
+		if rent, err := strconv.ParseFloat(option.MonthlyRentValue, 64); err == nil {
+			record.MonthlyRent = rent
+		}
+		record.Currency = firstNonEmpty(option.Currency, record.Currency, "EUR")
+		break
+	}
+	return record
+}
+
 func prepareExpenses(rows []expenseRecord) {
 	for i := range rows {
 		rows[i].Currency = firstNonEmpty(rows[i].Currency, "EUR")
 		rows[i].AmountDisplay = formatMoney(rows[i].Amount, rows[i].Currency, 2)
 		rows[i].DateDisplay = formatDate(rows[i].ExpenseDate)
+		if date, err := time.Parse(dateLayout, rows[i].ExpenseDate); err == nil {
+			rows[i].PeriodDisplay = date.Format("2006-01")
+		} else {
+			rows[i].PeriodDisplay = "—"
+		}
 	}
+}
+
+func filterExpensePageRows(rows []expenseRecord, period time.Time, status, search string) []expenseRecord {
+	needle := strings.ToLower(strings.TrimSpace(search))
+	month := monthStart(period).Format("2006-01")
+	filtered := make([]expenseRecord, 0, len(rows))
+	for _, row := range rows {
+		if row.ExpenseDate != "" {
+			if _, err := time.Parse(dateLayout, row.ExpenseDate); err == nil && !strings.HasPrefix(row.ExpenseDate, month) {
+				continue
+			}
+		}
+		linked := row.InvoiceLinked || strings.TrimSpace(row.InvoiceURL) != ""
+		if status == "invoice_linked" && !linked || status == "invoice_missing" && linked {
+			continue
+		}
+		if needle != "" {
+			searchable := strings.ToLower(strings.Join([]string{row.Description, row.Category, row.PropertyName, row.RoomLabel, row.RoomHint, row.TenantHint}, " "))
+			if !strings.Contains(searchable, needle) {
+				continue
+			}
+		}
+		filtered = append(filtered, row)
+	}
+	return filtered
 }
 
 func formatDate(value string) string {
@@ -2311,6 +2545,7 @@ var tenantTemplate = newWorkspacePageTemplate("tenants", nil, `<!doctype html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RentOps Tenants</title>
+  <link rel="stylesheet" href="/static/css/pages/object-navigation.css"><link rel="stylesheet" href="/static/css/pages/entity-drawers.css">
   <style>`+workspacePageCSS+workspaceCalendarCSS+`
     .tenant-row, .tenant-month-row { cursor: pointer; }
     .tenant-row:hover, .tenant-row:focus, .tenant-month-row:hover, .tenant-month-row:focus { background: var(--surface-accent); outline: none; }
@@ -2375,18 +2610,19 @@ var tenantTemplate = newWorkspacePageTemplate("tenants", nil, `<!doctype html>
         </div>
         <div class="actions"><a class="btn primary" href="/tenants?add=1">添加租客</a><form method="post" action="/logout"><button class="btn danger" type="submit">退出登录</button></form></div>
       </header>
+      {{template "workspace-object-tabs" .}}
 
       {{if eq .Message "tenant_added"}}<div class="notice ok">租客资料已保存。</div>{{end}}
       {{if eq .Message "tenant_updated"}}<div class="notice ok">租客资料已更新。</div>{{end}}
-		{{if eq .Error "tenant_has_payments"}}<div class="notice error">无法提前结束租期：结束月之后的账单已有有效收款，请先更正或撤销相关收款。</div>{{else if .Error}}<div class="notice error">请检查租客姓名、邮箱格式、日期关系、月租金额和房间地址。</div>{{end}}
+		{{if eq .Error "tenant_has_payments"}}<div class="notice error">无法提前结束租期：结束月之后的账单已有有效收款，请先更正或撤销相关收款。</div>{{else if eq .Error "tenant_room_locked"}}<div class="notice error">当前月或之后已有房间账单，无法更改租客的房间绑定。</div>{{else if .Error}}<div class="notice error">请检查租客姓名、邮箱格式、日期关系、月租金额和房间地址。</div>{{end}}
 
       <section class="summary" aria-label="Tenant summary">
         <div class="panel metric"><div class="label">租客数量</div><strong>{{.TenantCount}}</strong><span>当前保存的租客</span></div>
         <div class="panel metric"><div class="label">月租合计</div><strong>{{.RentTotal}}</strong><span>租客资料中的预期月租</span></div>
       </section>
 
-      {{if .ShowForm}}<section class="panel form tenant-form" aria-labelledby="tenant-form-title">
-        <div class="panel-head"><h2 id="tenant-form-title">{{if .Editing}}编辑租客{{else}}添加租客{{end}}</h2><a class="btn subtle" href="/tenants">取消</a></div>
+      {{if .ShowForm}}<div class="entity-drawer-backdrop"><section class="entity-drawer tenant-drawer" role="dialog" aria-modal="true" aria-labelledby="tenant-form-title">
+        <div class="panel-head"><div><h2 id="tenant-form-title">{{if .Editing}}编辑租客资料{{else}}新增租客{{end}}</h2><p class="tiny">租客、房间和租金责任分别保存。</p></div><a class="drawer-close" href="/tenants" aria-label="关闭租客表单">×</a></div>
         <form method="post" action="/tenants">
           {{if .Editing}}<input type="hidden" name="tenant_id" value="{{.Form.ID}}">{{end}}
           <label for="name">租客姓名</label>
@@ -2429,9 +2665,9 @@ var tenantTemplate = newWorkspacePageTemplate("tenants", nil, `<!doctype html>
           <textarea id="room_address" name="room_address" rows="4" required>{{.Form.RoomAddress}}</textarea>
           <label for="property_hint">房产备注</label>
           <input id="property_hint" name="property_hint" value="{{.Form.PropertyHint}}">
-          <button class="btn primary" type="submit">{{if .Editing}}保存修改{{else}}保存租客{{end}}</button>
+          <div class="drawer-actions"><a class="btn subtle" href="/tenants">取消</a><button class="btn primary" type="submit">{{if .Editing}}保存更改{{else}}保存租客{{end}}</button></div>
         </form>
-      </section>{{end}}
+      </section></div>{{end}}
       <section class="panel surface" aria-labelledby="tenant-list-title">
         <div class="panel-head"><h2 id="tenant-list-title">租客列表</h2><span class="tiny">{{.TenantCount}} 条记录</span></div>
         {{if .Rows}}
@@ -2514,7 +2750,7 @@ var tenantTemplate = newWorkspacePageTemplate("tenants", nil, `<!doctype html>
 </html>
 `)
 
-var expenseTemplate = newWorkspacePageTemplate("expenses", nil, `<!doctype html>
+var legacyExpenseTemplate = newWorkspacePageTemplate("expenses-legacy", nil, `<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">

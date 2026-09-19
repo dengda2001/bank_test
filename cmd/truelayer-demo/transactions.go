@@ -374,6 +374,8 @@ func validateTransactionFilters(filters transactionFilters) error {
 type transactionPageRow struct {
 	ID                        string
 	InternalID                string
+	DetailKey                 string
+	DetailURL                 string
 	Direction                 string
 	DirectionLabel            string
 	PayerName                 string
@@ -386,6 +388,9 @@ type transactionPageRow struct {
 	RemainingAmountInput      string
 	AllocationUseDisplay      string
 	DateDisplay               string
+	DateShort                 string
+	ObjectLabel               string
+	RoomOnlyLabel             string
 	ParsedPeriodDisplay       string
 	ParsedPeriodSourceDisplay string
 	FinalPeriodDisplay        string
@@ -443,8 +448,11 @@ func paymentTransactionInputFromModel(row paymentTransaction) paymentTransaction
 
 func transactionPageRowFromModel(row paymentTransaction) transactionPageRow {
 	dateDisplay := "Unknown"
+	dateShort := ""
 	if row.TransactionTime != nil {
 		dateDisplay = row.TransactionTime.UTC().Format("02 Jan 2006 15:04")
+		date := row.TransactionTime.UTC()
+		dateShort = fmt.Sprintf("%d月%d日", int(date.Month()), date.Day())
 	}
 	statusLabel := map[string]string{
 		"matched":      "已关联",
@@ -483,6 +491,7 @@ func transactionPageRowFromModel(row paymentTransaction) transactionPageRow {
 		RemainingAmountDisplay:    formatMoney(centsToMoney(row.AmountCents), row.Currency, 2),
 		RemainingAmountInput:      strconv.FormatFloat(centsToMoney(row.AmountCents), 'f', 2, 64),
 		DateDisplay:               dateDisplay,
+		DateShort:                 dateShort,
 		ParsedPeriodDisplay:       parsedPeriod,
 		ParsedPeriodSourceDisplay: row.ParsedPeriodSource,
 		Description:               firstNonEmpty(row.Description, "无描述"),
