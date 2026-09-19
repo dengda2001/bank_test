@@ -1275,6 +1275,19 @@ atomically, and recomputes the ledger projection from those rows.
 > "Scenario: Room-Centric Rent Workspace Read Model" below. Earlier revisions
 > of this file attributed the obligation-based model to `/rent-dashboard`
 > without that distinction.
+>
+> **Template selection is by request path** (`dashboard.go:168-174`), which is
+> the trap that hides the above: `/bills` -> `billsPageTemplate`, `/dunning*` ->
+> `dunningPageTemplate`, anything else -> `rentDashboardTemplate`. Since
+> `renderRentDashboard` is only ever reached with one of those three paths, and
+> `/rent-dashboard` short-circuits to the workspace whenever a database is
+> configured, **`rentDashboardTemplate` (`dashboard.go:180` onward) renders only
+> when `a.db == nil`**. Its distinctive markup — `tr.rent-row`, `a.tenant-link`,
+> `[data-dunning-open]` — is therefore absent from every database-backed
+> session. Anything asserting on that markup (the audit seeder did, until
+> 2026-09-19) is asserting on a page that cannot appear; read `/bills` instead,
+> and pass `status=all`, because the page's own "未结清" filter is
+> `open ∪ overdue ∪ partial` (`dashboard_filters.go:81-90`) and hides `paid`.
 
 ### 2. Signatures
 
