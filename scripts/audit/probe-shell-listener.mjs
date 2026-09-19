@@ -1,16 +1,27 @@
 // Attack point 2 (root cause) of the 09-19-list-pages-alignment review.
 //
-// The shared chrome registers
+// HISTORICAL DIAGNOSTIC -- kept for before/after comparison, not as a description
+// of the current tree. It records the shape of the defect as it existed on
+// 09-19: the shared chrome registered
 //   document.querySelectorAll(".object-list-filter-fields select, ...")
-// inside an IIFE that runs while the parser is still above <main>, so the
-// NodeList is empty on every page. Two consequences to measure:
+// inside an IIFE that ran while the parser was still above <main>, so the
+// NodeList came back empty on every page. Two consequences were measured:
 //   1. dispatching a bare `change` on an .object-list-filter-fields control
-//      (i.e. what a keyboard user produces when they move the selection) does
-//      NOT submit unless the control also carries inline onchange;
-//   2. therefore /properties and /rooms -- whose only submit affordance is that
-//      inline onchange (no visible submit button) -- depend entirely on it.
+//      (i.e. what a keyboard user produces when they move the selection) did
+//      NOT submit unless the control also carried inline onchange;
+//   2. therefore /properties and /rooms -- whose only submit affordance was that
+//      inline onchange (no visible submit button) -- depended entirely on it.
 //
-// Also exercises the /bank "立即同步" POST path, which no probe had hit before.
+// 09-20 (09-20-mobile-filter-and-duplicate-errors) fixed both: the chrome now
+// defers every page-body lookup to DOMContentLoaded, so this binding attaches and
+// is the single submit path, and the inline onchange escapes were deleted from
+// /properties and /rooms. This script asserts nothing -- it prints what it sees --
+// so it is safe to run against either revision. Run it on the current tree and the
+// readings below flip: `inline onchange present` reports none, and BOTH legs submit
+// (the removed-onchange leg is the one that used to be the only working path).
+//
+// Also exercises the /bank "立即同步" POST path, which no probe had hit before
+// and which remains worth regressing.
 //
 // Usage: AUDIT_BASE=... AUDIT_USER=... AUDIT_PASS=... node scripts/audit/probe-shell-listener.mjs
 import { chromium } from 'playwright';
