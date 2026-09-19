@@ -1,0 +1,2 @@
+{"file": "prdfile/prd.md", "reason": "范围排除项与账务口径；判断哪些详情页功能不该补、哪些实体尚未定义。"}
+{"file": ".trellis/spec/frontend/responsive-conventions.md", "reason": "详情页响应式约定，含窄屏专用字段的隐藏口径与共享样式表的优先级规则。"}

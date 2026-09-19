@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/responsive-conventions.md", "reason": "核对新契约可执行、1100 档位于 640 档之前、640 档规则与断言未变。"}
+{"file": ".trellis/tasks/archive/2026-09/09-16-mobile-responsive-audit/research/harness/README.md", "reason": "用 desktop-full.mjs 与 probe-wide.mjs 取得四档几何证据；只读，不得触发写入。"}

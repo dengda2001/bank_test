@@ -1,0 +1,628 @@
+[
+  {
+    "key": "dashboard",
+    "device": "desktop",
+    "status": 200,
+    "url": "/rent-dashboard?period=2026-09",
+    "title": "RentOps 月度工作台",
+    "h1": [
+      "月度收租工作台"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 0 账 应收账单 流 流水匹配 0 催 催收任务 产 房产管理 房 房间管理 租 租客管理 0 约 租住安排 现 现金补录 支 费用支出 0 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 月度收租工作台 RENTOPS · MONTHLY WORKSPACE 月度收租工作台 2026年9月 · 所有金额来自同一套月度账务事实 月份 查看 房产视角 房间视角 租客视角 本月应收 EUR 0.00 1 间有效房间 · 空置 0 已收租金 EUR 0.00 收缴率 0% · 0 间已交满 剩余未收 EUR 0.00 0 间未交满 经营净额 EUR 0.00 已收租金 − 有效支出 搜索 房产 全部房产 Prototype Audit House 状态 全部 未交满 待处理 逾期 部分缴纳 未到期未缴 已交满 空置 筛选 清除筛选 房产 房间 已交满 未交满 应收 已收 未收 支出 经营净额 状态 Prototype Audit House 1 Example Lane, Dublin 1 0 0 EUR 0.00 EUR 0.00 EUR 0.00 EUR 0.00 EUR 0.00 待处理 每页 12 24 50 当前显示 1 / 1 条 上一页 第 1 / 1 页 下一页",
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "pageHeight": 1000,
+    "forms": 3,
+    "errors": [
+      "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+  },
+  {
+    "key": "dashboard-rooms",
+    "device": "desktop",
+    "status": 200,
+    "url": "/rent-dashboard?period=2026-09&view=rooms",
+    "title": "RentOps 月度工作台",
+    "h1": [
+      "月度收租工作台"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 0 账 应收账单 流 流水匹配 0 催 催收任务 产 房产管理 房 房间管理 租 租客管理 0 约 租住安排 现 现金补录 支 费用支出 0 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 月度收租工作台 RENTOPS · MONTHLY WORKSPACE 月度收租工作台 2026年9月 · 所有金额来自同一套月度账务事实 月份 查看 房产视角 房间视角 租客视角 本月应收 EUR 0.00 1 间有效房间 · 空置 0 已收租金 EUR 0.00 收缴率 0% · 0 间已交满 剩余未收 EUR 0.00 0 间未交满 经营净额 EUR 0.00 已收租金 − 有效支出 搜索 房产 全部房产 Prototype Audit House 状态 全部 未交满 待处理 逾期 部分缴纳 未到期未缴 已交满 空置 筛选 清除筛选 房间 房产 入住人数 应收 已收 未收 收缴率 到期日 状态 Room 03 1 Example Lane, Dublin Prototype Audit House 1 EUR 0.00 EUR 0.00 EUR 0.00 0% 待处理 每页 12 24 50 当前显示 1 / 1 条 上一页 第 1 / 1 页 下一页",
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "pageHeight": 1000,
+    "forms": 3,
+    "errors": []
+  },
+  {
+    "key": "dashboard-tenants",
+    "device": "desktop",
+    "status": 200,
+    "url": "/rent-dashboard?period=2026-09&view=tenants",
+    "title": "RentOps 月度工作台",
+    "h1": [
+      "月度收租工作台"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 0 账 应收账单 流 流水匹配 0 催 催收任务 产 房产管理 房 房间管理 租 租客管理 0 约 租住安排 现 现金补录 支 费用支出 0 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 月度收租工作台 RENTOPS · MONTHLY WORKSPACE 月度收租工作台 2026年9月 · 所有金额来自同一套月度账务事实 月份 查看 房产视角 房间视角 租客视角 本月应收 EUR 0.00 1 间有效房间 · 空置 0 已收租金 EUR 0.00 收缴率 0% · 0 间已交满 剩余未收 EUR 0.00 0 间未交满 经营净额 EUR 0.00 已收租金 − 有效支出 搜索 房产 全部房产 Prototype Audit House 状态 全部 未交满 待处理 逾期 部分缴纳 未到期未缴 已交满 空置 筛选 清除筛选 暂无符合条件的租客责任。",
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "pageHeight": 1000,
+    "forms": 2,
+    "errors": []
+  },
+  {
+    "key": "properties",
+    "device": "desktop",
+    "status": 200,
+    "url": "/properties?period=2026-09",
+    "title": "RentOps Properties",
+    "h1": [
+      "房产"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 0 账 应收账单 流 流水匹配 0 催 催收任务 产 房产管理 房 房间管理 租 租客管理 0 约 租住安排 现 现金补录 支 费用支出 0 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 房产与房间管理 资产管理 房产 2026年9月 · 1 套 新建房产 房产列表 状态 有效 已停用 全部 房产 房间 本月应收 已收 支出 状态 操作 Prototype Audit House 1 Example Lane, Dublin 1 / 1 EUR 0.00 EUR 0.00 EUR 0.00 有效 编辑停用",
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "pageHeight": 1000,
+    "forms": 3,
+    "errors": []
+  },
+  {
+    "key": "property-create",
+    "device": "desktop",
+    "status": 200,
+    "url": "/properties?add=1",
+    "title": "RentOps Properties",
+    "h1": [
+      "房产"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 0 账 应收账单 流 流水匹配 0 催 催收任务 产 房产管理 房 房间管理 租 租客管理 0 约 租住安排 现 现金补录 支 费用支出 0 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 房产与房间管理 资产管理 房产 2026年9月 · 1 套 新建房产 新建房产 先建立房产，再绑定房间。 取消 房产名称 地址 保存房产 房产列表 状态 有效 已停用 全部 房产 房间 本月应收 已收 支出 状态 操作 Prototype Audit House 1 Example Lane, Dublin 1 / 1 EUR 0.00 EUR 0.00 EUR 0.00 有效 编辑停用",
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "pageHeight": 1000,
+    "forms": 4,
+    "errors": []
+  },
+  {
+    "key": "property-detail",
+    "device": "desktop",
+    "status": 200,
+    "url": "/properties/1?period=2026-09",
+    "title": "RentOps Property",
+    "h1": [
+      "Prototype Audit House"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 0 账 应收账单 流 流水匹配 0 催 催收任务 产 房产管理 房 房间管理 租 租客管理 0 约 租住安排 现 现金补录 支 费用支出 0 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 房产详情 房产详情 Prototype Audit House 1 Example Lane, Dublin · 有效 返回房产 房间 1 / 1 有效／全部 本月应收 EUR 0.00 已收 EUR 0.00 支出 EUR 0.00 房间 新建房间 房间 入住人 月租 状态 操作 Room 03 Prototype Audit House Audit Tenant EUR 1200.00 有效 详情 编辑 关联支出 旧未关联记录不会被伪造迁移 该房产暂无关联支出。",
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "pageHeight": 1000,
+    "forms": 0,
+    "errors": []
+  },
+  {
+    "key": "property-edit",
+    "device": "desktop",
+    "status": 200,
+    "url": "/properties/1?edit=1&period=2026-09",
+    "title": "RentOps Property",
+    "h1": [
+      "Prototype Audit House"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 0 账 应收账单 流 流水匹配 0 催 催收任务 产 房产管理 房 房间管理 租 租客管理 0 约 租住安排 现 现金补录 支 费用支出 0 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 房产详情 房产详情 Prototype Audit House 1 Example Lane, Dublin · 有效 返回房产 编辑房产 名称 地址 保存房产 房间 1 / 1 有效／全部 本月应收 EUR 0.00 已收 EUR 0.00 支出 EUR 0.00 房间 新建房间 房间 入住人 月租 状态 操作 Room 03 Prototype Audit House Audit Tenant EUR 1200.00 有效 详情 编辑 关联支出 旧未关联记录不会被伪造迁移 该房产暂无关联支出。",
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "pageHeight": 1096,
+    "forms": 1,
+    "errors": []
+  },
+  {
+    "key": "rooms",
+    "device": "desktop",
+    "status": 200,
+    "url": "/rooms?period=2026-09",
+    "title": "RentOps Rooms",
+    "h1": [
+      "房间"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 0 账 应收账单 流 流水匹配 0 催 催收任务 产 房产管理 房 房间管理 租 租客管理 0 约 租住安排 现 现金补录 支 费用支出 0 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 房间与房产绑定 资产管理 房间 2026年9月 · 房产绑定与入住安排 新建房间 房间列表 房间 房产 入住人 固定月租 本月余额 状态 操作 Room 03 2026-09-01 Prototype Audit House Audit Tenant EUR 1200.00 EUR 0.00 有效 详情 编辑",
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "pageHeight": 1000,
+    "forms": 0,
+    "errors": []
+  },
+  {
+    "key": "room-create",
+    "device": "desktop",
+    "status": 200,
+    "url": "/rooms?add=1",
+    "title": "RentOps Rooms",
+    "h1": [
+      "房间"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 0 账 应收账单 流 流水匹配 0 催 催收任务 产 房产管理 房 房间管理 租 租客管理 0 约 租住安排 现 现金补录 支 费用支出 0 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 房间与房产绑定 资产管理 房间 2026年9月 · 房产绑定与入住安排 新建房间 新建房间 房间必须绑定一个有效房产。 取消 房间名称 所属房产 请选择房产 Prototype Audit House 生效月份 保存房间 房间列表 房间 房产 入住人 固定月租 本月余额 状态 操作 Room 03 2026-09-01 Prototype Audit House Audit Tenant EUR 1200.00 EUR 0.00 有效 详情 编辑",
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "pageHeight": 1000,
+    "forms": 1,
+    "errors": []
+  },
+  {
+    "key": "room-detail",
+    "device": "desktop",
+    "status": 200,
+    "url": "/rooms/1?period=2026-09",
+    "title": "RentOps 房间详情",
+    "h1": [
+      "Room 03"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 0 账 应收账单 流 流水匹配 0 催 催收任务 产 房产管理 房 房间管理 租 租客管理 0 约 租住安排 现 现金补录 支 费用支出 0 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 房间详情 2026年9月 · 房间详情 Room 03 Prototype Audit House · 1 Example Lane, Dublin 返回工作台 应收 EUR 0.00 已收 EUR 0.00 未收 EUR 0.00 状态 待处理 租客责任 2026年9月 · 每一行是一条个人责任 本月暂无个人责任，可能是空置房。 房间支出 仅显示明确关联该房间的有效支出 本月暂无房间支出。",
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "pageHeight": 1000,
+    "forms": 0,
+    "errors": []
+  },
+  {
+    "key": "room-edit",
+    "device": "desktop",
+    "status": 200,
+    "url": "/rooms/1?edit=1",
+    "title": "RentOps Room Edit",
+    "h1": [
+      "编辑房间"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 0 账 应收账单 流 流水匹配 0 催 催收任务 产 房产管理 房 房间管理 租 租客管理 0 约 租住安排 现 现金补录 支 费用支出 0 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 房间编辑 资产管理 编辑房间 更新房产绑定与生效月份 返回房间 房间资料 房间必须绑定一个有效房产。 房间名称 所属房产 请选择房产 Prototype Audit House 生效月份 保存房间",
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "pageHeight": 1000,
+    "forms": 1,
+    "errors": []
+  },
+  {
+    "key": "tenants",
+    "device": "desktop",
+    "status": 200,
+    "url": "/tenants",
+    "title": "RentOps Tenants",
+    "h1": [
+      "租客资料"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 9 账 应收账单 流 流水匹配 16 催 催收任务 产 房产管理 房 房间管理 租 租客管理 9 约 租住安排 现 现金补录 支 费用支出 5 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 租客资料：/private/tmp/rentops-visual-audit-5wzrha_3/audit/tenants.json 租客管理 租客资料 添加租客 退出登录 租客数量 9 当前保存的租客 月租合计 EUR 10750.75 租客资料中的预期月租 租客列表 9 条记录 租客 付款人 租金 账单安排 房间 创建时间 操作 Alexandra Alexandria Catherine Montgomery-Wellington 2 暂无付款人别名 编号：暂无 EUR 1450.75 每月 25 日 2026-08-01 Apartment 12 Riverside Quarter Apartment 12, Riverside Quarter, 48-52 Wellington Quay, Dublin 2, D02 XR20, Ireland Riverside Quarter 2026-09-19T05:13:48Z 详情 编辑 Mick Michael O'Brien 8 MICHAEL OBRIEN 编号：PAYER-MIKE ",
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "pageHeight": 1484,
+    "forms": 1,
+    "errors": []
+  },
+  {
+    "key": "tenant-edit",
+    "device": "desktop",
+    "status": 200,
+    "url": "/tenants?edit=3",
+    "title": "RentOps Tenants",
+    "h1": [
+      "租客资料"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 9 账 应收账单 流 流水匹配 16 催 催收任务 产 房产管理 房 房间管理 租 租客管理 9 约 租住安排 现 现金补录 支 费用支出 5 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 租客资料：/private/tmp/rentops-visual-audit-5wzrha_3/audit/tenants.json 租客管理 租客资料 添加租客 退出登录 租客数量 9 当前保存的租客 月租合计 EUR 10750.75 租客资料中的预期月租 编辑租客 取消 租客姓名 显示别名 邮箱 银行付款人编号 付款人名称提示 月租金额 币种 绑定房间（可选） 暂不绑定房间 Prototype Audit House · Room 03 · 1200.00 EUR 选择房间会带出该房间当前月租，可继续手动编辑金额。 计费开始日期 留空则使用租期开始日期；如需延后，请填写租期内日期。 每月应缴日 租期开始日期 租期结束日期 状态 有效 停用 房间名称 房间地址 房产备注 保存修改 租客列表 9 条记录 租客 付款人 租金 账单安排 房间 创建时间 操作 Alexandra Alexandria Catherine Montgomery-Wellington 2 暂无付款人别名 编号：暂无 EUR 1450.75 每月 25 日 2026-08",
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "pageHeight": 2925,
+    "forms": 2,
+    "errors": []
+  },
+  {
+    "key": "tenant-detail",
+    "device": "desktop",
+    "status": 200,
+    "url": "/tenants/3?from_month=2026-08&to_month=2026-09",
+    "title": "RentOps Tenant Detail",
+    "h1": [
+      "Lina"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 账 应收账单 流 流水匹配 催 催收任务 产 房产管理 房 房间管理 租 租客管理 约 租住安排 现 现金补录 支 费用支出 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 租客缴费详情 租客详情 Lina 正式姓名：李娜 返回租客列表 编辑资料 现金补录 档案信息 active 邮箱 li.na@example.com 房间 Room 3B · 北京市朝阳区建国路88号SOHO现代城3B室 月租 EUR 950.00，每月 8 日 租期 2026-08-01 计费开始 2026-08-01 付款人关系 名称可用，稳定 ID 可选 LI NA ID: PAYER-LI-NA 移除 付款人名称 稳定付款人 ID（可选） 添加付款人 缴费历史 51 个适用月份 起始月份 结束月份 查询历史 月份 应缴日 应收 实收 未收 状态／来源 2026年9月 2026-09-08 EUR 950.00 EUR 0.00 EUR 950.00 已逾期 暂无有效收款 2026年9月 2026-09-08 EUR 950.00 EUR 0.00 EUR 950.00 已逾期 暂无有效收款 2026年9月 2026-09-08 EUR 950.00 EUR 0.00 EUR 950.00 已逾期 暂无有效收款 2026年9月 2026-09-08 EUR ",
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "pageHeight": 1913,
+    "forms": 3,
+    "errors": []
+  },
+  {
+    "key": "tenancies",
+    "device": "desktop",
+    "status": 200,
+    "url": "/tenancies",
+    "title": "RentOps Tenancies",
+    "h1": [
+      "自动生成的租住安排"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 0 账 应收账单 流 流水匹配 0 催 催收任务 产 房产管理 房 房间管理 租 租客管理 0 约 租住安排 现 现金补录 支 费用支出 0 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 自动生成的租住安排 租住安排 自动生成的租住安排 只读历史视图；新安排从租客入住配置生成 管理租客 房产／房间 租客责任 总月租 租期 账单日 状态 Prototype Audit House Room 03 Audit Tenant · EUR 1200.00 EUR 1200.00 2026-09-01 每月 10 日 有效",
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "pageHeight": 1000,
+    "forms": 0,
+    "errors": []
+  },
+  {
+    "key": "bills",
+    "device": "desktop",
+    "status": 200,
+    "url": "/bills?period=2026-09",
+    "title": "RentOps 月度工作台",
+    "h1": [
+      "月度收租工作台"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 0 账 应收账单 流 流水匹配 0 催 催收任务 产 房产管理 房 房间管理 租 租客管理 0 约 租住安排 现 现金补录 支 费用支出 0 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 月度收租工作台 RENTOPS · MONTHLY WORKSPACE 月度收租工作台 2026年9月 · 所有金额来自同一套月度账务事实 月份 查看 房产视角 房间视角 租客视角 本月应收 EUR 0.00 1 间有效房间 · 空置 0 已收租金 EUR 0.00 收缴率 0% · 0 间已交满 剩余未收 EUR 0.00 0 间未交满 经营净额 EUR 0.00 已收租金 − 有效支出 搜索 房产 全部房产 Prototype Audit House 状态 全部 未交满 待处理 逾期 部分缴纳 未到期未缴 已交满 空置 筛选 清除筛选 房产 房间 已交满 未交满 应收 已收 未收 支出 经营净额 状态 Prototype Audit House 1 Example Lane, Dublin 1 0 0 EUR 0.00 EUR 0.00 EUR 0.00 EUR 0.00 EUR 0.00 待处理 每页 12 24 50 当前显示 1 / 1 条 上一页 第 1 / 1 页 下一页",
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "pageHeight": 1000,
+    "forms": 3,
+    "errors": []
+  },
+  {
+    "key": "transactions",
+    "device": "desktop",
+    "status": 200,
+    "url": "/transactions",
+    "title": "RentOps Transactions",
+    "h1": [
+      "收款与支出"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 9 账 应收账单 流 流水匹配 16 催 催收任务 产 房产管理 房 房间管理 租 租客管理 9 约 租住安排 现 现金补录 支 费用支出 5 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 银行流水与租金关联 银行流水 收款与支出 连接银行账户 历史付款人预览 导入旧数据 退出登录 付款人 租客 全部租客 Alexandria Catherine Montgomery-Wellington Michael O'Brien Priya Nair Prototype Audit Tenant 周敏 张伟明·浦东新区世纪大道某某花园3号楼2单元1802室承租人（长期租住） 李娜 王芳 陈志强 流水到账月 租金所属月 入账用途 全部用途 房租 押金 其他收入 收支 全部 收入 支出 匹配状态 全部状态 待处理（需关联或确认） 已关联 部分关联 待确认 未关联 需处理 已忽略 应用筛选 清除筛选 流水明细 尚未同步 类型 付款人 ▲ 金额／余额 ▼ 到账／租金月 ▲ 描述 账户 用途／处理 收入 CHEN ZHIQIANG EUR 400.00 已分配 EUR 250.00 余款 EUR 150.00 12 Sep 2026 14:40 租金月：2026-08 Additional rent settlement for 2026-08 - ",
+    "scrollWidth": 1485,
+    "mainWidth": 1204,
+    "pageHeight": 4076,
+    "forms": 26,
+    "errors": []
+  },
+  {
+    "key": "billing",
+    "device": "desktop",
+    "status": 200,
+    "url": "/billing?match_status=unmatched",
+    "title": "RentOps Transactions",
+    "h1": [
+      "收款与支出"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 9 账 应收账单 流 流水匹配 11 催 催收任务 产 房产管理 房 房间管理 租 租客管理 9 约 租住安排 现 现金补录 支 费用支出 5 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 银行流水与租金关联 银行流水 收款与支出 连接银行账户 历史付款人预览 导入旧数据 退出登录 付款人 租客 全部租客 Alexandria Catherine Montgomery-Wellington Michael O'Brien Priya Nair Prototype Audit Tenant 周敏 张伟明·浦东新区世纪大道某某花园3号楼2单元1802室承租人（长期租住） 李娜 王芳 陈志强 流水到账月 租金所属月 入账用途 全部用途 房租 押金 其他收入 收支 全部 收入 支出 匹配状态 全部状态 待处理（需关联或确认） 已关联 部分关联 待确认 未关联 需处理 已忽略 应用筛选 清除筛选 流水明细 尚未同步 类型 付款人 ▲ 金额／余额 ▼ 到账／租金月 ▲ 描述 账户 用途／处理 支出 未知付款人 EUR 4321.09 已分配 EUR 0.00 余款 EUR 4321.09 10 Sep 2026 00:00 租金月：未确认 Local property tax instalment for the Riverside Quart",
+    "scrollWidth": 1485,
+    "mainWidth": 1204,
+    "pageHeight": 3125,
+    "forms": 16,
+    "errors": []
+  },
+  {
+    "key": "dunning",
+    "device": "desktop",
+    "status": 200,
+    "url": "/dunning",
+    "title": "RentOps Dashboard",
+    "h1": [
+      "2026年9月"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 9 账 应收账单 流 流水匹配 9 催 催收任务 产 房产管理 房 房间管理 租 租客管理 9 约 租住安排 现 现金补录 支 费用支出 7 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 月度收租工作台 本月收租 2026年9月 退出登录 尚未完成银行同步，待处理金额可能不完整。 收租月份 ‹ › 收租汇总 2026年9月 · 各卡片金额仅统计 EUR 本月应收 EUR 333273.25 本月租金账单 已收租金 EUR 1950.00 1 户已缴清 · 查看账单 剩余未收 EUR 331323.25 247 户未缴或部分缴纳 · 查看账单 房产支出 EUR 7821.61 7 笔已记录支出 · 查看支出 待处理 5 笔流水需要关联或确认 · 查看对应流水 本月共 248 户 逾期 185 部分缴纳 1 待确认 0 当前显示 248 户 收款进度 0% 已收 EUR 1950.00，本月还差 EUR 331323.25 租客缴费情况 共 248 户 · 点击任意一行展开收款明细 邮件催缴 搜索租客 状态 全部 未缴（含部分） 逾期 待确认 部分缴纳 未开始收款 已缴清 筛选 清除筛选 租客 ▲ 房间 应缴日 ▲ 应收 ▼ 已收 未收 状态 Michael O'Brien 别名：Mick Studio 9 Studio 9, 5 Mi",
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "pageHeight": 3784,
+    "forms": 30,
+    "errors": []
+  },
+  {
+    "key": "cash",
+    "device": "desktop",
+    "status": 200,
+    "url": "/cash-receipts",
+    "title": "RentOps Cash Receipts",
+    "h1": [
+      "现金收款记录"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 0 账 应收账单 流 流水匹配 0 催 催收任务 产 房产管理 房 房间管理 租 租客管理 0 约 租住安排 现 现金补录 支 费用支出 0 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 现金收款记录 现金补录 现金收款记录 现金不会伪装成银行流水；作废必须保留原因 新建现金收款 收款列表 全部状态 已确认 已作废 收据 租客／月份 金额 收款日期 状态 作废原因 cash-20260919051349-5vS8Pqsbfv 王芳 2026-08 EUR 200.00 2026-08-20 已作废 audit seed: correction demo cash-20260919051349-gNf2Bj9f6B 陈志强 2026-08 EUR 300.00 2026-08-15 已确认 撤销 —",
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "pageHeight": 1000,
+    "forms": 1,
+    "errors": []
+  },
+  {
+    "key": "cash-create",
+    "device": "desktop",
+    "status": 200,
+    "url": "/cash-receipts/new",
+    "title": "现金租金补录",
+    "h1": [
+      "现金租金补录"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 账 应收账单 流 流水匹配 催 催收任务 产 房产管理 房 房间管理 租 租客管理 约 租住安排 现 现金补录 支 费用支出 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 现金租金补录 手工收款 现金租金补录 现金记录只计入选择的租金月份，不会创建银行流水。 返回总览 填写收款信息 仅支持 EUR 租客 请选择租客 Alexandria Catherine Montgomery-Wellington · Apartment 12 Riverside Quarter Michael O'Brien · Studio 9 Priya Nair · Flat 2A Prototype Audit Tenant · Room 03 周敏 · 2号楼1105 张伟明·浦东新区世纪大道某某花园3号楼2单元1802室承租人（长期租住） · 3号楼2单元1802室 李娜 · Room 3B 王芳 · 4单元501 陈志强 · Unit 8 租金月份 现金金额 币种 实际收款日期 幂等请求号 重复提交同一请求号不会重复记账。 备注（可选） 预览入账 返回租客",
+    "scrollWidth": 1440,
+    "mainWidth": 980,
+    "pageHeight": 1000,
+    "forms": 1,
+    "errors": []
+  },
+  {
+    "key": "expenses",
+    "device": "desktop",
+    "status": 200,
+    "url": "/expenses",
+    "title": "RentOps Expenses",
+    "h1": [
+      "房产支出"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 9 账 应收账单 流 流水匹配 16 催 催收任务 产 房产管理 房 房间管理 租 租客管理 9 约 租住安排 现 现金补录 支 费用支出 5 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 支出资料：/private/tmp/rentops-visual-audit-5wzrha_3/audit/expenses.json 支出记录 房产支出 退出登录 支出笔数 5 手动记录的支出 支出合计 EUR 6237.05 全部已保存支出 添加支出 手动记录 支出描述 金额 类别 维修 水电 清洁 保险 其他 房产 请选择房产 Prototype Audit House 房间（可选） 房产级支出 Room 03 日期 付款方式 房间备注 租客备注 发票链接（可选） 保存支出 支出列表 5 条记录 描述 金额 类别 日期 备注 付款方式 Local property tax instalment for the Riverside Quarter apartment, second of four instalments 5 EUR 4321.09 房产税 10 Sep 2026 房间：Apartment 12 Riverside Quarter 租客：Alexandria Catherine Montgomery-Wellington Ba",
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "pageHeight": 1151,
+    "forms": 2,
+    "errors": []
+  },
+  {
+    "key": "bank",
+    "device": "desktop",
+    "status": 200,
+    "url": "/bank",
+    "title": "RentOps Bank",
+    "h1": [
+      "银行连接与同步"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 0 账 应收账单 流 流水匹配 0 催 催收任务 产 房产管理 房 房间管理 租 租客管理 0 约 租住安排 现 现金补录 支 费用支出 0 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 单一银行授权与同步状态 银行设置 银行连接与同步 每个账号只保留一个授权，授权下可同步多个实际账户 连接银行 授权 未连接 truelayer · sandbox 同步状态 未连接 最近覆盖 暂无 同步运行 refresh token 流程 暂无同步记录。连接银行后点击同步。",
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "pageHeight": 1000,
+    "forms": 0,
+    "errors": []
+  },
+  {
+    "key": "dashboard",
+    "device": "mobile",
+    "status": 200,
+    "url": "/rent-dashboard?period=2026-09",
+    "title": "RentOps 月度工作台",
+    "h1": [
+      "月度收租工作台"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 RENTOPS · MONTHLY WORKSPACE 月度收租工作台 2026年9月 · 所有金额来自同一套月度账务事实 月份 查看 房产视角 房间视角 租客视角 本月应收 EUR 0.00 1 间有效房间 · 空置 0 已收租金 EUR 0.00 收缴率 0% · 0 间已交满 剩余未收 EUR 0.00 0 间未交满 经营净额 EUR 0.00 已收租金 − 有效支出 搜索 房产 全部房产 Prototype Audit House 状态 全部 未交满 待处理 逾期 部分缴纳 未到期未缴 已交满 空置 筛选 清除筛选 Prototype Audit House 待处理 1 Example Lane, Dublin 房间 1 间 已交满 0 间 未交满 0 间 应收 EUR 0.00 已收 EUR 0.00 未收 EUR 0.00 支出 EUR 0.00 经营净额 EUR 0.00 每页 12 24 50 当前显示 1 / 1 条 上一页 第 1 / 1 页 下一页",
+    "scrollWidth": 390,
+    "mainWidth": 374,
+    "pageHeight": 1679,
+    "forms": 3,
+    "errors": []
+  },
+  {
+    "key": "properties",
+    "device": "mobile",
+    "status": 200,
+    "url": "/properties?period=2026-09",
+    "title": "RentOps Properties",
+    "h1": [
+      "房产"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 资产管理 房产 2026年9月 · 1 套 新建房产 房产列表 状态 有效 已停用 全部 Prototype Audit House 1 Example Lane, Dublin 1 / 1 EUR 0.00 EUR 0.00 EUR 0.00 有效 编辑停用",
+    "scrollWidth": 390,
+    "mainWidth": 374,
+    "pageHeight": 844,
+    "forms": 3,
+    "errors": []
+  },
+  {
+    "key": "property-detail",
+    "device": "mobile",
+    "status": 200,
+    "url": "/properties/1?period=2026-09",
+    "title": "RentOps Property",
+    "h1": [
+      "Prototype Audit House"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 房产详情 Prototype Audit House 1 Example Lane, Dublin · 有效 返回房产 房间 1 / 1 有效／全部 本月应收 EUR 0.00 已收 EUR 0.00 支出 EUR 0.00 房间 新建房间 Room 03 Prototype Audit House Audit Tenant EUR 1200.00 有效 详情 编辑 关联支出 旧未关联记录不会被伪造迁移 该房产暂无关联支出。",
+    "scrollWidth": 390,
+    "mainWidth": 374,
+    "pageHeight": 1315,
+    "forms": 0,
+    "errors": []
+  },
+  {
+    "key": "property-edit",
+    "device": "mobile",
+    "status": 200,
+    "url": "/properties/1?edit=1&period=2026-09",
+    "title": "RentOps Property",
+    "h1": [
+      "Prototype Audit House"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 房产详情 Prototype Audit House 1 Example Lane, Dublin · 有效 返回房产 编辑房产 名称 地址 保存房产 房间 1 / 1 有效／全部 本月应收 EUR 0.00 已收 EUR 0.00 支出 EUR 0.00 房间 新建房间 Room 03 Prototype Audit House Audit Tenant EUR 1200.00 有效 详情 编辑 关联支出 旧未关联记录不会被伪造迁移 该房产暂无关联支出。",
+    "scrollWidth": 390,
+    "mainWidth": 374,
+    "pageHeight": 1651,
+    "forms": 1,
+    "errors": []
+  },
+  {
+    "key": "rooms",
+    "device": "mobile",
+    "status": 200,
+    "url": "/rooms?period=2026-09",
+    "title": "RentOps Rooms",
+    "h1": [
+      "房间"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 资产管理 房间 2026年9月 · 房产绑定与入住安排 新建房间 房间列表 Room 03 2026-09-01 Prototype Audit House Audit Tenant EUR 1200.00 EUR 0.00 有效 详情 编辑",
+    "scrollWidth": 390,
+    "mainWidth": 374,
+    "pageHeight": 844,
+    "forms": 0,
+    "errors": []
+  },
+  {
+    "key": "room-detail",
+    "device": "mobile",
+    "status": 200,
+    "url": "/rooms/1?period=2026-09",
+    "title": "RentOps 房间详情",
+    "h1": [
+      "Room 03"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 2026年9月 · 房间详情 Room 03 Prototype Audit House · 1 Example Lane, Dublin 返回工作台 应收 EUR 0.00 已收 EUR 0.00 未收 EUR 0.00 状态 待处理 租客责任 2026年9月 · 每一行是一条个人责任 本月暂无个人责任，可能是空置房。 房间支出 仅显示明确关联该房间的有效支出 本月暂无房间支出。",
+    "scrollWidth": 390,
+    "mainWidth": 374,
+    "pageHeight": 908,
+    "forms": 0,
+    "errors": []
+  },
+  {
+    "key": "room-edit",
+    "device": "mobile",
+    "status": 200,
+    "url": "/rooms/1?edit=1",
+    "title": "RentOps Room Edit",
+    "h1": [
+      "编辑房间"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 资产管理 编辑房间 更新房产绑定与生效月份 返回房间 房间资料 房间必须绑定一个有效房产。 房间名称 所属房产 请选择房产 Prototype Audit House 生效月份 保存房间",
+    "scrollWidth": 390,
+    "mainWidth": 374,
+    "pageHeight": 844,
+    "forms": 1,
+    "errors": []
+  },
+  {
+    "key": "tenants",
+    "device": "mobile",
+    "status": 200,
+    "url": "/tenants",
+    "title": "RentOps Tenants",
+    "h1": [
+      "租客资料"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 租客管理 租客资料 添加租客 租客数量 9 当前保存的租客 月租合计 EUR 10750.75 租客资料中的预期月租 租客列表 9 条记录 Alexandra Alexandria Catherine Montgomery-Wellington Apartment 12 Riverside Quarter · Apartment 12, Riverside Quarter, 48-52 Wellington Quay, Dublin 2, D02 XR20, Ireland 有效 月租 · 每月 25 日 EUR 1450.75 详情 编辑 查看最近六个月缴费 Mick Michael O'Brien Studio 9 · Studio 9, 5 Mill Lane, Galway, H91 XY22, Ireland 有效 月租 · 每月 5 日 EUR 700.00 详情 编辑 查看最近六个月缴费 Priya Priya Nair Flat 2A · Flat 2A, 17 Harbour View Road, Cork, T12 AB34, Ireland 有效 月租 · 每月 5 日 EUR 1200.00 详情 编辑 查看最近六个月缴费 Audit Tenant Prototype Audit Tenant Room 03 · Room 03, 1 Example Lane, Dublin 有效 ",
+    "scrollWidth": 390,
+    "mainWidth": 374,
+    "pageHeight": 3001,
+    "forms": 1,
+    "errors": []
+  },
+  {
+    "key": "tenant-detail",
+    "device": "mobile",
+    "status": 200,
+    "url": "/tenants/3?from_month=2026-08&to_month=2026-09",
+    "title": "RentOps Tenant Detail",
+    "h1": [
+      "Lina"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 租客详情 Lina 正式姓名：李娜 返回租客列表 编辑资料 现金补录 档案信息 active 邮箱 li.na@example.com 房间 Room 3B · 北京市朝阳区建国路88号SOHO现代城3B室 月租 EUR 950.00，每月 8 日 租期 2026-08-01 计费开始 2026-08-01 付款人关系 名称可用，稳定 ID 可选 LI NA ID: PAYER-LI-NA 移除 付款人名称 稳定付款人 ID（可选） 添加付款人 缴费历史 56 个适用月份 起始月份 结束月份 查询历史 2026年9月 2026-09-08 EUR 950.00 EUR 0.00 EUR 950.00 已逾期 暂无有效收款 2026年9月 2026-09-08 EUR 950.00 EUR 0.00 EUR 950.00 已逾期 暂无有效收款 2026年9月 2026-09-08 EUR 950.00 EUR 0.00 EUR 950.00 已逾期 暂无有效收款 2026年9月 2026-09-08 EUR 950.00 EUR 0.00 EUR 950.00 已逾期 暂无有效收款 2026年9月 2026-09-08 EUR 950.00 EUR 0.00 EUR 950.00 已逾期 暂无有效收款 2026年9月 2026-09-08 EUR 950.00 EUR 0.00 EUR 950.00 已逾期 ",
+    "scrollWidth": 390,
+    "mainWidth": 374,
+    "pageHeight": 3265,
+    "forms": 3,
+    "errors": []
+  },
+  {
+    "key": "tenancies",
+    "device": "mobile",
+    "status": 200,
+    "url": "/tenancies",
+    "title": "RentOps Tenancies",
+    "h1": [
+      "自动生成的租住安排"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 租住安排 自动生成的租住安排 只读历史视图；新安排从租客入住配置生成 管理租客 Prototype Audit House Room 03 Audit Tenant · EUR 1200.00 EUR 1200.00 2026-09-01 每月 10 日 有效",
+    "scrollWidth": 390,
+    "mainWidth": 374,
+    "pageHeight": 844,
+    "forms": 0,
+    "errors": []
+  },
+  {
+    "key": "bills",
+    "device": "mobile",
+    "status": 200,
+    "url": "/bills?period=2026-09",
+    "title": "RentOps 月度工作台",
+    "h1": [
+      "月度收租工作台"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 RENTOPS · MONTHLY WORKSPACE 月度收租工作台 2026年9月 · 所有金额来自同一套月度账务事实 月份 查看 房产视角 房间视角 租客视角 本月应收 EUR 0.00 1 间有效房间 · 空置 0 已收租金 EUR 0.00 收缴率 0% · 0 间已交满 剩余未收 EUR 0.00 0 间未交满 经营净额 EUR 0.00 已收租金 − 有效支出 搜索 房产 全部房产 Prototype Audit House 状态 全部 未交满 待处理 逾期 部分缴纳 未到期未缴 已交满 空置 筛选 清除筛选 Prototype Audit House 待处理 1 Example Lane, Dublin 房间 1 间 已交满 0 间 未交满 0 间 应收 EUR 0.00 已收 EUR 0.00 未收 EUR 0.00 支出 EUR 0.00 经营净额 EUR 0.00 每页 12 24 50 当前显示 1 / 1 条 上一页 第 1 / 1 页 下一页",
+    "scrollWidth": 390,
+    "mainWidth": 374,
+    "pageHeight": 1679,
+    "forms": 3,
+    "errors": []
+  },
+  {
+    "key": "transactions",
+    "device": "mobile",
+    "status": 200,
+    "url": "/transactions",
+    "title": "RentOps Transactions",
+    "h1": [
+      "收款与支出"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 银行流水 收款与支出 连接银行账户 历史付款人预览 导入旧数据 付款人 租客 全部租客 Alexandria Catherine Montgomery-Wellington Michael O'Brien Priya Nair Prototype Audit Tenant 周敏 张伟明·浦东新区世纪大道某某花园3号楼2单元1802室承租人（长期租住） 李娜 王芳 陈志强 流水到账月 租金所属月 入账用途 全部用途 房租 押金 其他收入 收支 全部 收入 支出 匹配状态 全部状态 待处理（需关联或确认） 已关联 部分关联 待确认 未关联 需处理 已忽略 应用筛选 清除筛选 流水明细 尚未同步 收入 CHEN ZHIQIANG EUR 400.00 已分配 EUR 250.00 余款 EUR 150.00 12 Sep 2026 14:40 租金月：2026-08 Additional rent settlement for 2026-08 - CHEN ZHIQIANG RentOps Audit Current Account 部分关联 EUR 400.00 支出 未知付款人 EUR 4321.09 已分配 EUR 0.00 余款 EUR 4321.09 10 Sep 2026 00:00 租金月：未确认 Local property tax instalment for the Riverside Qua",
+    "scrollWidth": 390,
+    "mainWidth": 374,
+    "pageHeight": 6255,
+    "forms": 26,
+    "errors": []
+  },
+  {
+    "key": "dunning",
+    "device": "mobile",
+    "status": 200,
+    "url": "/dunning",
+    "title": "RentOps Dashboard",
+    "h1": [
+      "2026年9月"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 本月收租 2026年9月 尚未完成银行同步，待处理金额可能不完整。 ‹ › 收租汇总 2026年9月 · 各卡片金额仅统计 EUR 本月应收 EUR 365525.50 本月租金账单 已收租金 EUR 1950.00 1 户已缴清 · 查看账单 剩余未收 EUR 363575.50 271 户未缴或部分缴纳 · 查看账单 房产支出 EUR 7821.61 7 笔已记录支出 · 查看支出 待处理 5 笔流水需要关联或确认 · 查看对应流水 本月共 272 户 逾期 203 部分缴纳 1 待确认 0 当前显示 272 户 收款进度 0% 已收 EUR 1950.00，本月还差 EUR 363575.50 租客缴费情况 共 272 户 · 点击任意一行展开收款明细 邮件催缴 搜索租客 状态 全部 未缴（含部分） 逾期 待确认 部分缴纳 未开始收款 已缴清 筛选 清除筛选 Michael O'Brien 别名：Mick Studio 9 · Studio 9, 5 Mill Lane, Galway, H91 XY22, Ireland 已逾期 应收 EUR 700.00 已收 EUR 0.00 未收 EUR 700.00 租客详情 一键平账 Michael O'Brien 别名：Mick Studio 9 · Studio 9, 5 Mill Lane, Galway, H91 XY22, Ireland 已逾期",
+    "scrollWidth": 390,
+    "mainWidth": 374,
+    "pageHeight": 5007,
+    "forms": 30,
+    "errors": []
+  },
+  {
+    "key": "cash",
+    "device": "mobile",
+    "status": 200,
+    "url": "/cash-receipts",
+    "title": "RentOps Cash Receipts",
+    "h1": [
+      "现金收款记录"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 现金补录 现金收款记录 现金不会伪装成银行流水；作废必须保留原因 新建现金收款 收款列表 全部状态 已确认 已作废 cash-20260919051349-5vS8Pqsbfv 王芳 2026-08 EUR 200.00 2026-08-20 已作废 audit seed: correction demo cash-20260919051349-gNf2Bj9f6B 陈志强 2026-08 EUR 300.00 2026-08-15 已确认 撤销 —",
+    "scrollWidth": 390,
+    "mainWidth": 374,
+    "pageHeight": 844,
+    "forms": 1,
+    "errors": []
+  },
+  {
+    "key": "expenses",
+    "device": "mobile",
+    "status": 200,
+    "url": "/expenses",
+    "title": "RentOps Expenses",
+    "h1": [
+      "房产支出"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 支出记录 房产支出 支出笔数 5 手动记录的支出 支出合计 EUR 6237.05 全部已保存支出 添加支出 手动记录 支出描述 金额 类别 维修 水电 清洁 保险 其他 房产 请选择房产 Prototype Audit House 房间（可选） 房产级支出 Room 03 日期 付款方式 房间备注 租客备注 发票链接（可选） 保存支出 支出列表 5 条记录 Local property tax instalment for the Riverside Quarter apartment, second of four instalments 房产税 · 10 Sep 2026 EUR 4321.09 付款方式 Bank Transfer 归属 Apartment 12 Riverside Quarter 租客：Alexandria Catherine Montgomery-Wellington Wexford County Council waste water and refuse charges for September 2026 水电 · 09 Sep 2026 EUR 1234.56 付款方式 Direct Debit 归属 房产级支出 Annual buildings and contents insurance premium for the three rental units at We",
+    "scrollWidth": 390,
+    "mainWidth": 374,
+    "pageHeight": 2577,
+    "forms": 2,
+    "errors": []
+  },
+  {
+    "key": "bank",
+    "device": "mobile",
+    "status": 200,
+    "url": "/bank",
+    "title": "RentOps Bank",
+    "h1": [
+      "银行连接与同步"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 银行设置 银行连接与同步 每个账号只保留一个授权，授权下可同步多个实际账户 连接银行 授权 未连接 truelayer · sandbox 同步状态 未连接 最近覆盖 暂无 同步运行 refresh token 流程 暂无同步记录。连接银行后点击同步。",
+    "scrollWidth": 390,
+    "mainWidth": 374,
+    "pageHeight": 961,
+    "forms": 0,
+    "errors": []
+  }
+]

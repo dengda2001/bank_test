@@ -1,0 +1,926 @@
+[
+  {
+    "key": "dashboard",
+    "route": "/rent-dashboard?period=2026-09",
+    "status": 200,
+    "title": "RentOps Dashboard",
+    "h1": [
+      "2026年9月"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 8 账 应收账单 流 流水匹配 9 催 催收任务 产 房产管理 房 房间管理 租 租客管理 8 约 租住安排 现 现金补录 支 费用支出 7 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 月度收租工作台 本月收租 2026年9月 退出登录 尚未完成银行同步，待处理金额可能不完整。 收租月份 ‹ › 收租汇总 2026年9月 · 各卡片金额仅统计 EUR 本月应收 EUR 96756.75 本月租金账单 已收租金 EUR 1950.00 1 户已缴清 · 查看账单 剩余未收 EUR 94806.75 71 户未缴或部分缴纳 · 查看账单 房产支出 EUR 7821.61 7 笔已记录支出 · 查看支出 待处理 5 笔流水需要关联或确认 · 查看对应流水 本月共 72 户 逾期 53 部分缴纳 1 待确认 0 当前显示 72 户 收款进度 2% 已收 EUR 1950.00，本月还差 EUR 94806.75 租客缴费情况 共 72 户 · 点击任意一行展开收款明细 邮件催缴 搜索租客 状态 全部 未缴（含部分） 逾期 待确认 部分缴纳 未开始收款 已缴清 筛选 清除筛选 租客 ▲ 房间 应缴日 ▲ 应收 ▼ 已收 未收 状态 Michael O'Brien 别名：Mick Studio 9 Studio 9, 5 Mill Lane, Galway, H91 XY22, Ireland 2026-09-05 EUR 700.00 EUR 0.00 EUR 700.00 已逾期 一键平账 Michael O'Brien 别名：Mick Studio 9 Studio 9, 5 Mill Lane, Galway, H91 XY22, Ireland 2026-09-05 EUR 700.00 EUR 0.00 EUR 700.0",
+    "pageHeight": 2406,
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "mainLeft": 236,
+    "forms": 30,
+    "links": [
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      }
+    ],
+    "errors": [
+      "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+  },
+  {
+    "key": "dashboard-property-view",
+    "route": "/rent-dashboard?period=2026-09&view=properties",
+    "status": 200,
+    "title": "RentOps Dashboard",
+    "h1": [
+      "2026年9月"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 8 账 应收账单 流 流水匹配 9 催 催收任务 产 房产管理 房 房间管理 租 租客管理 8 约 租住安排 现 现金补录 支 费用支出 7 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 月度收租工作台 本月收租 2026年9月 退出登录 尚未完成银行同步，待处理金额可能不完整。 收租月份 ‹ › 收租汇总 2026年9月 · 各卡片金额仅统计 EUR 本月应收 EUR 107507.50 本月租金账单 已收租金 EUR 1950.00 1 户已缴清 · 查看账单 剩余未收 EUR 105557.50 79 户未缴或部分缴纳 · 查看账单 房产支出 EUR 7821.61 7 笔已记录支出 · 查看支出 待处理 5 笔流水需要关联或确认 · 查看对应流水 本月共 80 户 逾期 59 部分缴纳 1 待确认 0 当前显示 80 户 收款进度 1% 已收 EUR 1950.00，本月还差 EUR 105557.50 租客缴费情况 共 80 户 · 点击任意一行展开收款明细 邮件催缴 搜索租客 状态 全部 未缴（含部分） 逾期 待确认 部分缴纳 未开始收款 已缴清 筛选 清除筛选 租客 ▲ 房间 应缴日 ▲ 应收 ▼ 已收 未收 状态 Michael O'Brien 别名：Mick Studio 9 Studio 9, 5 Mill Lane, Galway, H91 XY22, Ireland 2026-09-05 EUR 700.00 EUR 0.00 EUR 700.00 已逾期 一键平账 Michael O'Brien 别名：Mick Studio 9 Studio 9, 5 Mill Lane, Galway, H91 XY22, Ireland 2026-09-05 EUR 700.00 EUR 0.00 EUR 70",
+    "pageHeight": 2417,
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "mainLeft": 236,
+    "forms": 30,
+    "links": [
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      }
+    ],
+    "errors": []
+  },
+  {
+    "key": "dashboard-room-view",
+    "route": "/rent-dashboard?period=2026-09&view=rooms",
+    "status": 200,
+    "title": "RentOps Dashboard",
+    "h1": [
+      "2026年9月"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 8 账 应收账单 流 流水匹配 9 催 催收任务 产 房产管理 房 房间管理 租 租客管理 8 约 租住安排 现 现金补录 支 费用支出 7 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 月度收租工作台 本月收租 2026年9月 退出登录 尚未完成银行同步，待处理金额可能不完整。 收租月份 ‹ › 收租汇总 2026年9月 · 各卡片金额仅统计 EUR 本月应收 EUR 118258.25 本月租金账单 已收租金 EUR 1950.00 1 户已缴清 · 查看账单 剩余未收 EUR 116308.25 87 户未缴或部分缴纳 · 查看账单 房产支出 EUR 7821.61 7 笔已记录支出 · 查看支出 待处理 5 笔流水需要关联或确认 · 查看对应流水 本月共 88 户 逾期 65 部分缴纳 1 待确认 0 当前显示 88 户 收款进度 1% 已收 EUR 1950.00，本月还差 EUR 116308.25 租客缴费情况 共 88 户 · 点击任意一行展开收款明细 邮件催缴 搜索租客 状态 全部 未缴（含部分） 逾期 待确认 部分缴纳 未开始收款 已缴清 筛选 清除筛选 租客 ▲ 房间 应缴日 ▲ 应收 ▼ 已收 未收 状态 Michael O'Brien 别名：Mick Studio 9 Studio 9, 5 Mill Lane, Galway, H91 XY22, Ireland 2026-09-05 EUR 700.00 EUR 0.00 EUR 700.00 已逾期 一键平账 Michael O'Brien 别名：Mick Studio 9 Studio 9, 5 Mill Lane, Galway, H91 XY22, Ireland 2026-09-05 EUR 700.00 EUR 0.00 EUR 70",
+    "pageHeight": 2428,
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "mainLeft": 236,
+    "forms": 30,
+    "links": [
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      }
+    ],
+    "errors": []
+  },
+  {
+    "key": "dashboard-tenant-view",
+    "route": "/rent-dashboard?period=2026-09&view=tenants",
+    "status": 200,
+    "title": "RentOps Dashboard",
+    "h1": [
+      "2026年9月"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 8 账 应收账单 流 流水匹配 9 催 催收任务 产 房产管理 房 房间管理 租 租客管理 8 约 租住安排 现 现金补录 支 费用支出 7 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 月度收租工作台 本月收租 2026年9月 退出登录 尚未完成银行同步，待处理金额可能不完整。 收租月份 ‹ › 收租汇总 2026年9月 · 各卡片金额仅统计 EUR 本月应收 EUR 129009.00 本月租金账单 已收租金 EUR 1950.00 1 户已缴清 · 查看账单 剩余未收 EUR 127059.00 95 户未缴或部分缴纳 · 查看账单 房产支出 EUR 7821.61 7 笔已记录支出 · 查看支出 待处理 5 笔流水需要关联或确认 · 查看对应流水 本月共 96 户 逾期 71 部分缴纳 1 待确认 0 当前显示 96 户 收款进度 1% 已收 EUR 1950.00，本月还差 EUR 127059.00 租客缴费情况 共 96 户 · 点击任意一行展开收款明细 邮件催缴 搜索租客 状态 全部 未缴（含部分） 逾期 待确认 部分缴纳 未开始收款 已缴清 筛选 清除筛选 租客 ▲ 房间 应缴日 ▲ 应收 ▼ 已收 未收 状态 Michael O'Brien 别名：Mick Studio 9 Studio 9, 5 Mill Lane, Galway, H91 XY22, Ireland 2026-09-05 EUR 700.00 EUR 0.00 EUR 700.00 已逾期 一键平账 Michael O'Brien 别名：Mick Studio 9 Studio 9, 5 Mill Lane, Galway, H91 XY22, Ireland 2026-09-05 EUR 700.00 EUR 0.00 EUR 70",
+    "pageHeight": 2440,
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "mainLeft": 236,
+    "forms": 30,
+    "links": [
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      }
+    ],
+    "errors": []
+  },
+  {
+    "key": "properties",
+    "route": "/properties?period=2026-09",
+    "status": 200,
+    "title": "RentOps Properties",
+    "h1": [
+      "房产"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 0 账 应收账单 流 流水匹配 0 催 催收任务 产 房产管理 房 房间管理 租 租客管理 0 约 租住安排 现 现金补录 支 费用支出 0 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 房产与房间管理 资产管理 房产 2026年9月 · 0 套 新建房产 房产列表 状态 有效 已停用 全部 还没有房产，先创建一套房产。",
+    "pageHeight": 1000,
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "mainLeft": 236,
+    "forms": 1,
+    "links": [],
+    "errors": []
+  },
+  {
+    "key": "property-create",
+    "route": "/properties?add=1",
+    "status": 200,
+    "title": "RentOps Properties",
+    "h1": [
+      "房产"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 0 账 应收账单 流 流水匹配 0 催 催收任务 产 房产管理 房 房间管理 租 租客管理 0 约 租住安排 现 现金补录 支 费用支出 0 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 房产与房间管理 资产管理 房产 2026年9月 · 0 套 新建房产 新建房产 先建立房产，再绑定房间。 取消 房产名称 地址 保存房产 房产列表 状态 有效 已停用 全部 还没有房产，先创建一套房产。",
+    "pageHeight": 1000,
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "mainLeft": 236,
+    "forms": 2,
+    "links": [],
+    "errors": []
+  },
+  {
+    "key": "rooms",
+    "route": "/rooms?period=2026-09",
+    "status": 200,
+    "title": "RentOps Rooms",
+    "h1": [
+      "房间"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 0 账 应收账单 流 流水匹配 0 催 催收任务 产 房产管理 房 房间管理 租 租客管理 0 约 租住安排 现 现金补录 支 费用支出 0 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 房间与房产绑定 资产管理 房间 2026年9月 · 房产绑定与入住安排 新建房间 房间列表 还没有房间，请先创建房产。",
+    "pageHeight": 1000,
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "mainLeft": 236,
+    "forms": 0,
+    "links": [],
+    "errors": []
+  },
+  {
+    "key": "room-create",
+    "route": "/rooms?add=1",
+    "status": 200,
+    "title": "RentOps Rooms",
+    "h1": [
+      "房间"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 0 账 应收账单 流 流水匹配 0 催 催收任务 产 房产管理 房 房间管理 租 租客管理 0 约 租住安排 现 现金补录 支 费用支出 0 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 房间与房产绑定 资产管理 房间 2026年9月 · 房产绑定与入住安排 新建房间 新建房间 房间必须绑定一个有效房产。 取消 房间名称 所属房产 请选择房产 生效月份 保存房间 房间列表 还没有房间，请先创建房产。",
+    "pageHeight": 1000,
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "mainLeft": 236,
+    "forms": 1,
+    "links": [],
+    "errors": []
+  },
+  {
+    "key": "tenants",
+    "route": "/tenants",
+    "status": 200,
+    "title": "RentOps Tenants",
+    "h1": [
+      "租客资料"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 8 账 应收账单 流 流水匹配 16 催 催收任务 产 房产管理 房 房间管理 租 租客管理 8 约 租住安排 现 现金补录 支 费用支出 5 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 租客资料：/private/tmp/rentops-visual-audit-5wzrha_3/audit/tenants.json 租客管理 租客资料 添加租客 退出登录 租客数量 8 当前保存的租客 月租合计 EUR 10750.75 租客资料中的预期月租 租客列表 8 条记录 租客 付款人 租金 账单安排 房间 创建时间 操作 Alexandra Alexandria Catherine Montgomery-Wellington 2 暂无付款人别名 编号：暂无 EUR 1450.75 每月 25 日 2026-08-01 Apartment 12 Riverside Quarter Apartment 12, Riverside Quarter, 48-52 Wellington Quay, Dublin 2, D02 XR20, Ireland Riverside Quarter 2026-09-19T05:13:48Z 详情 编辑 Mick Michael O'Brien 8 MICHAEL OBRIEN 编号：PAYER-MIKE EUR 700.00 每月 5 日 2026-08-01 Studio 9 Studio 9, 5 Mill Lane, Galway, H91 XY22, Ireland Mill Lane 2026-09-19T05:13:48Z 详情 编辑 Priya Priya Nair 7 PRIYA NAIR 编号：PAYER-PRIYA EUR 1200.00 每月 5 日 2026-09-01 F",
+    "pageHeight": 1368,
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "mainLeft": 236,
+    "forms": 1,
+    "links": [
+      {
+        "text": "详情",
+        "href": "/tenants/2"
+      },
+      {
+        "text": "详情",
+        "href": "/tenants/8"
+      },
+      {
+        "text": "详情",
+        "href": "/tenants/7"
+      },
+      {
+        "text": "详情",
+        "href": "/tenants/5"
+      },
+      {
+        "text": "详情",
+        "href": "/tenants/1"
+      },
+      {
+        "text": "详情",
+        "href": "/tenants/3"
+      },
+      {
+        "text": "详情",
+        "href": "/tenants/6"
+      },
+      {
+        "text": "详情",
+        "href": "/tenants/4"
+      },
+      {
+        "text": "详情",
+        "href": "/tenants/2"
+      },
+      {
+        "text": "详情",
+        "href": "/tenants/8"
+      },
+      {
+        "text": "详情",
+        "href": "/tenants/7"
+      },
+      {
+        "text": "详情",
+        "href": "/tenants/5"
+      }
+    ],
+    "errors": []
+  },
+  {
+    "key": "tenant-detail-3",
+    "route": "/tenants/3?from_month=2026-08&to_month=2026-09",
+    "status": 200,
+    "title": "RentOps Tenant Detail",
+    "h1": [
+      "Lina"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 账 应收账单 流 流水匹配 催 催收任务 产 房产管理 房 房间管理 租 租客管理 约 租住安排 现 现金补录 支 费用支出 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 租客缴费详情 租客详情 Lina 正式姓名：李娜 返回租客列表 编辑资料 现金补录 档案信息 active 邮箱 li.na@example.com 房间 Room 3B · 北京市朝阳区建国路88号SOHO现代城3B室 月租 EUR 950.00，每月 8 日 租期 2026-08-01 计费开始 2026-08-01 付款人关系 名称可用，稳定 ID 可选 LI NA ID: PAYER-LI-NA 移除 付款人名称 稳定付款人 ID（可选） 添加付款人 缴费历史 24 个适用月份 起始月份 结束月份 查询历史 月份 应缴日 应收 实收 未收 状态／来源 2026年9月 2026-09-08 EUR 950.00 EUR 0.00 EUR 950.00 已逾期 暂无有效收款 2026年9月 2026-09-08 EUR 950.00 EUR 0.00 EUR 950.00 已逾期 暂无有效收款 2026年9月 2026-09-08 EUR 950.00 EUR 0.00 EUR 950.00 已逾期 暂无有效收款 2026年9月 2026-09-08 EUR 950.00 EUR 0.00 EUR 950.00 已逾期 暂无有效收款 2026年9月 2026-09-08 EUR 950.00 EUR 0.00 EUR 950.00 已逾期 暂无有效收款 2026年9月 2026-09-08 EUR 950.00 EUR 0.00 EUR 950.00 已逾期 暂无有效收款 2026年9月 2026-09-08 EUR 950.00 EUR 0.00 E",
+    "pageHeight": 1913,
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "mainLeft": 236,
+    "forms": 3,
+    "links": [
+      {
+        "text": "下一页",
+        "href": "/tenants/3?from_month=2026-08&to_month=2026-09&page=2&page_size=12"
+      }
+    ],
+    "errors": []
+  },
+  {
+    "key": "tenant-edit-3",
+    "route": "/tenants?edit=3",
+    "status": 200,
+    "title": "RentOps Tenants",
+    "h1": [
+      "租客资料"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 8 账 应收账单 流 流水匹配 16 催 催收任务 产 房产管理 房 房间管理 租 租客管理 8 约 租住安排 现 现金补录 支 费用支出 5 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 租客资料：/private/tmp/rentops-visual-audit-5wzrha_3/audit/tenants.json 租客管理 租客资料 添加租客 退出登录 租客数量 8 当前保存的租客 月租合计 EUR 10750.75 租客资料中的预期月租 编辑租客 取消 租客姓名 显示别名 邮箱 银行付款人编号 付款人名称提示 月租金额 币种 绑定房间（可选） 暂不绑定房间 选择房间会带出该房间当前月租，可继续手动编辑金额。 计费开始日期 留空则使用租期开始日期；如需延后，请填写租期内日期。 每月应缴日 租期开始日期 租期结束日期 状态 有效 停用 房间名称 房间地址 房产备注 保存修改 租客列表 8 条记录 租客 付款人 租金 账单安排 房间 创建时间 操作 Alexandra Alexandria Catherine Montgomery-Wellington 2 暂无付款人别名 编号：暂无 EUR 1450.75 每月 25 日 2026-08-01 Apartment 12 Riverside Quarter Apartment 12, Riverside Quarter, 48-52 Wellington Quay, Dublin 2, D02 XR20, Ireland Riverside Quarter 2026-09-19T05:13:48Z 详情 编辑 Mick Michael O'Brien 8 MICHAEL OBRIEN 编号：PAYER-MIKE EUR 700.00 每月 5 日 2026-08-01 S",
+    "pageHeight": 2809,
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "mainLeft": 236,
+    "forms": 2,
+    "links": [
+      {
+        "text": "详情",
+        "href": "/tenants/2"
+      },
+      {
+        "text": "详情",
+        "href": "/tenants/8"
+      },
+      {
+        "text": "详情",
+        "href": "/tenants/7"
+      },
+      {
+        "text": "详情",
+        "href": "/tenants/5"
+      },
+      {
+        "text": "详情",
+        "href": "/tenants/1"
+      },
+      {
+        "text": "详情",
+        "href": "/tenants/3"
+      },
+      {
+        "text": "详情",
+        "href": "/tenants/6"
+      },
+      {
+        "text": "详情",
+        "href": "/tenants/4"
+      },
+      {
+        "text": "详情",
+        "href": "/tenants/2"
+      },
+      {
+        "text": "详情",
+        "href": "/tenants/8"
+      },
+      {
+        "text": "详情",
+        "href": "/tenants/7"
+      },
+      {
+        "text": "详情",
+        "href": "/tenants/5"
+      }
+    ],
+    "errors": []
+  },
+  {
+    "key": "tenancies",
+    "route": "/tenancies",
+    "status": 200,
+    "title": "RentOps Tenancies",
+    "h1": [
+      "自动生成的租住安排"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 0 账 应收账单 流 流水匹配 0 催 催收任务 产 房产管理 房 房间管理 租 租客管理 0 约 租住安排 现 现金补录 支 费用支出 0 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 自动生成的租住安排 租住安排 自动生成的租住安排 只读历史视图；新安排从租客入住配置生成 管理租客 暂无租住安排。新租客可先不绑定房间。",
+    "pageHeight": 1000,
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "mainLeft": 236,
+    "forms": 0,
+    "links": [],
+    "errors": []
+  },
+  {
+    "key": "bills",
+    "route": "/bills?period=2026-09",
+    "status": 200,
+    "title": "RentOps Dashboard",
+    "h1": [
+      "2026年9月"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 8 账 应收账单 流 流水匹配 9 催 催收任务 产 房产管理 房 房间管理 租 租客管理 8 约 租住安排 现 现金补录 支 费用支出 7 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 月度收租工作台 本月收租 2026年9月 退出登录 尚未完成银行同步，待处理金额可能不完整。 收租月份 ‹ › 收租汇总 2026年9月 · 各卡片金额仅统计 EUR 本月应收 EUR 172012.00 本月租金账单 已收租金 EUR 1950.00 1 户已缴清 · 查看账单 剩余未收 EUR 170062.00 127 户未缴或部分缴纳 · 查看账单 房产支出 EUR 7821.61 7 笔已记录支出 · 查看支出 待处理 5 笔流水需要关联或确认 · 查看对应流水 本月共 128 户 逾期 95 部分缴纳 1 待确认 0 当前显示 128 户 收款进度 1% 已收 EUR 1950.00，本月还差 EUR 170062.00 租客缴费情况 共 128 户 · 点击任意一行展开收款明细 邮件催缴 搜索租客 状态 全部 未缴（含部分） 逾期 待确认 部分缴纳 未开始收款 已缴清 筛选 清除筛选 租客 ▲ 房间 应缴日 ▲ 应收 ▼ 已收 未收 状态 Michael O'Brien 别名：Mick Studio 9 Studio 9, 5 Mill Lane, Galway, H91 XY22, Ireland 2026-09-05 EUR 700.00 EUR 0.00 EUR 700.00 已逾期 一键平账 Michael O'Brien 别名：Mick Studio 9 Studio 9, 5 Mill Lane, Galway, H91 XY22, Ireland 2026-09-05 EUR 700.00 EUR 0.00 EU",
+    "pageHeight": 2440,
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "mainLeft": 236,
+    "forms": 30,
+    "links": [
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      }
+    ],
+    "errors": []
+  },
+  {
+    "key": "transactions",
+    "route": "/transactions",
+    "status": 200,
+    "title": "RentOps Transactions",
+    "h1": [
+      "收款与支出"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 8 账 应收账单 流 流水匹配 16 催 催收任务 产 房产管理 房 房间管理 租 租客管理 8 约 租住安排 现 现金补录 支 费用支出 5 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 银行流水与租金关联 银行流水 收款与支出 连接银行账户 历史付款人预览 导入旧数据 退出登录 付款人 租客 全部租客 Alexandria Catherine Montgomery-Wellington Michael O'Brien Priya Nair 周敏 张伟明·浦东新区世纪大道某某花园3号楼2单元1802室承租人（长期租住） 李娜 王芳 陈志强 流水到账月 租金所属月 入账用途 全部用途 房租 押金 其他收入 收支 全部 收入 支出 匹配状态 全部状态 待处理（需关联或确认） 已关联 部分关联 待确认 未关联 需处理 已忽略 应用筛选 清除筛选 流水明细 尚未同步 类型 付款人 ▲ 金额／余额 ▼ 到账／租金月 ▲ 描述 账户 用途／处理 收入 CHEN ZHIQIANG EUR 400.00 已分配 EUR 250.00 余款 EUR 150.00 12 Sep 2026 14:40 租金月：2026-08 Additional rent settlement for 2026-08 - CHEN ZHIQIANG RentOps Audit Current Account 房租 EUR 250.00 部分关联 没有可直接匹配的租金月，可使用归类／拆分处理。 归类／拆分 修改匹配 撤销匹配 支出 未知付款人 EUR 4321.09 已分配 EUR 0.00 余款 EUR 4321.09 10 Sep 2026 00:00 租金月：未确认 Local property tax instalment for the Riversi",
+    "pageHeight": 4076,
+    "scrollWidth": 1485,
+    "mainWidth": 1204,
+    "mainLeft": 236,
+    "forms": 26,
+    "links": [],
+    "errors": []
+  },
+  {
+    "key": "billing",
+    "route": "/billing?match_status=unmatched",
+    "status": 200,
+    "title": "RentOps Transactions",
+    "h1": [
+      "收款与支出"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 8 账 应收账单 流 流水匹配 11 催 催收任务 产 房产管理 房 房间管理 租 租客管理 8 约 租住安排 现 现金补录 支 费用支出 5 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 银行流水与租金关联 银行流水 收款与支出 连接银行账户 历史付款人预览 导入旧数据 退出登录 付款人 租客 全部租客 Alexandria Catherine Montgomery-Wellington Michael O'Brien Priya Nair 周敏 张伟明·浦东新区世纪大道某某花园3号楼2单元1802室承租人（长期租住） 李娜 王芳 陈志强 流水到账月 租金所属月 入账用途 全部用途 房租 押金 其他收入 收支 全部 收入 支出 匹配状态 全部状态 待处理（需关联或确认） 已关联 部分关联 待确认 未关联 需处理 已忽略 应用筛选 清除筛选 流水明细 尚未同步 类型 付款人 ▲ 金额／余额 ▼ 到账／租金月 ▲ 描述 账户 用途／处理 支出 未知付款人 EUR 4321.09 已分配 EUR 0.00 余款 EUR 4321.09 10 Sep 2026 00:00 租金月：未确认 Local property tax instalment for the Riverside Quarter apartment, second of four instalments 未知账户 未归类 未关联 收入 Rounding adjustment credit EUR 25.00 已分配 EUR 0.00 余款 EUR 25.00 09 Sep 2026 07:20 租金月：未确认 Rounding adjustment credit RentOps Audit Current Account 未归类 未关联 原因：audit see",
+    "pageHeight": 3125,
+    "scrollWidth": 1485,
+    "mainWidth": 1204,
+    "mainLeft": 236,
+    "forms": 16,
+    "links": [],
+    "errors": []
+  },
+  {
+    "key": "dunning",
+    "route": "/dunning",
+    "status": 200,
+    "title": "RentOps Dashboard",
+    "h1": [
+      "2026年9月"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 8 账 应收账单 流 流水匹配 9 催 催收任务 产 房产管理 房 房间管理 租 租客管理 8 约 租住安排 现 现金补录 支 费用支出 7 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 月度收租工作台 本月收租 2026年9月 退出登录 尚未完成银行同步，待处理金额可能不完整。 收租月份 ‹ › 收租汇总 2026年9月 · 各卡片金额仅统计 EUR 本月应收 EUR 182762.75 本月租金账单 已收租金 EUR 1950.00 1 户已缴清 · 查看账单 剩余未收 EUR 180812.75 135 户未缴或部分缴纳 · 查看账单 房产支出 EUR 7821.61 7 笔已记录支出 · 查看支出 待处理 5 笔流水需要关联或确认 · 查看对应流水 本月共 136 户 逾期 101 部分缴纳 1 待确认 0 当前显示 136 户 收款进度 1% 已收 EUR 1950.00，本月还差 EUR 180812.75 租客缴费情况 共 136 户 · 点击任意一行展开收款明细 邮件催缴 搜索租客 状态 全部 未缴（含部分） 逾期 待确认 部分缴纳 未开始收款 已缴清 筛选 清除筛选 租客 ▲ 房间 应缴日 ▲ 应收 ▼ 已收 未收 状态 Michael O'Brien 别名：Mick Studio 9 Studio 9, 5 Mill Lane, Galway, H91 XY22, Ireland 2026-09-05 EUR 700.00 EUR 0.00 EUR 700.00 已逾期 一键平账 Michael O'Brien 别名：Mick Studio 9 Studio 9, 5 Mill Lane, Galway, H91 XY22, Ireland 2026-09-05 EUR 700.00 EUR 0.00 E",
+    "pageHeight": 3784,
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "mainLeft": 236,
+    "forms": 30,
+    "links": [
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "Michael O'Brien",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      },
+      {
+        "text": "租客详情",
+        "href": "/tenants/8?from_month=2026-09&to_month=2026-09"
+      }
+    ],
+    "errors": []
+  },
+  {
+    "key": "cash",
+    "route": "/cash-receipts",
+    "status": 200,
+    "title": "RentOps Cash Receipts",
+    "h1": [
+      "现金收款记录"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 0 账 应收账单 流 流水匹配 0 催 催收任务 产 房产管理 房 房间管理 租 租客管理 0 约 租住安排 现 现金补录 支 费用支出 0 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 现金收款记录 现金补录 现金收款记录 现金不会伪装成银行流水；作废必须保留原因 新建现金收款 收款列表 全部状态 已确认 已作废 收据 租客／月份 金额 收款日期 状态 作废原因 cash-20260919051349-5vS8Pqsbfv 王芳 2026-08 EUR 200.00 2026-08-20 已作废 audit seed: correction demo cash-20260919051349-gNf2Bj9f6B 陈志强 2026-08 EUR 300.00 2026-08-15 已确认 撤销 —",
+    "pageHeight": 1000,
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "mainLeft": 236,
+    "forms": 1,
+    "links": [
+      {
+        "text": "王芳",
+        "href": "/tenants/6"
+      },
+      {
+        "text": "陈志强",
+        "href": "/tenants/4"
+      }
+    ],
+    "errors": []
+  },
+  {
+    "key": "cash-create",
+    "route": "/cash-receipts/new",
+    "status": 200,
+    "title": "现金租金补录",
+    "h1": [
+      "现金租金补录"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 账 应收账单 流 流水匹配 催 催收任务 产 房产管理 房 房间管理 租 租客管理 约 租住安排 现 现金补录 支 费用支出 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 现金租金补录 手工收款 现金租金补录 现金记录只计入选择的租金月份，不会创建银行流水。 返回总览 填写收款信息 仅支持 EUR 租客 请选择租客 Alexandria Catherine Montgomery-Wellington · Apartment 12 Riverside Quarter Michael O'Brien · Studio 9 Priya Nair · Flat 2A 周敏 · 2号楼1105 张伟明·浦东新区世纪大道某某花园3号楼2单元1802室承租人（长期租住） · 3号楼2单元1802室 李娜 · Room 3B 王芳 · 4单元501 陈志强 · Unit 8 租金月份 现金金额 币种 实际收款日期 幂等请求号 重复提交同一请求号不会重复记账。 备注（可选） 预览入账 返回租客",
+    "pageHeight": 1000,
+    "scrollWidth": 1440,
+    "mainWidth": 980,
+    "mainLeft": 236,
+    "forms": 1,
+    "links": [],
+    "errors": []
+  },
+  {
+    "key": "expenses",
+    "route": "/expenses",
+    "status": 200,
+    "title": "RentOps Expenses",
+    "h1": [
+      "房产支出"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 8 账 应收账单 流 流水匹配 16 催 催收任务 产 房产管理 房 房间管理 租 租客管理 8 约 租住安排 现 现金补录 支 费用支出 5 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 支出资料：/private/tmp/rentops-visual-audit-5wzrha_3/audit/expenses.json 支出记录 房产支出 退出登录 支出笔数 5 手动记录的支出 支出合计 EUR 6237.05 全部已保存支出 添加支出 手动记录 支出描述 金额 类别 维修 水电 清洁 保险 其他 日期 付款方式 房间备注 租客备注 发票链接（可选） 保存支出 支出列表 5 条记录 描述 金额 类别 日期 备注 付款方式 Local property tax instalment for the Riverside Quarter apartment, second of four instalments 5 EUR 4321.09 房产税 10 Sep 2026 房间：Apartment 12 Riverside Quarter 租客：Alexandria Catherine Montgomery-Wellington Bank Transfer Wexford County Council waste water and refuse charges for September 2026 2 EUR 1234.56 水电 09 Sep 2026 暂无备注 Direct Debit Annual buildings and contents insurance premium for the three rental units at Wexford Street, paid by direct debit 1 EUR",
+    "pageHeight": 1000,
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "mainLeft": 236,
+    "forms": 2,
+    "links": [],
+    "errors": []
+  },
+  {
+    "key": "bank",
+    "route": "/bank",
+    "status": 200,
+    "title": "RentOps Bank",
+    "h1": [
+      "银行连接与同步"
+    ],
+    "text": "R RentOps SANDBOX WORKSPACE 工作台 总 月度总览 0 账 应收账单 流 流水匹配 0 催 催收任务 产 房产管理 房 房间管理 租 租客管理 0 约 租住安排 现 现金补录 支 费用支出 0 银 银行设置 当前用户：rentops-audit-20260919-051343-895db935-primary 单一银行授权与同步状态 银行设置 银行连接与同步 每个账号只保留一个授权，授权下可同步多个实际账户 连接银行 授权 未连接 truelayer · sandbox 同步状态 未连接 最近覆盖 暂无 同步运行 refresh token 流程 暂无同步记录。连接银行后点击同步。",
+    "pageHeight": 1000,
+    "scrollWidth": 1440,
+    "mainWidth": 1204,
+    "mainLeft": 236,
+    "forms": 0,
+    "links": [],
+    "errors": []
+  },
+  {
+    "key": "dashboard",
+    "route": "/rent-dashboard?period=2026-09",
+    "viewport": "mobile",
+    "status": 200,
+    "title": "RentOps Dashboard",
+    "h1": [
+      "2026年9月"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 本月收租 2026年9月 尚未完成银行同步，待处理金额可能不完整。 ‹ › 收租汇总 2026年9月 · 各卡片金额仅统计 EUR 本月应收 EUR 193513.50 本月租金账单 已收租金 EUR 1950.00 1 户已缴清 · 查看账单 剩余未收 EUR 191563.50 143 户未缴或部分缴纳 · 查看账单 房产支出 EUR 7821.61 7 笔已记录支出 · 查看支出 待处理 5 笔流水需要关联或确认 · 查看对应流水 本月共 144 户 逾期 107 部分缴纳 1 待确认 0 当前显示 144 户 收款进度 1% 已收 EUR 1950.00，本月还差 EUR 191563.50 租客缴费情况 共 144 户 · 点击任意一行展开收款明细 邮件催缴 搜索租客 状态 全部 未缴（含部分） 逾期 待确认 部分缴纳 未开始收款 已缴清 筛选 清除筛选 Michael O'Brien 别名：Mick Studio 9 · Studio 9, 5 Mill Lane, Galway, H91 XY22,",
+    "viewportWidth": 390,
+    "documentWidth": 390,
+    "mainWidth": 374,
+    "bodyHeight": 5006,
+    "errors": []
+  },
+  {
+    "key": "properties",
+    "route": "/properties?period=2026-09",
+    "viewport": "mobile",
+    "status": 200,
+    "title": "RentOps Properties",
+    "h1": [
+      "房产"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 资产管理 房产 2026年9月 · 0 套 新建房产 房产列表 状态 有效 已停用 全部 还没有房产，先创建一套房产。",
+    "viewportWidth": 390,
+    "documentWidth": 390,
+    "mainWidth": 374,
+    "bodyHeight": 844,
+    "errors": []
+  },
+  {
+    "key": "rooms",
+    "route": "/rooms?period=2026-09",
+    "viewport": "mobile",
+    "status": 200,
+    "title": "RentOps Rooms",
+    "h1": [
+      "房间"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 资产管理 房间 2026年9月 · 房产绑定与入住安排 新建房间 房间列表 还没有房间，请先创建房产。",
+    "viewportWidth": 390,
+    "documentWidth": 390,
+    "mainWidth": 374,
+    "bodyHeight": 844,
+    "errors": []
+  },
+  {
+    "key": "tenants",
+    "route": "/tenants",
+    "viewport": "mobile",
+    "status": 200,
+    "title": "RentOps Tenants",
+    "h1": [
+      "租客资料"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 租客管理 租客资料 添加租客 租客数量 8 当前保存的租客 月租合计 EUR 10750.75 租客资料中的预期月租 租客列表 8 条记录 Alexandra Alexandria Catherine Montgomery-Wellington Apartment 12 Riverside Quarter · Apartment 12, Riverside Quarter, 48-52 Wellington Quay, Dublin 2, D02 XR20, Ireland 有效 月租 · 每月 25 日 EUR 1450.75 详情 编辑 查看最近六个月缴费 Mick Michael O'Brien Studio 9 · Studio 9, 5 Mill Lane, Galway, H91 XY22, Ireland 有效 月租 · 每月 5 日 EUR 700.00 详情 编辑 查看最近六个月缴费 Priya Priya Nair Flat 2A · Flat 2A, 17 Harbour View Road",
+    "viewportWidth": 390,
+    "documentWidth": 390,
+    "mainWidth": 374,
+    "bodyHeight": 2809,
+    "errors": []
+  },
+  {
+    "key": "tenancies",
+    "route": "/tenancies",
+    "viewport": "mobile",
+    "status": 200,
+    "title": "RentOps Tenancies",
+    "h1": [
+      "自动生成的租住安排"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 租住安排 自动生成的租住安排 只读历史视图；新安排从租客入住配置生成 管理租客 暂无租住安排。新租客可先不绑定房间。",
+    "viewportWidth": 390,
+    "documentWidth": 390,
+    "mainWidth": 374,
+    "bodyHeight": 844,
+    "errors": []
+  },
+  {
+    "key": "bills",
+    "route": "/bills?period=2026-09",
+    "viewport": "mobile",
+    "status": 200,
+    "title": "RentOps Dashboard",
+    "h1": [
+      "2026年9月"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 本月收租 2026年9月 尚未完成银行同步，待处理金额可能不完整。 ‹ › 收租汇总 2026年9月 · 各卡片金额仅统计 EUR 本月应收 EUR 215015.00 本月租金账单 已收租金 EUR 1950.00 1 户已缴清 · 查看账单 剩余未收 EUR 213065.00 159 户未缴或部分缴纳 · 查看账单 房产支出 EUR 7821.61 7 笔已记录支出 · 查看支出 待处理 5 笔流水需要关联或确认 · 查看对应流水 本月共 160 户 逾期 119 部分缴纳 1 待确认 0 当前显示 160 户 收款进度 0% 已收 EUR 1950.00，本月还差 EUR 213065.00 租客缴费情况 共 160 户 · 点击任意一行展开收款明细 邮件催缴 搜索租客 状态 全部 未缴（含部分） 逾期 待确认 部分缴纳 未开始收款 已缴清 筛选 清除筛选 Michael O'Brien 别名：Mick Studio 9 · Studio 9, 5 Mill Lane, Galway, H91 XY22,",
+    "viewportWidth": 390,
+    "documentWidth": 390,
+    "mainWidth": 374,
+    "bodyHeight": 5006,
+    "errors": []
+  },
+  {
+    "key": "transactions",
+    "route": "/transactions",
+    "viewport": "mobile",
+    "status": 200,
+    "title": "RentOps Transactions",
+    "h1": [
+      "收款与支出"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 银行流水 收款与支出 连接银行账户 历史付款人预览 导入旧数据 付款人 租客 全部租客 Alexandria Catherine Montgomery-Wellington Michael O'Brien Priya Nair 周敏 张伟明·浦东新区世纪大道某某花园3号楼2单元1802室承租人（长期租住） 李娜 王芳 陈志强 流水到账月 租金所属月 入账用途 全部用途 房租 押金 其他收入 收支 全部 收入 支出 匹配状态 全部状态 待处理（需关联或确认） 已关联 部分关联 待确认 未关联 需处理 已忽略 应用筛选 清除筛选 流水明细 尚未同步 收入 CHEN ZHIQIANG EUR 400.00 已分配 EUR 250.00 余款 EUR 150.00 12 Sep 2026 14:40 租金月：2026-08 Additional rent settlement for 2026-08 - CHEN ZHIQIANG RentOps Audit Current Account 部分关联 EUR 400.00",
+    "viewportWidth": 390,
+    "documentWidth": 390,
+    "mainWidth": 374,
+    "bodyHeight": 6255,
+    "errors": []
+  },
+  {
+    "key": "dunning",
+    "route": "/dunning",
+    "viewport": "mobile",
+    "status": 200,
+    "title": "RentOps Dashboard",
+    "h1": [
+      "2026年9月"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 本月收租 2026年9月 尚未完成银行同步，待处理金额可能不完整。 ‹ › 收租汇总 2026年9月 · 各卡片金额仅统计 EUR 本月应收 EUR 225765.75 本月租金账单 已收租金 EUR 1950.00 1 户已缴清 · 查看账单 剩余未收 EUR 223815.75 167 户未缴或部分缴纳 · 查看账单 房产支出 EUR 7821.61 7 笔已记录支出 · 查看支出 待处理 5 笔流水需要关联或确认 · 查看对应流水 本月共 168 户 逾期 125 部分缴纳 1 待确认 0 当前显示 168 户 收款进度 0% 已收 EUR 1950.00，本月还差 EUR 223815.75 租客缴费情况 共 168 户 · 点击任意一行展开收款明细 邮件催缴 搜索租客 状态 全部 未缴（含部分） 逾期 待确认 部分缴纳 未开始收款 已缴清 筛选 清除筛选 Michael O'Brien 别名：Mick Studio 9 · Studio 9, 5 Mill Lane, Galway, H91 XY22,",
+    "viewportWidth": 390,
+    "documentWidth": 390,
+    "mainWidth": 374,
+    "bodyHeight": 5006,
+    "errors": []
+  },
+  {
+    "key": "cash",
+    "route": "/cash-receipts",
+    "viewport": "mobile",
+    "status": 200,
+    "title": "RentOps Cash Receipts",
+    "h1": [
+      "现金收款记录"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 现金补录 现金收款记录 现金不会伪装成银行流水；作废必须保留原因 新建现金收款 收款列表 全部状态 已确认 已作废 cash-20260919051349-5vS8Pqsbfv 王芳 2026-08 EUR 200.00 2026-08-20 已作废 audit seed: correction demo cash-20260919051349-gNf2Bj9f6B 陈志强 2026-08 EUR 300.00 2026-08-15 已确认 撤销 —",
+    "viewportWidth": 390,
+    "documentWidth": 390,
+    "mainWidth": 374,
+    "bodyHeight": 844,
+    "errors": []
+  },
+  {
+    "key": "expenses",
+    "route": "/expenses",
+    "viewport": "mobile",
+    "status": 200,
+    "title": "RentOps Expenses",
+    "h1": [
+      "房产支出"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 支出记录 房产支出 支出笔数 5 手动记录的支出 支出合计 EUR 6237.05 全部已保存支出 添加支出 手动记录 支出描述 金额 类别 维修 水电 清洁 保险 其他 日期 付款方式 房间备注 租客备注 发票链接（可选） 保存支出 支出列表 5 条记录 Local property tax instalment for the Riverside Quarter apartment, second of four instalments 房产税 · 10 Sep 2026 EUR 4321.09 付款方式 Bank Transfer 归属 Apartment 12 Riverside Quarter 租客：Alexandria Catherine Montgomery-Wellington Wexford County Council waste water and refuse charges for September 2026 水电 · 09 Sep 2026 EUR 1234.56 付款方式 Dire",
+    "viewportWidth": 390,
+    "documentWidth": 390,
+    "mainWidth": 374,
+    "bodyHeight": 2417,
+    "errors": []
+  },
+  {
+    "key": "bank",
+    "route": "/bank",
+    "viewport": "mobile",
+    "status": 200,
+    "title": "RentOps Bank",
+    "h1": [
+      "银行连接与同步"
+    ],
+    "text": "R RentOps ☰ 总 首页 账 账单 流 流水 物 对象 更 更多 银行设置 银行连接与同步 每个账号只保留一个授权，授权下可同步多个实际账户 连接银行 授权 未连接 truelayer · sandbox 同步状态 未连接 最近覆盖 暂无 同步运行 refresh token 流程 暂无同步记录。连接银行后点击同步。",
+    "viewportWidth": 390,
+    "documentWidth": 390,
+    "mainWidth": 374,
+    "bodyHeight": 961,
+    "errors": []
+  }
+]

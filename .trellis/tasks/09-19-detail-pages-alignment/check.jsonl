@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/responsive-conventions.md", "reason": "核对移动端专用字段在 PC 隐藏、窄屏显示，未重演 room-mobile-facts 的同等优先级覆盖。"}
+{"file": "prdfile/prd.md", "reason": "核对详情页补的是原型已有语义，未新增 prd 未定义的持久化实体。"}

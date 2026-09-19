@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/responsive-conventions.md", "reason": "核对筛选/排序/分页/detail-return 上下文行为与改动前一致，窄屏卡片化未被破坏。"}
+{"file": "prdfile/prd.md", "reason": "核对未越界实现被排除项，且平账表单未静默引入未确认的账务规则。"}

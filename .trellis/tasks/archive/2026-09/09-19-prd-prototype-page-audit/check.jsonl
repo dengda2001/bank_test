@@ -1,0 +1,3 @@
+{"file":".trellis/spec/frontend/responsive-conventions.md","reason":"Check responsive breakpoint, mobile list, and navigation-state contracts."}
+{"file":".trellis/tasks/09-19-prd-prototype-page-audit/research/page-audit.md","reason":"Verify every prototype state maps to an implementation state and residual gaps remain explicit."}
+{"file":".trellis/tasks/09-19-prd-prototype-page-audit/research/recheck-notes.md","reason":"Check final browser captures, filter/return-state flows, geometry, and validation results."}

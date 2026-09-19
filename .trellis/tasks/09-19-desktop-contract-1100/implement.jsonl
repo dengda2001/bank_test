@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/responsive-conventions.md", "reason": "本任务的直接对象：第 17 行的冻结契约表述、§3 的窄屏规则口径、§8 的桌面基线都要改。"}
+{"file": "figma/DESIGN-MANIFEST.json", "reason": "原型的响应式视口矩阵，用于确定 1100 档要承载的宽度区间。"}

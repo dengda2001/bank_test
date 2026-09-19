@@ -1,0 +1,2 @@
+{"file": "prdfile/prd.md", "reason": "第 144 行排除发票文件上传、第 145 行排除初始化向导——判断哪些入口不该补。"}
+{"file": ".trellis/spec/frontend/responsive-conventions.md", "reason": "列表筛选/排序/分页/detail-return 上下文契约与 §3.10 响应式标记，改动时不得破坏。"}

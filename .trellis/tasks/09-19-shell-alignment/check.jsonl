@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/responsive-conventions.md", "reason": "核对共享外壳改动未破坏各页面渲染、导航计数断言与抽屉的窄屏作用域。"}
+{"file": "figma/DESIGN-MANIFEST.json", "reason": "核对控件交互状态齐全（default/hover/focus/active/disabled），而非只核对默认态。"}

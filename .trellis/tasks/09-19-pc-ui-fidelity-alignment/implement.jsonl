@@ -1,0 +1,4 @@
+{"file": "figma/DESIGN-HANDOFF.md", "reason": "声明原型是视觉契约：实现冲突时以导出的像素与行为为准；并规定生产 UI 不得保留原型专属装饰、预览标签或设计过程注释。"}
+{"file": "figma/DESIGN-MANIFEST.json", "reason": "9 档响应式视口矩阵与 token 清单，本次 PC 验收取其中 1024/1366/1440/1920 四档。"}
+{"file": "prdfile/prd.md", "reason": "产品需求真源：经营净额口径、统一排序、房产视角业务列，以及第 144/145 行的范围排除项。"}
+{"file": ".trellis/spec/frontend/responsive-conventions.md", "reason": "响应式约定与桌面基线；本次要改的冻结契约与受影响断言都在此。"}

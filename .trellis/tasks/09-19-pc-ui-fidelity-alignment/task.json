@@ -1,0 +1,32 @@
+{
+  "id": "pc-ui-fidelity-alignment",
+  "name": "pc-ui-fidelity-alignment",
+  "title": "PC 端原型 UI 还原度对齐",
+  "description": "对照 figma/rentops-desktop-suite.html，在 1024/1366/1440/1920 四档宽度下对齐桌面端的样式、排版布局、表单/筛选/按钮组件与响应式适配；不追求文案与数据逐字一致。",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "dd",
+  "assignee": "dd",
+  "createdAt": "2026-09-19",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-19-desktop-contract-1100",
+    "09-19-shell-alignment",
+    "09-19-dashboard-alignment",
+    "09-19-list-pages-alignment",
+    "09-19-detail-pages-alignment"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

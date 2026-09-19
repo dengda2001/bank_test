@@ -1,0 +1,2 @@
+{"file": "prdfile/prd.md", "reason": "核对合并后的列未丢失 PRD 业务列，排序仍符合统一口径。"}
+{"file": ".trellis/spec/frontend/responsive-conventions.md", "reason": "核对树形展开与表格卡改动未影响窄屏断言。"}
