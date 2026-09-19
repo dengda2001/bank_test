@@ -1,4 +1,4 @@
 {"file": "figma/DESIGN-HANDOFF.md", "reason": "核对生产 UI 未残留原型专属装饰、预览标签与设计过程注释。"}
 {"file": "figma/DESIGN-MANIFEST.json", "reason": "核对 responsiveViewports 与 implementationChecklist 的实际完成度，而非只核对模板里存在某标记。"}
 {"file": ".trellis/spec/frontend/responsive-conventions.md", "reason": "核对桌面改动规则已落地、640 档未被污染、受影响断言已在同一批更新。"}
-{"file": ".trellis/tasks/archive/2026-09/09-16-mobile-responsive-audit/research/harness/README.md", "reason": "复用几何验证脚本，并遵守其只读约束：:8081 是生产实例，无沙箱。"}
+{"file": "scripts/audit/README.md", "reason": "复用几何验证脚本；用 scripts/run-audit-local.sh 起一次性实例，不指向 :8081 / bank.ddpl.top。注意 :110-118 关于脚本尚未实现的说明已过时。"}

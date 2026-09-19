@@ -39,4 +39,4 @@ git diff --check
 - [ ] 子任务 ① 已完成，1100 档已确认生效
 - [ ] 用户已审阅本子任务的 `prd.md` / `design.md` / `implement.md`
 - [ ] 已知悉顶栏不放主操作按钮（已确认决策，见 `prd.md`）—— 不要顺手把页头主操作复制进顶栏
-- [ ] 已确认不会对生产实例发起写入
+- [ ] 已确认用 `scripts/run-audit-local.sh` 起一次性实例，不指向 `:8081` / `bank.ddpl.top`

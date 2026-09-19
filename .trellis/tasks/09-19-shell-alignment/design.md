@@ -52,4 +52,4 @@
 
 - 11 个页面逐页截图，四档宽度。
 - 断言 `scrollWidth === clientWidth`。
-- 用归档 harness 的 `verify-hits.mjs` 类脚本核验可点击区域（顶栏控件尺寸）；**只读**，见父任务 `implement.md` 的安全边界。
+- 用 `scripts/audit/` 的 `verify-hits.mjs` 类脚本核验可点击区域（顶栏控件尺寸）。被测实例由 `scripts/run-audit-local.sh` 起，不指向 `:8081` / `bank.ddpl.top`。

@@ -42,17 +42,21 @@ git diff --check
 
 浏览器验证：`figma/rentops-desktop-suite.html`（原型）与本地运行的应用逐页对照，四档宽度各截一次，断言 `document.documentElement.scrollWidth === document.documentElement.clientWidth`。
 
-可复用的 Playwright 脚本在 `.trellis/tasks/archive/2026-09/09-16-mobile-responsive-audit/research/harness/`（29 个 `.mjs`，已随任务归档）。适合几何、命中区域、焦点类问题；`desktop-full.mjs` 是现成的桌面回归对，`probe-wide.mjs` 能把页面级溢出与滚动容器内的溢出分开。
+可复用的 Playwright 脚本在 **`scripts/audit/`**（已入库）。适合几何、命中区域、焦点类问题；`desktop-full.mjs` 是现成的桌面回归对，`probe-wide.mjs` 能把页面级溢出与滚动容器内的溢出分开。
 
-### 关于那套 harness 的安全边界（必读）
+### 怎么把被测实例跑起来（必读）
 
-该 README 的原文是：**"There is no sandbox. `:8081` is the production app."** —— 它由 nginx 以 `bank.ddpl.top` 对外，跑在**生产数据库**上，并没有隔离的沙箱实例。演示账号 `rentops-demo` 的数据行就在生产库里。
+**用 `scripts/run-audit-local.sh`。** 它建一个一次性 `rentops_audit_*` MySQL 库、导入 `test-data/audit/` 里的已提交夹具、起应用、跑完 drop 掉临时库。三道硬防护写在脚本里：
 
-因此复用这套脚本时：
+- `:62` 数据库名不匹配 `rentops_audit_*` 就拒绝运行；
+- `:66` 端口是 `8081` 或 URL 含 `bank.ddpl.top` 就拒绝运行；
+- `:73` `MYSQL_HOST` 不是 loopback 就拒绝运行。
 
-- 只发只读请求：GET，加上那一个只读的 `POST /billing/payer/preview`。
-- 不得对任何共享或生产实例执行写入、平账、生成账单、批量提醒等动作。本次涉及写操作（平账表单、生成账单）的验证，必须在本机自有实例与自有数据上进行。
-- 不要照搬 README 里那段"构建并 `systemctl restart rentops-app-live.service`"的部署片段 —— 它会把工作区（含用户未提交改动）直接推上生产。
+**不要指向 `:8081` / `bank.ddpl.top`** —— 那是生产应用连生产库，`scripts/audit/README.md:106-108` 明确要求指向你自己起的可丢弃实例。
+
+注意 `scripts/audit/README.md:110-118` 那段"该脚本尚未实现"的说明已经过时：脚本已随本次提交落地，以脚本本身为准。
+
+本次涉及写操作的验证（平账表单、生成账单）就在这个一次性实例上做 —— 它有可丢弃的数据，不必再像早期那样限制为只读。
 
 ## 风险文件与回滚点
 

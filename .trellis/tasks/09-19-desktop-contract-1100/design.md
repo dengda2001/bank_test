@@ -51,4 +51,4 @@
 
 - 四档（1024 / 1366 / 1440 / 1920）实机渲染，断言 `scrollWidth === clientWidth`。
 - 截图存入 `research/screenshots/`，作为 ②③④⑤ 的对照基线。
-- 复用归档 harness 的 `desktop-full.mjs`（桌面回归对）与 `probe-wide.mjs`（区分页面级溢出与滚动容器内溢出）。**只读**，见父任务 `implement.md` 的安全边界。
+- 复用 `scripts/audit/` 的 `desktop-full.mjs`（桌面回归对）与 `probe-wide.mjs`（区分页面级溢出与滚动容器内溢出）。被测实例由 `scripts/run-audit-local.sh` 起，不指向 `:8081` / `bank.ddpl.top`。

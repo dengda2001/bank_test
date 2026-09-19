@@ -45,4 +45,4 @@ git diff .trellis/spec/frontend/responsive-conventions.md
 - [ ] 用户已审阅本子任务的 `prd.md` / `design.md` / `implement.md`
 - [ ] 已加载 `trellis-before-dev`
 - [ ] 已确认本机可运行应用并截图
-- [ ] 已确认不会对生产实例（`:8081` / `bank.ddpl.top`）发起写入
+- [ ] 已确认用 `scripts/run-audit-local.sh` 起一次性实例，不指向 `:8081` / `bank.ddpl.top`
