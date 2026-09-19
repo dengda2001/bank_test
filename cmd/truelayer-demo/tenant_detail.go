@@ -22,9 +22,21 @@ func parseTenantHistoryRange(values formValues, now time.Time) (time.Time, time.
 	current := monthStart(now)
 	from := current.AddDate(0, -(defaultTenantHistoryMonths - 1), 0)
 	to := current
+	page, pageSize, err := parseTenantHistoryPagination(values)
+	if err != nil {
+		return time.Time{}, time.Time{}, 0, 0, err
+	}
+	// The prototype offers two presets, "近 12 个月" and "近 24 个月". A preset
+	// wins over explicit months so the select and the URL never disagree.
+	if raw := strings.TrimSpace(values.Get("range")); raw != "" {
+		months, convErr := strconv.Atoi(raw)
+		if convErr != nil || (months != defaultTenantHistoryMonths && months != 24) {
+			return time.Time{}, time.Time{}, 0, 0, errors.New("range must be 12 or 24 months")
+		}
+		return current.AddDate(0, -(months - 1), 0), current, page, pageSize, nil
+	}
 	hasFrom := strings.TrimSpace(values.Get("from_month")) != ""
 	hasTo := strings.TrimSpace(values.Get("to_month")) != ""
-	var err error
 	if value := strings.TrimSpace(values.Get("from_month")); value != "" {
 		from, err = parsePeriodMonth(value)
 		if err != nil {
@@ -50,11 +62,20 @@ func parseTenantHistoryRange(values formValues, now time.Time) (time.Time, time.
 	if monthCount > maxTenantHistoryMonths {
 		return time.Time{}, time.Time{}, 0, 0, fmt.Errorf("history range cannot exceed %d months", maxTenantHistoryMonths)
 	}
-	page, pageSize, err := parseTenantHistoryPagination(values)
-	if err != nil {
-		return time.Time{}, time.Time{}, 0, 0, err
-	}
 	return from, to, page, pageSize, nil
+}
+
+// tenantHistoryRangeValue maps a resolved range back to the preset the select
+// shows. The page only offers 12 and 24 months, so 24 is returned only when the
+// range actually spans 24 months; anything else reads as 近 12 个月.
+func tenantHistoryRangeValue(from, to time.Time) string {
+	from = monthStart(from)
+	to = monthStart(to)
+	months := (to.Year()-from.Year())*12 + int(to.Month()-from.Month()) + 1
+	if months == 24 {
+		return "24"
+	}
+	return "12"
 }
 
 func parseTenantHistoryPagination(values formValues) (int, int, error) {
@@ -108,6 +129,18 @@ type tenantBillingHistoryPage struct {
 	HasNext    bool
 	PrevPage   int
 	NextPage   int
+	Reference  string
+}
+
+// tenantPaidByOtherRow is one allocation where the bank payer and the
+// responsibility owner are different tenants. It backs the tenant detail page's
+// "代付与被代付" table. It is derived from real allocations, not a placeholder.
+type tenantPaidByOtherRow struct {
+	PeriodLabel string
+	PayerName   string
+	OwnerName   string
+	Amount      string
+	Result      string
 }
 
 func (s *obligationService) listTenantBillingHistoryPage(ctx context.Context, userID, tenantID uint64, fromMonth, toMonth time.Time, page, pageSize int) (tenantBillingHistoryPage, error) {
@@ -166,12 +199,33 @@ func (s *obligationService) listTenantBillingHistoryPage(ctx context.Context, us
 		HasNext:    page < totalPages,
 		PrevPage:   page - 1,
 		NextPage:   page + 1,
+		Reference:  latestTenantBillingReference(history),
 	}, nil
+}
+
+// latestTenantBillingReference returns the reference of the most recent payment
+// already loaded for this tenant. history is ordered newest period first, and
+// within an obligation payments are ordered oldest first, so the last reference
+// of the first month that has one is the most recent.
+func latestTenantBillingReference(history []tenantBillingMonth) string {
+	for _, month := range history {
+		var reference string
+		for _, payment := range month.Payments {
+			if value := strings.TrimSpace(payment.Reference); value != "" && value != "No reference" {
+				reference = value
+			}
+		}
+		if reference != "" {
+			return reference
+		}
+	}
+	return ""
 }
 
 type tenantDetailPageData struct {
 	workspaceShell
 	CurrentPeriod     string
+	HistoryRange      string
 	Message           string
 	Error             string
 	Tenant            tenantRecord
@@ -179,6 +233,69 @@ type tenantDetailPageData struct {
 	History           tenantBillingHistoryPage
 	HasCurrentBilling bool
 	CurrentBilling    tenantBillingMonth
+	PaidByOtherRows   []tenantPaidByOtherRow
+}
+
+// listTenantPaidByOtherRows returns every confirmed rent allocation inside the
+// range where the bank payer (the transaction's matched tenant) and the
+// responsibility owner (the allocation's tenant) are different, and this tenant
+// is one of the two. Rows where the payer is unknown are excluded rather than
+// guessed: a missing matched tenant does not prove that someone else paid.
+func (s *obligationService) listTenantPaidByOtherRows(ctx context.Context, userID, tenantID uint64, fromMonth, toMonth time.Time) ([]tenantPaidByOtherRow, error) {
+	if userID == 0 || tenantID == 0 {
+		return nil, errors.New("userID and tenantID are required")
+	}
+	fromMonth = monthStart(fromMonth)
+	toMonth = monthStart(toMonth)
+	if fromMonth.After(toMonth) {
+		return nil, errors.New("fromMonth cannot be after toMonth")
+	}
+	type paidByOtherRaw struct {
+		PeriodMonth time.Time `gorm:"column:period_month"`
+		OwnerID     uint64    `gorm:"column:owner_id"`
+		PayerID     uint64    `gorm:"column:payer_id"`
+		PayerName   string    `gorm:"column:payer_name"`
+		AmountCents int64     `gorm:"column:amount_cents"`
+		Currency    string    `gorm:"column:currency"`
+	}
+	var raw []paidByOtherRaw
+	if err := s.db.WithContext(ctx).Table("payment_allocations AS pa").
+		Select("ro.period_month, pa.tenant_id AS owner_id, pt.matched_tenant_id AS payer_id, pt.payer_name, pa.amount_cents, pt.currency").
+		Joins("JOIN rent_obligations AS ro ON ro.id = pa.rent_obligation_id AND ro.user_id = pa.user_id").
+		Joins("JOIN payment_transactions AS pt ON pt.id = pa.payment_transaction_id AND pt.user_id = pa.user_id").
+		Where("pa.user_id = ? AND pa.status = ? AND pa.allocation_kind = ? AND pt.direction = ?", userID, allocationStatusConfirmed, allocationKindRent, "income").
+		Where("ro.period_month >= ? AND ro.period_month < ?", fromMonth, toMonth.AddDate(0, 1, 0)).
+		Where("pt.matched_tenant_id IS NOT NULL AND pt.matched_tenant_id <> pa.tenant_id").
+		Where("(pa.tenant_id = ? OR pt.matched_tenant_id = ?)", tenantID, tenantID).
+		Order("ro.period_month DESC, pa.id ASC").Scan(&raw).Error; err != nil {
+		return nil, err
+	}
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	var tenants []tenant
+	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Find(&tenants).Error; err != nil {
+		return nil, err
+	}
+	nameByID := make(map[uint64]string, len(tenants))
+	for _, row := range tenants {
+		nameByID[row.ID] = firstNonEmpty(row.DisplayAlias, row.Name)
+	}
+	rows := make([]tenantPaidByOtherRow, 0, len(raw))
+	for _, item := range raw {
+		result := "代付他人"
+		if item.OwnerID == tenantID {
+			result = "本人被代付"
+		}
+		rows = append(rows, tenantPaidByOtherRow{
+			PeriodLabel: formatMonthLabel(monthStart(item.PeriodMonth)),
+			PayerName:   firstNonEmpty(nameByID[item.PayerID], strings.TrimSpace(item.PayerName), "未知付款人"),
+			OwnerName:   firstNonEmpty(nameByID[item.OwnerID], "未知责任人"),
+			Amount:      formatMoney(centsToMoney(item.AmountCents), firstNonEmpty(item.Currency, ledgerCurrencyEUR), 2),
+			Result:      result,
+		})
+	}
+	return rows, nil
 }
 
 var tenantDetailTemplate = newWorkspacePageTemplate("tenant-detail", nil, `<!doctype html>
@@ -202,11 +319,12 @@ var tenantDetailTemplate = newWorkspacePageTemplate("tenant-detail", nil, `<!doc
     .tenant-metrics .metric { min-height: 104px; }
     .tenant-metrics .metric strong { white-space: nowrap; }
     .tenant-metric-state { font-size: 18px; }
-    .detail-grid { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(320px, .9fr); grid-template-areas: "history side" "responsibility side"; align-items: start; gap: 16px; margin-bottom: 16px; }
+    .detail-grid { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(320px, .9fr); grid-template-areas: "history side" "paidfor side" "responsibility side"; align-items: start; gap: 16px; margin-bottom: 16px; }
     .tenant-history-panel { grid-area: history; min-width: 0; overflow: hidden; }
     .tenant-responsibility-panel { grid-area: responsibility; min-width: 0; overflow: hidden; }
     .tenant-detail-side { grid-area: side; display: grid; gap: 16px; min-width: 0; }
     .tenant-detail-side > .panel { min-width: 0; overflow: hidden; }
+    .tenant-detail-side .risk-note { padding: 14px 16px; border: 1px solid color-mix(in oklch, var(--warning) 30%, var(--border)); border-left: 3px solid var(--warning); border-radius: 8px; background: color-mix(in oklch, var(--warning) 6%, var(--surface)); color: var(--foreground-subtle); font-size: 12px; line-height: 1.6; }
     .tenant-responsibility-list { display: grid; padding: 6px 20px 10px; }
     .tenant-responsibility-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 0; border-bottom: 1px solid var(--border); }
     .tenant-responsibility-row:last-child { border-bottom: 0; }
@@ -220,6 +338,13 @@ var tenantDetailTemplate = newWorkspacePageTemplate("tenant-detail", nil, `<!doc
     .payer-item { display: flex; justify-content: space-between; gap: 12px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--border); }
     .payer-item:last-child { border-bottom: 0; }
     .payer-meta { display: grid; gap: 4px; }
+    /* 付款识别：参考码行与付款人列表同一张卡内，左右分别对齐卡内边距。 */
+    .reference-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 20px; padding: 13px 0; border-bottom: 1px solid var(--border); }
+    .reference-row > div { display: grid; gap: 4px; min-width: 0; }
+    .reference-row strong { font: 700 13px var(--mono); overflow-wrap: anywhere; }
+    .payer-badge { display: inline-block; border-radius: 999px; padding: 2px 7px; font-size: 11px; background: var(--surface-muted); color: var(--foreground-muted); }
+    .tenant-paid-for-panel { grid-area: paidfor; min-width: 0; overflow: hidden; }
+    .paid-for-table { min-width: 640px; }
     .flag { color: var(--warning); font-size: 12px; }
     .status { display: inline-block; border-radius: 999px; padding: 5px 9px; font-size: 12px; white-space: nowrap; }
     .status.open { color: #1e40af; background: #dbeafe; }
@@ -229,14 +354,14 @@ var tenantDetailTemplate = newWorkspacePageTemplate("tenant-detail", nil, `<!doc
     .status.voided { color: var(--foreground-muted); background: #e5e7eb; }
     .history-filter { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; padding: 16px 20px 0; }
     .history-filter label { margin: 0; }
-    .history-filter input { min-height: 40px; }
+    .history-filter input, .history-filter select { min-height: 40px; }
     .history-table { min-width: 760px; }
     .payment-list { display: grid; gap: 8px; margin-top: 10px; padding: 12px; background: var(--surface-muted); border-radius: 8px; }
     .payment-item { display: grid; grid-template-columns: 100px 145px 1fr; gap: 10px; font-size: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
     .payment-item:last-child { border-bottom: 0; padding-bottom: 0; }
     .pagination { display: flex; gap: 8px; align-items: center; margin-top: 16px; padding: 0 20px 18px; }
     .tenant-detail-mobile-actions { display: none; }
-    @media (max-width: 980px) { .detail-grid { grid-template-columns: 1fr; grid-template-areas: "history" "responsibility" "side"; } .tenant-detail-side { grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; } }
+    @media (max-width: 980px) { .detail-grid { grid-template-columns: 1fr; grid-template-areas: "history" "paidfor" "responsibility" "side"; } .tenant-detail-side { grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; } }
     @media (max-width: 680px) { .payment-item { grid-template-columns: 1fr 1fr; } }
     @media (max-width: 640px) {
       .tenant-detail-page { gap: 13px; padding-bottom: 116px; }
@@ -251,7 +376,7 @@ var tenantDetailTemplate = newWorkspacePageTemplate("tenant-detail", nil, `<!doc
       .tenant-metrics .metric:nth-child(4) { display: none; }
       .tenant-metrics .metric .label { font-size: 10px; white-space: nowrap; }
       .tenant-metrics .metric strong { font-size: 13px; }
-      .detail-grid { grid-template-areas: "responsibility" "side" "history"; }
+      .detail-grid { grid-template-areas: "responsibility" "paidfor" "side" "history"; }
       .tenant-detail-side { grid-template-columns: 1fr; }
       .tenant-detail-side { order: 1; }
       .tenant-detail-main { order: 2; }
@@ -266,9 +391,11 @@ var tenantDetailTemplate = newWorkspacePageTemplate("tenant-detail", nil, `<!doc
       .profile-list dt { font-size: 12px; }
       /* 移除按钮实测 62×40。 */
       .payer-item .btn { min-height: 44px; }
-      /* 页内的 .history-filter input 比共享表的裸 input 更具体，它的 40px 会盖过
-         共享窄屏块里的 44px（起止月份两个 input 实测 221x40）。 */
-      .history-filter input { min-height: 44px; }
+      /* 「付款识别」的复制按钮与参考码同在卡内，需满足 44px 可点击高度。 */
+      .reference-row .btn { min-height: 44px; }
+      /* 页内的 .history-filter input / select 比共享表的裸控件更具体，它的 40px
+         会盖过共享窄屏块里的 44px（范围下拉实测 221×40）。 */
+      .history-filter input, .history-filter select { min-height: 44px; }
     }
   </style>
 </head>
@@ -284,12 +411,12 @@ var tenantDetailTemplate = newWorkspacePageTemplate("tenant-detail", nil, `<!doc
     {{if eq .Error "invalid_payer"}}<div class="notice error">付款人名称不能为空，且字段长度必须有效。</div>{{end}}
 	<div class="tenant-metrics" aria-label="本月租金摘要"><div class="panel metric"><div class="label">本月个人责任</div><strong>{{.Tenant.RentDisplay}}</strong><span>{{if .Tenant.RoomLabel}}{{.Tenant.RoomLabel}}{{else}}月度租金责任{{end}}</span></div><div class="panel metric"><div class="label">个人责任已覆盖</div><strong>{{if .HasCurrentBilling}}{{.CurrentBilling.PaidAmount}}{{else}}—{{end}}</strong><span>银行收款与现金收款</span></div><div class="panel metric"><div class="label">本月未收</div><strong>{{if .HasCurrentBilling}}{{.CurrentBilling.BalanceAmount}}{{else}}—{{end}}</strong><span>按个人租金责任计算</span></div><div class="panel metric"><div class="label">本月状态</div><strong class="tenant-metric-state">{{if .HasCurrentBilling}}{{.CurrentBilling.StatusLabel}}{{else}}暂无账单{{end}}</strong><span>{{.CurrentPeriod}}</span></div></div>
 	<div class="detail-grid"><section class="panel surface tenant-history-panel" aria-labelledby="history-title"><div class="panel-head"><h2 id="history-title">缴费历史</h2><span class="tiny">{{.History.TotalRows}} 个适用月份</span></div>
-	  <form class="history-filter" method="get" action="/tenants/{{.Tenant.ID}}"><label for="from_month">起始月份<input id="from_month" name="from_month" type="month" value="{{.History.FromPeriod}}" required></label><label for="to_month">结束月份<input id="to_month" name="to_month" type="month" value="{{.History.ToPeriod}}" required></label><input type="hidden" name="page_size" value="{{.History.PageSize}}"><button class="btn" type="submit">查询历史</button></form>
+	  <form class="history-filter" method="get" action="/tenants/{{.Tenant.ID}}"><label for="range">历史范围<select id="range" name="range"><option value="12"{{if eq .HistoryRange "12"}} selected{{end}}>近 12 个月</option><option value="24"{{if eq .HistoryRange "24"}} selected{{end}}>近 24 个月</option></select></label><input type="hidden" name="page_size" value="{{.History.PageSize}}"><button class="btn" type="submit">查询历史</button></form>
 	  {{if .History.Rows}}<div class="table-wrap"><table class="history-table"><thead><tr><th>月份</th><th>应缴日</th><th>应收</th><th>实收</th><th>未收</th><th>状态／来源</th></tr></thead><tbody>{{range .History.Rows}}<tr><td><strong>{{.PeriodLabel}}</strong></td><td class="mono">{{.DueDate}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span>{{if .Payments}}<div class="payment-list">{{range .Payments}}<div class="payment-item"><span class="amount">{{.AmountDisplay}}</span><span class="mono">{{.DateDisplay}}</span><span>{{.Source}}</span>{{if eq .Source "现金"}}<a class="void-link" href="/cash-receipts/void?receipt_id={{.PaymentID}}">撤销</a>{{end}}</div>{{end}}</div>{{else}}<div class="tiny">暂无有效收款</div>{{end}}</td></tr>{{end}}</tbody></table></div>{{else}}<div class="empty">所选期间没有适用账单。</div>{{end}}
 	  {{if gt .History.TotalPages 1}}<div class="pagination">{{if .History.HasPrev}}<a class="btn subtle" href="/tenants/{{.Tenant.ID}}?from_month={{.History.FromPeriod}}&amp;to_month={{.History.ToPeriod}}&amp;page={{.History.PrevPage}}&amp;page_size={{.History.PageSize}}">上一页</a>{{end}}<span class="tiny">第 {{.History.Page}} / {{.History.TotalPages}} 页</span>{{if .History.HasNext}}<a class="btn subtle" href="/tenants/{{.Tenant.ID}}?from_month={{.History.FromPeriod}}&amp;to_month={{.History.ToPeriod}}&amp;page={{.History.NextPage}}&amp;page_size={{.History.PageSize}}">下一页</a>{{end}}</div>{{end}}
-	</section><section class="panel surface tenant-responsibility-panel" aria-labelledby="responsibility-title"><div class="panel-head"><h2 id="responsibility-title">责任与代付</h2><span class="tiny">{{.CurrentPeriod}}</span></div><div class="tenant-responsibility-list"><div class="tenant-responsibility-row"><span><strong>本月个人责任</strong><small>按租约金额计算</small></span><strong>{{.Tenant.RentDisplay}}</strong></div><div class="tenant-responsibility-row"><span><strong>已确认收款</strong><small>{{if .HasCurrentBilling}}{{if .CurrentBilling.Payments}}{{range .CurrentBilling.Payments}}{{.Source}} {{.AmountDisplay}} · {{.DateDisplay}} {{end}}{{else}}暂无有效收款{{end}}{{else}}当月暂无账单{{end}}</small></span><strong>{{if .HasCurrentBilling}}{{.CurrentBilling.PaidAmount}}{{else}}—{{end}}</strong></div></div></section><aside class="tenant-detail-side"><section class="panel surface" aria-labelledby="profile-title"><div class="panel-head"><h2 id="profile-title">租客档案</h2><span class="tiny">档案信息</span></div><dl class="profile-list"><dt>邮箱</dt><dd>{{if .Tenant.Email}}{{.Tenant.Email}}{{else}}未填写{{end}}</dd><dt>房间</dt><dd>{{if .Tenant.RoomLabel}}{{.Tenant.RoomLabel}} · {{end}}{{.Tenant.RoomAddress}}</dd><dt>月租</dt><dd>{{.Tenant.RentDisplay}}，每月 {{.Tenant.DueDay}} 日</dd><dt>租期</dt><dd>{{.Tenant.RentStartDate}}{{if .Tenant.RentEndDate}} 至 {{.Tenant.RentEndDate}}{{end}}</dd><dt>计费开始</dt><dd>{{.Tenant.BillingStartDate}}</dd></dl></section><section class="panel surface" aria-labelledby="payer-title"><div class="panel-head"><h2 id="payer-title">付款人关系</h2><span class="tiny">名称可用，稳定 ID 可选</span></div><div class="payer-list">{{if .Payers}}{{range .Payers}}<div class="payer-item"><div class="payer-meta"><strong>{{.Name}}</strong><span class="mono">{{if .PayerID}}ID: {{.PayerID}}{{else}}仅名称，无稳定 ID{{end}}</span>{{if .Shared}}<span class="flag">共享／冲突候选，不能自动选租客</span>{{end}}{{if .RemovedAt}}<span class="tiny">已移除：{{.RemovedAt}}</span>{{end}}</div>{{if not .RemovedAt}}<form method="post" action="/tenants/{{$.Tenant.ID}}/payers/remove"><input type="hidden" name="payer_id" value="{{.ID}}"><button class="btn subtle" type="submit">移除</button></form>{{end}}</div>{{end}}{{else}}<div class="empty">暂无付款人关系。</div>{{end}}</div><form method="post" action="/tenants/{{.Tenant.ID}}/payers" class="form"><label for="payer_name">付款人名称</label><input id="payer_name" name="payer_name" placeholder="例如 Mike" required><label for="payer_id_detail">稳定付款人 ID（可选）</label><input id="payer_id_detail" name="payer_id" placeholder="银行提供时填写"><button class="btn primary" type="submit">添加付款人</button></form></section></aside></div><div class="tenant-detail-mobile-actions"><a class="btn" href="/tenants?edit={{.Tenant.ID}}">编辑资料</a><a class="btn primary" href="/cash-receipts?add=1&amp;tenant_id={{.Tenant.ID}}&amp;period={{.CurrentPeriod}}">现金补录</a></div></div>
+	</section><section class="panel surface tenant-paid-for-panel" aria-labelledby="paid-for-title"><div class="panel-head"><div><h2 id="paid-for-title">代付与被代付</h2><p class="tiny">只影响责任覆盖，不改变每位住客的责任归属。</p></div></div>{{if .PaidByOtherRows}}<div class="table-wrap"><table class="paid-for-table"><thead><tr><th>责任月份</th><th>实际付款人</th><th>责任所有者</th><th class="amount">分配金额</th><th>结果</th></tr></thead><tbody>{{range .PaidByOtherRows}}<tr><td class="mono">{{.PeriodLabel}}</td><td>{{.PayerName}}{{if eq .Result "本人被代付"}} <span class="payer-badge">代付</span>{{end}}</td><td>{{.OwnerName}}</td><td class="amount">{{.Amount}}</td><td><span class="status paid">{{.Result}}</span></td></tr>{{end}}</tbody></table></div>{{else}}<div class="empty">所选期间没有代付或代收记录。</div>{{end}}</section><section class="panel surface tenant-responsibility-panel" aria-labelledby="responsibility-title"><div class="panel-head"><h2 id="responsibility-title">责任与代付</h2><span class="tiny">{{.CurrentPeriod}}</span></div><div class="tenant-responsibility-list"><div class="tenant-responsibility-row"><span><strong>本月个人责任</strong><small>按租约金额计算</small></span><strong>{{.Tenant.RentDisplay}}</strong></div><div class="tenant-responsibility-row"><span><strong>已确认收款</strong><small>{{if .HasCurrentBilling}}{{if .CurrentBilling.Payments}}{{range .CurrentBilling.Payments}}{{.Source}} {{.AmountDisplay}} · {{.DateDisplay}} {{end}}{{else}}暂无有效收款{{end}}{{else}}当月暂无账单{{end}}</small></span><strong>{{if .HasCurrentBilling}}{{.CurrentBilling.PaidAmount}}{{else}}—{{end}}</strong></div></div></section><aside class="tenant-detail-side"><section class="panel surface" aria-labelledby="profile-title"><div class="panel-head"><h2 id="profile-title">租客档案</h2><span class="tiny">档案信息</span></div><dl class="profile-list"><dt>邮箱</dt><dd>{{if .Tenant.Email}}{{.Tenant.Email}}{{else}}未填写{{end}}</dd><dt>房间</dt><dd>{{if .Tenant.RoomLabel}}{{.Tenant.RoomLabel}} · {{end}}{{.Tenant.RoomAddress}}</dd><dt>月租</dt><dd>{{.Tenant.RentDisplay}}，每月 {{.Tenant.DueDay}} 日</dd><dt>租期</dt><dd>{{.Tenant.RentStartDate}}{{if .Tenant.RentEndDate}} 至 {{.Tenant.RentEndDate}}{{end}}</dd><dt>计费开始</dt><dd>{{.Tenant.BillingStartDate}}</dd></dl></section><section class="panel surface" aria-labelledby="payer-title"><div class="panel-head"><h2 id="payer-title">付款识别</h2><span class="tiny">付款人名称与参考码</span></div><div class="reference-row"><div><strong>{{if .History.Reference}}{{.History.Reference}}{{else}}暂无付款参考码{{end}}</strong><span class="tiny">付款参考码</span></div>{{if .History.Reference}}<button class="btn subtle copy-reference" type="button" data-copy-value="{{.History.Reference}}">复制</button>{{end}}</div><div class="payer-list">{{if .Payers}}{{range .Payers}}<div class="payer-item"><div class="payer-meta"><strong>{{.Name}}</strong><span class="mono">{{if .PayerID}}ID: {{.PayerID}}{{else}}仅名称，无稳定 ID{{end}}</span>{{if .Shared}}<span class="flag">共享／冲突候选，不能自动选租客</span>{{end}}{{if .RemovedAt}}<span class="tiny">已移除：{{.RemovedAt}}</span>{{end}}</div>{{if not .RemovedAt}}<form method="post" action="/tenants/{{$.Tenant.ID}}/payers/remove"><input type="hidden" name="payer_id" value="{{.ID}}"><button class="btn subtle" type="submit">移除</button></form>{{end}}</div>{{end}}{{else}}<div class="empty">暂无付款人关系。</div>{{end}}</div><form method="post" action="/tenants/{{.Tenant.ID}}/payers" class="form"><label for="payer_name">付款人名称</label><input id="payer_name" name="payer_name" placeholder="例如 Mike" required><label for="payer_id_detail">稳定付款人 ID（可选）</label><input id="payer_id_detail" name="payer_id" placeholder="银行提供时填写"><button class="btn primary" type="submit">添加付款人</button></form></section><div class="risk-note">是否欠租只看个人责任的未覆盖金额。即使由他人代付，完整覆盖后也不会进入催收。</div></aside></div><div class="tenant-detail-mobile-actions"><a class="btn" href="/tenants?edit={{.Tenant.ID}}">编辑资料</a><a class="btn primary" href="/cash-receipts?add=1&amp;tenant_id={{.Tenant.ID}}&amp;period={{.CurrentPeriod}}">现金补录</a></div></div>
   </main>
-</div></body></html>`)
+</div><script>(function(){var buttons=document.querySelectorAll('.copy-reference');for(var i=0;i<buttons.length;i++){buttons[i].addEventListener('click',function(){var button=this;var value=button.getAttribute('data-copy-value')||'';if(!value){return;}var flash=function(){var original=button.textContent;button.textContent='已复制';window.setTimeout(function(){button.textContent=original;},1500);};if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(value).then(flash,function(){});return;}var field=document.createElement('textarea');field.value=value;document.body.appendChild(field);field.select();try{document.execCommand('copy');flash();}catch(error){}document.body.removeChild(field);});}})();</script></body></html>`)
 
 func (a *app) handleTenantDetail(w http.ResponseWriter, r *http.Request) {
 	if !a.requireAuth(w, r) {
@@ -335,6 +462,11 @@ func (a *app) handleTenantDetail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	paidByOtherRows, err := newObligationService(a.db).listTenantPaidByOtherRows(r.Context(), userID, tenantID, fromMonth, toMonth)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	data := tenantDetailPageData{
 		workspaceShell: a.fillWorkspaceShell(r, workspaceShell{
 			ActivePage:   "tenants",
@@ -343,12 +475,14 @@ func (a *app) handleTenantDetail(w http.ResponseWriter, r *http.Request) {
 			FootNote:     "租客缴费详情",
 			CompactTitle: firstNonEmpty(tenantRow.DisplayAlias, tenantRow.Name),
 		}),
-		CurrentPeriod: monthStart(time.Now().UTC()).Format("2006-01"),
-		Message:       r.URL.Query().Get("message"),
-		Error:         r.URL.Query().Get("error"),
-		Tenant:        tenantRecordFromModel(tenantRow),
-		Payers:        classifyTenantPayersWithAllRows(payers, allPayers),
-		History:       history,
+		CurrentPeriod:   monthStart(time.Now().UTC()).Format("2006-01"),
+		HistoryRange:    tenantHistoryRangeValue(fromMonth, toMonth),
+		Message:         r.URL.Query().Get("message"),
+		Error:           r.URL.Query().Get("error"),
+		Tenant:          tenantRecordFromModel(tenantRow),
+		Payers:          classifyTenantPayersWithAllRows(payers, allPayers),
+		History:         history,
+		PaidByOtherRows: paidByOtherRows,
 	}
 	for _, billing := range history.Rows {
 		if billing.Period == data.CurrentPeriod {

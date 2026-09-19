@@ -3,7 +3,7 @@
   "name": "detail-pages-alignment",
   "title": "详情页对齐",
   "description": "四个详情页的区块/指标卡/事实区/侧栏；房间详情未分配格；租客详情代付表、范围选择器、参考码复制；流水详情 code-block 与三操作入口。",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

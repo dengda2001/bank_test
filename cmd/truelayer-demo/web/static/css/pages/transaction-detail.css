@@ -5,6 +5,21 @@
 .transaction-detail-mark { display: grid; width: 48px; height: 48px; flex: 0 0 auto; place-items: center; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--accent); font: 700 16px var(--mono); }
 .transaction-detail-eyebrow { margin: 0 0 4px; color: var(--accent); font: 11px var(--mono); letter-spacing: .08em; }
 .transaction-detail-head h1 { font-size: 25px; }
+/* 页头三操作：原型把「编辑分配 / 标记非租金 / 确认匹配」放在 head-actions。
+   每个入口用 <details> 展开已有动作表单，表单与列表行内同名动作同源同 action。 */
+.transaction-detail-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.transaction-detail-actions .btn { white-space: nowrap; }
+.transaction-head-action { position: relative; }
+.transaction-head-action > summary { display: inline-flex; align-items: center; min-height: 38px; cursor: pointer; list-style: none; }
+.transaction-head-action > summary::-webkit-details-marker { display: none; }
+.transaction-head-action[open] > summary { border-color: color-mix(in oklch, var(--accent) 40%, var(--border)); }
+.transaction-head-action-body { position: absolute; right: 0; z-index: 20; display: grid; gap: 10px; width: min(340px, calc(100vw - 32px)); margin-top: 8px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: 0 18px 40px color-mix(in oklch, var(--sidebar) 20%, transparent); }
+.transaction-head-action-body form { display: grid; gap: 8px; }
+.transaction-head-action-body .tiny { margin: 0; }
+.transaction-head-action-body select, .transaction-head-action-body input { min-height: 38px; }
+.transaction-code-body { padding: 4px 16px 16px; }
+.code-block { margin: 0; padding: 12px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-muted); color: var(--foreground); font: 12px/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.transaction-risk-note { padding: 14px 16px; border: 1px solid color-mix(in oklch, var(--warning) 30%, var(--border)); border-left: 3px solid var(--warning); border-radius: 8px; background: color-mix(in oklch, var(--warning) 6%, var(--surface)); color: var(--foreground-subtle); font-size: 12px; line-height: 1.6; }
 .transaction-detail-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 7px; color: var(--foreground-muted); font-size: 12px; }
 .transaction-detail-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
 .transaction-detail-metrics .metric { display: flex; min-width: 0; min-height: 112px; flex-direction: column; align-items: flex-start; justify-content: center; gap: 7px; padding: 16px; }
@@ -51,7 +66,9 @@
   .transaction-detail-toolbar { margin-bottom: 14px; }
   .transaction-detail-toolbar .btn { min-height: 44px; }
   .transaction-detail-head { align-items: flex-start; flex-direction: column; gap: 12px; margin-bottom: 14px; }
-  .transaction-detail-head > .btn { display: none; }
+  .transaction-detail-head > .transaction-detail-actions { display: none; }
+  .transaction-code-body { padding: 0 13px 13px; }
+  .code-block { font-size: 11px; }
   .transaction-detail-mark { width: 42px; height: 42px; }
   .transaction-detail-head h1 { font-size: 21px; }
   .transaction-detail-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }

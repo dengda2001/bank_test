@@ -45,10 +45,12 @@ type propertyPageRow struct {
 	PaidCents             int64
 	BalanceCents          int64
 	ExpenseCents          int64
+	OtherIncomeCents      int64
 	ExpectedAmount        string
 	PaidAmount            string
 	BalanceAmount         string
 	ExpenseAmount         string
+	OtherIncomeAmount     string
 	NetAmount             string
 	CollectionPercent     int
 	Actions               []pageActionView
@@ -635,8 +637,8 @@ func (a *app) loadPropertyPage(ctx context.Context, userID uint64, period time.T
 			ID: row.ID, Mark: propertyMark(row.Name), Name: row.Name, CityRegion: row.CityRegion, Address: propertyAddress(row), Timezone: row.Timezone, Notes: stringValue(row.Notes), Status: row.Status,
 			ResponsibilityCount: responsibilityCount[row.ID],
 			StatusLabel:         pageStatusLabel(row.Status), CollectionStatus: collectionState, CollectionStatusLabel: collectionLabel, RoomCount: roomCount[row.ID], ActiveRoomCount: activeRoomCount[row.ID],
-			ExpectedCents: financialRow.ExpectedCents, PaidCents: financialRow.PaidCents, BalanceCents: financialRow.BalanceCents, ExpenseCents: financialRow.ExpenseCents,
-			ExpectedAmount: pageCurrencyAmount(financialRow.ExpectedCents, currency), PaidAmount: pageCurrencyAmount(financialRow.PaidCents, currency), BalanceAmount: pageCurrencyAmount(financialRow.BalanceCents, currency), ExpenseAmount: pageCurrencyAmount(financialRow.ExpenseCents, currency), CollectionPercent: financialRow.CollectionPercent,
+			ExpectedCents: financialRow.ExpectedCents, PaidCents: financialRow.PaidCents, BalanceCents: financialRow.BalanceCents, ExpenseCents: financialRow.ExpenseCents, OtherIncomeCents: financialRow.OtherIncomeCents,
+			ExpectedAmount: pageCurrencyAmount(financialRow.ExpectedCents, currency), PaidAmount: pageCurrencyAmount(financialRow.PaidCents, currency), BalanceAmount: pageCurrencyAmount(financialRow.BalanceCents, currency), ExpenseAmount: pageCurrencyAmount(financialRow.ExpenseCents, currency), OtherIncomeAmount: pageCurrencyAmount(financialRow.OtherIncomeCents, currency), CollectionPercent: financialRow.CollectionPercent,
 			NetAmount: pageCurrencyAmount(financialRow.NetCents, currency),
 			Actions:   propertyActions(row.ID, row.Status == "active"),
 		})

@@ -79,7 +79,13 @@ func TestTransactionDetailTemplateRendersPrototypeSectionsAndEscapesSourceData(t
 		"匹配建议",
 		"关联账单与对象",
 		"处理记录",
-		"付款信息",
+		"原始流水",
+		"原始描述",
+		`class="code-block"`,
+		"交易时间",
+		"编辑分配",
+		"标记非租金",
+		"确认匹配",
 		`href="/transactions?page=2#transaction-row-42"`,
 		"&lt;script&gt;alert(&#34;x&#34;)&lt;/script&gt;",
 	} {
@@ -89,6 +95,75 @@ func TestTransactionDetailTemplateRendersPrototypeSectionsAndEscapesSourceData(t
 	}
 	if strings.Contains(page, `<script>alert("x")</script>`) {
 		t.Fatal("source reference rendered as executable markup")
+	}
+}
+
+// The detail header's three entries must reuse the list-row actions: the same
+// endpoints and parameters, plus the detail page's return target so acting from
+// the detail page lands back on the list it came from. The three entries always
+// render; which one carries a live form depends on the row state, exactly as it
+// does in the list row (修改匹配 needs an existing rent match, 标记非租金 does not).
+func TestTransactionDetailHeaderActionsReuseListRowEndpoints(t *testing.T) {
+	render := func(t *testing.T, row transactionPageRow) string {
+		t.Helper()
+		page, err := executeTemplate(transactionDetailPageTemplate, transactionDetailPageData{
+			workspaceShell:  workspaceShell{ActivePage: "transactions"},
+			ActionBase:      "/transactions",
+			BackURL:         "/transactions?page=2",
+			TransactionTime: "2026-09-12 09:18",
+			Transaction:     row,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, entry := range []string{"编辑分配", "标记非租金", "确认匹配"} {
+			if !strings.Contains(page, entry) {
+				t.Fatalf("transaction detail header is missing the %q entry", entry)
+			}
+		}
+		return page
+	}
+
+	matched := render(t, transactionPageRow{
+		ID:                   "42",
+		Direction:            "income",
+		MatchStatus:          "matched",
+		MatchStatusLabel:     "已关联",
+		PayerName:            "C. CHEN",
+		Description:          "CREDIT TRANSFER\nC. CHEN",
+		CanEditRentMatch:     true,
+		RematchTenantOptions: []billingTenantOption{{ID: 9, Name: "Aoife"}},
+		RematchMonthOptions:  []billingMonthOption{{Period: "2026-09", Label: "2026年9月", Remaining: "€0.00"}},
+	})
+	for _, marker := range []string{
+		`action="/transactions/rematch"`,
+		`name="return_to" value="/transactions?page=2"`,
+		"2026-09-12 09:18",
+	} {
+		if !strings.Contains(matched, marker) {
+			t.Fatalf("matched header missing %q", marker)
+		}
+	}
+
+	confirmable := render(t, transactionPageRow{
+		ID:                        "42",
+		Direction:                 "income",
+		MatchStatus:               "candidate",
+		MatchStatusLabel:          "待确认",
+		CanConfirm:                true,
+		CandidateTenantName:       "C. CHEN",
+		CandidatePeriod:           "2026-09",
+		CandidateRentObligationID: 77,
+	})
+	for _, marker := range []string{
+		`action="/transactions/confirm"`,
+		`name="rent_obligation_id" value="77"`,
+		`action="/transactions/ignore"`,
+		`name="return_to" value="/transactions?page=2"`,
+	} {
+		if !strings.Contains(confirmable, marker) {
+			t.Fatalf("confirmable header missing %q", marker)
+		}
 	}
 }
 

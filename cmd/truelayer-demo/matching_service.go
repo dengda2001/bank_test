@@ -146,52 +146,60 @@ func (s *transactionService) listTransactionPageRowsWithTotal(ctx context.Contex
 	for _, transaction := range transactions {
 		allocations := allocationsByTransaction[transaction.ID]
 		row := enrichTransactionPageRow(transactionPageRowFromModel(transaction), transaction, allocations, obligations)
-		summary := summarizeTransactionAllocations(transaction, allocations)
-		if row.TenantID != 0 && transaction.Direction == "income" && summary.AllocatedCents == 0 && transaction.MatchStatus != "ignored" {
-			row.NeedsMonthChoice = true
-			row.MonthOptions = rentMonthOptionsForTenant(transaction, obligations, row.TenantID)
-		}
-		if transaction.Direction == "income" && summary.AllocatedCents == 0 && transaction.MatchStatus != "ignored" {
-			decision := decideStrictRentMatch(paymentTransactionInputFromModel(transaction), payers, tenants, obligations)
-			switch decision.Status {
-			case "matched", "partial":
-				row.CandidateTenantID = decision.TenantID
-				row.CandidateTenantName = tenantNames[decision.TenantID]
-				row.CandidateRentObligationID = decision.RentObligationID
-				row.CandidatePeriod = monthStart(decision.PeriodMonth).Format("2006-01")
-				row.CanConfirm = decision.TenantID != 0 && decision.RentObligationID != 0
-			case "candidate":
-				row.TenantID = decision.TenantID
-				row.CandidateTenantID = decision.TenantID
-				row.CandidateTenantName = tenantNames[decision.TenantID]
-				row.NeedsMonthChoice = decision.TenantID != 0
-			}
-		}
-		if row.NeedsMonthChoice && len(row.MonthOptions) == 0 {
-			row.MonthOptions = rentMonthOptionsForTenant(transaction, obligations, row.TenantID)
-		}
-		contextTenantID := row.CandidateTenantID
-		if contextTenantID == 0 {
-			contextTenantID = row.TenantID
-		}
-		if contextTenant, ok := tenantByID[contextTenantID]; ok {
-			row.ObjectLabel = transactionTenantObjectLabel(contextTenant)
-			if strings.TrimSpace(contextTenant.RoomLabel) != "" {
-				row.RoomOnlyLabel = "房间 " + strings.TrimSpace(contextTenant.RoomLabel)
-			}
-		}
-		if transaction.Direction == "income" && summary.AllocatedCents == 0 && transaction.MatchStatus != "ignored" && !row.CanConfirm && !row.NeedsMonthChoice {
-			row.ManualMatchOptions = availableRentMatchOptions(transaction, obligations, tenantNames, transaction.AmountCents, 0)
-		}
-		if effectiveRentAllocation, ok := singleEffectiveRentAllocation(allocations); ok {
-			row.CanRematch = true
-			row.RematchOptions = availableRentMatchOptions(transaction, obligations, tenantNames, effectiveRentAllocation.AmountCents, effectiveRentAllocation.RentObligationIDValue())
-			row.CanEditRentMatch = len(row.RematchOptions) > 0
-			row.RematchTenantOptions, row.RematchMonthOptions = rematchFilterOptions(row.RematchOptions)
-		}
+		decorateTransactionPageRow(&row, transaction, allocations, obligations, tenants, tenantByID, tenantNames, payers)
 		rows = append(rows, row)
 	}
 	return rows, total, nil
+}
+
+// decorateTransactionPageRow fills the per-row action state that the transaction
+// list's action cell renders. The transaction detail header reuses it verbatim,
+// which is what keeps the detail page's 确认匹配 / 标记非租金 / 编辑分配 entries
+// identical to the same-named list-row actions instead of a second implementation.
+func decorateTransactionPageRow(row *transactionPageRow, transaction paymentTransaction, allocations []paymentAllocation, obligations []rentObligation, tenants []tenant, tenantByID map[uint64]tenant, tenantNames map[uint64]string, payers []tenantPayer) {
+	summary := summarizeTransactionAllocations(transaction, allocations)
+	if row.TenantID != 0 && transaction.Direction == "income" && summary.AllocatedCents == 0 && transaction.MatchStatus != "ignored" {
+		row.NeedsMonthChoice = true
+		row.MonthOptions = rentMonthOptionsForTenant(transaction, obligations, row.TenantID)
+	}
+	if transaction.Direction == "income" && summary.AllocatedCents == 0 && transaction.MatchStatus != "ignored" {
+		decision := decideStrictRentMatch(paymentTransactionInputFromModel(transaction), payers, tenants, obligations)
+		switch decision.Status {
+		case "matched", "partial":
+			row.CandidateTenantID = decision.TenantID
+			row.CandidateTenantName = tenantNames[decision.TenantID]
+			row.CandidateRentObligationID = decision.RentObligationID
+			row.CandidatePeriod = monthStart(decision.PeriodMonth).Format("2006-01")
+			row.CanConfirm = decision.TenantID != 0 && decision.RentObligationID != 0
+		case "candidate":
+			row.TenantID = decision.TenantID
+			row.CandidateTenantID = decision.TenantID
+			row.CandidateTenantName = tenantNames[decision.TenantID]
+			row.NeedsMonthChoice = decision.TenantID != 0
+		}
+	}
+	if row.NeedsMonthChoice && len(row.MonthOptions) == 0 {
+		row.MonthOptions = rentMonthOptionsForTenant(transaction, obligations, row.TenantID)
+	}
+	contextTenantID := row.CandidateTenantID
+	if contextTenantID == 0 {
+		contextTenantID = row.TenantID
+	}
+	if contextTenant, ok := tenantByID[contextTenantID]; ok {
+		row.ObjectLabel = transactionTenantObjectLabel(contextTenant)
+		if strings.TrimSpace(contextTenant.RoomLabel) != "" {
+			row.RoomOnlyLabel = "房间 " + strings.TrimSpace(contextTenant.RoomLabel)
+		}
+	}
+	if transaction.Direction == "income" && summary.AllocatedCents == 0 && transaction.MatchStatus != "ignored" && !row.CanConfirm && !row.NeedsMonthChoice {
+		row.ManualMatchOptions = availableRentMatchOptions(transaction, obligations, tenantNames, transaction.AmountCents, 0)
+	}
+	if effectiveRentAllocation, ok := singleEffectiveRentAllocation(allocations); ok {
+		row.CanRematch = true
+		row.RematchOptions = availableRentMatchOptions(transaction, obligations, tenantNames, effectiveRentAllocation.AmountCents, effectiveRentAllocation.RentObligationIDValue())
+		row.CanEditRentMatch = len(row.RematchOptions) > 0
+		row.RematchTenantOptions, row.RematchMonthOptions = rematchFilterOptions(row.RematchOptions)
+	}
 }
 
 func transactionTenantObjectLabel(row tenant) string {

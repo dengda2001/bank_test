@@ -168,21 +168,86 @@ func TestParseTenantHistoryRangeDefaultsToTwelveMonths(t *testing.T) {
 func TestTenantDetailTemplateShowsNameOnlyPayerAndHistoryControls(t *testing.T) {
 	var body strings.Builder
 	err := tenantDetailTemplate.Execute(&body, tenantDetailPageData{
-		Tenant:  tenantRecord{ID: "7", Name: "Aoife Murphy", DisplayAlias: "Aoife", Email: "aoife@example.test"},
-		Payers:  []tenantPayerRecord{{ID: "8", Name: "Mike", Shared: true}},
-		History: tenantBillingHistoryPage{FromPeriod: "2025-10", ToPeriod: "2026-09", Page: 1, PageSize: 12, TotalRows: 1, Rows: []tenantBillingMonth{{PeriodLabel: "2026年9月", StatusLabel: "已缴清"}}},
+		Tenant:       tenantRecord{ID: "7", Name: "Aoife Murphy", DisplayAlias: "Aoife", Email: "aoife@example.test"},
+		Payers:       []tenantPayerRecord{{ID: "8", Name: "Mike", Shared: true}},
+		HistoryRange: "12",
+		History: tenantBillingHistoryPage{
+			FromPeriod: "2025-10", ToPeriod: "2026-09", Page: 1, PageSize: 12, TotalRows: 1, Reference: "RENT-2B-T018",
+			Rows: []tenantBillingMonth{{PeriodLabel: "2026年9月", StatusLabel: "已缴清"}},
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	page := body.String()
 	for _, expected := range []string{
-		"aoife@example.test", "Mike", "共享／冲突候选", "from_month", "to_month", "/tenants/7/payers",
+		"aoife@example.test", "Mike", "共享／冲突候选", "/tenants/7/payers",
 		"2026年9月", "租客详情",
+		// 缴费历史范围改成「近 12 / 24 个月」预设下拉，默认近 12；起止月份输入框退役。
+		`name="range"`, `value="12" selected`, "近 12 个月", "近 24 个月",
+		// 付款识别渲染参考码与复制按钮。
+		"付款识别", "付款参考码", "RENT-2B-T018", `data-copy-value="RENT-2B-T018"`,
+		// 代付与被代付表存在（数据为空时给空态而非占位行）。
+		"代付与被代付",
 	} {
 		if !strings.Contains(page, expected) {
 			t.Fatalf("tenant detail template missing %q", expected)
 		}
+	}
+	for _, retired := range []string{"from_month", "to_month", "付款人关系"} {
+		if strings.Contains(page, retired) {
+			t.Fatalf("tenant detail template still renders retired markup %q", retired)
+		}
+	}
+}
+
+// The 代付与被代付 table renders one row per payer/owner mismatch, with the
+// payer badge only when this tenant is the one being paid for.
+func TestTenantDetailTemplateRendersPaidByOtherRows(t *testing.T) {
+	var body strings.Builder
+	err := tenantDetailTemplate.Execute(&body, tenantDetailPageData{
+		Tenant:  tenantRecord{ID: "7", Name: "Aoife Murphy"},
+		History: tenantBillingHistoryPage{Page: 1, PageSize: 12},
+		PaidByOtherRows: []tenantPaidByOtherRow{
+			{PeriodLabel: "2026年9月", PayerName: "Mike", OwnerName: "Aoife Murphy", Amount: "€640.00", Result: "本人被代付"},
+			{PeriodLabel: "2026年9月", PayerName: "Aoife Murphy", OwnerName: "Mike", Amount: "€640.00", Result: "代付他人"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := body.String()
+	for _, expected := range []string{
+		"代付与被代付", "责任月份", "实际付款人", "责任所有者", "分配金额", "结果",
+		"本人被代付", "代付他人", "€640.00", `<span class="payer-badge">代付</span>`,
+	} {
+		if !strings.Contains(page, expected) {
+			t.Fatalf("tenant detail paid-by-other table missing %q", expected)
+		}
+	}
+}
+
+func TestTenantHistoryRangePresetWinsOverExplicitMonths(t *testing.T) {
+	now := time.Date(2026, 9, 16, 0, 0, 0, 0, time.UTC)
+	from, to, page, pageSize, err := parseTenantHistoryRange(testQueryValues{"range": "24", "from_month": "2026-09", "to_month": "2026-09", "page": "2"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if from.Format("2006-01") != "2024-10" || to.Format("2006-01") != "2026-09" || page != 2 || pageSize != 12 {
+		t.Fatalf("range=%s..%s page=%d size=%d want 2024-10..2026-09 page 2 size 12", from.Format("2006-01"), to.Format("2006-01"), page, pageSize)
+	}
+	if _, _, _, _, err := parseTenantHistoryRange(testQueryValues{"range": "13"}, now); err == nil {
+		t.Fatal("range=13 should be rejected; only 12 and 24 are offered")
+	}
+	if got := tenantHistoryRangeValue(from, to); got != "24" {
+		t.Fatalf("history range value = %q want 24", got)
+	}
+	twelveFrom, twelveTo, _, _, err := parseTenantHistoryRange(testQueryValues{}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := tenantHistoryRangeValue(twelveFrom, twelveTo); got != "12" {
+		t.Fatalf("default history range value = %q want 12", got)
 	}
 }
 

@@ -37,6 +37,14 @@
 .property-room-actions { display:flex; flex-wrap:wrap; gap:6px; }
 .property-room-actions .btn { min-height:34px; }
 .property-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 22px; margin:0; padding:8px 20px 18px; }
+/* 本月收支构成：原型 detail 页的金额桥（已收租金 + 已确认其他收入 − 有效支出），
+   三段等宽，运算符居中，窄屏折成单列。 */
+.property-financial-bridge .panel-body { padding:8px 20px 20px; }
+.financial-bridge { display:flex; align-items:center; gap:10px; }
+.bridge-item { display:grid; gap:6px; flex:1 1 0; min-width:0; padding:13px 14px; border:1px solid var(--border); border-radius:8px; background:var(--surface); }
+.bridge-item span { color:var(--foreground-muted); font-size:11px; }
+.bridge-item strong { font:700 16px var(--mono); overflow-wrap:anywhere; }
+.bridge-op { flex:0 0 auto; color:var(--foreground-muted); font:700 15px var(--mono); }
 .property-facts div { padding:12px 0; border-bottom:1px solid var(--border); }
 .property-facts dt { color:var(--foreground-muted); font-size:12px; }
 .property-facts dd { margin:5px 0 0; font-size:13px; font-weight:700; overflow-wrap:anywhere; }
@@ -79,7 +87,10 @@
   .property-metrics .metric strong { font-size:13px; }
   .property-detail-grid { display:contents; }
   .property-detail-stack, .property-detail-grid > aside { display:contents; }
-  .property-detail-stack > section:nth-child(2) { display:none; }
+  .property-expense-list { display:none; }
+  .property-financial-bridge .panel-body { padding-left:16px; padding-right:16px; }
+  .financial-bridge { flex-direction:column; align-items:stretch; }
+  .bridge-op { text-align:center; }
   .property-mobile-facts, .property-mobile-recent { display:block; }
   .property-desktop-facts, .property-attention, .property-desktop-risk { display:none; }
   .property-detail-grid > aside { grid-template-columns:1fr; }

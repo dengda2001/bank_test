@@ -70,8 +70,8 @@
           <section class="panel surface detail-section room-responsibility-section">
             <div class="panel-head"><div><h2>租客责任</h2><p class="tiny">每一行对应一条当月个人责任。</p></div></div>
             {{if .Tenants}}<div class="table-wrap"><table class="detail-table"><thead><tr><th>责任人</th><th>个人责任</th><th>已覆盖</th><th>未付</th><th>付款来源</th><th>状态</th></tr></thead><tbody>
-              {{range .Tenants}}<tr><td><strong>{{.TenantName}}</strong>{{if .PaidByOther}}<br><span class="tiny">他人代付</span>{{end}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td>{{if .Payments}}{{range .Payments}}{{.Source}} · {{.ConfirmationSource}}{{break}}{{end}}{{else}}—{{end}}</td><td><span class="detail-status {{workspaceStatusClass .Status}}">{{.StatusLabel}}</span></td></tr>{{end}}
-            </tbody></table></div><div class="room-responsibility-mobile-list">{{range .Tenants}}<div class="room-responsibility-mobile-row"><span><strong>{{.TenantName}}</strong><small>{{if .PaidByOther}}由同住人代付{{else}}本人付款{{end}}</small></span><strong class="amount">{{.ExpectedAmount}}</strong></div>{{end}}</div>{{else}}<div class="detail-list"><div class="workspace-empty">本月暂无个人责任。请检查当前租约和账单生成状态。</div></div>{{end}}
+              {{range .Tenants}}<tr><td>{{if .TenantID}}<a href="/tenants/{{.TenantID}}"><strong>{{.TenantName}}</strong></a>{{else}}<strong>{{.TenantName}}</strong>{{end}}{{if .PaidByOther}}<br><span class="tiny">他人代付</span>{{end}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td>{{if .Payments}}{{range .Payments}}{{.Source}} · {{.ConfirmationSource}}{{break}}{{end}}{{else}}—{{end}}</td><td><span class="detail-status {{workspaceStatusClass .Status}}">{{.StatusLabel}}</span></td></tr>{{end}}
+            </tbody></table></div><div class="room-responsibility-mobile-list">{{range .Tenants}}<div class="room-responsibility-mobile-row"><span>{{if .TenantID}}<a href="/tenants/{{.TenantID}}"><strong>{{.TenantName}}</strong></a>{{else}}<strong>{{.TenantName}}</strong>{{end}}<small>{{if .PaidByOther}}由同住人代付{{else}}本人付款{{end}}</small></span><strong class="amount">{{.ExpectedAmount}}</strong></div>{{end}}</div>{{else}}<div class="detail-list"><div class="workspace-empty">本月暂无个人责任。请检查当前租约和账单生成状态。</div></div>{{end}}
           </section>
 
           <section class="panel surface detail-section room-payments-section">
@@ -83,13 +83,13 @@
 
           <section class="panel surface detail-section room-allocation-section">
             <div class="panel-head"><div><h2>代付分配详情</h2><p class="tiny">实际付款人与各条房间责任分别展示。</p></div><span class="detail-status paid">分配明细</span></div>
-            <div class="room-allocation-metrics"><article><span>已覆盖金额</span><strong>{{.Summary.PaidAmount}}</strong><small>{{.PaymentCount}} 笔关联收款</small></article>{{range .Tenants}}<article><span>{{.TenantName}}责任</span><strong>{{.PaidAmount}}</strong><small>责任 {{.ExpectedAmount}}</small></article>{{end}}<article><span>未覆盖责任</span><strong>{{.Summary.BalanceAmount}}</strong><small>仍待收取</small></article></div>
+            <div class="room-allocation-metrics"><article><span>已覆盖金额</span><strong>{{.Summary.PaidAmount}}</strong><small>{{.PaymentCount}} 笔关联收款</small></article>{{range .Tenants}}<article><span>{{.TenantName}}责任</span><strong>{{.PaidAmount}}</strong><small>责任 {{.ExpectedAmount}}</small></article>{{end}}<article><span>未分配</span><strong>{{.UnallocatedAmount}}</strong><small>收款中尚未归属责任</small></article><article><span>未覆盖责任</span><strong>{{.Summary.BalanceAmount}}</strong><small>仍待收取</small></article></div>
             <div class="room-allocation-note">责任金额按当月租约生成；同住人代付会保留实际付款来源和责任归属。</div>
           </section>
         </div>
 
         <aside class="detail-stack">
-          <section class="panel surface detail-section room-facts-section"><div class="panel-head"><h2>房间与租约</h2></div><dl class="room-facts">
+          <section class="panel surface detail-section room-facts-section room-desktop-facts"><div class="panel-head"><h2>房间与租约</h2></div><dl class="room-facts">
             <div><dt>所属房产</dt><dd><a href="/properties/{{.Summary.PropertyID}}">{{.PropertyName}}</a></dd></div>
             <div><dt>房间类型</dt><dd>{{.RoomType}}</dd></div>
             <div><dt>可住人数</dt><dd>{{.Capacity}} 位</dd></div>
@@ -101,7 +101,8 @@
             <div><dt>当月到期日</dt><dd>{{.Summary.DueDate}}</dd></div>
             <div><dt>在住人数</dt><dd>{{.Summary.TenantCount}} 位</dd></div>
             {{if .RoomNotes}}<div><dt>房间备注</dt><dd>{{.RoomNotes}}</dd></div>{{end}}
-          </dl><dl class="room-facts room-mobile-facts"><div><dt>房间类型</dt><dd>{{.RoomType}}</dd></div><div><dt>账单日</dt><dd>每月 {{.DueDay}} 日</dd></div><div><dt>当前租客</dt><dd>{{.Summary.TenantCount}} 位</dd></div></dl></section>
+          </dl></section>
+          <section class="panel surface detail-section room-mobile-facts"><div class="panel-head"><h2>房间与租约</h2></div><dl class="room-facts"><div><dt>房间类型</dt><dd>{{.RoomType}}</dd></div><div><dt>账单日</dt><dd>每月 {{.DueDay}} 日</dd></div><div><dt>当前租客</dt><dd>{{.Summary.TenantCount}} 位</dd></div></dl></section>
           <div class="risk-note">房产级公共支出不会计入本房间。房间净额只使用明确关联本房间的收支。</div>
           <section class="panel surface detail-section room-timeline-section"><div class="panel-head"><h2><span class="room-timeline-title-desktop">收租时间线</span><span class="room-timeline-title-mobile">最近记录</span></h2></div>
             {{if or .Tenants .Expenses}}<div class="detail-list">{{range .Tenants}}{{$tenant := .}}{{range .Payments}}<div class="audit-row"><time>{{.DateDisplay}}</time><i class="audit-line"></i><div><strong>{{.AmountDisplay}} · {{.Source}}</strong><p class="tiny">{{$tenant.TenantName}} · {{$.Period}} · {{.ConfirmationSource}}</p></div></div>{{end}}{{end}}{{range .Expenses}}<div class="audit-row"><time>{{.ExpenseDate}}</time><i class="audit-line"></i><div><strong>{{.Amount}} · {{.Description}}</strong><p class="tiny">{{.Category}} · 房间支出</p></div></div>{{end}}</div>{{else}}<div class="detail-list"><div class="workspace-empty">暂无账单或收款时间线。</div></div>{{end}}

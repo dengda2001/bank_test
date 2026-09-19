@@ -26,7 +26,81 @@
             </div>
           </div>
         </div>
-        <a class="btn" href="{{.BackRowURL}}">在流水列表中处理</a>
+        <div class="transaction-detail-actions">
+          <details class="transaction-head-action">
+            <summary class="btn">编辑分配</summary>
+            <div class="transaction-head-action-body">
+              {{if .Transaction.CanEditRentMatch}}
+                <p class="tiny">修改这笔流水关联的租客与租金月份。</p>
+                <form method="post" action="{{.ActionBase}}/rematch">
+                  <input type="hidden" name="transaction_id" value="{{.Transaction.ID}}">
+                  <input type="hidden" name="return_to" value="{{.BackURL}}">
+                  <select name="tenant_id" aria-label="修改匹配租客" required><option value="">选择租客...</option>{{range .Transaction.RematchTenantOptions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
+                  <select name="period" aria-label="修改租金月份" required><option value="">选择租金月份...</option>{{range .Transaction.RematchMonthOptions}}<option value="{{.Period}}">{{.Label}} · 未收 {{.Remaining}}</option>{{end}}</select>
+                  <button class="btn primary" type="submit">确认修改</button>
+                </form>
+              {{else if .Transaction.CanRematch}}
+                <p class="tiny">当前没有可替换的租金目标；如需调整，请撤销后重新归类。</p>
+              {{else}}
+                <p class="tiny">该流水尚无已确认的租金匹配，或已拆分／含其他用途；请先确认匹配，或撤销后重新归类。</p>
+              {{end}}
+            </div>
+          </details>
+          <details class="transaction-head-action">
+            <summary class="btn">标记非租金</summary>
+            <div class="transaction-head-action-body">
+              {{if eq .Transaction.MatchStatus "ignored"}}
+                <p class="tiny">该流水已标记为非租金，可在流水列表恢复处理。</p>
+              {{else if and (eq .Transaction.Direction "income") (not (or (eq .Transaction.MatchStatus "matched") (eq .Transaction.MatchStatus "partial")))}}
+                <p class="tiny">标记后不再进入匹配建议，原始流水保持不变。</p>
+                <form method="post" action="{{.ActionBase}}/ignore">
+                  <input type="hidden" name="transaction_id" value="{{.Transaction.ID}}">
+                  <input type="hidden" name="return_to" value="{{.BackURL}}">
+                  <input name="reason" aria-label="忽略原因" placeholder="忽略原因" required>
+                  <button class="btn danger" type="submit">标记非租金</button>
+                </form>
+              {{else}}
+                <p class="tiny">该流水已有确认的租金匹配；如需标记为非租金，请先在流水列表撤销匹配。</p>
+              {{end}}
+            </div>
+          </details>
+          <details class="transaction-head-action">
+            <summary class="btn primary">确认匹配</summary>
+            <div class="transaction-head-action-body">
+              {{if .Transaction.CanConfirm}}
+                <p class="tiny">建议：{{.Transaction.CandidateTenantName}} · 租金月 {{.Transaction.CandidatePeriod}}</p>
+                <form method="post" action="{{.ActionBase}}/confirm">
+                  <input type="hidden" name="transaction_id" value="{{.Transaction.ID}}">
+                  <input type="hidden" name="rent_obligation_id" value="{{.Transaction.CandidateRentObligationID}}">
+                  <input type="hidden" name="return_to" value="{{.BackURL}}">
+                  <label class="tiny"><input type="checkbox" name="remember_payer" value="1" checked> 记住此付款人</label>
+                  <button class="btn primary" type="submit">确认匹配</button>
+                </form>
+              {{else if .Transaction.NeedsMonthChoice}}
+                <p class="tiny">已识别租客，请确认租金月份。</p>
+                <form method="post" action="{{.ActionBase}}/confirm">
+                  <input type="hidden" name="transaction_id" value="{{.Transaction.ID}}">
+                  <input type="hidden" name="tenant_id" value="{{.Transaction.TenantID}}">
+                  <input type="hidden" name="return_to" value="{{.BackURL}}">
+                  <select name="period" aria-label="选择租金月份" required><option value="">选择月份...</option>{{range .Transaction.MonthOptions}}<option value="{{.Period}}">{{.Label}} · 应收 {{.Expected}} · 已收 {{.Paid}} · 未收 {{.Remaining}}</option>{{end}}</select>
+                  <label class="tiny"><input type="checkbox" name="remember_payer" value="1" checked> 记住此付款人</label>
+                  <button class="btn primary" type="submit">确认匹配</button>
+                </form>
+              {{else if .Transaction.ManualMatchOptions}}
+                <p class="tiny">选择要核销的租客与租金月份。</p>
+                <form method="post" action="{{.ActionBase}}/confirm">
+                  <input type="hidden" name="transaction_id" value="{{.Transaction.ID}}">
+                  <input type="hidden" name="return_to" value="{{.BackURL}}">
+                  <select name="rent_obligation_id" aria-label="选择匹配租客和租金月份" required><option value="">选择租客和租金月...</option>{{range .Transaction.ManualMatchOptions}}<option value="{{.RentObligationID}}">{{.Label}}</option>{{end}}</select>
+                  <label class="tiny"><input type="checkbox" name="remember_payer" value="1" checked> 记住付款人</label>
+                  <button class="btn primary" type="submit">确认匹配</button>
+                </form>
+              {{else}}
+                <p class="tiny">没有可直接确认的租金匹配；可在流水列表使用归类／拆分处理。</p>
+              {{end}}
+            </div>
+          </details>
+        </div>
       </header>
 
       <section class="transaction-detail-metrics" aria-label="流水金额摘要">
@@ -146,18 +220,22 @@
 
         <aside class="transaction-detail-stack">
           <section class="panel" aria-labelledby="transaction-source-title">
-            <div class="panel-head"><h2 id="transaction-source-title">付款信息</h2></div>
+            <div class="panel-head"><h2 id="transaction-source-title">原始流水</h2></div>
             <dl class="transaction-facts">
-              <div><dt>付款人</dt><dd>{{.Transaction.PayerName}}</dd></div>
-              <div><dt>付款人编号</dt><dd>{{.Transaction.PayerID}}</dd></div>
-              <div><dt>银行账户</dt><dd>{{.Transaction.AccountName}}</dd></div>
-              <div><dt>账户标识</dt><dd>{{if .Transaction.AccountID}}{{.Transaction.AccountID}}{{else}}—{{end}}</dd></div>
-              <div><dt>银行流水号</dt><dd>{{.ProviderID}}</dd></div>
+              <div><dt>银行姓名</dt><dd>{{.Transaction.PayerName}}</dd></div>
+              <div><dt>摘要 / 参考</dt><dd>{{.Reference}}</dd></div>
+              <div><dt>交易时间</dt><dd class="mono">{{.TransactionTime}}</dd></div>
+              <div><dt>入账账户</dt><dd>{{.Transaction.AccountName}}</dd></div>
               <div><dt>数据来源</dt><dd>{{.SourceLabel}}</dd></div>
-              <div><dt>参考信息</dt><dd>{{.Reference}}</dd></div>
+              <div><dt>外部流水号</dt><dd>{{.ProviderID}}</dd></div>
+              <div><dt>付款人编号</dt><dd>{{.Transaction.PayerID}}</dd></div>
+              <div><dt>账户标识</dt><dd>{{if .Transaction.AccountID}}{{.Transaction.AccountID}}{{else}}—{{end}}</dd></div>
               <div><dt>识别租金月份</dt><dd>{{if .ParsedPeriod}}{{.ParsedPeriod}}{{else}}未识别{{end}}{{if .ParsedPeriodNote}}<small>{{.ParsedPeriodNote}}</small>{{end}}</dd></div>
-              <div><dt>原始描述</dt><dd>{{.Transaction.Description}}</dd></div>
             </dl>
+          </section>
+          <section class="panel" aria-labelledby="transaction-description-title">
+            <div class="panel-head"><h2 id="transaction-description-title">原始描述</h2></div>
+            <div class="transaction-code-body"><div class="code-block">{{.Transaction.Description}}</div></div>
           </section>
           {{if .HasRawRecord}}
             <details class="panel transaction-raw-record">
@@ -165,6 +243,7 @@
               <pre>{{.RawRecord}}</pre>
             </details>
           {{end}}
+          <div class="transaction-risk-note">确认匹配会产生付款分配记录，但不会修改原始银行流水。撤销时同样保留审计记录。</div>
         </aside>
       </div>
     </main>

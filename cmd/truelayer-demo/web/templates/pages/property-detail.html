@@ -63,7 +63,12 @@
             <div class="property-room-prototype-list">{{range .Rooms}}<a class="property-room-prototype-row" href="/rooms/{{.ID}}?period={{$.Period}}"><span><strong>房间 {{.RoomLabel}}{{range $index, $name := .TenantNames}}{{if eq $index 0}} · {{end}}{{if $index}}, {{end}}{{$name}}{{end}}</strong><small>{{.StatusLabel}}</small></span><strong class="amount">{{.ExpectedAmount}}</strong></a>{{end}}</div>
           </section>
 
-          <section class="panel surface">
+          <section class="panel surface property-financial-bridge">
+            <div class="panel-head"><div><h2>本月收支构成</h2><p class="tiny">公共支出只进入房产净额，不分摊到房间。</p></div></div>
+            <div class="panel-body"><div class="financial-bridge"><div class="bridge-item"><span>已收租金</span><strong>{{.Property.PaidAmount}}</strong></div><span class="bridge-op">+</span><div class="bridge-item"><span>已确认其他收入</span><strong>{{.Property.OtherIncomeAmount}}</strong></div><span class="bridge-op">−</span><div class="bridge-item"><span>有效支出</span><strong>{{.Property.ExpenseAmount}}</strong></div></div></div>
+          </section>
+
+          <section class="panel surface property-expense-list">
             <div class="panel-head"><div><h2>关联支出</h2><p class="tiny">只展示明确归属该房产或房间的支出。</p></div><a class="btn subtle" href="/expenses">查看全部支出</a></div>
             {{if .Expenses}}<div class="table-wrap"><table><thead><tr><th>日期</th><th>描述</th><th>类别</th><th>金额</th><th>凭证</th></tr></thead><tbody>{{range .Expenses}}<tr><td>{{.DateDisplay}}</td><td>{{.Description}}</td><td>{{.Category}}</td><td class="amount">{{.AmountDisplay}}</td><td>{{if .InvoiceURL}}<a href="{{.InvoiceURL}}" target="_blank" rel="noopener noreferrer">查看链接</a>{{else}}未提供{{end}}</td></tr>{{end}}</tbody></table></div>{{else}}<div class="workspace-empty">该房产暂无关联支出。</div>{{end}}
           </section>

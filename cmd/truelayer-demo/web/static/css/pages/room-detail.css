@@ -23,6 +23,7 @@
   .detail-stack { display:grid; gap:16px; min-width:0; }
   .detail-stack .detail-section { margin-bottom:0; }
   .room-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 22px; margin:0; padding:10px 20px 18px; }
+  .room-mobile-facts .room-facts { grid-template-columns:1fr; padding-top:4px; }
   .room-facts div { padding:12px 0; border-bottom:1px solid var(--border); }
   .room-facts dt { color:var(--foreground-muted); font-size:12px; }
   .room-facts dd { margin:5px 0 0; font-weight:700; }
@@ -73,8 +74,8 @@
     .room-responsibility-mobile-row:last-child{border-bottom:0}
     .room-responsibility-mobile-row span{display:grid;gap:4px;min-width:0}
     .room-responsibility-mobile-row small{color:var(--foreground-muted)}
-    .room-facts{display:none}
-    .room-mobile-facts{display:grid;grid-template-columns:1fr;padding-top:4px}
+    .room-desktop-facts{display:none}
+    .room-mobile-facts{display:block}
     .room-timeline-section{order:3}
     .room-timeline-title-desktop{display:none}
     .room-timeline-title-mobile{display:inline}

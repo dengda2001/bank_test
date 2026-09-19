@@ -162,37 +162,38 @@ func (a *app) renderRentWorkspaceDashboard(w http.ResponseWriter, r *http.Reques
 
 type rentRoomDetailPageData struct {
 	workspaceShell
-	Filters          rentWorkspaceFilters
-	ReturnURL        string
-	FromList         bool
-	ReturnPropertyID uint64
-	ReturnStatus     string
-	ReturnSearch     string
-	ReturnCollection string
-	Period           string
-	PeriodLabel      string
-	RoomID           uint64
-	RoomLabel        string
-	RoomType         string
-	Capacity         int
-	RoomNotes        string
-	ContractDate     string
-	MoveInDate       string
-	MonthlyRent      string
-	MonthlyRentValue string
-	DueDay           int
-	RoomActiveFrom   string
-	PropertyName     string
-	PropertyAddress  string
-	Editing          bool
-	Form             roomPageForm
-	Properties       []propertyPageRow
-	Summary          rentWorkspaceRoomRow
-	PaymentCount     int
-	Tenants          []rentWorkspaceTenantRow
-	Expenses         []rentWorkspaceExpenseView
-	Message          string
-	Error            string
+	Filters           rentWorkspaceFilters
+	ReturnURL         string
+	FromList          bool
+	ReturnPropertyID  uint64
+	ReturnStatus      string
+	ReturnSearch      string
+	ReturnCollection  string
+	Period            string
+	PeriodLabel       string
+	RoomID            uint64
+	RoomLabel         string
+	RoomType          string
+	Capacity          int
+	RoomNotes         string
+	ContractDate      string
+	MoveInDate        string
+	MonthlyRent       string
+	MonthlyRentValue  string
+	DueDay            int
+	RoomActiveFrom    string
+	PropertyName      string
+	PropertyAddress   string
+	Editing           bool
+	Form              roomPageForm
+	Properties        []propertyPageRow
+	Summary           rentWorkspaceRoomRow
+	PaymentCount      int
+	UnallocatedAmount string
+	Tenants           []rentWorkspaceTenantRow
+	Expenses          []rentWorkspaceExpenseView
+	Message           string
+	Error             string
 }
 
 type rentWorkspaceExpenseView struct {
@@ -268,35 +269,87 @@ func (s *rentWorkspaceService) loadRoomDetail(ctx context.Context, userID, roomI
 		}
 	}
 	paymentIDs := make(map[uint64]struct{})
+	obligationIDs := make([]uint64, 0, len(data.TenantRows))
 	for _, tenantRow := range data.TenantRows {
+		if tenantRow.ObligationID != 0 {
+			obligationIDs = append(obligationIDs, tenantRow.ObligationID)
+		}
 		for _, payment := range tenantRow.Payments {
 			if payment.PaymentID != 0 {
 				paymentIDs[payment.PaymentID] = struct{}{}
 			}
 		}
 	}
+	// "未分配" is money received into this room that no responsibility has claimed,
+	// which is a different quantity from "未覆盖" (responsibility no payment covered).
+	// It is derived from the source transactions: amount minus effective allocations.
+	unallocatedCents, err := s.roomUnallocatedCents(ctx, userID, obligationIDs)
+	if err != nil {
+		return rentRoomDetailPageData{}, err
+	}
 	return rentRoomDetailPageData{
-		Filters:          filters,
-		Period:           period.Format("2006-01"),
-		PeriodLabel:      formatMonthLabel(period),
-		RoomID:           roomRow.ID,
-		RoomLabel:        roomRow.RoomLabel,
-		RoomType:         firstNonEmpty(roomRow.RoomType, "未设置"),
-		Capacity:         roomRow.Capacity,
-		RoomNotes:        stringValue(roomRow.Notes),
-		ContractDate:     contractDate,
-		MoveInDate:       moveInDate,
-		MonthlyRent:      monthlyRent,
-		MonthlyRentValue: monthlyRentValue,
-		DueDay:           dueDay,
-		RoomActiveFrom:   roomRow.ActiveFrom.Format("2006-01"),
-		PropertyName:     propertyRow.Name,
-		PropertyAddress:  propertyAddress(propertyRow),
-		Summary:          summary,
-		PaymentCount:     len(paymentIDs),
-		Tenants:          data.TenantRows,
-		Expenses:         expenseViews,
+		Filters:           filters,
+		Period:            period.Format("2006-01"),
+		PeriodLabel:       formatMonthLabel(period),
+		RoomID:            roomRow.ID,
+		RoomLabel:         roomRow.RoomLabel,
+		RoomType:          firstNonEmpty(roomRow.RoomType, "未设置"),
+		Capacity:          roomRow.Capacity,
+		RoomNotes:         stringValue(roomRow.Notes),
+		ContractDate:      contractDate,
+		MoveInDate:        moveInDate,
+		MonthlyRent:       monthlyRent,
+		MonthlyRentValue:  monthlyRentValue,
+		DueDay:            dueDay,
+		RoomActiveFrom:    roomRow.ActiveFrom.Format("2006-01"),
+		PropertyName:      propertyRow.Name,
+		PropertyAddress:   propertyAddress(propertyRow),
+		Summary:           summary,
+		PaymentCount:      len(paymentIDs),
+		UnallocatedAmount: formatWorkspaceAmount(unallocatedCents),
+		Tenants:           data.TenantRows,
+		Expenses:          expenseViews,
 	}, nil
+}
+
+// roomUnallocatedCents sums, over every income transaction that paid into this
+// room, the part of the transaction that no effective allocation claimed. A cash
+// receipt is bound to a single obligation at creation, so it never contributes.
+func (s *rentWorkspaceService) roomUnallocatedCents(ctx context.Context, userID uint64, obligationIDs []uint64) (int64, error) {
+	if userID == 0 || len(obligationIDs) == 0 {
+		return 0, nil
+	}
+	transactionIDs := make([]uint64, 0)
+	if err := s.db.WithContext(ctx).Model(&paymentAllocation{}).
+		Where("user_id = ? AND rent_obligation_id IN ?", userID, obligationIDs).
+		Distinct().Pluck("payment_transaction_id", &transactionIDs).Error; err != nil {
+		return 0, err
+	}
+	if len(transactionIDs) == 0 {
+		return 0, nil
+	}
+	var transactions []paymentTransaction
+	if err := s.db.WithContext(ctx).Where("user_id = ? AND id IN ? AND direction = ?", userID, transactionIDs, "income").Find(&transactions).Error; err != nil {
+		return 0, err
+	}
+	var allocations []paymentAllocation
+	if err := s.db.WithContext(ctx).Where("user_id = ? AND payment_transaction_id IN ?", userID, transactionIDs).Find(&allocations).Error; err != nil {
+		return 0, err
+	}
+	allocatedByTransaction := make(map[uint64]int64, len(allocations))
+	for _, allocation := range allocations {
+		if !ledgerAllocationIsEffective(allocation) || allocation.AmountCents <= 0 {
+			continue
+		}
+		allocatedByTransaction[allocation.PaymentTransactionID] += allocation.AmountCents
+	}
+	var total int64
+	for _, transaction := range transactions {
+		if remaining := transaction.AmountCents - allocatedByTransaction[transaction.ID]; remaining > 0 {
+			total += remaining
+		}
+	}
+	return total, nil
 }
 
 func (a *app) handleRoomDetail(w http.ResponseWriter, r *http.Request) {

@@ -1,0 +1,921 @@
+{
+  "base": "http://127.0.0.1:18092",
+  "period": "2026-09",
+  "pages": [
+    {
+      "page": "property-detail",
+      "url": "/properties/1?period=2026-09",
+      "width": "1024",
+      "status": 200,
+      "overflow": 0,
+      "ok": true,
+      "offenders": [
+        {
+          "sel": "table.property-room-table",
+          "right": 1165,
+          "width": 900
+        }
+      ]
+    },
+    {
+      "page": "room-detail",
+      "url": "/rooms/5?period=2026-09",
+      "width": "1024",
+      "status": 200,
+      "overflow": 0,
+      "ok": true,
+      "offenders": []
+    },
+    {
+      "page": "tenant-detail",
+      "url": "/tenants/3",
+      "width": "1024",
+      "status": 200,
+      "overflow": 0,
+      "ok": true,
+      "offenders": [
+        {
+          "sel": "table.history-table",
+          "right": 1045,
+          "width": 780
+        }
+      ]
+    },
+    {
+      "page": "transaction-detail",
+      "url": "/transactions?detail=1",
+      "width": "1024",
+      "status": 200,
+      "overflow": 0,
+      "ok": true,
+      "offenders": []
+    },
+    {
+      "page": "property-detail",
+      "url": "/properties/1?period=2026-09",
+      "width": "1366",
+      "status": 200,
+      "overflow": 0,
+      "ok": true,
+      "offenders": []
+    },
+    {
+      "page": "room-detail",
+      "url": "/rooms/5?period=2026-09",
+      "width": "1366",
+      "status": 200,
+      "overflow": 0,
+      "ok": true,
+      "offenders": []
+    },
+    {
+      "page": "tenant-detail",
+      "url": "/tenants/3",
+      "width": "1366",
+      "status": 200,
+      "overflow": 0,
+      "ok": true,
+      "offenders": []
+    },
+    {
+      "page": "transaction-detail",
+      "url": "/transactions?detail=1",
+      "width": "1366",
+      "status": 200,
+      "overflow": 0,
+      "ok": true,
+      "offenders": []
+    },
+    {
+      "page": "property-detail",
+      "url": "/properties/1?period=2026-09",
+      "width": "1440",
+      "status": 200,
+      "overflow": 0,
+      "ok": true,
+      "offenders": []
+    },
+    {
+      "page": "room-detail",
+      "url": "/rooms/5?period=2026-09",
+      "width": "1440",
+      "status": 200,
+      "overflow": 0,
+      "ok": true,
+      "offenders": []
+    },
+    {
+      "page": "tenant-detail",
+      "url": "/tenants/3",
+      "width": "1440",
+      "status": 200,
+      "overflow": 0,
+      "ok": true,
+      "offenders": []
+    },
+    {
+      "page": "transaction-detail",
+      "url": "/transactions?detail=1",
+      "width": "1440",
+      "status": 200,
+      "overflow": 0,
+      "ok": true,
+      "offenders": []
+    },
+    {
+      "page": "property-detail",
+      "url": "/properties/1?period=2026-09",
+      "width": "1920",
+      "status": 200,
+      "overflow": 0,
+      "ok": true,
+      "offenders": []
+    },
+    {
+      "page": "room-detail",
+      "url": "/rooms/5?period=2026-09",
+      "width": "1920",
+      "status": 200,
+      "overflow": 0,
+      "ok": true,
+      "offenders": []
+    },
+    {
+      "page": "tenant-detail",
+      "url": "/tenants/3",
+      "width": "1920",
+      "status": 200,
+      "overflow": 0,
+      "ok": true,
+      "offenders": []
+    },
+    {
+      "page": "transaction-detail",
+      "url": "/transactions?detail=1",
+      "width": "1920",
+      "status": 200,
+      "overflow": 0,
+      "ok": true,
+      "offenders": []
+    },
+    {
+      "page": "room-detail",
+      "url": "/rooms/5?period=2026-09",
+      "width": "390",
+      "status": 200,
+      "overflow": 0,
+      "ok": true
+    }
+  ],
+  "probes": {
+    "property-detail": {
+      "vw": 1440,
+      "clientW": 1440,
+      "scrollW": 1440,
+      "blocks": [
+        {
+          "title": "房间收款概览房间收缴",
+          "sidebar": false,
+          "visible": true
+        },
+        {
+          "title": "本月收支构成",
+          "sidebar": false,
+          "visible": true
+        },
+        {
+          "title": "关联支出",
+          "sidebar": false,
+          "visible": true
+        },
+        {
+          "title": "房产资料",
+          "sidebar": true,
+          "visible": true
+        },
+        {
+          "title": "基础信息",
+          "sidebar": true,
+          "visible": false
+        },
+        {
+          "title": "需要关注",
+          "sidebar": true,
+          "visible": true
+        },
+        {
+          "title": "最近记录",
+          "sidebar": true,
+          "visible": false
+        }
+      ],
+      "metricCards": [
+        {
+          "label": "本月应收",
+          "visible": true
+        },
+        {
+          "label": "已收租金",
+          "visible": true
+        },
+        {
+          "label": "未收",
+          "visible": false
+        },
+        {
+          "label": "本月支出",
+          "visible": true
+        },
+        {
+          "label": "经营净额",
+          "visible": true
+        }
+      ],
+      "offenders": [],
+      "desktopFactsVisible": null,
+      "mobileFactsVisible": null,
+      "mobileActionsVisible": null,
+      "allocationCells": [],
+      "kpis": [],
+      "responsibilityRows": [],
+      "paymentRows": [],
+      "paymentCountMetric": null,
+      "descriptionText": null,
+      "descriptionWhiteSpace": null,
+      "factLabels": [],
+      "transactionTime": null,
+      "actionLabels": [],
+      "actionForms": [],
+      "rangeSelect": null,
+      "referenceText": null,
+      "copyButtonValue": null,
+      "paidForHeaders": [],
+      "paidForRows": []
+    },
+    "room-detail": {
+      "vw": 1440,
+      "clientW": 1440,
+      "scrollW": 1440,
+      "blocks": [
+        {
+          "title": "租客责任",
+          "sidebar": false,
+          "visible": true
+        },
+        {
+          "title": "关联收款",
+          "sidebar": false,
+          "visible": true
+        },
+        {
+          "title": "代付分配详情",
+          "sidebar": false,
+          "visible": true
+        },
+        {
+          "title": "房间与租约",
+          "sidebar": true,
+          "visible": true
+        },
+        {
+          "title": "房间与租约",
+          "sidebar": true,
+          "visible": false
+        },
+        {
+          "title": "收租时间线最近记录",
+          "sidebar": true,
+          "visible": true
+        }
+      ],
+      "metricCards": [
+        {
+          "label": "本月房间应收",
+          "visible": true
+        },
+        {
+          "label": "已覆盖",
+          "visible": true
+        },
+        {
+          "label": "未付",
+          "visible": true
+        },
+        {
+          "label": "付款记录",
+          "visible": true
+        }
+      ],
+      "offenders": [],
+      "desktopFactsVisible": true,
+      "mobileFactsVisible": false,
+      "mobileActionsVisible": false,
+      "allocationCells": [
+        {
+          "label": "已覆盖金额",
+          "value": "EUR 700.00"
+        },
+        {
+          "label": "Bala Anush Choudhary责任",
+          "value": "EUR 0.00"
+        },
+        {
+          "label": "Hardik Gattu责任",
+          "value": "EUR 0.00"
+        },
+        {
+          "label": "Priteesh Nandan责任",
+          "value": "EUR 0.00"
+        },
+        {
+          "label": "李娜责任",
+          "value": "EUR 700.00"
+        },
+        {
+          "label": "未分配",
+          "value": "EUR 1450.00"
+        },
+        {
+          "label": "未覆盖责任",
+          "value": "EUR 1750.00"
+        }
+      ],
+      "kpis": [
+        {
+          "label": "本月房间应收",
+          "value": "EUR 2450.00",
+          "note": "2026年9月 · 4 位责任人"
+        },
+        {
+          "label": "已覆盖",
+          "value": "EUR 700.00",
+          "note": "28% 收缴率"
+        },
+        {
+          "label": "未付",
+          "value": "EUR 1750.00",
+          "note": "已逾期"
+        },
+        {
+          "label": "付款记录",
+          "value": "2 笔",
+          "note": "本月关联收款"
+        }
+      ],
+      "responsibilityRows": [
+        [
+          "Bala Anush Choudhary",
+          "EUR 500.00",
+          "EUR 0.00",
+          "EUR 500.00",
+          "—",
+          "已逾期"
+        ],
+        [
+          "Hardik Gattu",
+          "EUR 500.00",
+          "EUR 0.00",
+          "EUR 500.00",
+          "—",
+          "已逾期"
+        ],
+        [
+          "Priteesh Nandan",
+          "EUR 500.00",
+          "EUR 0.00",
+          "EUR 500.00",
+          "—",
+          "已逾期"
+        ],
+        [
+          "李娜",
+          "EUR 950.00",
+          "EUR 700.00",
+          "EUR 250.00",
+          "银行 · manual_name",
+          "部分缴纳"
+        ]
+      ],
+      "paymentRows": [
+        [
+          "03 Sep 2026 09:15",
+          "银行 · manual_name",
+          "FASTER PAYMENTS RECEIPT REF:20260903LI FROM: LI NA REMITTANCE: RENT SEPT 2026 FLAT 3B",
+          "李娜 · 2026-09",
+          "EUR 400.00"
+        ],
+        [
+          "20 Sep 2026 10:00",
+          "银行 · manual",
+          "Room 5 extra transfer",
+          "李娜 · 2026-09",
+          "EUR 300.00"
+        ]
+      ],
+      "paymentCountMetric": "2 笔",
+      "descriptionText": null,
+      "descriptionWhiteSpace": null,
+      "factLabels": [],
+      "transactionTime": null,
+      "actionLabels": [],
+      "actionForms": [],
+      "rangeSelect": null,
+      "referenceText": null,
+      "copyButtonValue": null,
+      "paidForHeaders": [],
+      "paidForRows": []
+    },
+    "tenant-detail": {
+      "vw": 1440,
+      "clientW": 1440,
+      "scrollW": 1440,
+      "blocks": [
+        {
+          "title": "缴费历史",
+          "sidebar": false,
+          "visible": true
+        },
+        {
+          "title": "代付与被代付",
+          "sidebar": false,
+          "visible": true
+        },
+        {
+          "title": "责任与代付",
+          "sidebar": false,
+          "visible": true
+        },
+        {
+          "title": "租客档案",
+          "sidebar": true,
+          "visible": true
+        },
+        {
+          "title": "付款识别",
+          "sidebar": true,
+          "visible": true
+        }
+      ],
+      "metricCards": [
+        {
+          "label": "本月个人责任",
+          "visible": true
+        },
+        {
+          "label": "个人责任已覆盖",
+          "visible": true
+        },
+        {
+          "label": "本月未收",
+          "visible": true
+        },
+        {
+          "label": "本月状态",
+          "visible": true
+        }
+      ],
+      "offenders": [],
+      "desktopFactsVisible": null,
+      "mobileFactsVisible": null,
+      "mobileActionsVisible": null,
+      "allocationCells": [],
+      "kpis": [],
+      "responsibilityRows": [],
+      "paymentRows": [],
+      "paymentCountMetric": null,
+      "descriptionText": null,
+      "descriptionWhiteSpace": null,
+      "factLabels": [],
+      "transactionTime": null,
+      "actionLabels": [],
+      "actionForms": [],
+      "rangeSelect": {
+        "value": "12",
+        "options": [
+          "近 12 个月",
+          "近 24 个月"
+        ]
+      },
+      "referenceText": "RENT-2026-09-LINA",
+      "copyButtonValue": "RENT-2026-09-LINA",
+      "paidForHeaders": [
+        "责任月份",
+        "实际付款人",
+        "责任所有者",
+        "分配金额",
+        "结果"
+      ],
+      "paidForRows": [
+        [
+          "2026年8月",
+          "志强 代付",
+          "Lina",
+          "EUR 950.00",
+          "本人被代付"
+        ]
+      ]
+    },
+    "transaction-detail": {
+      "vw": 1440,
+      "clientW": 1440,
+      "scrollW": 1440,
+      "blocks": [
+        {
+          "title": "匹配建议",
+          "sidebar": false,
+          "visible": true
+        },
+        {
+          "title": "关联账单与对象",
+          "sidebar": false,
+          "visible": true
+        },
+        {
+          "title": "处理记录",
+          "sidebar": false,
+          "visible": true
+        },
+        {
+          "title": "原始流水",
+          "sidebar": true,
+          "visible": true
+        },
+        {
+          "title": "原始描述",
+          "sidebar": true,
+          "visible": true
+        },
+        {
+          "title": "查看银行原始记录",
+          "sidebar": true,
+          "visible": true
+        }
+      ],
+      "metricCards": [
+        {
+          "label": "流水金额",
+          "visible": true
+        },
+        {
+          "label": "处理状态",
+          "visible": true
+        },
+        {
+          "label": "已分配金额",
+          "visible": true
+        },
+        {
+          "label": "未分配余额",
+          "visible": true
+        }
+      ],
+      "offenders": [],
+      "desktopFactsVisible": null,
+      "mobileFactsVisible": null,
+      "mobileActionsVisible": null,
+      "allocationCells": [],
+      "kpis": [],
+      "responsibilityRows": [],
+      "paymentRows": [],
+      "paymentCountMetric": null,
+      "descriptionText": "FASTER PAYMENTS RECEIPT REF:20260903LI\nFROM: LI NA\nREMITTANCE: RENT SEPT 2026 FLAT 3B",
+      "descriptionWhiteSpace": "pre-wrap",
+      "factLabels": [
+        "银行姓名",
+        "摘要 / 参考",
+        "交易时间",
+        "入账账户",
+        "数据来源",
+        "外部流水号",
+        "付款人编号",
+        "账户标识",
+        "识别租金月份"
+      ],
+      "transactionTime": "2026-09-03 09:15",
+      "actionLabels": [
+        "编辑分配",
+        "标记非租金",
+        "确认匹配"
+      ],
+      "actionForms": [
+        {
+          "action": "/transactions/rematch",
+          "hasReturnTo": true
+        }
+      ],
+      "rangeSelect": null,
+      "referenceText": null,
+      "copyButtonValue": null,
+      "paidForHeaders": [],
+      "paidForRows": []
+    },
+    "room-detail@390": {
+      "vw": 390,
+      "clientW": 390,
+      "scrollW": 390,
+      "blocks": [
+        {
+          "title": "租客责任",
+          "sidebar": false,
+          "visible": true
+        },
+        {
+          "title": "关联收款",
+          "sidebar": false,
+          "visible": false
+        },
+        {
+          "title": "代付分配详情",
+          "sidebar": false,
+          "visible": false
+        },
+        {
+          "title": "房间与租约",
+          "sidebar": true,
+          "visible": false
+        },
+        {
+          "title": "房间与租约",
+          "sidebar": true,
+          "visible": true
+        },
+        {
+          "title": "收租时间线最近记录",
+          "sidebar": true,
+          "visible": true
+        }
+      ],
+      "metricCards": [
+        {
+          "label": "本月房间应收",
+          "visible": true
+        },
+        {
+          "label": "已覆盖",
+          "visible": true
+        },
+        {
+          "label": "未付",
+          "visible": true
+        },
+        {
+          "label": "付款记录",
+          "visible": false
+        }
+      ],
+      "offenders": [],
+      "desktopFactsVisible": false,
+      "mobileFactsVisible": true,
+      "mobileActionsVisible": true,
+      "allocationCells": [
+        {
+          "label": "已覆盖金额",
+          "value": "EUR 700.00"
+        },
+        {
+          "label": "Bala Anush Choudhary责任",
+          "value": "EUR 0.00"
+        },
+        {
+          "label": "Hardik Gattu责任",
+          "value": "EUR 0.00"
+        },
+        {
+          "label": "Priteesh Nandan责任",
+          "value": "EUR 0.00"
+        },
+        {
+          "label": "李娜责任",
+          "value": "EUR 700.00"
+        },
+        {
+          "label": "未分配",
+          "value": "EUR 1450.00"
+        },
+        {
+          "label": "未覆盖责任",
+          "value": "EUR 1750.00"
+        }
+      ],
+      "kpis": [
+        {
+          "label": "本月房间应收",
+          "value": "EUR 2450.00",
+          "note": "2026年9月 · 4 位责任人"
+        },
+        {
+          "label": "已覆盖",
+          "value": "EUR 700.00",
+          "note": "28% 收缴率"
+        },
+        {
+          "label": "未付",
+          "value": "EUR 1750.00",
+          "note": "已逾期"
+        },
+        {
+          "label": "付款记录",
+          "value": "2 笔",
+          "note": "本月关联收款"
+        }
+      ],
+      "responsibilityRows": [
+        [
+          "Bala Anush Choudhary",
+          "EUR 500.00",
+          "EUR 0.00",
+          "EUR 500.00",
+          "—",
+          "已逾期"
+        ],
+        [
+          "Hardik Gattu",
+          "EUR 500.00",
+          "EUR 0.00",
+          "EUR 500.00",
+          "—",
+          "已逾期"
+        ],
+        [
+          "Priteesh Nandan",
+          "EUR 500.00",
+          "EUR 0.00",
+          "EUR 500.00",
+          "—",
+          "已逾期"
+        ],
+        [
+          "李娜",
+          "EUR 950.00",
+          "EUR 700.00",
+          "EUR 250.00",
+          "银行 · manual_name",
+          "部分缴纳"
+        ]
+      ],
+      "paymentRows": [
+        [
+          "03 Sep 2026 09:15",
+          "银行 · manual_name",
+          "FASTER PAYMENTS RECEIPT REF:20260903LI FROM: LI NA REMITTANCE: RENT SEPT 2026 FLAT 3B",
+          "李娜 · 2026-09",
+          "EUR 400.00"
+        ],
+        [
+          "20 Sep 2026 10:00",
+          "银行 · manual",
+          "Room 5 extra transfer",
+          "李娜 · 2026-09",
+          "EUR 300.00"
+        ]
+      ],
+      "paymentCountMetric": "2 笔",
+      "descriptionText": null,
+      "descriptionWhiteSpace": null,
+      "factLabels": [],
+      "transactionTime": null,
+      "actionLabels": [],
+      "actionForms": [],
+      "rangeSelect": null,
+      "referenceText": null,
+      "copyButtonValue": null,
+      "paidForHeaders": [],
+      "paidForRows": []
+    },
+    "room-detail-fully-allocated": {
+      "vw": 1440,
+      "clientW": 1440,
+      "scrollW": 1440,
+      "blocks": [
+        {
+          "title": "租客责任",
+          "sidebar": false,
+          "visible": true
+        },
+        {
+          "title": "关联收款",
+          "sidebar": false,
+          "visible": true
+        },
+        {
+          "title": "代付分配详情",
+          "sidebar": false,
+          "visible": true
+        },
+        {
+          "title": "房间与租约",
+          "sidebar": true,
+          "visible": true
+        },
+        {
+          "title": "房间与租约",
+          "sidebar": true,
+          "visible": false
+        },
+        {
+          "title": "收租时间线最近记录",
+          "sidebar": true,
+          "visible": true
+        }
+      ],
+      "metricCards": [
+        {
+          "label": "本月房间应收",
+          "visible": true
+        },
+        {
+          "label": "已覆盖",
+          "visible": true
+        },
+        {
+          "label": "未付",
+          "visible": true
+        },
+        {
+          "label": "付款记录",
+          "visible": true
+        }
+      ],
+      "offenders": [],
+      "desktopFactsVisible": true,
+      "mobileFactsVisible": false,
+      "mobileActionsVisible": false,
+      "allocationCells": [
+        {
+          "label": "已覆盖金额",
+          "value": "EUR 0.00"
+        },
+        {
+          "label": "Devansh Chauhan责任",
+          "value": "EUR 0.00"
+        },
+        {
+          "label": "Noel Jose责任",
+          "value": "EUR 0.00"
+        },
+        {
+          "label": "未分配",
+          "value": "EUR 0.00"
+        },
+        {
+          "label": "未覆盖责任",
+          "value": "EUR 1360.00"
+        }
+      ],
+      "kpis": [
+        {
+          "label": "本月房间应收",
+          "value": "EUR 1360.00",
+          "note": "2026年9月 · 2 位责任人"
+        },
+        {
+          "label": "已覆盖",
+          "value": "EUR 0.00",
+          "note": "0% 收缴率"
+        },
+        {
+          "label": "未付",
+          "value": "EUR 1360.00",
+          "note": "已逾期"
+        },
+        {
+          "label": "付款记录",
+          "value": "0 笔",
+          "note": "本月关联收款"
+        }
+      ],
+      "responsibilityRows": [
+        [
+          "Devansh Chauhan",
+          "EUR 680.00",
+          "EUR 0.00",
+          "EUR 680.00",
+          "—",
+          "已逾期"
+        ],
+        [
+          "Noel Jose",
+          "EUR 680.00",
+          "EUR 0.00",
+          "EUR 680.00",
+          "—",
+          "已逾期"
+        ]
+      ],
+      "paymentRows": [],
+      "paymentCountMetric": "0 笔",
+      "descriptionText": null,
+      "descriptionWhiteSpace": null,
+      "factLabels": [],
+      "transactionTime": null,
+      "actionLabels": [],
+      "actionForms": [],
+      "rangeSelect": null,
+      "referenceText": null,
+      "copyButtonValue": null,
+      "paidForHeaders": [],
+      "paidForRows": []
+    }
+  },
+  "failures": []
+}

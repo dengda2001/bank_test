@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type transactionDetailPageData struct {
@@ -18,6 +19,8 @@ type transactionDetailPageData struct {
 	StatusClass      string
 	BackURL          string
 	BackRowURL       string
+	ActionBase       string
+	TransactionTime  string
 	AllocatedAmount  string
 	RemainingAmount  string
 	AllocationCount  int
@@ -31,6 +34,16 @@ type transactionDetailPageData struct {
 	Suggestion       transactionDetailSuggestion
 	Allocations      []transactionDetailAllocationRow
 	Events           []transactionDetailEvent
+}
+
+// formatTransactionTimestamp renders the bank timestamp the same way the
+// prototype's 「交易时间」 fact does. A missing timestamp renders as an em dash
+// rather than an empty row.
+func formatTransactionTimestamp(value *time.Time) string {
+	if value == nil || value.IsZero() {
+		return "—"
+	}
+	return value.UTC().Format("2006-01-02 15:04")
 }
 
 type transactionDetailSuggestion struct {
@@ -191,9 +204,12 @@ func (a *app) transactionDetailPageData(ctx context.Context, r *http.Request, us
 	row := enrichTransactionPageRow(transactionPageRowFromModel(source), source, allocations, obligations)
 	summary := summarizeTransactionAllocations(source, allocations)
 	nameByTenant := make(map[uint64]string, len(tenants))
+	tenantByID := make(map[uint64]tenant, len(tenants))
 	for _, tenantRow := range tenants {
 		nameByTenant[tenantRow.ID] = firstNonEmpty(tenantRow.DisplayAlias, tenantRow.Name)
+		tenantByID[tenantRow.ID] = tenantRow
 	}
+	decorateTransactionPageRow(&row, source, allocations, obligations, tenants, tenantByID, nameByTenant, payers)
 	obligationByID := make(map[uint64]rentObligation, len(obligations))
 	for _, obligation := range obligations {
 		obligationByID[obligation.ID] = obligation
@@ -264,6 +280,8 @@ func (a *app) transactionDetailPageData(ctx context.Context, r *http.Request, us
 		StatusClass:      row.MatchStatus,
 		BackURL:          backURL,
 		BackRowURL:       backRowURL,
+		ActionBase:       transactionListPath(r.URL.Path),
+		TransactionTime:  formatTransactionTimestamp(source.TransactionTime),
 		AllocatedAmount:  row.AllocatedAmountDisplay,
 		RemainingAmount:  row.RemainingAmountDisplay,
 		SourceLabel:      transactionSourceLabel(source.Source),
@@ -304,6 +322,8 @@ func (a *app) demoTransactionDetailPageData(r *http.Request, row transactionPage
 		StatusClass:     row.MatchStatus,
 		BackURL:         backURL,
 		BackRowURL:      backURL + "#transaction-row-" + url.PathEscape(key),
+		ActionBase:      transactionListPath(r.URL.Path),
+		TransactionTime: formatTransactionTimestamp(nil),
 		AllocatedAmount: row.AllocatedAmountDisplay,
 		RemainingAmount: row.RemainingAmountDisplay,
 		SourceLabel:     transactionSourceLabel(row.Source),
