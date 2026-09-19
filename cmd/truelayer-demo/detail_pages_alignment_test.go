@@ -207,3 +207,41 @@ func TestPropertyDetailHidesTheExpenseListByClassNotByChildIndex(t *testing.T) {
 		t.Fatal("the narrow tier no longer hides the desktop facts card")
 	}
 }
+
+// 09-19-pc-ui-fidelity-alignment's 行内操作 sweep renamed the list pages' row
+// action to 查看详情, and the sweep missed one page: 房产详情 embeds a 房间收款概览
+// table with its own 操作 column, still reading 详情 on both its desktop table and
+// its mobile card. Pinned on markup because no other test renders this table's
+// action column.
+func TestPropertyDetailRoomActionColumnSaysViewDetails(t *testing.T) {
+	var body strings.Builder
+	if err := propertyDetailPageTemplate.Execute(&body, propertyDetailPageData{
+		workspaceShell: workspaceShell{ActivePage: "properties"},
+		Period:         "2026-09",
+		Property:       propertyPageRow{ID: 1, Name: "Canal House", Status: "active", StatusLabel: "有效"},
+		Rooms: []roomPageRow{{
+			ID: 11, PropertyName: "Canal House", RoomLabel: "A-01", Status: "active", StatusLabel: "在租",
+			TenantNames: []string{"WAHAJULLAH KHAN"},
+			MonthlyRent: "€1,250.00", ExpectedAmount: "€1,250.00", PaidAmount: "€0.00", BalanceAmount: "€1,250.00",
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	page := body.String()
+	for _, marker := range []string{
+		`>操作</th>`,
+		`href="/rooms/11?period=2026-09">查看详情</a>`,
+	} {
+		if !strings.Contains(page, marker) {
+			t.Fatalf("property detail room table missing %q", marker)
+		}
+	}
+	// The desktop table and the mobile card carry the same action pair, so a
+	// correct render has 查看详情 twice and a bare 详情 zero times.
+	if got := strings.Count(page, `>查看详情</a>`); got != 2 {
+		t.Fatalf("property detail room actions: got %d 查看详情, want 2 (desktop table + mobile card)", got)
+	}
+	if strings.Contains(page, `>详情</a>`) {
+		t.Fatal(`a property detail room action still reads 详情; it must match the list pages`)
+	}
+}
