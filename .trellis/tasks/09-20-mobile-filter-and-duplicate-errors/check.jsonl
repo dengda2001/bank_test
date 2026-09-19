@@ -1,1 +1,2 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/responsive-conventions.md", "reason": "复核缺陷 1 的 DOMContentLoaded 改动与缺陷 3 的 toast 文案白名单是否都落到 §8.1/§8.2 的约定上；新增测试必须与既有 TestTheCollapsedTierUnswebsTheStickyRail 同风格，不重复造。"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "缺陷 2 要求同一错误码全仓库唯一文案，缺陷 3 要求全仓库无裸回显 —— 两条都是「全仓库唯一性」断言，需按本仓库既有测试写法（扫描模板与 Go 模板字面量）实现。"}
