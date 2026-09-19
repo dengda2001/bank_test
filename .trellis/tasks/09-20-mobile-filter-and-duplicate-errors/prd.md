@@ -8,16 +8,20 @@
 ② ③ ④ ⑤ 全部落地之后再开工，**不与它们并行**。
 
 原因：缺陷 1 要改的 `web/templates/partials/workspace-nav.html` 正是 ② 的产物，
-缺陷 2 要改的 `web/templates/pages/cash-receipts.html` 在 ②④ 的写入面内。
+缺陷 2 要改的 `web/templates/pages/cash-receipts.html` 在 ②④ 的写入面内，
+缺陷 3 要改的 `page_data_routes.go` 在 ④ 的写入面内。
 现在插进去会与在途改动抢同一批文件。
 
 开工前先确认 ② ③ ④ ⑤ 均已提交，工作区没有它们的在途改动。
 
+进度（2026-09-20 更新）：② 已提交 `e47702e`，③ 已提交 `e2e88fb`，
+⑤ 已提交 `c3c992c`；**只剩 ④ 在途**。④ 提交后即可开工。
+
 ## Goal
 
-修掉两个既有缺陷。二者都不是本轮原型对齐改出来的，都在 `HEAD` 里就已经坏了；
-由 `09-19-shell-alignment` 的实施者在做工时发现并如实上报，经主会话用 `git grep HEAD`
-独立复核确认，遂单独立项。
+修掉三个既有缺陷。三者都不是本轮原型对齐**改出来**的，都在 `HEAD` 里就已经坏了；
+由 `09-19-shell-alignment` 的实施者与复验者在做工与复验时发现并如实上报，
+经主会话用 `git grep HEAD` / `git show 8c62c3f^:…` 独立复核确认，遂单独立项。
 
 ## Confirmed Facts
 
@@ -80,6 +84,37 @@
 所以用户一次失败看到两条措辞不同的消息。`cash_receipt_handlers.go:216` 那份是
 另一条渲染路径（内联模板），与 `.html` 是并列关系，是否同时可达需在实施时确认。
 
+### 缺陷 3：三处把 URL 查询参数当文本原样渲染成绿色成功提示
+
+（2026-09-20 由 `09-19-shell-alignment` 的复验 agent 发现并上报，主会话用
+`git show 8c62c3f^:…` 独立复核后归入本任务。）
+
+`{{.Message}}` 在本仓库有**两种**写法，含义不同：
+
+- **白名单**（多数页面，正确）：`{{if eq .Message "refreshed"}}…{{end}}` ——
+  查询参数是**码**，文案写在模板里。
+- **裸回显**（少数几处，错误）：`{{if .Message}}…{{.Message}}…{{end}}` ——
+  查询参数被当作**文本**打印。
+
+裸回显让「链接里写什么，页面就原样显示什么」，且带 `notice ok` 绿色成功样式：
+攻击者构造一条链接，即可在受信任的应用界面内弹出**任意文本**的「成功」提示。
+`html/template` 会转义 `<`/`>`，所以不是 XSS，是**内容注入／社会工程**面。
+
+三处裸回显及其可达性（主会话逐条实测）：
+
+| 位置 | 正规产出方 | 判定 |
+|---|---|---|
+| `page_data_routes.go:1524` `bankPageTemplate` | `main.go:1684` → `bankRefreshRedirect` → `/bank?message=refreshed`（POST `/bank/sync` 后） | **可达**，需按码守卫 |
+| `page_data_routes.go:1511` `legacyCashReceiptPageTemplate` | **无** —— 全仓库没有任何 `Execute` 调用它，是死模板 | 死代码，但仍是陷阱 |
+| `web/templates/pages/rent-workspace.html:21` | **无** —— `rent_workspace_page.go:146` 直接 `r.URL.Query().Get("message")` 灌进来，全仓库没有任何 redirect 往 `/rent-workspace` 带 `message=` | **不可达但可注入** |
+
+主会话复核的关键事实：`8c62c3f` **之前**，`page_data_routes.go` 里有 **2 处**
+裸回显、**0 处** `data-toast`。也就是说裸回显是既有缺陷；`8c62c3f`（②）只是给它
+加了 `data-toast`，把它从一条静态横幅**提升成了一条会自己消失的 toast** ——
+toast 比横幅更像系统自己发出的通知，欺骗性更强。所以本缺陷成立，
+且修复时**不要**把 `data-toast` 去掉当作解法（那会退掉 ② 的对齐成果），
+要把文案收敛成白名单。
+
 ## Requirements
 
 - 缺陷 1：把 `workspace-nav.html` 里需要页面正文的 DOM 查找推迟到
@@ -88,7 +123,17 @@
   `.object-list-filter-fields` 三类），不要只修被报告的那一个。
 - 缺陷 2：同一个错误码收敛成**一份**文案、**一个**渲染点。保留哪一条措辞由实施者
   决定，但必须全仓库唯一。修完用 `grep -rn 'cash_overbalance'` 复核没有残留的第二份文案。
-- 两处修复都要在**真实页面**上验证，不能只看代码。
+- 缺陷 3：三处裸回显全部改成白名单，**保留** `data-toast`：
+  - `bankPageTemplate` → `{{if eq .Message "refreshed"}}`，文案与 `billing_page.go:264`
+    对同一码的既有措辞保持一致（「银行数据已刷新。」），不要再造第二种说法。
+  - `legacyCashReceiptPageTemplate` → 它是死模板，按同样写法守卫即可；
+    **不要**在本任务里删除它（删遗留模板另有专门任务）。
+  - `rent-workspace.html` → 无正规产出方，直接删掉那一行，并把
+    `rent_workspace_page.go:82` 的 `message` 形参及其 `:118`、`:146` 的传递一并清掉，
+    避免留下一个「永远传空」的死参数。注意 `pageError` 参数仍在使用，不要误删。
+  - 修完用 `grep -rn '{{if \.Message}}{{\.Message}}\|data-toast>{{\.Message}}' cmd/truelayer-demo/`
+    复核全仓库没有残留的裸回显。
+- 三处修复都要在**真实页面**上验证，不能只看代码。
 
 ## Acceptance Criteria
 
@@ -107,6 +152,11 @@
 - [ ] `/cash-receipts?error=cash_overbalance` 页面渲染出的该错误消息**恰好一条**。
 - [ ] `grep -rn 'cash_overbalance' cmd/truelayer-demo` 后，该错误码对应的**用户可见文案**
       在全仓库只有一处；其余出现只能是错误码字面量本身或测试断言。
+- [ ] 构造 `/bank?message=注入测试文本`，页面**不出现**任何绿色成功提示；
+      而走正规路径（POST `/bank/sync` 后重定向）仍能看到「银行数据已刷新。」。
+- [ ] 构造 `/rent-workspace?message=注入测试文本`，页面不出现绿色成功提示。
+- [ ] `grep -rn 'data-toast>{{\.Message}}' cmd/truelayer-demo/` 无输出 ——
+      没有任何查询参数被当作 toast 文本原样渲染。
 - [ ] 上述验证在 `scripts/run-audit-local.sh` 起的真实实例上用真实浏览器完成
       （`scripts/audit/launch.mjs`），不指向 `:8081` / `bank.ddpl.top`。
 - [ ] `go test ./cmd/truelayer-demo/...` 与 `go vet ./...` 通过。
