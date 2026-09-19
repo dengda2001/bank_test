@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Scenario 'Tenant Billing History Projection' 已把「每 (tenant, month) 至多一条 rent_obligations」和「重复 GET 靠现有唯一键保持幂等」写成契约；同时含迁移约定（migrations/ 是 schema 唯一来源、禁用 AutoMigrate）与 user_id 作用域要求"}
+{"file": ".trellis/tasks/09-19-rent-obligation-dedup/research/obligation-insert-paths.md", "reason": "全部非测试写入 rent_obligations 的路径、HTTP 调用链、各自的守卫与所依赖的键；并说明 rent_charges 由谁创建"}
+{"file": ".trellis/tasks/09-19-rent-obligation-dedup/research/fix-options.md", "reason": "四个修复方案 (a)-(d) 的影响面与推荐；本任务采用其 (a)+(c) 的意图但把键换成生成列形式以消除其标注的残留风险"}
+{"file": ".trellis/tasks/09-19-rent-obligation-dedup/research/data-repair.md", "reason": "三张引用表全部 ON DELETE CASCADE 的证据、幸存行选择规则、payment_allocations 唯一键在 remap 时的碰撞处理"}
+{"file": ".trellis/tasks/09-19-rent-obligation-dedup/research/live-db-verification.md", "reason": "线上重复数据的实测计数，作为迁移回归测试的期望值来源"}

@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "对照 'Tenant Billing History Projection' 的 at-most-one 契约与 EUR-only 账本约定，验证修复后的行为符合 spec 而非只是测试变绿"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "本项目的质量门与验证命令要求"}
+{"file": ".trellis/tasks/09-19-rent-obligation-dedup/research/tests-and-verifiers.md", "reason": "11 个调用惰性路径的测试、逐字断言迁移 009 的两个测试、以及 e2e validateE2ECleanupObligations 的 3 行期望——检查时逐条对照是否被破坏"}
+{"file": ".trellis/tasks/09-19-rent-obligation-dedup/research/read-path-dedupe.md", "reason": "确认读路径没有去重兜底，因此「读路径正确」只能由写入侧的去重来保证，检查时不能用页面看起来对来替代数据库计数"}

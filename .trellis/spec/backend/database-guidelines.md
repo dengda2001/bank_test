@@ -82,6 +82,96 @@ development escape.
   confirmation ownership.
 - Legacy JSON/JSONL import mapping and repeat-import idempotence.
 
+## Scenario: Migration Authoring with the Flat SQL Runner
+
+### 1. Scope / Trigger
+
+- Trigger: writing or editing any file under `migrations/`.
+- `applyMigration` in `cmd/truelayer-demo/db.go` executes each migration inside
+  one transaction, but the statement splitter is a plain text split.
+
+### 2. Signatures
+
+- `splitSQLStatements(sqlText string) []string` splits on `;` and drops every
+  fragment whose trimmed text starts with `--`.
+- `runMigrations(db *sql.DB, dir string)` orders files by filename, skips
+  versions already recorded in `schema_migrations`, and records each applied
+  version in the same transaction.
+
+### 3. Contracts
+
+- Migration files carry **no comments**. A `--` fragment is discarded silently,
+  so a comment line above a statement deletes that statement with no error and
+  no log line. A `;` inside a comment still splits the file, so a block comment
+  containing one produces an unterminated `/*` and a syntax error.
+- A single statement may not contain `;`, which rules out stored procedures,
+  `SIGNAL` self-checks, and multi-statement bodies. Re-entrant helper state
+  belongs in a plain table created with `CREATE TABLE` after a
+  `DROP TABLE IF EXISTS`, and cleaned up at the end of the file.
+- DDL implicitly commits, so a migration is not atomic once it alters a table.
+  Put `ALTER TABLE` after the data statements the migration must not lose, and
+  make every earlier step idempotent so a rerun after a failed `ALTER` succeeds.
+- Uniqueness is declared in SQL, never by `AutoMigrate`. When a later migration
+  drops a key an earlier one added, the Go code that relied on it must be
+  updated in the same change or it silently degrades (`009` dropped
+  `idx_rent_obligations_user_tenant_period`, and `ensureMonthlyObligations`
+  stopped deduplicating because `OnConflict.Columns` is not read by the MySQL
+  driver).
+- A new migration file must never edit an earlier one; existing migration
+  contract tests read those files verbatim.
+
+### 4. Validation & Error Matrix
+
+- Comment present in a migration file -> statement skipped or syntax error;
+  reject in review.
+- Data repair that adds a unique key -> the repair itself must run in the same
+  migration, or `ADD UNIQUE KEY` fails on any database that already holds
+  duplicates and the application cannot start.
+- Repair that deletes rows referenced by cascading foreign keys -> remap the
+  references onto the surviving row first; a raw delete destroys history.
+- Statement relying on session variables -> valid, because one migration runs
+  on one pinned connection.
+
+### 5. Good/Base/Bad Cases
+
+- Good: `migrations/013_dedupe_rent_obligations.sql` is comment-free, uses a
+  plain `_mig013_keep` helper table, remaps every cascading reference, and
+  leaves the `ALTER TABLE` that adds the constraint last.
+- Base: a fresh database applies every file in order and a second run is a
+  no-op through `schema_migrations`.
+- Bad: `-- repair duplicates` above an `UPDATE`, a helper table created with
+  `CREATE TEMPORARY TABLE` plus a `SIGNAL` guard, or an `ALTER TABLE` placed
+  before the data repair.
+
+### 6. Tests Required
+
+- Static test asserting the migration text contains no `--`/`/*` comment and
+  splits into non-empty statements through `splitSQLStatements`.
+- Opt-in MySQL test that applies migrations twice, and a test that rebuilds the
+  pre-migration state, seeds the dirty rows the migration repairs, applies it,
+  and asserts both the repaired facts and the new constraint.
+- Run `go test ./... -count=1`, `go vet ./...`, and `git diff --check`.
+
+### 7. Wrong vs Correct
+
+Wrong:
+
+```sql
+-- Repair duplicate lazy obligations before adding the key.
+DELETE FROM rent_obligations WHERE id NOT IN (SELECT MIN(id) FROM rent_obligations GROUP BY user_id, tenant_id, period_month);
+```
+
+Correct:
+
+```sql
+DROP TABLE IF EXISTS _mig013_keep;
+CREATE TABLE _mig013_keep (...);
+INSERT INTO _mig013_keep (...) SELECT o.id, ... FROM rent_obligations o WHERE o.rent_charge_id IS NULL AND ...;
+UPDATE payment_allocations pa JOIN _mig013_keep k ON ... SET pa.rent_obligation_id = k.obligation_id;
+DELETE o FROM rent_obligations o JOIN _mig013_keep k ON ... WHERE o.id <> k.obligation_id;
+ALTER TABLE rent_obligations ADD UNIQUE KEY ...;
+```
+
 ## Scenario: Scoped Landlord Rent Repository
 
 ### 1. Scope / Trigger
