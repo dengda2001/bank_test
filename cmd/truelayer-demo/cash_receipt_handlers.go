@@ -145,6 +145,41 @@ func cashReceiptErrorCode(err error) string {
 	return "cash_receipt_failed"
 }
 
+// cashOverbalanceText is the one wording for the overbalance error code returned by
+// cashReceiptErrorCode. That code is reachable from two parallel server-rendered
+// forms -- the embedded /cash-receipts drawer and the inline /cash-receipts/new page
+// (cashReceiptFormErrorURL sends it to the latter whenever the posted form carries no
+// return_to) -- and they are never rendered together, so each form has to show it
+// while the repository keeps a single copy of the sentence. Both call the
+// cashOverbalanceNotice template func below rather than holding their own text, so
+// the wording cannot drift.
+const cashOverbalanceText = "这笔现金会超过该月份未收余额，请核对已有收款。"
+
+// cashOverbalanceNotice renders cashOverbalanceText into the two cash receipt
+// templates. A func rather than a data field keeps the handlers from threading a
+// constant through their view models.
+var cashOverbalanceNotice = func() string { return cashOverbalanceText }
+
+// cashReceiptFailedText is the one wording for the catch-all cash receipt error
+// code. It has exactly the same shape as cashOverbalanceText and for the same
+// reason: the two parallel server-rendered forms (the /cash-receipts drawer and the
+// inline /cash-receipts/new page) can each be the one that shows it, and one render
+// of /cash-receipts used to print it twice -- a page-level banner and the drawer --
+// in two different sentences.
+//
+// The named fields are the ones parseCashReceiptForm actually rejects (tenant_id,
+// period, amount, received_at) and each is editable in both forms. The inline page
+// used to add 币种 there, which is a dead end for the user: the currency input is
+// `readonly` in both forms (EUR is the only ledger currency), so a user can never
+// mistype it and must not be sent to inspect it. The message also cannot name the
+// remaining cause -- a tenant with no rent obligation for that month -- which is
+// what 月份 covers loosely.
+const cashReceiptFailedText = "现金补录失败，请检查租客、月份、金额和日期。"
+
+// cashReceiptFailedNotice renders cashReceiptFailedText into the two cash receipt
+// templates, so the sentence cannot drift between them.
+var cashReceiptFailedNotice = func() string { return cashReceiptFailedText }
+
 func (a *app) loadCashReceiptFormData(ctx context.Context, r *http.Request, userID, tenantID uint64, period time.Time) (cashReceiptFormData, error) {
 	period = monthStart(period)
 	data := cashReceiptFormData{
@@ -210,10 +245,10 @@ func (a *app) cashReceiptFormDataFromPreview(ctx context.Context, r *http.Reques
 
 var cashReceiptTemplate = newWorkspacePageTemplate("cash-receipt", template.FuncMap{"cashReceiptNewURL": func(tenantID, period string) string {
 	return "/cash-receipts/new?tenant_id=" + url.QueryEscape(tenantID) + "&period=" + url.QueryEscape(period)
-}}, `<!doctype html>
+}, "cashOverbalanceNotice": cashOverbalanceNotice, "cashReceiptFailedNotice": cashReceiptFailedNotice}, `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>现金租金补录</title><style>`+workspacePageCSS+`
 .cash-shell{max-width:980px}.cash-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.cash-form .wide{grid-column:1/-1}.cash-form label{display:grid;gap:7px}.cash-form input,.cash-form select,.cash-form textarea{width:100%;box-sizing:border-box}.cash-form textarea{min-height:96px;resize:vertical}.summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:18px 0}.summary-card{padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--surface-muted)}.summary-card strong{display:block;margin-top:6px;font:700 18px var(--mono)}.cash-actions{display:flex;gap:10px;align-items:center;margin-top:18px}.cash-actions .btn{cursor:pointer}.muted{color:var(--foreground-muted)}.danger-note{color:var(--danger)}.void-link{color:var(--danger);text-decoration:none;border-bottom:1px dashed currentColor}@media(max-width:700px){.cash-form,.summary-grid{grid-template-columns:1fr}.cash-form .wide{grid-column:auto}.cash-actions{align-items:stretch;flex-wrap:wrap}.cash-actions .btn{flex:1 1 180px}}
-</style></head><body><div class="app">{{template "workspace-nav" .}}<main class="content cash-shell"><header class="topbar"><div><div class="brand-title">手工收款</div><h1>现金租金补录</h1><div class="tiny">现金记录只计入选择的租金月份，不会创建银行流水。</div></div><a class="btn" href="/rent-dashboard">返回总览</a></header>{{if eq .Error "cash_receipt_failed"}}<div class="notice error">现金补录失败，请检查租客、月份、金额和币种。</div>{{end}}{{if eq .Error "cash_overbalance"}}<div class="notice error">这笔现金会超过该月份的未收余额，请重新核对银行与现金收款。</div>{{end}}{{if not .Preview}}<section class="panel surface"><div class="panel-head"><h2>填写收款信息</h2><span class="tiny">仅支持 EUR</span></div><form class="cash-form" method="post" action="/cash-receipts/preview"><label>租客<select name="tenant_id" required><option value="">请选择租客</option>{{range .Tenants}}<option value="{{.ID}}"{{if eq .ID $.Tenant.ID}} selected{{end}}>{{.Name}}{{if .RoomLabel}} · {{.RoomLabel}}{{end}}</option>{{end}}</select></label><label>租金月份<input name="period" type="month" value="{{.Period}}" required></label><label>现金金额<input name="amount" inputmode="decimal" placeholder="例如 400.00" value="{{.Amount}}" required></label><label>币种<input name="currency" value="{{.Currency}}" readonly></label><label>实际收款日期<input name="received_at" type="date" value="{{.ReceivedAt}}" required></label><label>幂等请求号<input name="idempotency_key" value="{{.IdempotencyKey}}" maxlength="191" required><span class="tiny">重复提交同一请求号不会重复记账。</span></label><label class="wide">备注（可选）<textarea name="note" maxlength="512" placeholder="例如 现金交付，已核对收据">{{.Note}}</textarea></label><div class="cash-actions wide"><button class="btn primary" type="submit">预览入账</button><a class="btn subtle" href="/tenants">返回租客</a></div></form></section>{{else}}<section class="panel surface"><div class="panel-head"><h2>确认现金入账</h2><span class="tiny">提交时会再次锁定并核对余额</span></div><div class="summary-grid"><div class="summary-card"><span class="tiny">本月应收</span><strong>{{.ExpectedAmount}}</strong></div><div class="summary-card"><span class="tiny">当前已收</span><strong>{{.CurrentPaidAmount}}</strong></div><div class="summary-card"><span class="tiny">本次现金</span><strong>{{.Amount}} {{.Currency}}</strong></div><div class="summary-card"><span class="tiny">入账后未收</span><strong>{{.AfterRemaining}}</strong></div></div><dl><dt class="muted">租客／月份</dt><dd>{{.Tenant.Name}} · {{.Period}}</dd><dt class="muted">实际收款日期</dt><dd>{{.ReceivedAt}}</dd><dt class="muted">备注</dt><dd>{{if .Note}}{{.Note}}{{else}}无{{end}}</dd><dt class="muted">请求号</dt><dd class="mono">{{.IdempotencyKey}}</dd></dl><form class="cash-actions" method="post" action="/cash-receipts"><input type="hidden" name="tenant_id" value="{{.TenantID}}"><input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="amount" value="{{.Amount}}"><input type="hidden" name="currency" value="{{.Currency}}"><input type="hidden" name="received_at" value="{{.ReceivedAt}}"><input type="hidden" name="note" value="{{.Note}}"><input type="hidden" name="idempotency_key" value="{{.IdempotencyKey}}"><button class="btn primary" type="submit">确认入账</button><a class="btn subtle" href="{{cashReceiptNewURL .TenantID .Period}}">修改</a></form></section>{{end}}</main></div></body></html>`)
+</style></head><body><div class="app">{{template "workspace-nav" .}}<main class="content cash-shell"><header class="topbar"><div><div class="brand-title">手工收款</div><h1>现金租金补录</h1><div class="tiny">现金记录只计入选择的租金月份，不会创建银行流水。</div></div><a class="btn" href="/rent-dashboard">返回总览</a></header>{{if eq .Error "cash_receipt_failed"}}<div class="notice error">{{cashReceiptFailedNotice}}</div>{{end}}{{if eq .Error "cash_overbalance"}}<div class="notice error">{{cashOverbalanceNotice}}</div>{{end}}{{if not .Preview}}<section class="panel surface"><div class="panel-head"><h2>填写收款信息</h2><span class="tiny">仅支持 EUR</span></div><form class="cash-form" method="post" action="/cash-receipts/preview"><label>租客<select name="tenant_id" required><option value="">请选择租客</option>{{range .Tenants}}<option value="{{.ID}}"{{if eq .ID $.Tenant.ID}} selected{{end}}>{{.Name}}{{if .RoomLabel}} · {{.RoomLabel}}{{end}}</option>{{end}}</select></label><label>租金月份<input name="period" type="month" value="{{.Period}}" required></label><label>现金金额<input name="amount" inputmode="decimal" placeholder="例如 400.00" value="{{.Amount}}" required></label><label>币种<input name="currency" value="{{.Currency}}" readonly></label><label>实际收款日期<input name="received_at" type="date" value="{{.ReceivedAt}}" required></label><label>幂等请求号<input name="idempotency_key" value="{{.IdempotencyKey}}" maxlength="191" required><span class="tiny">重复提交同一请求号不会重复记账。</span></label><label class="wide">备注（可选）<textarea name="note" maxlength="512" placeholder="例如 现金交付，已核对收据">{{.Note}}</textarea></label><div class="cash-actions wide"><button class="btn primary" type="submit">预览入账</button><a class="btn subtle" href="/tenants">返回租客</a></div></form></section>{{else}}<section class="panel surface"><div class="panel-head"><h2>确认现金入账</h2><span class="tiny">提交时会再次锁定并核对余额</span></div><div class="summary-grid"><div class="summary-card"><span class="tiny">本月应收</span><strong>{{.ExpectedAmount}}</strong></div><div class="summary-card"><span class="tiny">当前已收</span><strong>{{.CurrentPaidAmount}}</strong></div><div class="summary-card"><span class="tiny">本次现金</span><strong>{{.Amount}} {{.Currency}}</strong></div><div class="summary-card"><span class="tiny">入账后未收</span><strong>{{.AfterRemaining}}</strong></div></div><dl><dt class="muted">租客／月份</dt><dd>{{.Tenant.Name}} · {{.Period}}</dd><dt class="muted">实际收款日期</dt><dd>{{.ReceivedAt}}</dd><dt class="muted">备注</dt><dd>{{if .Note}}{{.Note}}{{else}}无{{end}}</dd><dt class="muted">请求号</dt><dd class="mono">{{.IdempotencyKey}}</dd></dl><form class="cash-actions" method="post" action="/cash-receipts"><input type="hidden" name="tenant_id" value="{{.TenantID}}"><input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="amount" value="{{.Amount}}"><input type="hidden" name="currency" value="{{.Currency}}"><input type="hidden" name="received_at" value="{{.ReceivedAt}}"><input type="hidden" name="note" value="{{.Note}}"><input type="hidden" name="idempotency_key" value="{{.IdempotencyKey}}"><button class="btn primary" type="submit">确认入账</button><a class="btn subtle" href="{{cashReceiptNewURL .TenantID .Period}}">修改</a></form></section>{{end}}</main></div></body></html>`)
 
 var cashReceiptVoidTemplate = newWorkspacePageTemplate("cash-receipt-void", nil, `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>撤销现金收款</title><style>`+workspacePageCSS+`

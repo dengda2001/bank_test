@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"html/template"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -9,7 +10,14 @@ import (
 	"time"
 )
 
-var cashReceiptPageTemplate = newEmbeddedWorkspacePageTemplate("cash-receipts-page", nil, "web/templates/pages/cash-receipts.html")
+// cashReceiptPageTemplate's func map carries the shared cash-receipt error wording
+// (defined in cash_receipt_handlers.go). The embedded drawer and the inline
+// /cash-receipts/new page must render the identical sentence for each error code,
+// so both call the same funcs instead of holding a copy each.
+var cashReceiptPageTemplate = newEmbeddedWorkspacePageTemplate("cash-receipts-page", template.FuncMap{
+	"cashOverbalanceNotice":   cashOverbalanceNotice,
+	"cashReceiptFailedNotice": cashReceiptFailedNotice,
+}, "web/templates/pages/cash-receipts.html")
 
 func cashReceiptListURL(period, status, search string, add bool, tenantID string, errorCode, message string) string {
 	query := url.Values{}
@@ -49,6 +57,25 @@ func cashReceiptFormErrorURL(values url.Values, draft cashReceiptFormInput, erro
 		tenantID = strconv.FormatUint(draft.TenantID, 10)
 	}
 	return cashReceiptListReturnURL(values, errorCode, "", true, tenantID)
+}
+
+// cashReceiptDrawerIsOpen reports whether /cash-receipts must render its cash
+// receipt drawer. The drawer is now the only carrier of the cash receipt error
+// messages: the page-level copy was removed because one render printed the same
+// code twice, in two different sentences.
+//
+// How much of the duplicate a user actually read depended on the width, which is
+// why it went unnoticed. The backdrop is a 22%-opaque scrim, not an opaque wall,
+// so on a desktop the banner stayed legible behind it and both wordings were on
+// screen at once; only at <=640, where the drawer becomes a bottom sheet covering
+// the banner outright, did the second copy go unread. A one-code/two-sentence
+// render is the defect either way.
+//
+// The removal is safe only because an error code opens the drawer on its own --
+// if this ever stopped being true, the message would have no visible carrier at
+// all.
+func cashReceiptDrawerIsOpen(values url.Values) bool {
+	return values.Get("add") == "1" || values.Get("error") != ""
 }
 
 func (a *app) loadCashReceiptListPage(ctx context.Context, r *http.Request, userID uint64, period time.Time, statusFilter, search string) (cashReceiptPageData, error) {
@@ -118,7 +145,7 @@ func (a *app) loadCashReceiptListPage(ctx context.Context, r *http.Request, user
 	return cashReceiptPageData{
 		workspaceShell: canonicalPageShell(a, r, "cash-receipts", "现金补录"),
 		Rows:           rows, Period: periodValue, StatusFilter: statusFilter, Search: search,
-		ShowForm: r.URL.Query().Get("add") == "1" || r.URL.Query().Get("error") != "",
+		ShowForm: cashReceiptDrawerIsOpen(r.URL.Query()),
 		Form:     form, Message: r.URL.Query().Get("message"), Error: r.URL.Query().Get("error"),
 	}, nil
 }

@@ -20,8 +20,6 @@
 
       {{if eq .Message "cash_receipt_saved"}}<div class="notice ok" data-toast>现金收款已登记。</div>{{end}}
       {{if eq .Message "cash_receipt_voided"}}<div class="notice ok" data-toast>现金收款已撤销，原始收据仍保留。</div>{{end}}
-      {{if eq .Error "cash_receipt_failed"}}<div class="notice error">现金补录失败，请检查租客、月份、金额和日期。</div>{{end}}
-      {{if eq .Error "cash_overbalance"}}<div class="notice error">这笔现金会超过该月份未收余额，请核对已有收款。</div>{{end}}
 
       <form class="cash-receipt-filters" method="get" action="/cash-receipts">
         <label class="cash-receipt-search"><span>搜索当前列表</span><input type="search" name="search" value="{{.Search}}" placeholder="租客、收据号或备注"></label>
@@ -48,7 +46,7 @@
       <div class="entity-drawer-backdrop">
         <section class="entity-drawer cash-receipt-drawer" role="dialog" aria-modal="true" aria-labelledby="cash-receipt-create-title">
           <div class="panel-head"><div><h2 id="cash-receipt-create-title">{{if .Form.Preview}}确认现金入账{{else}}录入现金收款{{end}}</h2><p class="tiny">现金只计入租金余额，不会创建银行流水。</p></div><a class="drawer-close" href="/cash-receipts?period={{.Period}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}" aria-label="关闭现金收款抽屉">×</a></div>
-          {{if eq .Error "cash_receipt_failed"}}<div class="notice error">请检查租客、月份、金额和日期。</div>{{end}}{{if eq .Error "cash_overbalance"}}<div class="notice error">入账金额大于当前未收余额。</div>{{end}}
+          {{if eq .Error "cash_receipt_failed"}}<div class="notice error">{{cashReceiptFailedNotice}}</div>{{end}}{{if eq .Error "cash_overbalance"}}<div class="notice error">{{cashOverbalanceNotice}}</div>{{end}}
           {{if .Form.Preview}}
           <div class="cash-preview-summary"><div><span>本月应收</span><strong>{{.Form.ExpectedAmount}}</strong></div><div><span>当前已收</span><strong>{{.Form.CurrentPaidAmount}}</strong></div><div><span>本次现金</span><strong>{{.Form.Amount}} {{.Form.Currency}}</strong></div><div><span>入账后未收</span><strong>{{.Form.AfterRemaining}}</strong></div></div>
           <dl class="cash-preview-facts"><dt>租客 / 月份</dt><dd>{{.Form.Tenant.Name}} · {{.Form.Period}}</dd><dt>收款日期</dt><dd>{{.Form.ReceivedAt}}</dd><dt>备注</dt><dd>{{if .Form.Note}}{{.Form.Note}}{{else}}无{{end}}</dd><dt>收据请求号</dt><dd class="mono">{{.Form.IdempotencyKey}}</dd></dl>
