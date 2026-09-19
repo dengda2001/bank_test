@@ -28,11 +28,22 @@
 两条都用 `git grep <符号> HEAD -- cmd/truelayer-demo` 在**改动前的提交**上复核过，
 确认不是本轮引入。
 
-### 缺陷 1：≤640px 时三个列表页的「筛选」按钮点了没反应
+### 缺陷 1：≤640px 时 `/properties`、`/rooms` 的筛选区打不开
 
-- 涉及页面：`/properties`、`/rooms`、`/tenancies`。
+> **2026-09-20 勘误（主会话实机复核）**：原文写「三个列表页」并把 `/tenancies` 列入，
+> **是错的**。`/tenancies` 用的是普通的 `<button class="btn subtle" type="submit">筛选</button>`
+> （`tenancies.html:28`），没有开关按钮、也没有 `.object-list-filter-fields` 包裹层，
+> 它不受本缺陷影响。涉及页面只有 **`/properties`、`/rooms`** 两个。
+> 实机证据：390×844 下点击开关后 `aria-expanded` 仍为 `false`、
+> `.object-list-filter-fields` 的计算样式仍为 `display:none`。
+
+- 涉及页面：`/properties`、`/rooms`。
 - 按钮标记（`HEAD` 即存在）：`properties.html:48`、`rooms.html:54`、
   `object-lists.css:19/68`（移动档 `display: block`）。
+- 失效链完整形态：≤640 档 `.object-list-filter-fields { display: none }`（`object-lists.css:64`），
+  只有 `.object-list-filters.filters-open` 才把它变回 `display: grid`（`:67`），
+  而加 `filters-open` 类、翻 `aria-expanded` 的正是下面这段死监听。
+  **所以本缺陷的后果不是「按钮没反应」，是筛选功能在 ≤640 档完全够不着。**
 - 绑定逻辑在 `web/templates/partials/workspace-nav.html`。该 partial 渲染在
   `<div class="app">` 内、`<main class="content">` **之前**，所以它里面的
   `<script>` 在解析到该点时立即执行，此刻 `<main>` 及其内部的
@@ -137,10 +148,14 @@ toast 比横幅更像系统自己发出的通知，欺骗性更强。所以本�
 
 ## Acceptance Criteria
 
-- [ ] ≤640px 下 `/properties`、`/rooms`、`/tenancies` 三页的「筛选」按钮点击后
-      筛选区展开，`aria-expanded` 由 `false` 变 `true`；再点一次收起。
-- [ ] 同样三页在 **≥641px** 下按钮行为不变（该档按钮本就是 `display: none`，
+- [ ] ≤640px 下 `/properties`、`/rooms` 的「筛选」按钮点击后筛选区展开，
+      `aria-expanded` 由 `false` 变 `true`、`.object-list-filter-fields` 的计算样式
+      由 `display:none` 变 `display:grid`；再点一次收起。
+- [ ] 同样两页在 **≥641px** 下按钮行为不变（该档按钮本就是 `display: none`，
       要确认没有因这次改动而报错或行为变化）。
+- [ ] `/tenancies` 的筛选**不受影响**：它用 `type="submit"` 按钮、无开关，
+      改动前后 ≤640 与 ≥641 都必须能正常提交（这是勘误后新增的反向断言，
+      防止把开关机制硬套到没有开关的页面上）。
 - [ ] `workspace-nav.html` 的 `<script>` 内**所有**查询页面正文元素的语句都已推迟到
       `DOMContentLoaded` 之后；用一次「把 partial 注入到不含 `<main>` 的最小页面」
       的渲染测试钉住，防止回归。
@@ -157,6 +172,14 @@ toast 比横幅更像系统自己发出的通知，欺骗性更强。所以本�
 - [ ] 构造 `/rent-workspace?message=注入测试文本`，页面不出现绿色成功提示。
 - [ ] `grep -rn 'data-toast>{{\.Message}}' cmd/truelayer-demo/` 无输出 ——
       没有任何查询参数被当作 toast 文本原样渲染。
+- [ ] 上一条要有**测试**兜住，不能只靠 grep：在 `workspace_shell_test.go` 里
+      （`TestOnlySuccessFlashesAreMarkedForTheToast` 旁边）加一条扫描全部模板与
+      Go 模板字面量的断言，禁止任何 `data-toast` 附近的裸 `{{.Message}}`。
+      该断言在修复前必然失败，所以**必须与修复同批提交**。
+      参考 `.trellis/spec/frontend/responsive-conventions.md` §8.1 新加的
+      「A marked notice renders fixed text chosen by the template」一段。
+- [ ] 同理，`responsive-conventions.md` §8.2（980 档必须显式撤销 sticky）已有
+      `TestTheCollapsedTierUnswebsTheStickyRail` 兜住，不要重复造。
 - [ ] 上述验证在 `scripts/run-audit-local.sh` 起的真实实例上用真实浏览器完成
       （`scripts/audit/launch.mjs`），不指向 `:8081` / `bank.ddpl.top`。
 - [ ] `go test ./cmd/truelayer-demo/...` 与 `go vet ./...` 通过。
