@@ -330,7 +330,6 @@
       .app { grid-template-columns: 1fr; padding: 12px; }
       .sidebar { border-radius: 12px 12px 0 0; border-right: 1px solid var(--border); border-bottom: 0; }
       .content { border-radius: 0 0 12px 12px; }
-      .grid-two { grid-template-columns: 1fr; }
     }
     @media (min-width: 981px) {
       .workspace-page-topbar {
@@ -352,6 +351,19 @@
       .workspace-page-topbar-separator { color: var(--border-strong); }
       .content { padding-top: 88px; }
     }
+
+    /* 1100 档：原型 rentops-desktop-suite.html 的 @media(max-width:1100px) 在 760
+       移动档之前先把宽双栏折成一栏（.dashboard-grid,.two-col,.detail-grid{1fr}）。
+       顺序上它必须写在基准与 640 档之间：范围嵌套在前、窄屏在后。
+       共享表只够得着共享表拥有的选择器（§3.3），而实测下来这一档在十一条页面里
+       真正渲染的对应物都在页面局部表里 —— 生产里共享表拥有、能渲染的多栏块只有
+       .summary，而它本来就是两栏，已经是原型 <=1100 的取值。所以这一档承载共享
+       表的双栏原语 .grid-two（现由遗留的 legacy expense 模板使用），其余原型 1100
+       声明由各页面自己的 1100 块实现，做法见 §3.1 与 §3.3。 */
+    @media (max-width: 1100px) {
+      .grid-two { grid-template-columns: 1fr; }
+    }
+
     @media (max-width: 640px) {
       .app { display: flex; flex-direction: column; padding: 8px; }
       .content { border: 0; border-radius: 0; padding: 8px 8px 94px; background: var(--background-deep); }

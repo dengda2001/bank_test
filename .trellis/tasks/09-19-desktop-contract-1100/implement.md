@@ -4,15 +4,15 @@
 
 ## 执行顺序
 
-1. [ ] 通读 `responsive-conventions.md`，标记所有依赖"桌面冻结"表述的段落
-2. [ ] 查清 `max-width:980px` / `min-width:981px` 各自承担的行为（读规则 + 查测试 + 实机验证），记录结论
-3. [ ] 改写 `:17` 的冻结契约表述（按 design.md §2.3 的三个条件）
-4. [ ] 在共享样式表新增 `@media (max-width: 1100px)`，位置在基准之后、640 之前
-5. [ ] **实机验证 1100 档是否真的生效**（design.md §2.1 第 2 步）—— 不生效则升级优先级或改用页面表追加
-6. [ ] 同步更新因桌面解冻而失效的断言
-7. [ ] 确认 640 档规则与断言未变（diff 证明）
-8. [ ] 四档截图，存 `research/screenshots/`
-9. [ ] 跑全量测试与 vet
+1. [x] 通读 `responsive-conventions.md`，标记所有依赖"桌面冻结"表述的段落
+2. [x] 查清 `max-width:980px` / `min-width:981px` 各自承担的行为（读规则 + 查测试 + 实机验证），记录结论
+3. [x] 改写 `:17` 的冻结契约表述（按 design.md §2.3 的三个条件）
+4. [x] 在共享样式表新增 `@media (max-width: 1100px)`，位置在基准之后、640 之前
+5. [x] **实机验证 1100 档是否真的生效**（design.md §2.1 第 2 步）—— 不生效则升级优先级或改用页面表追加
+6. [x] 同步更新因桌面解冻而失效的断言
+7. [x] 确认 640 档规则与断言未变（diff 证明）
+8. [x] 四档截图，存 `research/screenshots/`
+9. [x] 跑全量测试与 vet
 10. [ ] 提交
 
 不要跳过第 5 步 —— 它是本子任务唯一容易"看起来做完了但实际没生效"的地方。
@@ -44,14 +44,17 @@ git diff .trellis/spec/frontend/responsive-conventions.md
 
 - [x] 用户已审阅本子任务的 `prd.md` / `design.md` / `implement.md`
 - [ ] 已加载 `trellis-before-dev`
-- [ ] 已确认本机可运行应用并截图
-- [ ] 已确认用 `scripts/run-audit-local.sh` 起一次性实例，不指向 `:8081` / `bank.ddpl.top`
+- [x] 已确认本机可运行应用并截图（44 张截图在 research/screenshots/，检查代理已逐张核过尺寸与空白）
+- [x] 已确认用 `scripts/run-audit-local.sh` 起一次性实例，不指向 `:8081` / `bank.ddpl.top`（本任务共跑过 3 次，均为 18090 一次性实例，收工后确认无残留）
 
-## 阻塞记录（2026-09-19，开工后实测发现）
+## 阻塞记录（2026-09-19，已关闭）
 
-第 5 步「实机验证 1100 档是否真的生效」**当前无法执行**，卡在审计实例起不来。以下是实测到的事实，供本子任务恢复时直接引用。
+> **状态：已解除，第 5 步已执行。** 开头那段「当前无法执行」是阻塞当时的记录，保留下来是因为
+> B1–B3 的失败模式对后续任务仍有参考价值。第 5 步的实测结论见本节末尾与 `design.md`。
 
-### B1 审计 harness 在 HEAD 上是坏的（已修，未提交）
+第 5 步「实机验证 1100 档是否真的生效」当时无法执行，卡在审计实例起不来。以下是实测到的事实。
+
+### B1 审计 harness 在 HEAD 上是坏的（已修，见提交 `15d49bb`）
 
 `scripts/audit/seed.mjs` 的 `parseBillingRows` 用 `/<tr class="(income|expense)">/` 匹配，要求 `class` 紧跟 `<tr`。
 `billing_page.go:301` 现在是 `<tr id="transaction-row-{{.DetailKey}}" class="{{.Direction}}">` —— 属性顺序变了，正则失配，

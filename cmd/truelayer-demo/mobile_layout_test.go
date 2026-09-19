@@ -15,23 +15,77 @@ func executeTemplate(tmpl *template.Template, data any) (string, error) {
 	return body.String(), nil
 }
 
-// splitWorkspaceCSS returns the desktop stylesheet and the mobile-only tail that
-// follows it. A rule in the tail cannot move the desktop rendering; a rule in the
-// head can.
-func splitWorkspaceCSS(t *testing.T) (base, mobile string) {
+// splitWorkspaceCSS returns everything written above the 640 tier and the
+// mobile tail that follows it. The head is no longer the frozen desktop
+// stylesheet: it legitimately carries the base rules, the desktop shell and the
+// @media (max-width: 1100px) tier (responsive-conventions.md §1). What it still
+// must not contain is a mobile-only *mechanism* -- the drawer, the frozen
+// column, the bottom navigation -- because those exist only at <=640.
+func splitWorkspaceCSS(t *testing.T) (head, mobile string) {
 	t.Helper()
-	base, mobile, found := strings.Cut(workspacePageCSS, "@media (max-width: 640px)")
+	head, mobile, found := strings.Cut(workspacePageCSS, "@media (max-width: 640px)")
 	if !found {
 		t.Fatal("workspacePageCSS has no @media (max-width: 640px) block")
 	}
-	return base, mobile
+	return head, mobile
 }
 
-// The sidebar used to be copy-pasted into seven templates and the copies had
+// The tiers have to be written base -> 1100 -> 640 so range nesting comes first
+// and the narrow tier last: at equal specificity the later rule wins. Written
+// the other way round the 640 rules would also be the last match at 1440px.
+func TestWorkspaceCSSOrdersThe1100TierBeforeThe640Tier(t *testing.T) {
+	tier1100 := strings.Index(workspacePageCSS, "@media (max-width: 1100px)")
+	tier640 := strings.Index(workspacePageCSS, "@media (max-width: 640px)")
+	if tier1100 < 0 {
+		t.Fatal("workspacePageCSS has no @media (max-width: 1100px) tier")
+	}
+	if tier640 < 0 {
+		t.Fatal("workspacePageCSS has no @media (max-width: 640px) tier")
+	}
+	if tier1100 > tier640 {
+		t.Fatal("the 1100 tier is written after the 640 tier; at equal specificity the later rule wins, so the mobile contract would override the desktop tier")
+	}
+	// A tier that carries no rule is a tier that does nothing. The prototype's
+	// @media(max-width:1100px) folds its wide two-column grids to one column, and
+	// .grid-two is the shared sheet's counterpart.
+	if !strings.Contains(workspacePageCSS[tier1100:tier640], "grid-template-columns: 1fr;") {
+		t.Fatal("the 1100 tier carries no prototype-backed compaction")
+	}
+}
+
+// The shared sheet only reaches the selectors it owns (§3.3), and the prototype's
+// remaining 1100 collapses sit on page-local selectors, so the tier is only real
+// if a page sheet carries its own 1100 block. "The tier exists" and "the tier does
+// something" are two distinct claims; this asserts the second one where the
+// prototype makes it, and that the page rewrote its old threshold instead of
+// stacking a second block on the same selector.
+func TestCollectionSummaryCollapsesInThe1100Tier(t *testing.T) {
+	sheet := embeddedWebText("web/static/css/pages/collection-pages.css")
+	const collapse = ".collection-summary { grid-template-columns: repeat(2,minmax(0,1fr)); }"
+
+	tier1100 := strings.Index(sheet, "@media (max-width: 1100px)")
+	if tier1100 < 0 {
+		t.Fatal("collection-pages.css has no page-local @media (max-width: 1100px) block")
+	}
+	tier640 := strings.Index(sheet, "@media (max-width: 640px)")
+	if tier640 >= 0 && tier1100 > tier640 {
+		t.Fatal("the page-local 1100 block is written after the 640 block; the later rule wins at every width")
+	}
+	if !strings.Contains(sheet[tier1100:], collapse) {
+		t.Fatal("the page-local 1100 block does not collapse .collection-summary to the prototype's two columns")
+	}
+	if got := strings.Count(sheet, collapse); got != 1 {
+		t.Fatalf(".collection-summary is collapsed in %d blocks, want 1; rewrite its threshold instead of stacking blocks", got)
+	}
+}
+
+// The sidebar used to be copy-pasted into every page template and the copies had
 // already drifted: the cash-receipt pages rendered no count badges, the footer
 // carried three different captions, and the dashboard alone labelled its <nav>.
 // One shared definition is what makes the drawer a one-place change, so every
-// page has to go on rendering exactly one of it.
+// page has to go on rendering exactly one of it. This is a template contract and
+// it survives the unfreeze of the desktop rendering (responsive-conventions.md
+// §1): the chrome is shared, not duplicated.
 func TestEveryWorkspacePageRendersTheSharedChromeOnce(t *testing.T) {
 	pages := map[string]func() (string, error){
 		"billing": func() (string, error) {
@@ -94,6 +148,11 @@ func TestDesktopWorkspaceBreadcrumbHasMatchingContentOffset(t *testing.T) {
 // The drawer is pure CSS: a hidden checkbox holds the open state and the sidebar
 // slides in on :checked. It has to keep working with JavaScript disabled, so the
 // rules live in the stylesheet and not in a script.
+//
+// The head guard below used to mean "the desktop rendering is frozen". It now
+// means something narrower and still true: the drawer is a <=640 mechanism, so
+// none of its declarations may sit above the 640 tier. The head may carry
+// desktop alignment and the 1100 tier; it may not carry the drawer.
 func TestWorkspaceCSSDrawerIsCSSOnlyAndMobileScoped(t *testing.T) {
 	base, mobile := splitWorkspaceCSS(t)
 	if !strings.Contains(mobile, ".app { display: flex; flex-direction: column; padding: 8px; }") {
@@ -336,13 +395,17 @@ func TestMobileDunningUsesSafeBottomSheet(t *testing.T) {
 }
 
 // Sticky is what keeps a row's identity and its actions on screen while the table
-// scrolls sideways. It must never leak above the breakpoint: at 1280px the tables
-// have to render exactly as they did before.
+// scrolls sideways, and it only makes sense once the action column has left the
+// viewport. It is therefore a <=640 mechanism and must never leak above the 640
+// tier -- including into the 1100 tier, which is desktop. The unfrozen head
+// (responsive-conventions.md §1) may carry desktop alignment; it may not carry a
+// frozen column, because freezing one at 1024px would pin the action cell over
+// the columns that fit there.
 func TestFrozenLastColumnIsMobileOnly(t *testing.T) {
 	base, mobile := splitWorkspaceCSS(t)
 
 	if strings.Contains(base, "sticky") {
-		t.Fatal("a sticky declaration reached the desktop stylesheet")
+		t.Fatal("a sticky declaration reached the stylesheet above the 640 tier; the frozen column is mobile-only")
 	}
 	for _, expected := range []string{
 		".table-wrap > table > thead > tr > th:last-child,",
@@ -395,10 +458,12 @@ func TestTenantDetailProfileListStacksOnlyOnNarrowScreens(t *testing.T) {
 	}
 }
 
-// Rendering the count badges on the pages that never had them would change their
-// desktop appearance, which is a hard constraint of this task. The shell's
-// ShowNavCounts flag is what keeps those three pages byte-identical while the
-// other four keep their badges.
+// The count badges are a per-page property, not a responsive one: four pages
+// render them, three never did. This used to be phrased as a desktop-freeze
+// constraint, but it survives the unfreeze (responsive-conventions.md §1) as
+// exactly what it says -- the shared chrome must not gain markup a page never
+// had. The shell's ShowNavCounts flag is what keeps those three pages clean
+// while the other four keep their badges.
 func TestNavCountsOnlyRenderWhereTheyDidBefore(t *testing.T) {
 	withBadges := map[string]func() (string, error){
 		"billing": func() (string, error) {

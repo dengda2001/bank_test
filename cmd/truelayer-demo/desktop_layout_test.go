@@ -19,8 +19,11 @@ func TestDesktopWorkspaceShellUsesFigmaTokens(t *testing.T) {
 			t.Fatalf("desktop shell missing Figma marker %q", marker)
 		}
 	}
+	// The desktop head may be aligned to the prototype (responsive-conventions.md
+	// §1), but the frozen-column mechanism is still mobile-only: the desktop shell
+	// breadcrumb is `position: fixed`, never sticky.
 	if strings.Contains(strings.Split(workspacePageCSS, "@media (max-width: 640px)")[0], "position: sticky") {
-		t.Fatal("desktop shell must keep sticky/frozen rules in the mobile stylesheet tail")
+		t.Fatal("the stylesheet above the 640 tier contains a sticky rule; the frozen column is mobile-only")
 	}
 }
 

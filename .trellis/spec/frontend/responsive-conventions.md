@@ -1,7 +1,8 @@
 # Responsive Conventions
 
-> Executable contracts for the narrow-screen rendering of the workspace pages.
-> Every rule here is asserted by `cmd/truelayer-demo/mobile_layout_test.go`.
+> Executable contracts for the responsive rendering of the workspace pages.
+> Every rule here is asserted by `cmd/truelayer-demo/mobile_layout_test.go` and
+> `cmd/truelayer-demo/desktop_layout_test.go`.
 
 ---
 
@@ -14,19 +15,42 @@ Read this before any of:
 - adding a page, or a column to an existing table
 - changing `workspaceNav` or `workspaceShell`
 
-The desktop rendering is a frozen contract. It was captured before this work as a
-`:8082` reference build, and moved only once, deliberately (see §5). Anything you
-add has to land on the narrow side of the breakpoint, or be justified in a
-comment as a deliberate desktop change.
+The desktop rendering is **not frozen**. It may be aligned to
+`figma/rentops-desktop-suite.html`, but a desktop change is legitimate only when
+all three of these hold:
+
+1. **It names the prototype difference it implements.** A comment has to say
+   which declaration in the export it is porting — "the prototype's
+   `@media(max-width:1100px)` collapses its wide two-column grids to one
+   column", not "looks better at 1024". Without that, nobody can review it.
+2. **It updates the assertions it invalidates, in the same change.** Several
+   tests split `workspacePageCSS` at the first narrow-screen block and assert on
+   the head. Those assertions were written while the head was frozen, so a
+   desktop change can trip one. Retarget or re-justify the assertion then and
+   there; never delete it, and never leave it red for a later task.
+3. **It lives in a media query, not in the base rules.** A desktop-tier
+   declaration belongs in `@media (max-width: 1100px)` (see §3.1). The base
+   rules stay the ≥1101px rendering.
+
+What is still absolute is the **≤640px mobile contract**. The breakpoint, the
+drawer, the frozen last column, the bottom navigation, the 44px floor, and the
+card layouts must keep behaving exactly as they do today: none of the three
+conditions above weakens them, and §3.1 fixes their order in the file.
 
 ---
 
 ## 2. Signatures
 
 ```go
-// The shared stylesheet. Concatenated into every workspace page's <style>,
-// BEFORE that page's own rules.
-const workspacePageCSS = `...`
+// The shared stylesheet: one file, consumed two ways.
+//
+//	var workspacePageCSS = embeddedWebText("web/static/css/workspace.css")
+//
+// Legacy inline templates concatenate it into <style> (`"<style>"+workspacePageCSS+...`);
+// embedded templates (/bills, /dunning, rent-workspace) load the same file with
+// <link rel="stylesheet" href="/static/css/workspace.css">. Either way it lands
+// BEFORE the page's own sheet (pages/*.css), which is the order §3.3 depends on.
+var workspacePageCSS = `...`
 
 // The shared chrome. Defined once; every page template is cloned from
 // workspaceBase and calls {{template "workspace-nav" .}}.
@@ -51,19 +75,75 @@ func newWorkspacePageTemplate(name string, functs template.FuncMap, body string)
 
 ## 3. Contracts
 
-### 3.1 One breakpoint
+### 3.1 Three tiers, written in this order
 
-All new narrow-screen rules use **`@media (max-width: 640px)`**. There is an
-older `@media (max-width: 980px)` that only collapses `.app` to one column; do
-not add to it and do not retarget it. A page may own a *page-local* 640px block
-(it must, for anything more specific than the shared sheet — see §3.3), and
+| Tier | Applies | Owns |
+|---|---|---|
+| base rules | ≥1101px | the wide desktop layout |
+| `@media (max-width: 1100px)` | ≤1100 | the prototype's compact desktop tier — 641–1100 as a desktop tier, and it still matches below 981 alongside the 980/981 navigation switch |
+| `@media (max-width: 640px)` | ≤640 | the frozen mobile contract |
+
+Range nesting comes first and the narrow tier last, because a later rule of
+equal specificity wins: an 1100 rule written after the base rule overrides it,
+and a 640 rule written after the 1100 rule overrides that. Written the wrong way
+round the 640 rules would apply at 1440px.
+
+A page may own a *page-local* 640px block (it must, for anything more specific
+than the shared sheet — see §3.3), and a page-local 1100px block follows the
+same rule: place it after the rule it overrides, in that page's own sheet.
 `transaction_previews.go` has one standalone 760px block that predates this
 convention.
 
-Rule of thumb: **a narrow-screen rule that could move the desktop rendering is a
-bug**, and the tests enforce that by splitting `workspacePageCSS` at the first
-`@media (max-width: 640px)` and asserting the head contains no `sticky`,
-`#nav-drawer`, `translateX` or `nav-burger`.
+**The 980/981 pair is kept, and it is not the 1100 tier.** It is the
+*navigation-layout* threshold:
+
+- `@media (max-width: 980px)` collapses `.app` to one column and stacks the
+  sidebar above the content with rounded corners. It no longer touches
+  `.grid-two`; that rule moved up into the 1100 tier.
+- `@media (min-width: 981px)` makes the sidebar the fixed 236px rail and pins
+  `.workspace-page-topbar` to it with `.content { padding-top: 88px; }` so the
+  fixed breadcrumb cannot cover the content.
+
+It survives for two reasons. Merging it into the 1100 tier would stack the
+sidebar at 981–1100, changing navigation the prototype keeps as a rail down to
+760px; deleting it would strand the fixed breadcrumb, which has no other switch.
+Its only job is navigation layout, so **all grid and typography compaction
+belongs in the 1100 tier**, not here. (`.grid-two` itself was moved out of the
+980 block into the 1100 tier for exactly that reason; ≤980 renders identically
+because the 1100 tier also matches there.)
+
+The prototype has only two thresholds, 1100 and 760, so the page-local
+thresholds that predate this convention are inventoried here and their
+disposition is fixed:
+
+| Page sheet | Threshold | Carries | Disposition |
+|---|---|---|---|
+| `collection-pages.css` | 900 | `.dunning-layout` two-column → one | kept at 900; it is a page-local layout choice the prototype makes at 760 |
+| `collection-pages.css` | 900 → **1100** | `.collection-summary` four columns → two | **moved to 1100**: the prototype does it in its own `@media(max-width:1100px)` |
+| `rent-workspace.css` | 981 | the desktop action-queue (3 columns, inline buttons) | kept; it owns the same rail switch as the shared 981 |
+| `object-lists.css` | 980/981 | table floors / a heading nudge | kept; it is the page-local copy of the nav threshold |
+| `property-detail.css`, `room-detail.css` | 980 / 900 | two-column detail grids → one | candidates for 1100 in the page-alignment subtasks; not moved here |
+
+**What the shared tier carries today.** Exactly one declaration — `.grid-two`'s
+collapse. `.grid-two` is the shared sheet's two-column primitive, and its only
+renderer is `legacyExpenseTemplate`, a template nothing references. Measured at
+1024 / 1100 / 1101 / 1366 / 1440 / 1920, the 1100 tier's one rendered effect on
+the eleven audited pages is the *page-local* `.collection-summary` collapse on
+`/dunning` (2 columns at ≤1100, 4 at ≥1101). The remaining prototype 1100
+collapses are the deferred work of the page-alignment subtasks (see the
+disposition table above). **"The tier exists" is not "the tier is populated"**:
+adding a page's own 1100 collapse is that page's change, not this tier's.
+
+A page-local grid that the prototype collapses at 1100 moves to 1100 by
+rewriting its existing threshold, not by stacking a second block on top of it —
+two blocks for one selector is how the 900/1100 pair becomes unreadable.
+
+Rule of thumb: **a mobile-only *mechanism* has to stay below the 640 tier**, and
+the tests enforce that by splitting `workspacePageCSS` at the first
+`@media (max-width: 640px)` and asserting the head — which now legitimately
+contains the desktop shell and the 1100 tier — holds no `sticky`, `#nav-drawer`,
+`translateX` or `nav-burger`. The head is no longer immutable; those four are
+mobile mechanisms, not desktop rules.
 
 ### 3.2 Two ways to be narrow-screen-only
 
@@ -93,6 +173,26 @@ beats `input` (0,0,1). Those pages carry their own narrow-screen override, place
 **Corollary**: when you add a page-local override, put it after the rule it
 overrides, in the same block. When you add a shared override, it will only reach
 elements no page-local rule has claimed.
+
+This is the trap under the 1100 tier. A shared `@media (max-width: 1100px)`
+block reaches the selectors the shared sheet owns (`.grid-two`, `.summary`,
+`.content`, the shell) and **nothing else**. A page-local selector such as
+`.collection-summary`, `.detail-summary` or `.room-allocation-metrics` is
+declared in `pages/*.css`, which is concatenated *after* `workspacePageCSS`, so
+a same-specificity 1100 rule in the shared sheet loses and silently does
+nothing. Those pages need their own 1100 block, appended after the base rule in
+their own sheet:
+
+```css
+/* pages/collection-pages.css, after .collection-summary's base rule */
+@media (max-width: 1100px) {
+  .collection-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+```
+
+**"The declaration exists" is not "the declaration applies."** Verify a new
+1100 rule by measuring the rendered geometry at 1024 and at 1366 — the computed
+value has to differ — not by grepping the stylesheet.
 
 ### 3.4 Touch targets: 44px floor
 
@@ -319,14 +419,17 @@ http.Redirect(w, r, "/rooms?"+query.Encode(), http.StatusFound)
 
 | Condition | Result |
 |---|---|
-| Narrow rule written outside a media query, not undone above 640px | Desktop rendering moves — caught by `TestFrozenLastColumnIsMobileOnly` / `TestWorkspaceCSSDrawerIsCSSOnlyAndMobileScoped` |
-| `sticky` / `#nav-drawer` / `translateX` / `nav-burger` in the head of `workspacePageCSS` | Test failure |
+| A mobile-only mechanism (`sticky`, `#nav-drawer`, `translateX`, `nav-burger`) written above the 640 tier | The mechanism leaks to every width above 640 — caught by `TestFrozenLastColumnIsMobileOnly` / `TestWorkspaceCSSDrawerIsCSSOnlyAndMobileScoped` |
+| A page-local selector given an 1100 rule in the shared sheet only | The rule exists but does not apply — the page-local sheet is concatenated last and wins the tie (§3.3). Only measurement catches it |
+| The 640 tier written before the 1100 tier | At equal specificity the later rule wins, so the 1100 rules apply at ≤640 and the mobile contract is deleted — caught by the tier-order test |
+| A desktop change landed without its prototype justification comment | No test can catch it; review has to ask which prototype declaration it ports (§1) |
+| A desktop change landed without updating the assertions it trips | The suite goes red and stays red; that is the signal, not an obstacle to work around (§1) |
 | Drawer checkbox carries `hidden` | Unfocusable nav at ≤640px; `TestWorkspaceCSSDrawerIsCSSOnlyAndMobileScoped` fails, and `verify-check-fixes.mjs` fails on real focus |
 | sr-only rule omits `display: block` | Base `display: none` still wins; checkbox stays unfocusable — the CSS reads fine, only measurement catches it |
 | Closed sidebar only `translateX`'d | Links stay in the tab order, focus ring lands off-screen |
 | Page renders `workspace-nav` twice, or not at all | `TestEveryWorkspacePageRendersTheSharedChromeOnce` fails (one each of `id="nav-drawer"`, `<aside class="sidebar"`, `class="nav-compact-bar"`, `class="nav-scrim"`) |
 | `ShowNavCounts` left at its zero value on a page that used to show badges | That page loses 4 badges; `TestNavCountsOnlyRenderWhereTheyDidBefore` fails |
-| `ShowNavCounts: true` on tenant-detail / cash-receipt / cash-receipt-void | Those pages gain badges they never had, changing their desktop appearance |
+| `ShowNavCounts: true` on tenant-detail / cash-receipt / cash-receipt-void | Those pages gain badges they never had, a template change a page never asked for |
 | A narrow-screen block written before the wide-screen block | Wide rules apply at 1280px; `TestBillingNarrowScreenBlockFollowsTheWideScreenOne` fails |
 
 ---
@@ -365,9 +468,11 @@ or the CSS constants:
 
 | Test | Asserts |
 |---|---|
-| `TestEveryWorkspacePageRendersTheSharedChromeOnce` | All 7 pages render exactly one of each chrome marker |
+| `TestWorkspaceCSSOrdersThe1100TierBeforeThe640Tier` | The 1100 tier exists, is written before the 640 tier, and carries a prototype-backed compaction |
+| `TestCollectionSummaryCollapsesInThe1100Tier` | A page sheet carries its own 1100 block, written before its 640 block, and collapses `.collection-summary` in exactly one place |
+| `TestEveryWorkspacePageRendersTheSharedChromeOnce` | All 9 pages render exactly one of each chrome marker |
 | `TestWorkspaceCSSDrawerIsCSSOnlyAndMobileScoped` | Drawer rules are in the mobile tail only; `visibility: hidden` present; `.nav-drawer-input` styled at ≤640 and suppressed above; `workspaceNav` has no `hidden` |
-| `TestFrozenLastColumnIsMobileOnly` | `sticky` never in the head; the last-child rules, opaque background and inset shadow all present |
+| `TestFrozenLastColumnIsMobileOnly` | `sticky` never above the 640 tier; the last-child rules, opaque background and inset shadow all present |
 | `TestTenantDetailProfileListStacksOnlyOnNarrowScreens` | The 130px wide rule is intact *and* the 1fr rule is in the last 640px block |
 | `TestNavCountsOnlyRenderWhereTheyDidBefore` | 4 badges on four pages, 0 on three |
 | `TestPayerPreviewScrollsTheTableNotTheCard` | `.tp-scroll{overflow-x:auto}` present; `.card{...overflow-x:auto}` gone; card rule unchanged in shape; wrapper opens and closes around the table |
@@ -375,6 +480,13 @@ or the CSS constants:
 | `TestBillingNarrowScreenBlockFollowsTheWideScreenOne` | Narrow block is written after the wide one |
 | `TestMobileDashboardUsesCardsForRentRows`, `TestMobileTenantListUsesCards`, `TestMobileExpenseListUsesCards`, `TestMobileBillingRowsStackAsCards` | High-frequency pages expose mobile card markup while retaining desktop wrappers |
 | `TestMobileSimpleTablesStackAsCards` | Generic object-table card rules stay in the mobile stylesheet tail |
+
+The desktop side of the contract is checked in the browser, not in Go:
+`scripts/audit/desktop-widths.mjs` walks all 11 sidebar destinations at
+1024 / 1366 / 1440 / 1920 and fails on any document-level horizontal overflow
+(a wide table scrolling *inside* `.table-wrap` is expected and not a failure).
+It is the acceptance probe for the 1100 tier; run it against an instance from
+`scripts/run-audit-local.sh`, never against `:8081` / `bank.ddpl.top`.
 
 **Go tests are necessary and not sufficient here.** They parse strings; they do
 not lay anything out. Three defects in this task's own work were invisible to

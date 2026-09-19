@@ -62,8 +62,13 @@
 .dunning-feedback article { padding: 12px; border: 1px solid var(--border); border-radius: 8px; }
 .dunning-feedback article p { margin: 6px 0 0; }
 .dunning-feedback pre { overflow: auto; white-space: pre-wrap; }
-@media (max-width: 900px) {
+/* 1100 档：原型 @media(max-width:1100px){.allocation-summary{grid-template-columns:repeat(2,1fr)}}。
+   .collection-summary 原先挂在 900 这个预置阈值上，按新口径归 1100 档 —— 实测
+   1024 下它从四栏变两栏、1366 下仍四栏。共享表的 1100 块够不着这里（§3.3）。 */
+@media (max-width: 1100px) {
   .collection-summary { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media (max-width: 900px) {
   .dunning-layout { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {

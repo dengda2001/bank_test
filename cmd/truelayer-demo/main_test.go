@@ -127,9 +127,10 @@ func TestWorkspaceUIPrimitivesHaveConsistentInteractionStates(t *testing.T) {
 }
 
 func TestWorkspaceCSSUsesFlatDesignTokens(t *testing.T) {
-	// The flat look is a desktop constraint: the base stylesheet must stay
-	// free of depth effects. The `@media (max-width: 640px)` block below it is
-	// mobile-only, and there the drawer scrim and the frozen column's inset
+	// The flat look is a desktop constraint: everything at or above the 640 tier
+	// -- the base rules, the desktop shell and the @media (max-width: 1100px)
+	// tier -- must stay free of depth effects. The 640 block below is the frozen
+	// mobile contract, and there the drawer scrim and the frozen column's inset
 	// shadow are functional (they say "there is more to the right"), so the
 	// guard stops at the breakpoint.
 	baseCSS, _, _ := strings.Cut(workspacePageCSS, "@media (max-width: 640px)")
