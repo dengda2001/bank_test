@@ -314,6 +314,94 @@ server boundary instead of leaving either concern to a renderer.
 
 ---
 
+### Scenario: The DB-backed test group is skipped unless a DSN is set
+
+#### 1. Scope / Trigger
+
+- Trigger: any change to a MySQL-backed path (ledger, dunning, cash receipts,
+  tenant profile, transaction actions), **and** any verification claim that
+  rests on `go test ./...`.
+- Several scenarios above end with "Run `go test ./... -count=1`". That command
+  does **not** run the database tests. It reports `ok bank/cmd/truelayer-demo`
+  while a whole group of tests never executes.
+
+#### 2. Signatures
+
+- `openLedgerMySQLTestDB(t)` (`ledger_mysql_test.go:16-31`) reads
+  `RENTOPS_MYSQL_TEST_DSN` and calls `t.Skip("RENTOPS_MYSQL_TEST_DSN is not set")`
+  when it is empty (`:18-21`). It is the single entry point for the group.
+- Every DB-backed test selects through `-run 'MySQL'` (its name contains `OnMySQL`).
+- `cmd/rentops-e2e/runner.go` reads the same key for its own live suite.
+
+#### 3. Contracts
+
+- DSN form: `root@tcp(127.0.0.1:3306)/<disposable-db>?parseTime=true&multiStatements=true`.
+  `multiStatements=true` is required — the migration runner sends multi-statement
+  files.
+- The target database is **disposable and point-in-time**: the group calls
+  `runMigrations(sqlDB, "../../migrations")` against it. Never point it at
+  `rentops`, at a `rentops_audit_*` database you still need, or at anything
+  reachable through the production host.
+- Unset key -> every test in the group reports `SKIP`, the package reports
+  `ok`. `PASS` and `SKIP` are indistinguishable in `go test ./...` output.
+
+#### 4. Validation & Error Matrix
+
+- Key unset -> group skipped, exit 0. Never read this as "verified".
+- Key set, database missing -> `open MySQL test database` failure, not a skip.
+- Key set, database reachable -> 22 tests run (counted 2026-09-20).
+- Migration already applied -> `runMigrations` is idempotent; re-running against
+  a used database is safe, unlike re-running the seed scripts.
+
+#### 5. Good/Base/Bad Cases
+
+- Good: create a named throwaway database, run
+  `RENTOPS_MYSQL_TEST_DSN=... go test ./cmd/truelayer-demo/ -run 'MySQL' -count=1 -v`,
+  read the per-test lines, then drop the database. The `-v` and the `-run` filter
+  are both required — without `-v` you cannot tell a skip from a pass.
+- Base: the group is genuinely out of scope for the change at hand. Say so
+  explicitly ("MySQL group not run: no DSN") instead of quoting `go test ./...`
+  as if it covered it.
+- Bad: reporting "all tests pass" on the strength of `go test ./...`, or
+  pointing the DSN at a database whose contents you did not create.
+
+#### 6. Tests Required
+
+- Before claiming a DB-backed path is verified, run the group with a DSN and
+  quote the failing test names, if any.
+- Two known states as of 2026-09-20, both **pre-existing** and unrelated to the
+  09-20 mobile/notice fixes:
+  - `TestDunningDashboardHTTPWorkflowOnMySQL` — deterministically red. It asserts
+    `/rent-dashboard` contains `邮件催缴` and the tenant email; the 09-19 dashboard
+    alignment changed what that page renders. Fix the assertion or the page.
+  - `TestDunningSendWorkflowOnMySQL` — **flaky**, roughly 20–40% red under load,
+    on trees both before and after 09-20 (measured 7/17 vs 4/18, not
+    distinguishable). It fires two concurrent `service.send` calls with the same
+    `request_key` and requires both to come back holding the same `sent` attempt.
+    Treat a single red as inconclusive; sample it.
+- Re-measure both before relying on this list.
+
+#### 7. Wrong vs Correct
+
+Wrong:
+
+```bash
+go test ./... -count=1
+# ok  bank/cmd/truelayer-demo  1.3s
+# ...quoted as "the ledger and dunning paths are verified".
+```
+
+Correct:
+
+```bash
+mysql -e "create database rentops_check_$$ character set utf8mb4"
+RENTOPS_MYSQL_TEST_DSN="root@tcp(127.0.0.1:3306)/rentops_check_$$?parseTime=true&multiStatements=true" \
+  go test ./cmd/truelayer-demo/ -run 'MySQL' -count=1 -v
+mysql -e "drop database rentops_check_$$"
+```
+
+---
+
 ## Code Review Checklist
 
 <!-- What reviewers should check -->
