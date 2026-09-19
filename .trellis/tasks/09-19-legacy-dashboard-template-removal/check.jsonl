@@ -1,4 +1,5 @@
-{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "核对本任务的 spec 更新是否与既有读模型契约一致，且没有把「renderRentDashboard 已死」这类错误结论写进去。"}
-{"file": ".trellis/spec/frontend/responsive-conventions.md", "reason": "核对被改指向的移动端/桌面测试仍然在断言断点契约本身，而不是被等价重述成恒真断言。"}
-{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "核对删除后的代码符合本仓库的质量约定（错误处理、不静默降级），并据以判断 §3.1 的报错写法是否恰当。"}
-{"file": ".trellis/tasks/09-19-legacy-dashboard-template-removal/design.md", "reason": "本次检查的主要依据：§6 的 17 项处置表是逐项核对的清单，§5 与 §7 是两处「不许悄悄删」的红线。"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "本任务改的就是错误处理与「不静默降级」（无库 503、未知路径不再有回退）。核对新代码符合本仓的质量约定；`db == nil → 503` 是既定约定（dunning_handlers.go:66 已用同款措辞）。"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "核对本任务的 spec 更新是否与既有读模型契约一致；特别核对「renderRentDashboard 现为 /bills + /dunning* 的 live 载体、无库/未知路径 503」这条新结论，以及「交给 ③ 的已知缺口」段是否把两处原型功能缺失都登记了。"}
+{"file": ".trellis/spec/frontend/responsive-conventions.md", "reason": "实现代理改动了其中一个测试名（TestMobileDashboardUsesCardsForRentRows → TestMobileBillsListUsesCardsForRentRows）。核对改名后规格与测试仍然对得上，且没有顺手放松断点契约。"}
+{"file": ".trellis/tasks/09-19-legacy-dashboard-template-removal/design.md", "reason": "本次检查的主要依据。注意：§6 的清单是 17 项，实现代理补了第 18 项（TestRentDashboardHTTPRendersSafeFallbackAndFilterError）—— 核对它补得对不对。§5 与 §7 是两处「不许悄悄删」的红线。"}
+{"file": ".trellis/tasks/09-19-legacy-dashboard-template-removal/implement.md", "reason": "执行清单含两道停机门（门 A 鉴权复核、门 B 逐项「原来在测什么」）与「执行痕迹」段。核对两道门是否被真实执行，以及 AC 的逐字节要求是否被独立验证过而不是引用实现方自己的对比。"}

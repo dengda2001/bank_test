@@ -195,6 +195,27 @@ if _, ok := a.currentUserID(r); !ok { http.Error(..., 401); return }  // :69 必
 
 ---
 
+### 6.1 实施后补记：清单外的依赖者与残余
+
+**第 18 项（本设计漏了，实施时补上）**：`TestRentDashboardHTTPRendersSafeFallbackAndFilterError`
+（`dashboard_filters_test.go:175`）。它不点名 `rentDashboardTemplate`，所以按名字搜不到；
+但它靠"有 session 无 DB"直接驱动 `handleRentDashboard`，受 R3 影响。
+⇒ **教训：按符号名 grep 不足以找出全部依赖者，要按语义找**（搜 `db == nil`、
+`renderRentDashboard`、`handleRentDashboard`，以及断言里出现旧模板专属类名的测试）。
+
+**第 19 项不存在**，但查明三处残余，此前均未登记：
+
+| 残余 | 位置 | 性质 |
+|---|---|---|
+| `TestDunningDashboardHTTPWorkflowOnMySQL` | `dunning_handlers_mysql_test.go:60` | **未登记的依赖者**。用官方 harness 跑当前树与 `c944538` 基线 → 两者都 `EXIT=1`，同一行、同一断言、同一消息。**前后一致失败 ⇒ 不是本任务回归**，属于既有 known-red |
+| `.dashboard-toolbar .calendar-input` | `web/static/css/calendar.css:12,197` | 随模板变成**死规则**（该 CSS 文件本身仍 live）。未清理，可接受 |
+| `.dashboard-pagination` 回退分支 | `scripts/audit/probe-p1-4.mjs:61` | 在本任务**之前**就是死的，非本任务引入 |
+
+**已知红清单（本任务不修，报告时不要算进红绿）**：
+`TestDunningDashboardHTTPWorkflowOnMySQL` —— 改动前后一致失败，已在干净副本上双向复现。
+
+---
+
 ## 7. 已知损失：催收抽屉没有活的落点
 
 `TestMobileDunningUsesSafeBottomSheet`（#4）测的是旧模板里的 `data-dunning-open` 抽屉
@@ -204,6 +225,19 @@ if _, ok := a.currentUserID(r); !ok { http.Error(..., 401); return }  // :69 必
 - 房间视角 `rent-workspace.html` **没有** `dunning-open` / `drawer` / `sheet` 任何命中
 
 也就是说：**"从工作区直接发起催收"这个原型功能，目前只存在于即将被删的模板里。**
+
+### 7.1 第二处缺口：催收「重试此人」按钮（本设计原先不知道）
+
+上面只覆盖了抽屉。**复核阶段查明还有第二处**：`TestRentDashboardTemplateRendersDunningDrawerAndRetry`
+（第 15 项）同时还断言了一个 **"重试此人"** 按钮。核对结果同样是**全仓无 live 载体**
+（`/dunning` 模板与 `rent-workspace.html` 都没有对应 DOM）。
+
+要点：**服务端重试逻辑仍然完好** —— `dunning_service.go:254/266/301-303` 实现了重试，
+且被 `dunning_send_mysql_test.go:165`、`dunning_test.go:109` 覆盖。
+**丢的是"入口"，不是"能力"**。所以 ③ 要做的是把按钮接回去，不是重写服务端。
+
+⇒ 两处缺口（抽屉、重试按钮）都必须登记进 spec 的「交给 ③ 的已知缺口」段。
+**只登记一处就是漏报。**
 
 因此本任务**不能悄悄删掉这个测试**。处置：
 

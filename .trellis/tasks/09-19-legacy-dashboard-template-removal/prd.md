@@ -114,20 +114,20 @@
 
 ## Acceptance Criteria
 
-- [ ] `rentDashboardTemplate` 及其 HTML 体已删除，全仓库无残留引用
+- [x] `rentDashboardTemplate` 及其 HTML 体已删除，全仓库无残留引用
       （`/usr/bin/grep -rn 'rentDashboardTemplate' --include='*.go' .` 无输出）
-- [ ] `renderRentDashboard` **仍然存在**，`/bills` 与 `/dunning` 两个 case 一行未动
-- [ ] `switch` 不再有指向已删除变量的回退分支，默认分支是显式报错
-- [ ] `/bills` 与 `/dunning*` 渲染**逐字节不变**（改动前后对同一输入对比输出）
-- [ ] `rentDashboardPageData` / 筛选与排序 helper / `renderRentDashboard` 未被误删
-- [ ] 测试文件中**没有**为了通过而删除的、原本覆盖筛选/排序行为的断言
+- [x] `renderRentDashboard` **仍然存在**，`/bills` 与 `/dunning` 两个 case 一行未动
+- [x] `switch` 不再有指向已删除变量的回退分支，默认分支是显式报错
+- [x] `/bills` 与 `/dunning*` 渲染**逐字节不变**（改动前后对同一输入对比输出）
+- [x] `rentDashboardPageData` / 筛选与排序 helper / `renderRentDashboard` 未被误删
+- [x] 测试文件中**没有**为了通过而删除的、原本覆盖筛选/排序行为的断言
       （每个被删或被改的测试都要能说出它原本在测什么）
-- [ ] `/rent-dashboard/settle` 路由与 `handleDashboardManualBalance` 仍存在，
+- [x] `/rent-dashboard/settle` 路由与 `handleDashboardManualBalance` 仍存在，
       `dashboard_manual_balance_test.go` 两个测试仍在且通过（R6）
-- [ ] 催收抽屉的功能缺口已登记进 spec 并标注交给 ③（R7）
-- [ ] `scripts/audit/` 对旧选择器的依赖已同步（`metrics.mjs:23`、`seed.mjs:143-148`）
-- [ ] `go test ./... -count=1` 与 `go vet ./...` 通过
-- [ ] `dashboard.go` 行数显著下降（预期从 569 行降到 200 行以内）
+- [x] 催收抽屉的功能缺口已登记进 spec 并标注交给 ③（R7）
+- [x] `scripts/audit/` 对旧选择器的依赖已同步（`metrics.mjs:23`、`seed.mjs:143-148`）
+- [x] `go test ./... -count=1` 与 `go vet ./...` 通过
+- [x] `dashboard.go` 行数显著下降（预期从 569 行降到 200 行以内）
 
 > **注**：`TestDunningDashboardHTTPWorkflowOnMySQL` 在本任务之前就已失败
 > （已在 `git archive HEAD` 的干净副本上独立复现），不计入本任务的红绿，本任务也不修它。
@@ -151,3 +151,29 @@
 本任务完成后，`09-19-dashboard-alignment`（子任务 ③）只需对齐单一模板。
 
 **执行顺序**：本任务应在 ③ 之前完成（它是 ③ 的前置清理），但与 ①②④⑤ 无依赖冲突。
+
+---
+
+## 验收证据（2026-09-19 收尾时逐条对过）
+
+| 验收项 | 证据 |
+|---|---|
+| 模板及引用归零 | `grep -rn 'rentDashboardTemplate' --include='*.go' .` → 无输出（exit 1） |
+| `renderRentDashboard` 仍在、两个活 case 未动 | `dashboard.go:26` 函数在；`:178` `/bills` case、`:180` `/dunning` case 原样 |
+| `switch` 默认分支显式报错 | 不再指向已删变量；未知路径 → 500 |
+| 逐字节不变 | **独立复现**：从 `c944538` 抽干净副本、两棵树各建独立库、固定自增 ID、同一输入渲染，`/bills`、`/dunning`、`/dunning/send` 三份归一化后与基线逐字节相同（唯一归一化字段：`request_key`，因 `recordID` 带随机后缀） |
+| 数据契约与 helper 未被误删 | `rentDashboardPageData`、`rentDashboardFiltersFromQuery`、`defaultRentDashboardFilters`、`filterAndSortRentDashboardRows` 均在，`/bills` 全流程测试通过 |
+| 没有靠删断言过关 | 逐 guard 从 `c944538` 与工作区提取、去注释、逐字 diff。**复核推翻了首轮的"全绿"**：修了 1 处恒真断言、恢复 1 处丢失的别名覆盖、补 1 个丢失的非法输入渲染测试（每处都用注入验证有牙） |
+| `/rent-dashboard/settle` 与 handler 保留 | `main.go:465` 路由在；`handleDashboardManualBalance` 在；`dashboard_manual_balance_test.go` **0 行 diff**。另注：`main.go:468` 的 `/bills/settle` 也路由到同一 handler |
+| 功能缺口已登记（R7） | `database-guidelines.md` 的「交给 ③ 的已知缺口」段**两处都登记**：催收抽屉 + 「重试此人」按钮（后者是本设计原先不知道的）。措辞未暗示功能仍在 |
+| 审计脚本已同步 | `metrics.mjs` 的 `.rent-row` 分支收敛；`seed.mjs` 注释更新 |
+| `go test` / `go vet` | 退出码均为 0。**注意**：无 DSN 时 MySQL 门控测试被 skip，"全套绿"不含其余 MySQL 测试 |
+| 行数 | `dashboard.go` = **189**（基线 569，目标 ≤200） |
+
+**已知红（不计入本任务，也不修）**：`TestDunningDashboardHTTPWorkflowOnMySQL`
+（`dunning_handlers_mysql_test.go:60`）。改动前后**一致失败**（同一行、同一断言、同一消息），
+已在干净副本上双向复现 —— 不是本任务引入的。
+
+**复核方明确未验证**：未跑浏览器 / Playwright（桌面断点契约按 spec 需靠浏览器核）；
+未起真实服务器（全部 `httptest` 进程内渲染），故未验证静态资源服务与 MySQL 实际驱动下的
+`/bills` 渲染；`/dunning/send` 用 recording stub，非真实 SMTP。
