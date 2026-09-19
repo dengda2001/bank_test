@@ -80,3 +80,51 @@ git diff --check
 - [x] 用户已审阅本子任务的 `prd.md` / `design.md` / `implement.md`
 - [x] 已知悉顶栏不放主操作按钮（已确认决策，见 `prd.md`）—— 不要顺手把页头主操作复制进顶栏
 - [x] 已确认用 `scripts/run-audit-local.sh` 起一次性实例，不指向 `:8081` / `bank.ddpl.top`
+
+## 主会话独立复验记录（2026-09-20）
+
+复验 agent 只改了 `web/static/css/workspace.css` 与 `workspace_shell_test.go`
+两个文件（`git diff --stat` 核对过），实例已停、可丢弃库已 drop、端口 18095 已释放。
+
+### 复验发现并修复的真实缺陷
+
+**641–980 档侧边栏 sticky 回归（`workspace.css`）。** 641 档给 `.sidebar` 写了
+`position: sticky; top: 0; height: 100vh`，而 641 档是 `min-width: 641px`，
+在 980 档同样命中。980 档的 `grid-template-columns: 1fr` 把 `.app` 折成单列后，
+侧边栏变成一个 100vh 高的 sticky 盒：它随文档下滑，且定位元素绘制在常规流之上，
+**把正文整块盖住**。实测 800×700 滚到底，视口中心命中的是栏内 `.side-foot`，
+页面上一个标题都看不见。
+
+根因是 `prd.md:101` 的「980 档不设 position」被读成「不写就是没定位」——
+实际是「必须显式撤销 641 档的 sticky」。修法：在 980 块显式
+`position: static`（`workspace.css:427`）。
+
+主会话独立核验：源码顺序上 343 行（`min-width:641px`）的 sticky 被 418 行
+（`max-width:980px`）的 static 覆盖，同特异性按先后判定；495 行
+（`max-width:640px`）的 `fixed` 抽屉在其后，不受影响。级联方向正确。
+
+### 复验修复的断言脆弱性
+
+`workspace_shell_test.go` 的 toast 断言原以字面量 `.notice[data-toast] {` 扫描，
+把写成 `.notice[data-toast]{display:none;}` 的第二条规则漏掉——而那正是该测试
+唯一要防的失效（无脚本时这条 notice 是仅存的一份）。改为容忍空白的正则扫描，
+并加了 `len(scoped)==0` 守卫防止扫描本身空转。变异 M6 由 VACUOUS 变 CAUGHT。
+
+### 复验结论
+
+AC 十条全部通过（侧边栏 3 分组 / `01`–`11` / 4 计数 / 状态卡 / 页脚；搜索框真过滤
+且无参页不渲染；计数按钮 == 待处理条数；toast 实测存活 2365ms 且与 notice 不同时
+可见；无脚本时 notice 仍可见；11 页正常渲染；四档全部 `scrollWidth === clientWidth`；
+44 张截图）。20 个变异 18 CAUGHT。
+
+### 复验上报、主会话判定**不改**的两项
+
+1. **`/bank?message=<任意文本>` 渲染成绿色成功 toast**（`page_data_routes.go:1524`
+   的 `bankPageTemplate`，`legacyCashReceiptPageTemplate:1511` 同）。主会话已独立复核：
+   `8c62c3f` **之前**该文件有 2 处裸回显 `{{if .Message}}<div class="notice ok">{{.Message}}</div>{{end}}`、
+   **0 处** `data-toast` —— 裸回显是既有缺陷，② 只是把它从静态横幅提升成了 toast。
+   按本仓库既有惯例（既有缺陷报告不顺手改）归入 `09-20-mobile-filter-and-duplicate-errors`。
+2. **`verify-shell.mjs` 自身的两个盲区**（登录失败时 `.sidebar` 为 null 会确定性
+   TypeError 而非报 FAIL；`WIDTHS` 只有三档且固定 `scrollTo(0,600)` 不滚到底）——
+   第 2 点正是上面 641–980 缺陷逃逸的原因。该探针脚本属复验工具，不在产品代码内，
+   记录在案供后续修探针时参考。

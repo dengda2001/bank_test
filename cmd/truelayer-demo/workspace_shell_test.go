@@ -180,16 +180,21 @@ func TestToastHidesTheMarkedNoticeOnlyWhenScriptingIsAvailable(t *testing.T) {
 	if !strings.Contains(workspacePageCSS, `.js .notice[data-toast] { display: none; }`) {
 		t.Fatal("the marked notice must be hidden only under the scripted root class")
 	}
-	// Every rule that hides a marked notice must be scoped to the scripted root.
-	for rest := workspacePageCSS; ; {
-		index := strings.Index(rest, ".notice[data-toast] {")
-		if index < 0 {
-			break
+	// Every rule whose selector is a marked notice must be scoped to the scripted
+	// root. The selector is matched with a whitespace-tolerant pattern on purpose:
+	// keying the scan on the exact spelling ".notice[data-toast] {" let a second
+	// rule written ".notice[data-toast]{display:none;}" pass unseen, and that rule
+	// hides the message outright — the one failure this test exists to prevent
+	// (without scripting the block is the only copy left).
+	markedSelector := regexp.MustCompile(`\.notice\[data-toast\][ \t\n]*\{`)
+	scoped := markedSelector.FindAllStringIndex(workspacePageCSS, -1)
+	if len(scoped) == 0 {
+		t.Fatal("no rule targets the marked notice at all; the scripted-root scoping is not being checked")
+	}
+	for _, rule := range scoped {
+		if !strings.HasSuffix(strings.TrimRight(workspacePageCSS[:rule[0]], " \t\n"), ".js") {
+			t.Fatal("a rule hides the marked notice outside the scripted root; without scripting no message would be visible")
 		}
-		if !strings.HasSuffix(rest[:index], ".js ") {
-			t.Fatal("the marked notice is hidden unconditionally; without scripting no message would be visible")
-		}
-		rest = rest[index+1:]
 	}
 	if !strings.Contains(workspaceNav, `document.documentElement.classList.add("js")`) {
 		t.Fatal("the shared chrome must mark the root element as scripted before the toast script runs")

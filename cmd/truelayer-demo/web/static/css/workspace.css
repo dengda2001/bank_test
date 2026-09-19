@@ -354,7 +354,9 @@
          间距全由 .nav-label 的 padding 提供，页脚靠 .side-foot{margin-top:auto}
          贴底。基准档那条 gap:20px 是抽屉版留下的，原型从来没有；在 100vh 的栏里
          它多出 7×20=140px，把 .side-foot 顶到栏外 —— 实测 1440×900 下页脚底边
-         931px、栏底 900px，用户区整块看不见。去掉后 768px 与 900px 两档都装得下。 */
+         931px、栏底 900px，用户区整块看不见。去掉后 900px 档装得下；768px 档
+         在无状态卡时也装得下，但状态卡渲染出时实测页脚底边 791px、栏底 768px，
+         靠下面的 overflow:auto 让侧边栏自己滚动才能看到 —— 23px，可接受。 */
       .sidebar {
         position: sticky;
         top: 0;
@@ -415,7 +417,14 @@
 
     @media (max-width: 980px) {
       .app { grid-template-columns: 1fr; padding: 12px; }
-      .sidebar { border-radius: 12px 12px 0 0; border-right: 1px solid var(--border); border-bottom: 0; }
+      /* 这一档把侧边栏从「左轨道」折成「内容上方的一整块」（上面那行
+         grid-template-columns:1fr 就是这次折叠）。641 档的 sticky 只在那条
+         轨道里成立：折成一栏后它是一个 100vh 高的 sticky 盒，会随文档下滑、
+         并且因为定位元素绘制在常规流内容之上，把正文整个盖住。实测 800x700
+         滚到底时视口中心命中的仍是栏内节点、页面上一个标题都看不见；把
+         position 还原成常规流后同样的位置命中正文。所以这里必须把 641 档
+         的 sticky 撤掉。640 档在其后且把它改成 fixed 抽屉，不受影响。 */
+      .sidebar { position: static; border-radius: 12px 12px 0 0; border-right: 1px solid var(--border); border-bottom: 0; }
       .content { border-radius: 0 0 12px 12px; }
     }
     @media (min-width: 981px) {
