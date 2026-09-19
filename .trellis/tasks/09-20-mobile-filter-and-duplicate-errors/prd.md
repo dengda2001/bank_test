@@ -47,6 +47,25 @@
   把查找推迟到 `DOMContentLoaded`，并在注释里写明了这个陷阱
   （`workspace-nav.html:57-59`、`:80`）。修法照它即可，不要另创一套。
 
+#### 同一个根因还有第二个受害者（2026-09-20 由 ④ 发现并上报）
+
+`09-19-list-pages-alignment` 的实施者在实机探测时发现，同一个 `<script>` 里
+绑 `change → requestSubmit` 的那段（`.object-list-filter-fields select/input`，
+`workspace-nav.html:110-112`）**同样是死代码**，且**不分屏宽**，桌面档一样失效。
+
+后果：`/properties` 与 `/rooms` 在桌面档**根本没有筛选提交路径** —— 这两页的筛选控件
+只有下拉，没有 `type="submit"` 按钮；唯一的提交来源就是这段死掉的 `change` 绑定。
+
+④ 在自己的两个列表模板上加了 `onchange="this.form.submit()"` 作为**局部绕行**
+（与 `/bills`、`billing_page.go:283` 的既有写法一致），**没有动 ② 的外壳文件**。
+所以：
+
+- `/properties`、`/rooms` 桌面档现在能提交了（靠绕行）。
+- `workspace-nav.html:110-112` 的死代码**原样留着**，仍是死代码。
+- ≤640px 的「筛选」开关**依然点不开** —— 开关打不开，里面能提交的下拉也够不着。
+  本缺陷成立，且修复时必须把 `workspace-nav.html` 里那段死代码一并处理，
+  否则会出现「同一个功能两套提交机制」的局面。
+
 ### 缺陷 2：`/cash-receipts?error=cash_overbalance` 对同一个错误渲染两条不同措辞的消息
 
 `HEAD` 里同一个错误码在**三处**各写了一份文案：
@@ -77,6 +96,12 @@
       筛选区展开，`aria-expanded` 由 `false` 变 `true`；再点一次收起。
 - [ ] 同样三页在 **≥641px** 下按钮行为不变（该档按钮本就是 `display: none`，
       要确认没有因这次改动而报错或行为变化）。
+- [ ] `workspace-nav.html` 的 `<script>` 内**所有**查询页面正文元素的语句都已推迟到
+      `DOMContentLoaded` 之后；用一次「把 partial 注入到不含 `<main>` 的最小页面」
+      的渲染测试钉住，防止回归。
+- [ ] `/properties`、`/rooms` 的筛选提交**只有一条路径**：④ 为绕行加的
+      `onchange="this.form.submit()"` 要么被外壳的通用机制取代、要么被明确保留并说明
+      为什么两套并存 —— 不允许出现「修好了但没人知道哪套在起作用」。
 - [ ] 移动搜索框按钮（`[data-mobile-search]`）在 ≤640px 下仍能正常展开搜索框 ——
       它与缺陷 1 同源，一并回归。
 - [ ] `/cash-receipts?error=cash_overbalance` 页面渲染出的该错误消息**恰好一条**。
