@@ -393,7 +393,7 @@ func TestRentWorkspaceTemplateRendersThreeViewsAndRoomDrilldownWithoutReferenceN
 			Property: rentWorkspacePropertyRow{PropertyID: 1, Name: "Canal House", TotalRooms: 1, ExpectedAmount: "EUR 1,000.00", PaidAmount: "EUR 0.00", BalanceAmount: "EUR 1,000.00", Status: "open", StatusLabel: "待缴"},
 			Rooms: []rentWorkspaceRoomTreeRow{{
 				Room:    rentWorkspaceRoomRow{RoomID: 11, PropertyID: 1, RoomLabel: "A-01", TenantCount: 1, ExpectedAmount: "EUR 1,000.00", PaidAmount: "EUR 0.00", BalanceAmount: "EUR 1,000.00", Status: "open", StatusLabel: "待缴"},
-				Tenants: []rentWorkspaceTenantRow{{TenantName: "Sample tenant", ExpectedAmount: "EUR 1,000.00", PaidAmount: "EUR 0.00", BalanceAmount: "EUR 1,000.00", Status: "open", StatusLabel: "待缴"}},
+				Tenants: []rentWorkspaceTenantRow{{TenantName: "Sample tenant", TenantAlias: "Sample A", ExpectedAmount: "EUR 1,000.00", PaidAmount: "EUR 0.00", BalanceAmount: "EUR 1,000.00", Status: "open", StatusLabel: "待缴"}},
 			}},
 		}},
 		TotalRows:     1,
@@ -406,7 +406,7 @@ func TestRentWorkspaceTemplateRendersThreeViewsAndRoomDrilldownWithoutReferenceN
 		t.Fatal(err)
 	}
 	page := body.String()
-	for _, expected := range []string{"房产视角", "房间视角", "租客视角", "Canal House", "A-01", "Sample tenant", "查看房产详情", "workspace-property", "<details"} {
+	for _, expected := range []string{"房产视角", "房间视角", "租客视角", "Canal House", "A-01", "Sample tenant", "别名：Sample A", "查看房产详情", "workspace-property", "<details"} {
 		if !strings.Contains(page, expected) {
 			t.Fatalf("workspace missing %q: %s", expected, page)
 		}

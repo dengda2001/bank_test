@@ -91,8 +91,10 @@ func TestEveryWorkspacePageRendersTheSharedChromeOnce(t *testing.T) {
 		"billing": func() (string, error) {
 			return executeTemplate(billingTemplate, billingPageData{})
 		},
-		"rent-dashboard": func() (string, error) {
-			return executeTemplate(rentDashboardTemplate, rentDashboardPageData{})
+		"rent-workspace": func() (string, error) {
+			// The legacy no-database fallback template was removed; the dashboard
+			// path that still renders is the room workspace.
+			return executeTemplate(rentWorkspaceTemplate, rentWorkspacePageData{})
 		},
 		"more": func() (string, error) {
 			return executeTemplate(morePageTemplate, morePageData{})
@@ -201,7 +203,7 @@ func TestWorkspaceCSSDrawerIsCSSOnlyAndMobileScoped(t *testing.T) {
 }
 
 func TestMobileBottomNavExposesFiveSectionsAndObjectsMenu(t *testing.T) {
-	page, err := executeTemplate(rentDashboardTemplate, rentDashboardPageData{workspaceShell: workspaceShell{ActivePage: "rent-dashboard"}})
+	page, err := executeTemplate(rentWorkspaceTemplate, rentWorkspacePageData{workspaceShell: workspaceShell{ActivePage: "rent-dashboard"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,18 +248,26 @@ func TestMorePageMatchesMobilePrototypeAndKeepsMoreNavigationActive(t *testing.T
 	}
 }
 
-func TestMobileDashboardUsesCardsForRentRows(t *testing.T) {
-	page, err := executeTemplate(rentDashboardTemplate, rentDashboardPageData{
+// The high-frequency rent-row list collapses to cards on narrow screens instead
+// of a sideways-scrolling table, and the settle affordance travels with the card.
+// This was asserted on the legacy /rent-dashboard fallback template, which was
+// removed; the contract is now pinned on /bills, its live carrier (the room
+// workspace has its own card markup, covered in rent_workspace_test.go).
+func TestMobileBillsListUsesCardsForRentRows(t *testing.T) {
+	page, err := executeTemplate(billsPageTemplate, rentDashboardPageData{
 		Period:      "2026-09",
 		PeriodLabel: "2026年9月",
-		Rows:        []rentDashboardRow{{TenantID: 7, TenantName: "陈先生", RoomLabel: "2B", RoomAddress: "Rosewood Court", ExpectedAmount: "EUR 1280.00", PaidAmount: "EUR 640.00", BalanceAmount: "EUR 640.00", ExpectedCents: 128000, PaidCents: 64000, Status: "partial", StatusLabel: "部分缴纳", ObligationID: 9, Payments: []rentPaymentDetail{{AmountDisplay: "EUR 640.00", DateDisplay: "2026-09-12", Source: "银行"}}}},
+		Page:        1,
+		PageSize:    12,
+		TotalPages:  1,
+		Rows:        []rentDashboardRow{{TenantID: 7, TenantName: "陈先生", RoomLabel: "2B", RoomAddress: "Rosewood Court", Period: "2026-09", ExpectedAmount: "EUR 1280.00", PaidAmount: "EUR 640.00", BalanceAmount: "EUR 640.00", ExpectedCents: 128000, PaidCents: 64000, Status: "partial", StatusLabel: "部分缴纳", ObligationID: 9}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, marker := range []string{`class="dashboard-mobile-list"`, `class="dashboard-mobile-card panel"`, `填写平账原因`, `class="dashboard-table-wrap table-wrap"`, `details class="dashboard-mobile-payments"`} {
+	for _, marker := range []string{`class="collection-mobile-list"`, `class="collection-bill-card"`, `填写平账原因`, `class="table-wrap collection-table-wrap"`, `details class="collection-settle"`} {
 		if !strings.Contains(page, marker) {
-			t.Fatalf("mobile dashboard cards missing %q", marker)
+			t.Fatalf("mobile bills cards missing %q", marker)
 		}
 	}
 }
@@ -373,26 +383,13 @@ func TestMobileSimpleTablesStackAsCards(t *testing.T) {
 	}
 }
 
-func TestMobileDunningUsesSafeBottomSheet(t *testing.T) {
-	page, err := executeTemplate(rentDashboardTemplate, rentDashboardPageData{
-		Dunning: dunningDrawerData{Enabled: true, Period: "2026-09"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, marker := range []string{
-		`.dunning-drawer { position: fixed; left: 8px; right: 8px; bottom: calc(76px + env(safe-area-inset-bottom));`,
-		`max-height: calc(100vh - 96px - env(safe-area-inset-bottom));`,
-		`overflow: auto;`,
-		`background: var(--surface);`,
-		`data-dunning-open`,
-		`onclick="return confirm('确认发送催收邮件吗？')"`,
-	} {
-		if !strings.Contains(page, marker) {
-			t.Fatalf("mobile dunning sheet missing %q", marker)
-		}
-	}
-}
+// TestMobileDunningUsesSafeBottomSheet was removed with the legacy
+// /rent-dashboard fallback template (09-19-legacy-dashboard-template-removal).
+// The data-dunning-open drawer and its safe-area bottom sheet existed only in
+// that template: neither the live /dunning page nor the room workspace renders
+// a drawer, so there is no surviving markup to assert. "Launch dunning from the
+// workspace" is a prototype feature that is missing on the real path; it is
+// registered in the backend spec and handed to the dashboard-alignment subtask.
 
 // Sticky is what keeps a row's identity and its actions on screen while the table
 // scrolls sideways, and it only makes sense once the action column has left the
@@ -471,8 +468,8 @@ func TestNavCountsOnlyRenderWhereTheyDidBefore(t *testing.T) {
 				ShowNavCounts: true, TenantCount: 3, IncomeCount: 4, ExpenseCount: 5,
 			}})
 		},
-		"rent-dashboard": func() (string, error) {
-			return executeTemplate(rentDashboardTemplate, rentDashboardPageData{workspaceShell: workspaceShell{
+		"rent-workspace": func() (string, error) {
+			return executeTemplate(rentWorkspaceTemplate, rentWorkspacePageData{workspaceShell: workspaceShell{
 				ShowNavCounts: true, TenantCount: 3, IncomeCount: 4, ExpenseCount: 5,
 			}})
 		},

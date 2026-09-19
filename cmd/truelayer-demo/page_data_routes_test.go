@@ -37,16 +37,30 @@ func TestCanonicalRoutesKeepLegacyRefreshTargetAndBankTarget(t *testing.T) {
 	}
 }
 
-func TestDashboardManualBalanceRequiresReasonField(t *testing.T) {
-	var body strings.Builder
-	if err := rentDashboardTemplate.Execute(&body, rentDashboardPageData{Period: "2026-09", PeriodLabel: "2026年9月", Rows: []rentDashboardRow{{ObligationID: 7, ExpectedCents: 100, PaidCents: 50, Status: "partial", StatusLabel: "部分缴纳"}}, Dunning: dunningDrawerData{Enabled: true}}); err != nil {
+// The manual-balance form must carry a required reason. That contract now lives
+// on /bills: the legacy /rent-dashboard/settle form was removed with its template.
+// The confirmation prompt also moved from an inline onsubmit to the delegated
+// data-confirm guard in the bills page script.
+func TestBillsManualBalanceRequiresReasonField(t *testing.T) {
+	page, err := executeTemplate(billsPageTemplate, rentDashboardPageData{
+		Period:      "2026-09",
+		PeriodLabel: "2026年9月",
+		Page:        1,
+		PageSize:    12,
+		TotalPages:  1,
+		Rows:        []rentDashboardRow{{ObligationID: 7, TenantID: 7, ExpectedCents: 100, PaidCents: 50, Status: "partial", StatusLabel: "部分缴纳"}},
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
-	page := body.String()
-	for _, marker := range []string{`name="reason"`, `placeholder="填写平账原因"`, `required`, `onsubmit="return confirm('确认一键平账吗？')"`, `onclick="return confirm('确认发送催收邮件吗？')"`} {
-		if !strings.Contains(page, marker) {
-			t.Fatalf("dashboard missing manual-balance marker %q", marker)
+	form := markupBetween(t, page, `action="/bills/settle"`, `</form>`)
+	for _, marker := range []string{`name="reason"`, `required`, `placeholder="平账原因"`, `data-confirm="true"`} {
+		if !strings.Contains(form, marker) {
+			t.Fatalf("bills settle form missing manual-balance marker %q: %s", marker, form)
 		}
+	}
+	if !strings.Contains(page, "确认按剩余未付金额平账吗？") {
+		t.Fatal("bills page lost its manual-balance confirmation prompt")
 	}
 }
 

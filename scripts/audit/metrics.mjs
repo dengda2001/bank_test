@@ -20,7 +20,10 @@ await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }).cat
 
 // --- find a cash receipt so the void page can be audited at all ---------------
 await page.goto(BASE + '/rent-dashboard', { waitUntil: 'networkidle' });
-const rowCount = await page.locator('.rent-row, tbody tr').count();
+// The legacy `.rent-row` class was removed with the no-database dashboard
+// template; /rent-dashboard now renders the room workspace, whose rows are plain
+// `tbody tr`.
+const rowCount = await page.locator('tbody tr').count();
 let receiptId = null;
 for (let i = 0; i < Math.min(rowCount, 12) && !receiptId; i++) {
   const row = page.locator('tbody tr').nth(i);

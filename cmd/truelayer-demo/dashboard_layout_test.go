@@ -22,113 +22,12 @@ func markupBetween(t *testing.T, page, start, end string) string {
 	return rest[:endIndex]
 }
 
-// The dashboard used to be one toolbar holding the title, the dunning button
-// and seven filter controls, with the per-status counts floating underneath as
-// bare text. It now reads as two blocks: a period bar that only picks a month,
-// a summary block, and a list block that owns every control acting on the list.
-func TestRentDashboardSeparatesPeriodBarSummaryAndList(t *testing.T) {
-	var body strings.Builder
-	err := rentDashboardTemplate.Execute(&body, rentDashboardPageData{
-		Period:         "2026-09",
-		PeriodLabel:    "2026年9月",
-		PreviousPeriod: "2026-08",
-		NextPeriod:     "2026-10",
-		SearchFilter:   "Aoife",
-		StatusFilter:   "unpaid",
-		SortFilter:     "due_desc",
-		Page:           1,
-		PageSize:       12,
-		TotalPages:     1,
-		FilteredCount:  3,
-		TotalRows:      3,
-		OverdueCount:   1,
-		PartialCount:   1,
-		ReviewCount:    1,
-		Rows:           []rentDashboardRow{{TenantID: 7, TenantName: "Aoife Murphy", Period: "2026-09", Status: "partial", StatusLabel: "部分缴纳"}},
-		Dunning:        dunningDrawerData{Enabled: true, Period: "2026-09"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	page := body.String()
-
-	periodBar := markupBetween(t, page, `<div class="dashboard-toolbar">`, `<section class="dashboard-section"`)
-	if got := strings.Count(periodBar, "<form"); got != 1 {
-		t.Fatalf("period bar holds %d forms, want only the month picker: %s", got, periodBar)
-	}
-	if !strings.Contains(periodBar, `name="period"`) {
-		t.Fatalf("period bar has no month picker: %s", periodBar)
-	}
-	for _, moved := range []string{`id="dashboard-search"`, `id="dashboard-status"`, `id="dashboard-sort"`, `id="dashboard-page-size"`, "邮件催缴", `class="filter-actions"`} {
-		if strings.Contains(periodBar, moved) {
-			t.Fatalf("period bar still holds %q, it belongs to the list block: %s", moved, periodBar)
-		}
-	}
-
-	summaryBlock := markupBetween(t, page,
-		`<section class="dashboard-section" aria-labelledby="dashboard-summary-title">`,
-		`<section class="dashboard-section" aria-labelledby="rent-status-title">`)
-	for _, expected := range []string{"本月应收", "已收租金", "剩余未收", "待处理", `class="panel dashboard-counts"`, "当前显示 3 户"} {
-		if !strings.Contains(summaryBlock, expected) {
-			t.Fatalf("summary block is missing %q: %s", expected, summaryBlock)
-		}
-	}
-	for _, leaked := range []string{`class="list-filter"`, "租客缴费情况", `id="dashboard-search"`} {
-		if strings.Contains(summaryBlock, leaked) {
-			t.Fatalf("summary block leaked list markup %q: %s", leaked, summaryBlock)
-		}
-	}
-
-	// The status counts are still the entry point into the filtered list, they
-	// just live in a real container now instead of floating between sections.
-	for _, chip := range []string{`class="count-chip overdue"`, `class="count-chip partial"`, `class="count-chip review"`} {
-		if !strings.Contains(summaryBlock, chip) {
-			t.Fatalf("status counts are missing %q: %s", chip, summaryBlock)
-		}
-	}
-
-	listBlock := markupBetween(t, page,
-		`<section class="dashboard-section" aria-labelledby="rent-status-title">`,
-		`<section id="dunning-drawer"`)
-	for _, expected := range []string{
-		`id="rent-status-title"`,
-		`class="list-filter"`,
-		`id="dashboard-search"`,
-		`id="dashboard-status"`,
-		"清除筛选",
-		"邮件催缴",
-		`name="period" value="2026-09"`,
-	} {
-		if !strings.Contains(listBlock, expected) {
-			t.Fatalf("list block is missing %q: %s", expected, listBlock)
-		}
-	}
-
-	// Sorting is done by clicking a heading now, so the 排序 dropdown is gone and
-	// the filter row must not grow it back.
-	if strings.Contains(listBlock, `id="dashboard-sort"`) {
-		t.Fatalf("list block still offers the 排序 dropdown: %s", listBlock)
-	}
-	if got := strings.Count(listBlock, `class="sort-link`); got < 4 {
-		t.Fatalf("list block has %d sortable headings, want the tenant/due/amount/status columns: %s", got, listBlock)
-	}
-	if !strings.Contains(listBlock, `<input type="hidden" name="sort" value="due_desc">`) {
-		t.Fatalf("filtering would silently drop the column sort: %s", listBlock)
-	}
-
-	// The page size sits with the pager: it is reachable from every page of the
-	// list, and it carries the current filters so switching it does not reset them.
-	pager := markupBetween(t, page, `<nav class="dashboard-pagination"`, `</nav>`)
-	for _, expected := range []string{`id="dashboard-page-size"`, `name="period" value="2026-09"`, `name="search" value="Aoife"`, `name="status" value="unpaid"`, `name="sort" value="due_desc"`, "第 1 / 1 页"} {
-		if !strings.Contains(pager, expected) {
-			t.Fatalf("pager is missing %q: %s", expected, pager)
-		}
-	}
-	filterForm := markupBetween(t, listBlock, `<form class="list-filter"`, `</form>`)
-	if strings.Contains(filterForm, `id="dashboard-page-size"`) {
-		t.Fatalf("page size is still in the filter row: %s", filterForm)
-	}
-}
+// TestRentDashboardSeparatesPeriodBarSummaryAndList was removed with the legacy
+// /rent-dashboard fallback template. It asserted that template's own three-block
+// structure (month-only period bar, summary block, list block) and its
+// dashboard-search / dashboard-status / dashboard-sort / dashboard-page-size
+// control IDs. The live /bills and room-workspace pages have their own layouts
+// with their own tests; the legacy structure has no surviving carrier.
 
 // A heading click flips its own column and adopts the primary direction for any
 // other, so the arrow always describes what the next click will do.
@@ -169,33 +68,44 @@ func TestNormalisedSortFallsBackToTheDefaultColumn(t *testing.T) {
 	}
 }
 
-// The E2E runner reads the summary cards with a regex requiring the label and
-// the value to be adjacent inside one element, so the layout refactor must not
-// insert whitespace or a wrapper between them.
-func TestRentDashboardMetricsKeepTheE2EShape(t *testing.T) {
-	var body strings.Builder
-	if err := rentDashboardTemplate.Execute(&body, rentDashboardPageData{Period: "2026-09", PeriodLabel: "2026年9月"}); err != nil {
+// The E2E runner reads the summary cards on /rent-dashboard with a regex
+// requiring the label and the value to be adjacent inside one element
+// (cmd/rentops-e2e/dashboard_scenario.go), so the live room workspace must not
+// insert whitespace or a wrapper between them. This used to be pinned on the
+// removed legacy template; the runner never reads 待处理 as a metric, so the
+// assertion is the three it does read plus the filtered-count text.
+func TestRentWorkspaceMetricsKeepTheE2EShape(t *testing.T) {
+	page, err := executeTemplate(rentWorkspaceTemplate, rentWorkspacePageData{
+		Period:      "2026-09",
+		PeriodLabel: "2026年9月",
+		TotalRows:   1,
+		Summary:     rentWorkspaceSummary{ExpectedAmount: "EUR 950.00", PaidAmount: "EUR 950.00", BalanceAmount: "EUR 0.00"},
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
-	page := body.String()
-	for _, metric := range []string{"本月应收", "已收租金", "剩余未收", "待处理"} {
+	for _, metric := range []string{"本月应收", "已收租金", "剩余未收"} {
 		if !strings.Contains(page, `<div class="label">`+metric+`</div><strong>`) {
 			t.Fatalf("metric %q does not match the E2E extraction pattern", metric)
 		}
 	}
 	for _, hiddenMetric := range []string{"待分配金额", "其他收入"} {
 		if strings.Contains(page, hiddenMetric) {
-			t.Fatalf("dashboard still renders hidden metric %q", hiddenMetric)
+			t.Fatalf("workspace still renders hidden metric %q", hiddenMetric)
 		}
 	}
 	if !strings.Contains(page, "当前显示") {
-		t.Fatal("dashboard lost the filtered-count text the E2E runner asserts on")
+		t.Fatal("workspace lost the filtered-count text the E2E runner asserts on")
 	}
 }
 
-func TestRentDashboardManualBalanceActionOnlyAppearsForOutstandingRent(t *testing.T) {
-	var body strings.Builder
-	err := rentDashboardTemplate.Execute(&body, rentDashboardPageData{
+// The settle action belongs to a bill with an outstanding balance; a paid bill
+// offers only the plain detail link. This used to be asserted on the removed
+// legacy dashboard (and on its /rent-dashboard/settle form). /bills is the live
+// carrier and shares the same `gt .ExpectedCents .PaidCents` condition, so the
+// contract moves there unchanged.
+func TestBillsManualBalanceActionOnlyAppearsForOutstandingRent(t *testing.T) {
+	page, err := executeTemplate(billsPageTemplate, rentDashboardPageData{
 		Period:       "2026-09",
 		PeriodLabel:  "2026年9月",
 		StatusFilter: "all",
@@ -211,25 +121,23 @@ func TestRentDashboardManualBalanceActionOnlyAppearsForOutstandingRent(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	page := body.String()
 	for name, block := range map[string]string{
-		"mobile cards":  markupBetween(t, page, `<div class="dashboard-mobile-list"`, `<div class="dashboard-table-wrap`),
-		"desktop table": markupBetween(t, page, `<div class="dashboard-table-wrap table-wrap">`, `</table></div>`),
+		"mobile cards":  markupBetween(t, page, `<div class="collection-mobile-list">`, `<nav class="collection-pager"`),
+		"desktop table": markupBetween(t, page, `<div class="table-wrap collection-table-wrap">`, `</table></div>`),
 	} {
-		if got := strings.Count(block, `>一键平账</button>`); got != 1 {
+		if got := strings.Count(block, `>一键平账</summary>`); got != 1 {
 			t.Fatalf("manual balance action count in %s=%d want 1: %s", name, got, block)
 		}
 	}
 	for _, expected := range []string{
-		`action="/rent-dashboard/settle"`,
+		`action="/bills/settle"`,
 		`name="obligation_id" value="71"`,
 		`name="period" value="2026-09"`,
-		`onkeydown="event.stopPropagation()"`,
-		`onsubmit="return confirm('确认一键平账吗？')"`,
-		`class="status-actions"`,
+		`data-confirm="true"`,
+		`placeholder="平账原因"`,
 	} {
 		if !strings.Contains(page, expected) {
-			t.Fatalf("dashboard is missing manual balance markup %q: %s", expected, page)
+			t.Fatalf("bills page is missing manual balance markup %q: %s", expected, page)
 		}
 	}
 	if strings.Contains(page, `name="obligation_id" value="72"`) {

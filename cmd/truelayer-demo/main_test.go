@@ -70,9 +70,6 @@ func TestWorkspaceTemplatesIncludeSharedCalendarPicker(t *testing.T) {
 		{name: "billing", render: func(body *strings.Builder) error {
 			return billingTemplate.Execute(body, billingPageData{})
 		}},
-		{name: "dashboard", render: func(body *strings.Builder) error {
-			return rentDashboardTemplate.Execute(body, rentDashboardPageData{})
-		}},
 		{name: "tenants", render: func(body *strings.Builder) error {
 			return tenantTemplate.Execute(body, tenantPageData{})
 		}},
@@ -899,44 +896,12 @@ func TestHistoricalPayerPreviewTemplateConfirmsOneRowAtATime(t *testing.T) {
 	}
 }
 
-func TestRentDashboardTemplateRendersMonthlyStatus(t *testing.T) {
-	var body strings.Builder
-	err := rentDashboardTemplate.Execute(&body, rentDashboardPageData{
-		workspaceShell: workspaceShell{Username: "ddrzh", Environment: "sandbox"},
-		Period:         "2026-09",
-		PeriodLabel:    "2026年9月",
-		ExpectedTotal:  "EUR 950.00",
-		Rows: []rentDashboardRow{{
-			ObligationID:   11,
-			TenantName:     "Aoife Murphy",
-			RoomAddress:    "Room A12",
-			DueDate:        "2026-09-05",
-			ExpectedAmount: "EUR 950.00",
-			Status:         "paid",
-			StatusLabel:    "已缴清",
-			Payments: []rentPaymentDetail{{
-				AmountDisplay:      "EUR 950.00",
-				DateDisplay:        "04 Sep 2026 08:00",
-				Description:        "September rent",
-				Reference:          "rent-2026-09",
-				ConfirmationSource: "auto_id",
-			}},
-		}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, expected := range []string{"2026-09", "租客缴费情况", "Aoife Murphy", "月度总览", "银行流水", `onchange="this.form.submit()"`, "收款明细", "September rent"} {
-		if !strings.Contains(body.String(), expected) {
-			t.Fatalf("dashboard missing %q: %s", expected, body.String())
-		}
-	}
-	for _, unwanted := range []string{"参考号", "rent-2026-09"} {
-		if strings.Contains(body.String(), unwanted) {
-			t.Fatalf("dashboard payment detail still renders %q: %s", unwanted, body.String())
-		}
-	}
-}
+// TestRentDashboardTemplateRendersMonthlyStatus was removed with the legacy
+// /rent-dashboard fallback template. It asserted that template's own markup: the
+// 租客缴费情况 / 月度总览 / 收款明细 headings and its inline payment-detail rows
+// (including that the payer reference stayed hidden). None of those render on a
+// live page — /bills, the room workspace and /tenants/{id} carry their own
+// payment views — so the assertions had no surviving carrier.
 
 func TestAppendStoredTokenPersistsRefreshTokenOnly(t *testing.T) {
 	tokenPath := filepath.Join(t.TempDir(), "token.json")
@@ -1197,17 +1162,26 @@ func TestFallbackTransactionPageRowsFiltersPendingTransactionsByPeriod(t *testin
 	}
 }
 
-func TestRentDashboardTemplateLinksPendingCountToSelectedPeriod(t *testing.T) {
-	var body strings.Builder
-	if err := rentDashboardTemplate.Execute(&body, rentDashboardPageData{
+// The pending-transactions entry point must carry the selected month, so acting
+// on it keeps the user on the month they were reviewing. This used to be asserted
+// on the removed legacy dashboard template; the live carrier is the room
+// workspace, whose own "查看全部待处理流水" link the template builds from .Period.
+//
+// The item-level ListURL is loader-supplied, so it must not be able to satisfy
+// this assertion: the fixture deliberately points it at another month, and the
+// needle names the class of the template-built anchor. Otherwise the test would
+// pass even if the template stopped deriving the link from .Period.
+func TestRentWorkspaceLinksPendingCountToSelectedPeriod(t *testing.T) {
+	page, err := executeTemplate(rentWorkspaceTemplate, rentWorkspacePageData{
 		Period:       "2026-09",
 		PeriodLabel:  "2026年9月",
 		PendingCount: 4,
-	}); err != nil {
+		PendingItems: []rentWorkspacePendingItem{{Title: "待确认付款人", Amount: "EUR 800.00", ListURL: "/transactions?period=2026-08&match_status=pending"}},
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
-	page := body.String()
-	if !strings.Contains(page, `href="/billing?period=2026-09&amp;pending=1"`) {
+	if !strings.Contains(page, `class="workspace-queue-more" href="/transactions?period=2026-09&amp;match_status=pending"`) {
 		t.Fatalf("pending count is not linked to the selected period: %s", page)
 	}
 }

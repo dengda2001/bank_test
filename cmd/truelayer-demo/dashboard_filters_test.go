@@ -103,91 +103,112 @@ func TestRentDashboardURLPreservesFilters(t *testing.T) {
 	}
 }
 
-func TestRentDashboardTemplateRendersFiltersMetricsAndPagination(t *testing.T) {
-	var body strings.Builder
-	err := rentDashboardTemplate.Execute(&body, rentDashboardPageData{
-		Period:                     "2026-09",
-		PeriodLabel:                "2026年9月",
-		SearchFilter:               "Aoife",
-		StatusFilter:               "unpaid",
-		SortFilter:                 "due_desc",
-		Page:                       1,
-		PageSize:                   12,
-		FilteredCount:              12,
-		TotalRows:                  14,
-		TotalPages:                 2,
-		PendingTotal:               "EUR 300.00",
-		OtherIncomeTotal:           "EUR 400.00",
-		OtherIncomeCount:           1,
-		PendingCount:               2,
-		SyncStatus:                 bankSyncStatusPartial,
-		SyncCoverage:               "部分成功 · 覆盖 2026-09-01 至 2026-09-16",
-		LastSuccessfulSyncCoverage: "同步成功 · 覆盖 2026-06-01 至 2026-09-01",
-		Rows:                       []rentDashboardRow{{TenantID: 7, TenantName: "Aoife Murphy", TenantAlias: "Aoife A", Period: "2026-09", ExpectedAmount: "EUR 1,000.00", PaidAmount: "EUR 400.00", BalanceAmount: "EUR 600.00", Status: "partial", StatusLabel: "部分缴纳"}},
+// This used to render the legacy dashboard template. Its live carrier for the
+// same parsed-filter and pagination contract is /bills, which shares
+// rentDashboardFiltersFromQuery and rentDashboardPageData. The legacy-only parts
+// of the old assertion -- the bank sync-status notices and the tenant alias --
+// have no /bills carrier; bank sync coverage renders on /bank instead
+// (bankPageTemplate), and the legacy dashboard was the only page that showed it
+// inline with the rent list.
+func TestBillsPageRendersFiltersMetricsAndPagination(t *testing.T) {
+	page, err := executeTemplate(billsPageTemplate, rentDashboardPageData{
+		Period:        "2026-09",
+		PeriodLabel:   "2026年9月",
+		SearchFilter:  "Aoife",
+		StatusFilter:  "unpaid",
+		SortFilter:    "due_desc",
+		Page:          1,
+		PageSize:      12,
+		FilteredCount: 12,
+		TotalRows:     14,
+		TotalPages:    2,
+		Rows:          []rentDashboardRow{{TenantID: 7, TenantName: "Aoife Murphy", RoomLabel: "A-01", Period: "2026-09", ExpectedAmount: "EUR 1,000.00", PaidAmount: "EUR 400.00", BalanceAmount: "EUR 600.00", Status: "partial", StatusLabel: "部分缴纳"}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	page := body.String()
 	for _, expected := range []string{
 		`name="search"`,
 		`value="Aoife"`,
 		`value="unpaid" selected`,
-		"部分成功",
-		"最近一次成功同步",
-		"别名：Aoife A",
 		`/tenants/7?from_month=2026-09&amp;to_month=2026-09`,
 		"第 1 / 2 页",
 		`page=2`,
 	} {
 		if !strings.Contains(page, expected) {
-			t.Fatalf("dashboard missing %q: %s", expected, page)
+			t.Fatalf("bills page missing %q: %s", expected, page)
 		}
 	}
 	for _, hiddenMetric := range []string{"待分配金额", "其他收入"} {
 		if strings.Contains(page, hiddenMetric) {
-			t.Fatalf("dashboard still renders hidden metric %q: %s", hiddenMetric, page)
+			t.Fatalf("bills page still renders hidden metric %q: %s", hiddenMetric, page)
 		}
 	}
 }
 
-func TestRentDashboardTemplateDistinguishesNoMatchesFromNoBills(t *testing.T) {
+// /bills distinguishes "this month has no bills" from "the filters matched
+// nothing" with two different empty states; the removed legacy dashboard had the
+// same two-state contract, which is what this test originally pinned.
+func TestBillsPageDistinguishesNoMatchesFromNoBills(t *testing.T) {
 	for name, data := range map[string]rentDashboardPageData{
 		"no matches": {TotalRows: 2, FilteredCount: 0},
 		"no bills":   {TotalRows: 0, FilteredCount: 0},
 	} {
 		t.Run(name, func(t *testing.T) {
-			var body strings.Builder
-			if err := rentDashboardTemplate.Execute(&body, data); err != nil {
+			page, err := executeTemplate(billsPageTemplate, data)
+			if err != nil {
 				t.Fatal(err)
 			}
-			want := "本月还没有租金账单"
+			want := "本月暂无应收账单"
 			if name == "no matches" {
 				want = "没有符合当前筛选条件"
 			}
-			if !strings.Contains(body.String(), want) {
-				t.Fatalf("dashboard missing %q: %s", want, body.String())
+			if !strings.Contains(page, want) {
+				t.Fatalf("bills page missing %q: %s", want, page)
 			}
 		})
 	}
 }
 
-func TestRentDashboardHTTPRendersSafeFallbackAndFilterError(t *testing.T) {
+// With a session but no database there is no dashboard read model left: the
+// legacy JSON-backed fallback template was removed, so the handler now fails
+// loudly instead of silently degrading to demo data. Mirrors the analogous
+// dunning guard (TestDunningPOSTRejectsLegacySessionWithoutDatabase).
+func TestRentDashboardWithoutDatabaseReturnsServiceUnavailable(t *testing.T) {
 	dir := t.TempDir()
 	a := testApp()
 	a.cfg.TenantFile = filepath.Join(dir, "tenants.json")
 	a.cfg.ExpenseFile = filepath.Join(dir, "expenses.json")
 	a.cfg.LogFile = filepath.Join(dir, "bank-data.jsonl")
-	req := httptest.NewRequest(http.MethodGet, "/rent-dashboard?period=2026-09&status=not-valid", nil)
+	req := httptest.NewRequest(http.MethodGet, "/rent-dashboard?period=2026-09", nil)
 	req.AddCookie(sessionCookie(a.cfg, time.Now().Add(sessionTTL)))
 	rec := httptest.NewRecorder()
 	a.handleRentDashboard(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d want %d body=%s", rec.Code, http.StatusServiceUnavailable, rec.Body.String())
 	}
-	for _, expected := range []string{"筛选条件无效", "尚未完成银行同步", `id="dashboard-search"`, "本月还没有租金账单"} {
-		if !strings.Contains(rec.Body.String(), expected) {
-			t.Fatalf("fallback dashboard missing %q: %s", expected, rec.Body.String())
-		}
+}
+
+// The invalid-input contract survives the deletion, but on a different carrier:
+// renderRentDashboard still turns a rejected filter/period into rentDashboardPageData.Error
+// and /bills (billsPageTemplate) is what renders it now. The removed legacy
+// dashboard used to be the only page pinned for this, and it rendered a Chinese
+// notice ("筛选条件无效") instead of the handler's code. Both the code and the
+// notice element are asserted here so the assertion cannot be satisfied by some
+// unrelated error markup appearing elsewhere on the page.
+func TestBillsPageSurfacesInvalidFilterAndPeriodErrors(t *testing.T) {
+	for code, data := range map[string]rentDashboardPageData{
+		"invalid_dashboard_filter": {Error: "invalid_dashboard_filter"},
+		"invalid_period":           {Error: "invalid_period"},
+	} {
+		t.Run(code, func(t *testing.T) {
+			page, err := executeTemplate(billsPageTemplate, data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(page, `<div class="notice error">`+code+`</div>`) {
+				t.Fatalf("bills page does not surface %q as an error notice: %s", code, page)
+			}
+		})
 	}
 }

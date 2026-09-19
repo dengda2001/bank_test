@@ -1265,29 +1265,34 @@ atomically, and recomputes the ledger projection from those rows.
 - Applies to the database-backed monthly obligations, effective rent/cash
   payment projection, bank arrival transactions, allocations, and sync runs.
 
-> **Surface note (verified 2026-09-19).** `renderRentDashboard` serves
-> **`/bills`** (`page_data_routes.go:439` -> `renderRentDashboard`) and serves
-> `/rent-dashboard` **only** when no database-backed user session exists
-> (`dashboard.go:15-19`). That second case is a legacy, no-database fallback.
-> With a database configured — every normal session — `/rent-dashboard` renders
-> the room-centric workspace instead, whose read model is **not** the one
-> described in this scenario. See
-> "Scenario: Room-Centric Rent Workspace Read Model" below. Earlier revisions
-> of this file attributed the obligation-based model to `/rent-dashboard`
-> without that distinction.
+> **Surface note (updated 2026-09-19 by
+> `09-19-legacy-dashboard-template-removal`).** `renderRentDashboard` serves
+> **`/bills`** (`page_data_routes.go:439`) and the **`/dunning*`** routes
+> (`page_data_routes.go`, `dunning_handlers.go`), and nothing else. **It is live
+> code, not dead code**: the function body and its `switch` must stay, because
+> that switch is what selects `billsPageTemplate` and `dunningPageTemplate`.
+> The legacy no-database fallback template (`rentDashboardTemplate`) and its
+> `db == nil` entry point were **deleted**. An unknown request path and a
+> session with no database now each return an explicit error (`503`) instead of
+> silently degrading to demo data. The template's distinctive markup —
+> `tr.rent-row`, `a.tenant-link`, `[data-dunning-open]` — no longer exists
+> anywhere in the repository. `/rent-dashboard` renders the room-centric
+> workspace for every database-backed session, whose read model is **not** the
+> one described in this scenario. See "Scenario: Room-Centric Rent Workspace
+> Read Model" below. Anything that used to read the legacy markup should read
+> `/bills` instead, passing `status=all`, because the page's own "未结清" filter
+> is `open ∪ overdue ∪ partial` (`dashboard_filters.go:81-90`) and hides `paid`.
 >
-> **Template selection is by request path** (`dashboard.go:168-174`), which is
-> the trap that hides the above: `/bills` -> `billsPageTemplate`, `/dunning*` ->
-> `dunningPageTemplate`, anything else -> `rentDashboardTemplate`. Since
-> `renderRentDashboard` is only ever reached with one of those three paths, and
-> `/rent-dashboard` short-circuits to the workspace whenever a database is
-> configured, **`rentDashboardTemplate` (`dashboard.go:180` onward) renders only
-> when `a.db == nil`**. Its distinctive markup — `tr.rent-row`, `a.tenant-link`,
-> `[data-dunning-open]` — is therefore absent from every database-backed
-> session. Anything asserting on that markup (the audit seeder did, until
-> 2026-09-19) is asserting on a page that cannot appear; read `/bills` instead,
-> and pass `status=all`, because the page's own "未结清" filter is
-> `open ∪ overdue ∪ partial` (`dashboard_filters.go:81-90`) and hides `paid`.
+> **Known gap handed to the dashboard-alignment subtask
+> (`09-19-pc-ui-fidelity-alignment`, item ③).** The prototype's "launch dunning
+> from the workspace" drawer — `[data-dunning-open]`, `#dunning-drawer`, its
+> safe-area bottom sheet, and the per-attempt "重试此人" retry button — existed
+> **only** in the deleted template. Neither `/dunning` (`dunningPageTemplate`)
+> nor the room workspace (`rent-workspace.html`) renders a drawer or a retry
+> button, although the server-side preview/send/retry handlers all still work.
+> The `db == nil` branch of `renderRentDashboard` that loaded the JSON demo data
+> (`loadTenants` / `loadExpenses` / `loadLatestDemoResult`) is now unreachable
+> but was left in place deliberately; its removal is a separate follow-up.
 
 ### 2. Signatures
 
@@ -1320,6 +1325,15 @@ atomically, and recomputes the ledger projection from those rows.
 - Sync text comes from the current user's latest `bank_sync_runs` and account
   coverage. Partial/failed latest runs remain visible, with the latest
   successful coverage shown separately when available; no-run state is explicit.
+  **After `09-19-legacy-dashboard-template-removal` this bullet has no rendered
+  carrier on `/bills` or `/dunning`:** `renderRentDashboard` still fills
+  `rentDashboardPageData.SyncCoverage` / `.SyncStatus` /
+  `.LastSuccessfulSyncCoverage` (`dashboard.go`), but no template reads those
+  three fields any more — the inline sync notice lived only in the deleted
+  legacy template. `/bank` (`bankPageTemplate`) renders sync separately from its
+  own `bankPageData.SyncCoverage` (`page_data_routes.go`). Restoring the
+  dashboard sync notice is part of the dashboard-alignment subtask, not this
+  read model.
 - All dashboard reads include `user_id`; URL links preserve the selected month,
   filters, direction, and allocation/pending conditions where applicable.
 
@@ -1384,8 +1398,10 @@ used only for pending and other-income navigation.
 ### 1. Scope / Trigger
 
 - Trigger: Any authenticated `/rent-dashboard` request while `a.db != nil`
-  (`dashboard.go:15-19`) — that is, every database-backed session. The legacy
-  no-database fallback renders the obligation-based model instead.
+  (`handleRentDashboard`, `dashboard.go`) — that is, every database-backed
+  session. A session without a database now returns an explicit `503`; the
+  legacy no-database fallback was deleted
+  (`09-19-legacy-dashboard-template-removal`).
 - Governs the monthly summary cards, the per-property cards, the room tree and
   its per-room tenant counts, and the room status chips.
 

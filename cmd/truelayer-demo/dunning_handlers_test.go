@@ -63,9 +63,15 @@ func TestDunningPOSTRejectsLegacySessionWithoutDatabase(t *testing.T) {
 	}
 }
 
-func TestRentDashboardTemplateRendersDunningDrawerAndRetry(t *testing.T) {
-	var body strings.Builder
-	err := rentDashboardTemplate.Execute(&body, rentDashboardPageData{
+// The preview/result rendering of the dunning flow lives on the dedicated
+// /dunning page; the dashboard drawer this test used to render was removed with
+// the legacy template. The failed-attempt status still round-trips through
+// dunningDeliveryLabel, but the drawer chrome (id="dunning-drawer",
+// data-dunning-open) and the per-attempt "重试此人" button had no other carrier:
+// they are a prototype feature still missing on the real path and are registered
+// as such in the backend spec for the dashboard-alignment subtask.
+func TestDunningPageRendersPreviewResultsAndConfirmation(t *testing.T) {
+	page, err := executeTemplate(dunningPageTemplate, rentDashboardPageData{
 		workspaceShell: workspaceShell{Environment: "sandbox"},
 		Period:         "2026-09",
 		PeriodLabel:    "2026年9月",
@@ -101,21 +107,19 @@ func TestRentDashboardTemplateRendersDunningDrawerAndRetry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	page := body.String()
 	for _, expected := range []string{
-		`id="dunning-drawer"`,
 		`action="/dunning/config"`,
 		`/dunning/preview`,
 		`/dunning/send`,
 		"发送前预览",
 		"Rent reminder for September 2026",
 		"provider unavailable",
-		"重试此人",
+		"账单不存在或不属于当前用户",
+		"发送失败",
 		"确认同日重发",
-		"data-dunning-open",
 	} {
 		if !strings.Contains(page, expected) {
-			t.Fatalf("dunning drawer missing %q: %s", expected, page)
+			t.Fatalf("dunning page missing %q: %s", expected, page)
 		}
 	}
 }

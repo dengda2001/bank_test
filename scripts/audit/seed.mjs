@@ -142,11 +142,12 @@ function parseBillingRows(html) {
 
 // The rent-dashboard read model is reachable, in a session that has a DB, only
 // through /bills. handleBills (page_data_routes.go:439) delegates to
-// renderRentDashboard, which picks its template by request path
-// (dashboard.go:169-174): the legacy `rent-row` markup belongs to the branch
-// that is neither /bills nor /dunning, and /rent-dashboard never reaches that
-// branch once a session exists — dashboard.go:15-17 short-circuits it to the
-// room workspace. So the per-obligation rows to read are /bills' own.
+// renderRentDashboard, which picks its template by request path: /bills and
+// /dunning are the only live cases. The legacy no-database fallback template and
+// its `rent-row` markup were removed (09-19-legacy-dashboard-template-removal):
+// /rent-dashboard never reached that branch once a session existed — the handler
+// short-circuits to the room workspace and now fails with 503 when no database
+// is configured. So the per-obligation rows to read are /bills' own.
 //
 // status=all is required to see every state: the page's "未结清" filter is
 // open ∪ overdue ∪ partial (dashboard_filters.go:81-90) and hides `paid`.

@@ -478,7 +478,7 @@ or the CSS constants:
 | `TestPayerPreviewScrollsTheTableNotTheCard` | `.tp-scroll{overflow-x:auto}` present; `.card{...overflow-x:auto}` gone; card rule unchanged in shape; wrapper opens and closes around the table |
 | `TestBillingActionCellCollapsesOnlyOnNarrowScreens` | `<details class="txn-action" open>`, summary hidden wide, `matchMedia` script strips `open`, dropped columns, 680px floor, mobile amount default and override order |
 | `TestBillingNarrowScreenBlockFollowsTheWideScreenOne` | Narrow block is written after the wide one |
-| `TestMobileDashboardUsesCardsForRentRows`, `TestMobileTenantListUsesCards`, `TestMobileExpenseListUsesCards`, `TestMobileBillingRowsStackAsCards` | High-frequency pages expose mobile card markup while retaining desktop wrappers |
+| `TestMobileBillsListUsesCardsForRentRows`, `TestMobileTenantListUsesCards`, `TestMobileExpenseListUsesCards`, `TestMobileBillingRowsStackAsCards` | High-frequency pages expose mobile card markup while retaining desktop wrappers. (The first was renamed from `TestMobileDashboardUsesCardsForRentRows` when the legacy /rent-dashboard fallback template was removed; the contract now anchors on `/bills`, its live carrier.) |
 | `TestMobileSimpleTablesStackAsCards` | Generic object-table card rules stay in the mobile stylesheet tail |
 
 The desktop side of the contract is checked in the browser, not in Go:
