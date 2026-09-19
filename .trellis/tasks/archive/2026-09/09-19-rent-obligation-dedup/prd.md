@@ -46,10 +46,26 @@
       —— 实测两条 charge 行（1397/1398）共存
 - [x] `go test ./...` 与 `go vet ./...` 通过（含 `RENTOPS_MYSQL_TEST_DSN` 下的 MySQL 测试）
       —— 另：HEAD 上 5 条 MySQL 用例失败，本改动后仅剩 1 条，且该条在 HEAD 上同样失败（`design.md` §「既有失败用例的定性」）
-- [ ] **`scripts/run-audit-local.sh` 跑通 —— 未验证。**
-      该脚本的管理连接硬编码 `sudo mysql`（`scripts/run-audit-local.sh:58-60`），不认免密 root、也不接受
-      `MYSQL_PORT` 覆盖，本机无 sudo 终端故无法执行。以真实 HTTP 反复加载三个触发页面作为替代验证
-      （见第 1 条）。**这不是通过，只是未测**；在有 sudo 的机器上应补跑一次。
+- [ ] **`scripts/run-audit-local.sh` 跑通 —— 已实测，失败；且与本改动无关。**
+
+      本节原先写「未验证，因为脚本硬编码 `sudo mysql`」——**那个判断是错的**。脚本的 admin 连接
+      是三级降级（`run-audit-local.sh:115-134`）：显式 `MYSQL_ADMIN_CMD` → TCP 免密 root → `sudo mysql`。
+      第二级正是本机在用的连接，之所以掉到第三级只因 `MYSQL_PORT` 默认值是 `53306`。改用
+      `MYSQL_PORT=3306 APP_PORT=18090 scripts/run-audit-local.sh` 即可运行（真实退出码 **1**）。
+
+      失败点是 seeder 的 `一键匹配` 断言（`scripts/audit/seed.mjs:433`）。**根因不是义务重复**：
+
+      - 本次运行义务为 **18 条、零重复**（`116 → 18` 的修复已生效），断言依旧失败。
+      - `matching.go:94`：流水未解析出月份 → 只能返回 `candidate`（渲染「请确认租金月份」），拿不到
+        `CanConfirm`。三笔候选里 `audit-tx-candidate-priya` 的描述本就没有月份；唯一同时具备
+        「已记住付款人 + 解析出 2026-09 + 金额 70000 恰等于义务 16 应收」的是 MICHAEL 那笔，
+        而 seeder 把它标成了 `ignored`。
+      - A/B 实测：保持现状 → `一键匹配` 渲染 **0** 次；把该笔改回 `unmatched` → 渲染 **1** 次。
+
+      该矛盾在 HEAD 上原样存在，也不在 `seed.mjs` 的未提交改动里（改的是解析器正则）。
+
+      → 结论：013 是必要修复，但**不足以**解除 B2；`09-19-desktop-contract-1100/implement.md:63-72`
+      把「一键匹配失败」归因于义务重复，该因果链不成立，需另行更正。
 
 ## Out of Scope
 
