@@ -31,7 +31,15 @@ const TX = {
   chenA: 'Rent adjustment for 2026-08 - CHEN ZHIQIANG',
   chenB: 'Additional rent settlement for 2026-08 - CHEN ZHIQIANG',
   zhouPartial: 'Partial rent payment for September 2026 - ZHOU MIN',
-  ignored: 'Rent payment 2026-09 - MICHAEL OBRIEN',
+  // The ignore demo must sit on a transaction that can never produce a
+  // 一键匹配 suggestion — one with no remembered payer relation and no parsed
+  // rent month (matching.go returns "unmatched" for the former and only a
+  // month-choice "candidate" for the latter). MICHAEL OBRIEN's transaction has
+  // both a PAYER-MIKE relation and a parsed 2026-09, so ignoring it suppresses
+  // the very suggestion the verification block below asserts. A savings
+  // transfer qualifies instead; "ignore this, it is not rent" is also the
+  // honest reading of that row.
+  ignored: 'Transfer into savings reserve',
   revoke: 'Rounding adjustment credit',
 };
 
@@ -115,7 +123,10 @@ async function post(path, form) {
 
 function parseBillingRows(html) {
   const rows = [];
-  const rowPattern = /<tr class="(income|expense)">([\s\S]*?)<\/tr>/g;
+  // The row carries other attributes too (`id="transaction-row-<key>"`), so match
+  // the class anywhere in the opening tag rather than insisting it comes first:
+  // attribute order is a rendering detail, not part of this parser's contract.
+  const rowPattern = /<tr\b[^>]*\bclass="(income|expense)"[^>]*>([\s\S]*?)<\/tr>/g;
   let match;
   while ((match = rowPattern.exec(html))) {
     const segment = match[2];
@@ -129,12 +140,26 @@ function parseBillingRows(html) {
   return rows;
 }
 
-function parseDashboardRows(html) {
+// The rent-dashboard read model is reachable, in a session that has a DB, only
+// through /bills. handleBills (page_data_routes.go:439) delegates to
+// renderRentDashboard, which picks its template by request path
+// (dashboard.go:169-174): the legacy `rent-row` markup belongs to the branch
+// that is neither /bills nor /dunning, and /rent-dashboard never reaches that
+// branch once a session exists — dashboard.go:15-17 short-circuits it to the
+// room workspace. So the per-obligation rows to read are /bills' own.
+//
+// status=all is required to see every state: the page's "未结清" filter is
+// open ∪ overdue ∪ partial (dashboard_filters.go:81-90) and hides `paid`.
+//
+// The mobile card list (collection-bill-card) repeats the same tenants, so
+// this deliberately anchors on the desktop table's <tr> shape to avoid
+// double-counting.
+function parseBillsRows(html) {
   const rows = [];
-  const rowPattern = /<tr class="rent-row"[\s\S]*?<a class="tenant-link"[^>]*><strong>([\s\S]*?)<\/strong>[\s\S]*?<span class="status ([a-z_]+)">/g;
+  const rowPattern = /<tr><td class="mono">[^<]*<\/td><td><a href="\/tenants\/(\d+)[^"]*"><strong>([\s\S]*?)<\/strong><\/a>[\s\S]*?<span class="status ([a-z_]+)">/g;
   let match;
   while ((match = rowPattern.exec(html))) {
-    rows.push({ tenant: unescapeHtml(match[1]).trim(), status: match[2] });
+    rows.push({ tenantId: match[1], tenant: unescapeHtml(match[2]).trim(), status: match[3] });
   }
   return rows;
 }
@@ -169,9 +194,9 @@ function findTransaction(rows, needle) {
   return matches[0];
 }
 
-function findDashboardRow(rows, tenant) {
+function findBillsRow(rows, tenant) {
   const matches = rows.filter((row) => row.tenant.includes(tenant));
-  if (matches.length !== 1) fail(`expected exactly one dashboard row for ${tenant}, found ${matches.length}`);
+  if (matches.length !== 1) fail(`expected exactly one /bills row for ${tenant}, found ${matches.length}`);
   return matches[0];
 }
 
@@ -237,8 +262,8 @@ async function ensureIgnored(transaction) {
   }
   const response = await post('/billing/ignore', {
     transaction_id: transaction.id,
-    reason: 'audit seed: foreign-currency style ignore state',
-    idempotency_key: 'audit-seed-ignore-michael',
+    reason: 'audit seed: non-rent transfer parked out of the way',
+    idempotency_key: 'audit-seed-ignore-transfer',
   });
   expectRedirect(response, '/billing/ignore', 'message=transaction_action_saved');
   log(`ignored ${transaction.description}`);
@@ -395,8 +420,14 @@ async function main() {
     key: 'audit-seed-allocate-zhou',
   });
 
-  // ignored transaction.
+  // Ignored transaction: a non-rent transfer, parked so the "已忽略" state is
+  // visible. Deliberately not a payable-looking row — see the TX table.
   await ensureIgnored(findTransaction(rows, TX.ignored));
+
+  // MICHAEL OBRIEN's rent is deliberately left untouched. It is the only row
+  // in the fixture that satisfies every strict-match condition at once
+  // (remembered payer + parsed month + amount equal to the obligation), so it
+  // is what makes the 一键匹配 suggestion render for the assertion below.
 
   // Revoke flow: confirm then revoke, leaving unmatched + a voided allocation.
   await ensureRevokedDemo(findTransaction(rows, TX.revoke), tenantId.wang, PERIOD_CURRENT, '25.00');
@@ -431,22 +462,25 @@ async function main() {
     fail('verification: no auto-match (一键匹配) suggestion rendered for an unmatched transaction');
   }
 
-  const current = parseDashboardRows(await get(`/rent-dashboard?period=${PERIOD_CURRENT}&page_size=50`));
-  const statuses = new Set(current.map((row) => row.status));
+  const currentHtml = await get(`/bills?period=${PERIOD_CURRENT}&status=all&page_size=50`);
+  const statuses = new Set(parseBillsRows(currentHtml).map((row) => row.status));
   for (const required of ['paid', 'partial', 'open', 'overdue']) {
-    if (!statuses.has(required)) fail(`verification: dashboard ${PERIOD_CURRENT} has no "${required}" row (saw ${[...statuses].join(', ')})`);
+    if (!statuses.has(required)) {
+      fail(`verification: /bills ${PERIOD_CURRENT} has no "${required}" row (saw ${[...statuses].join(', ') || 'no rows'}; collection-table present: ${currentHtml.includes('collection-table')})`);
+    }
   }
-  const prev = parseDashboardRows(await get(`/rent-dashboard?period=${PERIOD_PREV}&page_size=50`));
-  if (findDashboardRow(prev, TENANT.chen).status !== 'partial') {
-    fail(`verification: dashboard ${PERIOD_PREV} 陈志强 expected partial, got ${findDashboardRow(prev, TENANT.chen).status}`);
+  const prevRows = parseBillsRows(await get(`/bills?period=${PERIOD_PREV}&status=all&page_size=50`));
+  const chenPrev = findBillsRow(prevRows, TENANT.chen);
+  if (chenPrev.status !== 'partial') {
+    fail(`verification: /bills ${PERIOD_PREV} 陈志强 expected partial, got ${chenPrev.status}`);
   }
 
   console.log('==> seed complete: all reachable §D3 branches present');
   console.log('    billing: matched / partial / ignored / unmatched / expense rows / auto-match suggestion');
   console.log('    tenants: payer relations, long CN + long EN names/addresses');
-  console.log(`    dashboard ${PERIOD_CURRENT}: paid / partial / open / overdue`);
-  console.log(`    dashboard ${PERIOD_PREV}: partial (mixed bank + cash payments)`);
-  console.log('    NOT reachable (documented): billing candidate/needs_review, dashboard needs_review');
+  console.log(`    /bills ${PERIOD_CURRENT}: paid / partial / open / overdue`);
+  console.log(`    /bills ${PERIOD_PREV}: partial (mixed bank + cash payments)`);
+  console.log('    NOT reachable (documented): billing candidate/needs_review, /bills needs_review');
 }
 
 main().catch((error) => fail(error.stack || String(error)));
