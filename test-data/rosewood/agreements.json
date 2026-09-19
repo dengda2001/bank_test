@@ -1,0 +1,1045 @@
+{
+ "agreements": [
+  {
+   "key": "kimmage-01-agreement-2026-05",
+   "property_key": "kimmage",
+   "room": "01",
+   "start_date": "2026-05-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 75000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "kimmage-01-anselmo-2026-05",
+     "responsibility_cents": 75000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "kimmage-02-agreement-2026-05",
+   "property_key": "kimmage",
+   "room": "02",
+   "start_date": "2026-05-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 132000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "kimmage-02-siddarth-2026-05",
+     "responsibility_cents": 66000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    },
+    {
+     "tenant_key": "kimmage-02-chidera-2026-05",
+     "responsibility_cents": 66000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "kimmage-03-agreement-2026-05",
+   "property_key": "kimmage",
+   "room": "03",
+   "start_date": "2026-05-01",
+   "end_date": "2026-08-31",
+   "monthly_rent_cents": 129000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "kimmage-03-sravan-2026-05",
+     "responsibility_cents": 66000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-08-31",
+     "status": "active"
+    },
+    {
+     "tenant_key": "kimmage-03-neil-2026-05",
+     "responsibility_cents": 63000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "kimmage-03-agreement-2026-09",
+   "property_key": "kimmage",
+   "room": "03",
+   "start_date": "2026-09-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 129000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-09-01",
+   "move_in_date": "2026-09-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "kimmage-03-abdellatif-2026-09",
+     "responsibility_cents": 66000,
+     "joined_at": "2026-09-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    },
+    {
+     "tenant_key": "kimmage-03-neil-2026-05",
+     "responsibility_cents": 63000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "kimmage-04-agreement-2026-05",
+   "property_key": "kimmage",
+   "room": "04",
+   "start_date": "2026-05-01",
+   "end_date": "2026-05-31",
+   "monthly_rent_cents": 88000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "kimmage-04-lilian-2026-05",
+     "responsibility_cents": 88000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-05-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "kimmage-04-agreement-2026-06",
+   "property_key": "kimmage",
+   "room": "04",
+   "start_date": "2026-06-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 88000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-06-01",
+   "move_in_date": "2026-06-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "kimmage-04-chenxi-2026-06",
+     "responsibility_cents": 88000,
+     "joined_at": "2026-06-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "kimmage-05-agreement-2026-05",
+   "property_key": "kimmage",
+   "room": "05",
+   "start_date": "2026-05-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 150000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "kimmage-05-anush-2026-05",
+     "responsibility_cents": 50000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    },
+    {
+     "tenant_key": "kimmage-05-priteesh-2026-05",
+     "responsibility_cents": 50000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    },
+    {
+     "tenant_key": "kimmage-05-hardik-2026-05",
+     "responsibility_cents": 50000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "kimmage-06-agreement-2026-05",
+   "property_key": "kimmage",
+   "room": "06",
+   "start_date": "2026-05-01",
+   "end_date": "2026-06-30",
+   "monthly_rent_cents": 136000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "kimmage-06-noel-2026-05",
+     "responsibility_cents": 68000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    },
+    {
+     "tenant_key": "kimmage-06-pavel-2026-05",
+     "responsibility_cents": 68000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-06-30",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "kimmage-06-agreement-2026-07",
+   "property_key": "kimmage",
+   "room": "06",
+   "start_date": "2026-07-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 136000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-07-01",
+   "move_in_date": "2026-07-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "kimmage-06-noel-2026-05",
+     "responsibility_cents": 68000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    },
+    {
+     "tenant_key": "kimmage-06-devansh-2026-07",
+     "responsibility_cents": 68000,
+     "joined_at": "2026-07-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "oldcounty-1-agreement-2026-05",
+   "property_key": "oldcounty",
+   "room": "1",
+   "start_date": "2026-05-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 68000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "oldcounty-1-thant-2026-05",
+     "responsibility_cents": 68000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "oldcounty-2-agreement-2026-05",
+   "property_key": "oldcounty",
+   "room": "2",
+   "start_date": "2026-05-01",
+   "end_date": "2026-06-30",
+   "monthly_rent_cents": 120000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "oldcounty-2-sai-2026-05",
+     "responsibility_cents": 60000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-06-30",
+     "status": "active"
+    },
+    {
+     "tenant_key": "oldcounty-2-tajudin-2026-05",
+     "responsibility_cents": 60000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "oldcounty-2-agreement-2026-07",
+   "property_key": "oldcounty",
+   "room": "2",
+   "start_date": "2026-07-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 120000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-07-01",
+   "move_in_date": "2026-07-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "oldcounty-2-sriram-2026-07",
+     "responsibility_cents": 60000,
+     "joined_at": "2026-07-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    },
+    {
+     "tenant_key": "oldcounty-2-tajudin-2026-05",
+     "responsibility_cents": 60000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "oldcounty-3-agreement-2026-05",
+   "property_key": "oldcounty",
+   "room": "3",
+   "start_date": "2026-05-01",
+   "end_date": "2026-06-30",
+   "monthly_rent_cents": 125000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "oldcounty-3-nghiem-2026-05",
+     "responsibility_cents": 62500,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-06-30",
+     "status": "active"
+    },
+    {
+     "tenant_key": "oldcounty-3-pham-2026-05",
+     "responsibility_cents": 62500,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-06-30",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "oldcounty-3-agreement-2026-07",
+   "property_key": "oldcounty",
+   "room": "3",
+   "start_date": "2026-07-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 62500,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-07-01",
+   "move_in_date": "2026-07-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "oldcounty-3-wahajullah-2026-07",
+     "responsibility_cents": 62500,
+     "joined_at": "2026-07-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "oldcounty-4-agreement-2026-05",
+   "property_key": "oldcounty",
+   "room": "4",
+   "start_date": "2026-05-01",
+   "end_date": "2026-06-30",
+   "monthly_rent_cents": 120000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "oldcounty-4-wai-2026-05",
+     "responsibility_cents": 60000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-06-30",
+     "status": "active"
+    },
+    {
+     "tenant_key": "oldcounty-4-chu-2026-05",
+     "responsibility_cents": 60000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-06-30",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "oldcounty-4-agreement-2026-07",
+   "property_key": "oldcounty",
+   "room": "4",
+   "start_date": "2026-07-01",
+   "end_date": "2026-08-31",
+   "monthly_rent_cents": 120000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-07-01",
+   "move_in_date": "2026-07-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "oldcounty-4-asad-2026-07",
+     "responsibility_cents": 60000,
+     "joined_at": "2026-07-01",
+     "left_at": "2026-08-31",
+     "status": "active"
+    },
+    {
+     "tenant_key": "oldcounty-4-arslan-2026-07",
+     "responsibility_cents": 60000,
+     "joined_at": "2026-07-01",
+     "left_at": "2026-08-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "oldcounty-4-agreement-2026-09",
+   "property_key": "oldcounty",
+   "room": "4",
+   "start_date": "2026-09-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 120000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-09-01",
+   "move_in_date": "2026-09-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "oldcounty-4-henisha-2026-09",
+     "responsibility_cents": 60000,
+     "joined_at": "2026-09-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    },
+    {
+     "tenant_key": "oldcounty-4-anish-2026-09",
+     "responsibility_cents": 60000,
+     "joined_at": "2026-09-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "oldcounty-5-agreement-2026-05",
+   "property_key": "oldcounty",
+   "room": "5",
+   "start_date": "2026-05-01",
+   "end_date": "2026-06-30",
+   "monthly_rent_cents": 120000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "oldcounty-5-nyan-2026-05",
+     "responsibility_cents": 60000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-06-30",
+     "status": "active"
+    },
+    {
+     "tenant_key": "oldcounty-5-min-2026-05",
+     "responsibility_cents": 60000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-06-30",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "oldcounty-5-agreement-2026-07",
+   "property_key": "oldcounty",
+   "room": "5",
+   "start_date": "2026-07-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 120000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-07-01",
+   "move_in_date": "2026-07-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "oldcounty-5-satvik-2026-07",
+     "responsibility_cents": 60000,
+     "joined_at": "2026-07-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    },
+    {
+     "tenant_key": "oldcounty-5-ananya-2026-07",
+     "responsibility_cents": 60000,
+     "joined_at": "2026-07-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "walkinstown-1-agreement-2026-05",
+   "property_key": "walkinstown",
+   "room": "1",
+   "start_date": "2026-05-01",
+   "end_date": "2026-06-30",
+   "monthly_rent_cents": 70000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "walkinstown-1-abhishek-2026-05",
+     "responsibility_cents": 70000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-06-30",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "walkinstown-1-agreement-2026-07",
+   "property_key": "walkinstown",
+   "room": "1",
+   "start_date": "2026-07-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 70000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-07-01",
+   "move_in_date": "2026-07-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "walkinstown-1-eider-2026-07",
+     "responsibility_cents": 70000,
+     "joined_at": "2026-07-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "walkinstown-2-agreement-2026-05",
+   "property_key": "walkinstown",
+   "room": "2",
+   "start_date": "2026-05-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 116000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "walkinstown-2-ardra-2026-05",
+     "responsibility_cents": 58000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    },
+    {
+     "tenant_key": "walkinstown-2-meghana-2026-05",
+     "responsibility_cents": 58000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "walkinstown-3-agreement-2026-05",
+   "property_key": "walkinstown",
+   "room": "3",
+   "start_date": "2026-05-01",
+   "end_date": "2026-07-31",
+   "monthly_rent_cents": 120000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "walkinstown-3-blancy-2026-05",
+     "responsibility_cents": 60000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-07-31",
+     "status": "active"
+    },
+    {
+     "tenant_key": "walkinstown-3-avila-2026-05",
+     "responsibility_cents": 60000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-07-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "walkinstown-3-agreement-2026-09",
+   "property_key": "walkinstown",
+   "room": "3",
+   "start_date": "2026-09-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 60000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-09-01",
+   "move_in_date": "2026-09-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "walkinstown-3-domingo-2026-09",
+     "responsibility_cents": 60000,
+     "joined_at": "2026-09-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "walkinstown-4-agreement-2026-05",
+   "property_key": "walkinstown",
+   "room": "4",
+   "start_date": "2026-05-01",
+   "end_date": "2026-06-30",
+   "monthly_rent_cents": 122000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "walkinstown-4-raj-2026-05",
+     "responsibility_cents": 61000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-06-30",
+     "status": "active"
+    },
+    {
+     "tenant_key": "walkinstown-4-nagendra-2026-05",
+     "responsibility_cents": 61000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-06-30",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "walkinstown-4-agreement-2026-07",
+   "property_key": "walkinstown",
+   "room": "4",
+   "start_date": "2026-07-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 122000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-07-01",
+   "move_in_date": "2026-07-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "walkinstown-4-lohit-2026-07",
+     "responsibility_cents": 61000,
+     "joined_at": "2026-07-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    },
+    {
+     "tenant_key": "walkinstown-4-durga-2026-07",
+     "responsibility_cents": 61000,
+     "joined_at": "2026-07-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "walkinstown-5-agreement-2026-05",
+   "property_key": "walkinstown",
+   "room": "5",
+   "start_date": "2026-05-01",
+   "end_date": "2026-06-30",
+   "monthly_rent_cents": 99000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "walkinstown-5-rohith-2026-05",
+     "responsibility_cents": 49500,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-06-30",
+     "status": "active"
+    },
+    {
+     "tenant_key": "walkinstown-5-amal-2026-05",
+     "responsibility_cents": 49500,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "walkinstown-5-agreement-2026-07",
+   "property_key": "walkinstown",
+   "room": "5",
+   "start_date": "2026-07-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 99000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-07-01",
+   "move_in_date": "2026-07-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "walkinstown-5-suryakarthik-2026-07",
+     "responsibility_cents": 49500,
+     "joined_at": "2026-07-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    },
+    {
+     "tenant_key": "walkinstown-5-amal-2026-05",
+     "responsibility_cents": 49500,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "walkinstown-6-agreement-2026-05",
+   "property_key": "walkinstown",
+   "room": "6",
+   "start_date": "2026-05-01",
+   "end_date": "2026-06-30",
+   "monthly_rent_cents": 73000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "walkinstown-6-bhuvaneswaran-2026-05",
+     "responsibility_cents": 73000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-06-30",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "walkinstown-6-agreement-2026-07",
+   "property_key": "walkinstown",
+   "room": "6",
+   "start_date": "2026-07-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 73000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-07-01",
+   "move_in_date": "2026-07-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "walkinstown-6-kaushik-2026-07",
+     "responsibility_cents": 73000,
+     "joined_at": "2026-07-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "walkinstown-7-agreement-2026-05",
+   "property_key": "walkinstown",
+   "room": "7",
+   "start_date": "2026-05-01",
+   "end_date": "2026-06-30",
+   "monthly_rent_cents": 73000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "walkinstown-7-kaushik-2026-05",
+     "responsibility_cents": 73000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-06-30",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "walkinstown-7-agreement-2026-07",
+   "property_key": "walkinstown",
+   "room": "7",
+   "start_date": "2026-07-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 73000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-07-01",
+   "move_in_date": "2026-07-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "walkinstown-7-bhuvaneswaran-2026-07",
+     "responsibility_cents": 73000,
+     "joined_at": "2026-07-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "walkinstown-8-agreement-2026-05",
+   "property_key": "walkinstown",
+   "room": "8",
+   "start_date": "2026-05-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 80000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "walkinstown-8-ajay-2026-05",
+     "responsibility_cents": 80000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "windmill-01-agreement-2026-05",
+   "property_key": "windmill",
+   "room": "01",
+   "start_date": "2026-05-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 60000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "windmill-01-yong-2026-05",
+     "responsibility_cents": 60000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "windmill-02-agreement-2026-05",
+   "property_key": "windmill",
+   "room": "02",
+   "start_date": "2026-05-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 90000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "windmill-02-abdulrahman-2026-05",
+     "responsibility_cents": 90000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "windmill-03-agreement-2026-05",
+   "property_key": "windmill",
+   "room": "03",
+   "start_date": "2026-05-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 125000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "windmill-03-vitor-2026-05",
+     "responsibility_cents": 62500,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    },
+    {
+     "tenant_key": "windmill-03-gleice-2026-05",
+     "responsibility_cents": 62500,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "windmill-04-agreement-2026-05",
+   "property_key": "windmill",
+   "room": "04",
+   "start_date": "2026-05-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 80000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "windmill-04-rafael-2026-05",
+     "responsibility_cents": 80000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "windmill-05-agreement-2026-05",
+   "property_key": "windmill",
+   "room": "05",
+   "start_date": "2026-05-01",
+   "end_date": "2026-05-31",
+   "monthly_rent_cents": 65000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "windmill-05-atif-2026-05",
+     "responsibility_cents": 65000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "windmill-05-agreement-2026-06",
+   "property_key": "windmill",
+   "room": "05",
+   "start_date": "2026-06-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 130000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-06-01",
+   "move_in_date": "2026-06-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "windmill-05-atif-2026-05",
+     "responsibility_cents": 65000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    },
+    {
+     "tenant_key": "windmill-05-mohd-2026-06",
+     "responsibility_cents": 65000,
+     "joined_at": "2026-06-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  },
+  {
+   "key": "windmill-06-agreement-2026-05",
+   "property_key": "windmill",
+   "room": "06",
+   "start_date": "2026-05-01",
+   "end_date": "2026-12-31",
+   "monthly_rent_cents": 120000,
+   "currency": "EUR",
+   "due_day": 1,
+   "contract_date": "2026-05-01",
+   "move_in_date": "2026-05-01",
+   "status": "active",
+   "parties": [
+    {
+     "tenant_key": "windmill-06-qiang-2026-05",
+     "responsibility_cents": 120000,
+     "joined_at": "2026-05-01",
+     "left_at": "2026-12-31",
+     "status": "active"
+    }
+   ]
+  }
+ ]
+}

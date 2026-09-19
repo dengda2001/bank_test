@@ -1,0 +1,36 @@
+{
+ "properties": [
+  {
+   "key": "kimmage",
+   "name": "116 Kimmage Rd W Dublin 12",
+   "address": "116 Kimmage Rd W Dublin 12",
+   "city_region": "Dublin",
+   "timezone": "Europe/Dublin",
+   "status": "active"
+  },
+  {
+   "key": "oldcounty",
+   "name": "78 Old County Road Dublin 12",
+   "address": "78 Old County Road Dublin 12",
+   "city_region": "Dublin",
+   "timezone": "Europe/Dublin",
+   "status": "active"
+  },
+  {
+   "key": "walkinstown",
+   "name": "72 Walkinstown Rd Dublin 12",
+   "address": "72 Walkinstown Rd Dublin 12",
+   "city_region": "Dublin",
+   "timezone": "Europe/Dublin",
+   "status": "active"
+  },
+  {
+   "key": "windmill",
+   "name": "169 Windmill Park Dublin 12",
+   "address": "169 Windmill Park Dublin 12",
+   "city_region": "Dublin",
+   "timezone": "Europe/Dublin",
+   "status": "active"
+  }
+ ]
+}

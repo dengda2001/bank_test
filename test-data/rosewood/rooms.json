@@ -1,0 +1,254 @@
+{
+ "rooms": [
+  {
+   "key": "kimmage-01",
+   "property_key": "kimmage",
+   "label": "01",
+   "capacity": 1,
+   "monthly_rent_cents": 75000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "kimmage-02",
+   "property_key": "kimmage",
+   "label": "02",
+   "capacity": 2,
+   "monthly_rent_cents": 132000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "kimmage-03",
+   "property_key": "kimmage",
+   "label": "03",
+   "capacity": 2,
+   "monthly_rent_cents": 129000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "kimmage-04",
+   "property_key": "kimmage",
+   "label": "04",
+   "capacity": 1,
+   "monthly_rent_cents": 88000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "kimmage-05",
+   "property_key": "kimmage",
+   "label": "05",
+   "capacity": 3,
+   "monthly_rent_cents": 150000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "kimmage-06",
+   "property_key": "kimmage",
+   "label": "06",
+   "capacity": 2,
+   "monthly_rent_cents": 136000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "oldcounty-1",
+   "property_key": "oldcounty",
+   "label": "1",
+   "capacity": 1,
+   "monthly_rent_cents": 68000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "oldcounty-2",
+   "property_key": "oldcounty",
+   "label": "2",
+   "capacity": 2,
+   "monthly_rent_cents": 120000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "oldcounty-3",
+   "property_key": "oldcounty",
+   "label": "3",
+   "capacity": 2,
+   "monthly_rent_cents": 62500,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "oldcounty-4",
+   "property_key": "oldcounty",
+   "label": "4",
+   "capacity": 2,
+   "monthly_rent_cents": 120000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "oldcounty-5",
+   "property_key": "oldcounty",
+   "label": "5",
+   "capacity": 2,
+   "monthly_rent_cents": 120000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "walkinstown-1",
+   "property_key": "walkinstown",
+   "label": "1",
+   "capacity": 1,
+   "monthly_rent_cents": 70000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "walkinstown-2",
+   "property_key": "walkinstown",
+   "label": "2",
+   "capacity": 2,
+   "monthly_rent_cents": 116000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "walkinstown-3",
+   "property_key": "walkinstown",
+   "label": "3",
+   "capacity": 2,
+   "monthly_rent_cents": 60000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "walkinstown-4",
+   "property_key": "walkinstown",
+   "label": "4",
+   "capacity": 2,
+   "monthly_rent_cents": 122000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "walkinstown-5",
+   "property_key": "walkinstown",
+   "label": "5",
+   "capacity": 2,
+   "monthly_rent_cents": 99000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "walkinstown-6",
+   "property_key": "walkinstown",
+   "label": "6",
+   "capacity": 1,
+   "monthly_rent_cents": 73000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "walkinstown-7",
+   "property_key": "walkinstown",
+   "label": "7",
+   "capacity": 1,
+   "monthly_rent_cents": 73000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "walkinstown-8",
+   "property_key": "walkinstown",
+   "label": "8",
+   "capacity": 1,
+   "monthly_rent_cents": 80000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "windmill-01",
+   "property_key": "windmill",
+   "label": "01",
+   "capacity": 1,
+   "monthly_rent_cents": 60000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "windmill-02",
+   "property_key": "windmill",
+   "label": "02",
+   "capacity": 1,
+   "monthly_rent_cents": 90000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "windmill-03",
+   "property_key": "windmill",
+   "label": "03",
+   "capacity": 2,
+   "monthly_rent_cents": 125000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "windmill-04",
+   "property_key": "windmill",
+   "label": "04",
+   "capacity": 1,
+   "monthly_rent_cents": 80000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "windmill-05",
+   "property_key": "windmill",
+   "label": "05",
+   "capacity": 2,
+   "monthly_rent_cents": 130000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  },
+  {
+   "key": "windmill-06",
+   "property_key": "windmill",
+   "label": "06",
+   "capacity": 1,
+   "monthly_rent_cents": 120000,
+   "due_day": 1,
+   "active_from": "2026-05-01",
+   "status": "active"
+  }
+ ]
+}

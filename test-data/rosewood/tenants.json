@@ -1,0 +1,1963 @@
+{
+ "tenants": [
+  {
+   "key": "kimmage-01-anselmo-2026-05",
+   "name": "Anselmo Augusto dos Santos Rodrigues",
+   "display_alias": null,
+   "property_key": "kimmage",
+   "room": "01",
+   "monthly_rent_cents": 75000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "Anselmo Augusto dos Santos Rodrigues"
+    ],
+    "observed_due_cents": [
+     75000,
+     75000,
+     75000,
+     75000,
+     75000,
+     75000,
+     75000,
+     75000
+    ]
+   }
+  },
+  {
+   "key": "kimmage-02-chidera-2026-05",
+   "name": "Chidera Nnaeto",
+   "display_alias": null,
+   "property_key": "kimmage",
+   "room": "02",
+   "monthly_rent_cents": 66000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "Chidera Nnaeto"
+    ],
+    "observed_due_cents": [
+     66000,
+     66000,
+     66000,
+     66000,
+     66000,
+     66000,
+     66000,
+     66000
+    ]
+   }
+  },
+  {
+   "key": "kimmage-02-siddarth-2026-05",
+   "name": "Siddarth Janagouda",
+   "display_alias": null,
+   "property_key": "kimmage",
+   "room": "02",
+   "monthly_rent_cents": 66000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "Siddarth Janagouda"
+    ],
+    "observed_due_cents": [
+     66000,
+     66000,
+     68000,
+     68000,
+     66000,
+     66000,
+     66000,
+     66000
+    ]
+   }
+  },
+  {
+   "key": "kimmage-03-abdellatif-2026-09",
+   "name": "Abdellatif",
+   "display_alias": "ABDELLATIF 原5405）",
+   "property_key": "kimmage",
+   "room": "03",
+   "monthly_rent_cents": 66000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-09-01",
+   "rent_start_date": "2026-09-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "ABDELLATIF 原5405）"
+    ],
+    "observed_due_cents": [
+     66000,
+     66000,
+     66000,
+     66000
+    ]
+   }
+  },
+  {
+   "key": "kimmage-03-neil-2026-05",
+   "name": "Neil Jose",
+   "display_alias": "Neil",
+   "property_key": "kimmage",
+   "room": "03",
+   "monthly_rent_cents": 63000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "NEIL JOSE",
+     "Neil"
+    ],
+    "observed_due_cents": [
+     66000,
+     66000,
+     63000,
+     63000,
+     63000,
+     63000,
+     63000,
+     63000
+    ]
+   }
+  },
+  {
+   "key": "kimmage-03-sravan-2026-05",
+   "name": "Sravan",
+   "display_alias": null,
+   "property_key": "kimmage",
+   "room": "03",
+   "monthly_rent_cents": 66000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-08-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07",
+     "2026-08"
+    ],
+    "raw_names": [
+     "Sravan"
+    ],
+    "observed_due_cents": [
+     63000,
+     63000,
+     66000,
+     66000
+    ]
+   }
+  },
+  {
+   "key": "kimmage-04-chenxi-2026-06",
+   "name": "Chenxi Liu",
+   "display_alias": null,
+   "property_key": "kimmage",
+   "room": "04",
+   "monthly_rent_cents": 88000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-06-01",
+   "rent_start_date": "2026-06-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-06",
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "CHENXI LIU"
+    ],
+    "observed_due_cents": [
+     88000,
+     88000,
+     88000,
+     88000,
+     88000,
+     88000,
+     88000
+    ]
+   }
+  },
+  {
+   "key": "kimmage-04-lilian-2026-05",
+   "name": "Lilian",
+   "display_alias": null,
+   "property_key": "kimmage",
+   "room": "04",
+   "monthly_rent_cents": 88000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-05-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05"
+    ],
+    "raw_names": [
+     "Lilian"
+    ],
+    "observed_due_cents": [
+     88000
+    ]
+   }
+  },
+  {
+   "key": "kimmage-05-anush-2026-05",
+   "name": "Bala Anush Choudhary",
+   "display_alias": "Anush",
+   "property_key": "kimmage",
+   "room": "05",
+   "monthly_rent_cents": 50000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "Anush",
+     "BALA ANUSH CHOUDHARY"
+    ],
+    "observed_due_cents": [
+     50000,
+     50000,
+     50000,
+     50000,
+     50000,
+     50000,
+     50000,
+     50000
+    ]
+   }
+  },
+  {
+   "key": "kimmage-05-hardik-2026-05",
+   "name": "Hardik Gattu",
+   "display_alias": null,
+   "property_key": "kimmage",
+   "room": "05",
+   "monthly_rent_cents": 50000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "HARDIK GATTU"
+    ],
+    "observed_due_cents": [
+     50000,
+     50000,
+     50000,
+     50000,
+     50000,
+     50000,
+     50000,
+     50000
+    ]
+   }
+  },
+  {
+   "key": "kimmage-05-priteesh-2026-05",
+   "name": "Priteesh Nandan",
+   "display_alias": null,
+   "property_key": "kimmage",
+   "room": "05",
+   "monthly_rent_cents": 50000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "PRITEESH NANDAN"
+    ],
+    "observed_due_cents": [
+     50000,
+     50000,
+     50000,
+     50000,
+     50000,
+     50000,
+     50000,
+     50000
+    ]
+   }
+  },
+  {
+   "key": "kimmage-06-devansh-2026-07",
+   "name": "Devansh Chauhan",
+   "display_alias": null,
+   "property_key": "kimmage",
+   "room": "06",
+   "monthly_rent_cents": 68000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-07-01",
+   "rent_start_date": "2026-07-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "DEVANSH CHAUHAN"
+    ],
+    "observed_due_cents": [
+     68000,
+     68000,
+     68000,
+     68000,
+     68000,
+     68000
+    ]
+   }
+  },
+  {
+   "key": "kimmage-06-noel-2026-05",
+   "name": "Noel Jose",
+   "display_alias": "Noel",
+   "property_key": "kimmage",
+   "room": "06",
+   "monthly_rent_cents": 68000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "NOEL JOSE",
+     "Noel"
+    ],
+    "observed_due_cents": [
+     68000,
+     68000,
+     68000,
+     68000,
+     68000,
+     68000,
+     68000,
+     68000
+    ]
+   }
+  },
+  {
+   "key": "kimmage-06-pavel-2026-05",
+   "name": "Pavel Ionut Alexandru",
+   "display_alias": null,
+   "property_key": "kimmage",
+   "room": "06",
+   "monthly_rent_cents": 68000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-06-30",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06"
+    ],
+    "raw_names": [
+     "Pavel Ionut Alexandru"
+    ],
+    "observed_due_cents": [
+     68000,
+     68000
+    ]
+   }
+  },
+  {
+   "key": "oldcounty-1-thant-2026-05",
+   "name": "Thant Lynn Htet",
+   "display_alias": null,
+   "property_key": "oldcounty",
+   "room": "1",
+   "monthly_rent_cents": 68000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "Thant Lynn Htet"
+    ],
+    "observed_due_cents": [
+     68000,
+     68000,
+     68000,
+     68000,
+     68000,
+     68000,
+     68000,
+     68000
+    ]
+   }
+  },
+  {
+   "key": "oldcounty-2-sai-2026-05",
+   "name": "Sai Chitraksh Amram",
+   "display_alias": null,
+   "property_key": "oldcounty",
+   "room": "2",
+   "monthly_rent_cents": 60000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-06-30",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06"
+    ],
+    "raw_names": [
+     "Sai Chitraksh Amram"
+    ],
+    "observed_due_cents": [
+     60000,
+     60000
+    ]
+   }
+  },
+  {
+   "key": "oldcounty-2-sriram-2026-07",
+   "name": "Sriram Samala",
+   "display_alias": null,
+   "property_key": "oldcounty",
+   "room": "2",
+   "monthly_rent_cents": 60000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-07-01",
+   "rent_start_date": "2026-07-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "SRIRAM SAMALA"
+    ],
+    "observed_due_cents": [
+     60000,
+     60000,
+     60000,
+     60000,
+     60000,
+     60000
+    ]
+   }
+  },
+  {
+   "key": "oldcounty-2-tajudin-2026-05",
+   "name": "Tajudin Shaik",
+   "display_alias": "Taj",
+   "property_key": "oldcounty",
+   "room": "2",
+   "monthly_rent_cents": 60000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "TAJUDIN SHAIK",
+     "Taj"
+    ],
+    "observed_due_cents": [
+     60000,
+     60000,
+     60000,
+     60000,
+     60000,
+     60000,
+     60000,
+     60000
+    ]
+   }
+  },
+  {
+   "key": "oldcounty-3-nghiem-2026-05",
+   "name": "Nghiem Duc Minh (Chris)",
+   "display_alias": null,
+   "property_key": "oldcounty",
+   "room": "3",
+   "monthly_rent_cents": 62500,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-06-30",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06"
+    ],
+    "raw_names": [
+     "NGHIEM DUC MINH (Chris)"
+    ],
+    "observed_due_cents": [
+     62500,
+     62500
+    ]
+   }
+  },
+  {
+   "key": "oldcounty-3-pham-2026-05",
+   "name": "Pham Trung Hieu (Harvey)",
+   "display_alias": "PHAM TRUNG HIEU (Harvey",
+   "property_key": "oldcounty",
+   "room": "3",
+   "monthly_rent_cents": 62500,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-06-30",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06"
+    ],
+    "raw_names": [
+     "PHAM TRUNG HIEU (Harvey"
+    ],
+    "observed_due_cents": [
+     62500,
+     62500
+    ]
+   }
+  },
+  {
+   "key": "oldcounty-3-wahajullah-2026-07",
+   "name": "Wahajullah Khan",
+   "display_alias": null,
+   "property_key": "oldcounty",
+   "room": "3",
+   "monthly_rent_cents": 62500,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-07-01",
+   "rent_start_date": "2026-07-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "WAHAJULLAH KHAN"
+    ],
+    "observed_due_cents": [
+     62500,
+     62500,
+     62500,
+     62500,
+     62500,
+     62500
+    ]
+   }
+  },
+  {
+   "key": "oldcounty-4-anish-2026-09",
+   "name": "Anish Kishor",
+   "display_alias": null,
+   "property_key": "oldcounty",
+   "room": "4",
+   "monthly_rent_cents": 60000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-09-01",
+   "rent_start_date": "2026-09-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "ANISH KISHOR"
+    ],
+    "observed_due_cents": [
+     60000,
+     60000,
+     60000,
+     60000
+    ]
+   }
+  },
+  {
+   "key": "oldcounty-4-arslan-2026-07",
+   "name": "Arslan Arshad",
+   "display_alias": null,
+   "property_key": "oldcounty",
+   "room": "4",
+   "monthly_rent_cents": 60000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-07-01",
+   "rent_start_date": "2026-07-01",
+   "rent_end_date": "2026-08-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-07",
+     "2026-08"
+    ],
+    "raw_names": [
+     "ARSLAN ARSHAD"
+    ],
+    "observed_due_cents": [
+     60000,
+     60000
+    ]
+   }
+  },
+  {
+   "key": "oldcounty-4-asad-2026-07",
+   "name": "Asad Raza",
+   "display_alias": null,
+   "property_key": "oldcounty",
+   "room": "4",
+   "monthly_rent_cents": 60000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-07-01",
+   "rent_start_date": "2026-07-01",
+   "rent_end_date": "2026-08-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-07",
+     "2026-08"
+    ],
+    "raw_names": [
+     "ASAD RAZA"
+    ],
+    "observed_due_cents": [
+     60000,
+     60000
+    ]
+   }
+  },
+  {
+   "key": "oldcounty-4-chu-2026-05",
+   "name": "Chu Sandy Kyaw",
+   "display_alias": null,
+   "property_key": "oldcounty",
+   "room": "4",
+   "monthly_rent_cents": 60000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-06-30",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06"
+    ],
+    "raw_names": [
+     "Chu Sandy Kyaw"
+    ],
+    "observed_due_cents": [
+     60000,
+     60000
+    ]
+   }
+  },
+  {
+   "key": "oldcounty-4-henisha-2026-09",
+   "name": "Henisha Anish Raut",
+   "display_alias": null,
+   "property_key": "oldcounty",
+   "room": "4",
+   "monthly_rent_cents": 60000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-09-01",
+   "rent_start_date": "2026-09-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "HENISHA ANISH RAUT"
+    ],
+    "observed_due_cents": [
+     60000,
+     60000,
+     60000,
+     60000
+    ]
+   }
+  },
+  {
+   "key": "oldcounty-4-wai-2026-05",
+   "name": "Wai Aung",
+   "display_alias": null,
+   "property_key": "oldcounty",
+   "room": "4",
+   "monthly_rent_cents": 60000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-06-30",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06"
+    ],
+    "raw_names": [
+     "Wai Aung"
+    ],
+    "observed_due_cents": [
+     60000,
+     60000
+    ]
+   }
+  },
+  {
+   "key": "oldcounty-5-ananya-2026-07",
+   "name": "Ananya M",
+   "display_alias": null,
+   "property_key": "oldcounty",
+   "room": "5",
+   "monthly_rent_cents": 60000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-07-01",
+   "rent_start_date": "2026-07-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "ANANYA M"
+    ],
+    "observed_due_cents": [
+     60000,
+     60000,
+     60000,
+     60000,
+     60000,
+     60000
+    ]
+   }
+  },
+  {
+   "key": "oldcounty-5-min-2026-05",
+   "name": "Min Myat Moe",
+   "display_alias": null,
+   "property_key": "oldcounty",
+   "room": "5",
+   "monthly_rent_cents": 60000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-06-30",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06"
+    ],
+    "raw_names": [
+     "Min myat moe"
+    ],
+    "observed_due_cents": [
+     60000,
+     60000
+    ]
+   }
+  },
+  {
+   "key": "oldcounty-5-nyan-2026-05",
+   "name": "Nyan Lin Htut",
+   "display_alias": null,
+   "property_key": "oldcounty",
+   "room": "5",
+   "monthly_rent_cents": 60000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-06-30",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06"
+    ],
+    "raw_names": [
+     "Nyan Lin Htut"
+    ],
+    "observed_due_cents": [
+     60000,
+     60000
+    ]
+   }
+  },
+  {
+   "key": "oldcounty-5-satvik-2026-07",
+   "name": "Satvik Talawar",
+   "display_alias": null,
+   "property_key": "oldcounty",
+   "room": "5",
+   "monthly_rent_cents": 60000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-07-01",
+   "rent_start_date": "2026-07-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "SATVIK TALAWAR"
+    ],
+    "observed_due_cents": [
+     60000,
+     60000,
+     60000,
+     60000,
+     60000,
+     60000
+    ]
+   }
+  },
+  {
+   "key": "walkinstown-1-abhishek-2026-05",
+   "name": "Abhishek Bhagwat",
+   "display_alias": null,
+   "property_key": "walkinstown",
+   "room": "1",
+   "monthly_rent_cents": 70000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-06-30",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06"
+    ],
+    "raw_names": [
+     "Abhishek Bhagwat"
+    ],
+    "observed_due_cents": [
+     70000,
+     70000
+    ]
+   }
+  },
+  {
+   "key": "walkinstown-1-eider-2026-07",
+   "name": "Eider Esneir",
+   "display_alias": null,
+   "property_key": "walkinstown",
+   "room": "1",
+   "monthly_rent_cents": 70000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-07-01",
+   "rent_start_date": "2026-07-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "EIDER ESNEIR"
+    ],
+    "observed_due_cents": [
+     70000,
+     70000,
+     70000,
+     70000,
+     70000,
+     70000
+    ]
+   }
+  },
+  {
+   "key": "walkinstown-2-ardra-2026-05",
+   "name": "Ardra M Punathil",
+   "display_alias": "Ardra Punathil; ARDRA PUNATHIL; ARDRA M",
+   "property_key": "walkinstown",
+   "room": "2",
+   "monthly_rent_cents": 58000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "ARDRA M",
+     "ARDRA M PUNATHIL",
+     "ARDRA PUNATHIL",
+     "Ardra Punathil"
+    ],
+    "observed_due_cents": [
+     58000,
+     58000,
+     58000,
+     58000,
+     58000,
+     58000,
+     58000,
+     58000
+    ]
+   }
+  },
+  {
+   "key": "walkinstown-2-meghana-2026-05",
+   "name": "Meghana Vipin Mehta",
+   "display_alias": "MEGHANA VIPIN",
+   "property_key": "walkinstown",
+   "room": "2",
+   "monthly_rent_cents": 58000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "MEGHANA VIPIN",
+     "Meghana Vipin Mehta"
+    ],
+    "observed_due_cents": [
+     58000,
+     58000,
+     58000,
+     58000,
+     58000,
+     58000,
+     58000,
+     58000
+    ]
+   }
+  },
+  {
+   "key": "walkinstown-3-avila-2026-05",
+   "name": "Avila Almeida",
+   "display_alias": null,
+   "property_key": "walkinstown",
+   "room": "3",
+   "monthly_rent_cents": 60000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-07-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07"
+    ],
+    "raw_names": [
+     "Avila almeida"
+    ],
+    "observed_due_cents": [
+     60000,
+     60000,
+     60000
+    ]
+   }
+  },
+  {
+   "key": "walkinstown-3-blancy-2026-05",
+   "name": "Blancy Mendes",
+   "display_alias": null,
+   "property_key": "walkinstown",
+   "room": "3",
+   "monthly_rent_cents": 60000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-07-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07"
+    ],
+    "raw_names": [
+     "Blancy Mendes"
+    ],
+    "observed_due_cents": [
+     60000,
+     60000,
+     60000
+    ]
+   }
+  },
+  {
+   "key": "walkinstown-3-domingo-2026-09",
+   "name": "Domingo Jose Cristo Sanches",
+   "display_alias": null,
+   "property_key": "walkinstown",
+   "room": "3",
+   "monthly_rent_cents": 60000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-09-01",
+   "rent_start_date": "2026-09-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "DOMINGO JOSE Cristo Sanches"
+    ],
+    "observed_due_cents": [
+     60000,
+     60000,
+     60000,
+     60000
+    ]
+   }
+  },
+  {
+   "key": "walkinstown-4-durga-2026-07",
+   "name": "Durga Nagendra",
+   "display_alias": null,
+   "property_key": "walkinstown",
+   "room": "4",
+   "monthly_rent_cents": 61000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-07-01",
+   "rent_start_date": "2026-07-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "DURGA NAGENDRA"
+    ],
+    "observed_due_cents": [
+     61000,
+     61000,
+     61000,
+     61000,
+     61000,
+     61000
+    ]
+   }
+  },
+  {
+   "key": "walkinstown-4-lohit-2026-07",
+   "name": "Lohit Dinesh",
+   "display_alias": null,
+   "property_key": "walkinstown",
+   "room": "4",
+   "monthly_rent_cents": 61000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-07-01",
+   "rent_start_date": "2026-07-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "LOHIT DINESH"
+    ],
+    "observed_due_cents": [
+     61000,
+     61000,
+     61000,
+     61000,
+     61000,
+     61000
+    ]
+   }
+  },
+  {
+   "key": "walkinstown-4-nagendra-2026-05",
+   "name": "Nagendra Gonugunta",
+   "display_alias": null,
+   "property_key": "walkinstown",
+   "room": "4",
+   "monthly_rent_cents": 61000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-06-30",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06"
+    ],
+    "raw_names": [
+     "Nagendra Gonugunta"
+    ],
+    "observed_due_cents": [
+     61000,
+     61000
+    ]
+   }
+  },
+  {
+   "key": "walkinstown-4-raj-2026-05",
+   "name": "Raj",
+   "display_alias": null,
+   "property_key": "walkinstown",
+   "room": "4",
+   "monthly_rent_cents": 61000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-06-30",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06"
+    ],
+    "raw_names": [
+     "Raj"
+    ],
+    "observed_due_cents": [
+     61000,
+     61000
+    ]
+   }
+  },
+  {
+   "key": "walkinstown-5-amal-2026-05",
+   "name": "Amal Surya",
+   "display_alias": null,
+   "property_key": "walkinstown",
+   "room": "5",
+   "monthly_rent_cents": 49500,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "Amal Surya"
+    ],
+    "observed_due_cents": [
+     49500,
+     49500,
+     49500,
+     49500,
+     49500,
+     49500,
+     49500,
+     49500
+    ]
+   }
+  },
+  {
+   "key": "walkinstown-5-rohith-2026-05",
+   "name": "Rohith Murali",
+   "display_alias": null,
+   "property_key": "walkinstown",
+   "room": "5",
+   "monthly_rent_cents": 49500,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-06-30",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06"
+    ],
+    "raw_names": [
+     "Rohith Murali"
+    ],
+    "observed_due_cents": [
+     49500,
+     49500
+    ]
+   }
+  },
+  {
+   "key": "walkinstown-5-suryakarthik-2026-07",
+   "name": "Suryakarthik",
+   "display_alias": null,
+   "property_key": "walkinstown",
+   "room": "5",
+   "monthly_rent_cents": 49500,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-07-01",
+   "rent_start_date": "2026-07-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "SURYAKARTHIK"
+    ],
+    "observed_due_cents": [
+     49500,
+     49500,
+     49500,
+     49500,
+     49500,
+     49500
+    ]
+   }
+  },
+  {
+   "key": "walkinstown-6-bhuvaneswaran-2026-05",
+   "name": "Bhuvaneswaran",
+   "display_alias": "Bhuvan D",
+   "property_key": "walkinstown",
+   "room": "6",
+   "monthly_rent_cents": 73000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-06-30",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06"
+    ],
+    "raw_names": [
+     "Bhuvan D"
+    ],
+    "observed_due_cents": [
+     73000,
+     73000
+    ]
+   }
+  },
+  {
+   "key": "walkinstown-6-kaushik-2026-07",
+   "name": "Kaushik Kannan",
+   "display_alias": null,
+   "property_key": "walkinstown",
+   "room": "6",
+   "monthly_rent_cents": 73000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-07-01",
+   "rent_start_date": "2026-07-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "KAUSHIK KANNAN"
+    ],
+    "observed_due_cents": [
+     73000,
+     73000,
+     73000,
+     73000,
+     73000,
+     73000
+    ]
+   }
+  },
+  {
+   "key": "walkinstown-7-bhuvaneswaran-2026-07",
+   "name": "Bhuvaneswaran",
+   "display_alias": "BHUVANES WARAN",
+   "property_key": "walkinstown",
+   "room": "7",
+   "monthly_rent_cents": 73000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-07-01",
+   "rent_start_date": "2026-07-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "BHUVANES WARAN",
+     "BHUVANESWARAN"
+    ],
+    "observed_due_cents": [
+     73000,
+     73000,
+     73000,
+     73000,
+     73000,
+     73000
+    ]
+   }
+  },
+  {
+   "key": "walkinstown-7-kaushik-2026-05",
+   "name": "Kaushik Kannan",
+   "display_alias": null,
+   "property_key": "walkinstown",
+   "room": "7",
+   "monthly_rent_cents": 73000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-06-30",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06"
+    ],
+    "raw_names": [
+     "Kaushik Kannan"
+    ],
+    "observed_due_cents": [
+     73000,
+     73000
+    ]
+   }
+  },
+  {
+   "key": "walkinstown-8-ajay-2026-05",
+   "name": "Ajay Pandikasala",
+   "display_alias": "Ajay",
+   "property_key": "walkinstown",
+   "room": "8",
+   "monthly_rent_cents": 80000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "AJAY PANDIKASALA",
+     "Ajay"
+    ],
+    "observed_due_cents": [
+     79000,
+     79000,
+     79000,
+     79000,
+     80000,
+     80000,
+     80000,
+     80000
+    ]
+   }
+  },
+  {
+   "key": "windmill-01-yong-2026-05",
+   "name": "Yong Liu",
+   "display_alias": null,
+   "property_key": "windmill",
+   "room": "01",
+   "monthly_rent_cents": 60000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "yong liu"
+    ],
+    "observed_due_cents": [
+     60000,
+     60000,
+     60000,
+     60000,
+     60000,
+     60000,
+     60000,
+     60000
+    ]
+   }
+  },
+  {
+   "key": "windmill-02-abdulrahman-2026-05",
+   "name": "Abdulrahman Elfeky",
+   "display_alias": "Abdulrhman elfeky",
+   "property_key": "windmill",
+   "room": "02",
+   "monthly_rent_cents": 90000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "ABDULRAHMAN ELFEKY",
+     "Abdulrhman elfeky"
+    ],
+    "observed_due_cents": [
+     90000,
+     90000,
+     90000,
+     90000,
+     90000,
+     90000,
+     90000,
+     90000
+    ]
+   }
+  },
+  {
+   "key": "windmill-03-gleice-2026-05",
+   "name": "Gleice Cristina Rodrigues da Silva",
+   "display_alias": null,
+   "property_key": "windmill",
+   "room": "03",
+   "monthly_rent_cents": 62500,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "Gleice Cristina Rodrigues da Silva"
+    ],
+    "observed_due_cents": [
+     62500,
+     62500,
+     62500,
+     62500,
+     62500,
+     62500,
+     62500,
+     62500
+    ]
+   }
+  },
+  {
+   "key": "windmill-03-vitor-2026-05",
+   "name": "Vitor Hugo Silva Carvalho",
+   "display_alias": null,
+   "property_key": "windmill",
+   "room": "03",
+   "monthly_rent_cents": 62500,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "Vitor Hugo Silva Carvalho"
+    ],
+    "observed_due_cents": [
+     62500,
+     62500,
+     62500,
+     62500,
+     62500,
+     62500,
+     62500,
+     62500
+    ]
+   }
+  },
+  {
+   "key": "windmill-04-rafael-2026-05",
+   "name": "Rafael de Souza Santos Cunha",
+   "display_alias": null,
+   "property_key": "windmill",
+   "room": "04",
+   "monthly_rent_cents": 80000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "Rafael de Souza Santos Cunha"
+    ],
+    "observed_due_cents": [
+     80000,
+     80000,
+     80000,
+     80000,
+     80000,
+     80000,
+     80000,
+     80000
+    ]
+   }
+  },
+  {
+   "key": "windmill-05-atif-2026-05",
+   "name": "Atif Anam",
+   "display_alias": null,
+   "property_key": "windmill",
+   "room": "05",
+   "monthly_rent_cents": 65000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "Atif Anam"
+    ],
+    "observed_due_cents": [
+     45000,
+     65000,
+     65000,
+     65000,
+     65000,
+     65000,
+     65000,
+     65000
+    ]
+   }
+  },
+  {
+   "key": "windmill-05-mohd-2026-06",
+   "name": "Mohd Anamul Haq",
+   "display_alias": null,
+   "property_key": "windmill",
+   "room": "05",
+   "monthly_rent_cents": 65000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-06-01",
+   "rent_start_date": "2026-06-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-06",
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "Mohd Anamul Haq"
+    ],
+    "observed_due_cents": [
+     65000,
+     65000,
+     65000,
+     65000,
+     65000,
+     65000,
+     65000
+    ]
+   }
+  },
+  {
+   "key": "windmill-06-qiang-2026-05",
+   "name": "Qiang Li",
+   "display_alias": null,
+   "property_key": "windmill",
+   "room": "06",
+   "monthly_rent_cents": 120000,
+   "currency": "EUR",
+   "due_day": 1,
+   "billing_start_date": "2026-05-01",
+   "rent_start_date": "2026-05-01",
+   "rent_end_date": "2026-12-31",
+   "status": "active",
+   "source": {
+    "months": [
+     "2026-05",
+     "2026-06",
+     "2026-07",
+     "2026-08",
+     "2026-09",
+     "2026-10",
+     "2026-11",
+     "2026-12"
+    ],
+    "raw_names": [
+     "QIANG LI"
+    ],
+    "observed_due_cents": [
+     120000,
+     120000,
+     120000,
+     120000,
+     120000,
+     120000,
+     120000,
+     120000
+    ]
+   }
+  }
+ ]
+}

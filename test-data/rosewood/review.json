@@ -1,0 +1,1003 @@
+{
+ "skipped_rows": [
+  {
+   "property": "walkinstown",
+   "month": "2026-08",
+   "room": "3",
+   "raw_name": "#REF!",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 60000,
+   "paid_cents": 60000
+  },
+  {
+   "property": "walkinstown",
+   "month": "2026-08",
+   "room": "3",
+   "raw_name": "DOMING 女儿",
+   "reason": "only a family relation is recorded (DOMING 女儿), not a name",
+   "due_cents": 60000,
+   "paid_cents": 30000
+  },
+  {
+   "property": "walkinstown",
+   "month": "2026-09",
+   "room": "3",
+   "raw_name": "DOMING 女儿",
+   "reason": "only a family relation is recorded (DOMING 女儿), not a name",
+   "due_cents": 60000,
+   "paid_cents": 60000
+  },
+  {
+   "property": "walkinstown",
+   "month": "2026-10",
+   "room": "3",
+   "raw_name": "(blank)",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 60000,
+   "paid_cents": null
+  },
+  {
+   "property": "walkinstown",
+   "month": "2026-10",
+   "room": "3",
+   "raw_name": "DOMING 女儿",
+   "reason": "only a family relation is recorded (DOMING 女儿), not a name",
+   "due_cents": 60000,
+   "paid_cents": null
+  },
+  {
+   "property": "walkinstown",
+   "month": "2026-11",
+   "room": "3",
+   "raw_name": "(blank)",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 60000,
+   "paid_cents": null
+  },
+  {
+   "property": "walkinstown",
+   "month": "2026-11",
+   "room": "3",
+   "raw_name": "DOMING 女儿",
+   "reason": "only a family relation is recorded (DOMING 女儿), not a name",
+   "due_cents": 60000,
+   "paid_cents": null
+  },
+  {
+   "property": "walkinstown",
+   "month": "2026-12",
+   "room": "3",
+   "raw_name": "(blank)",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 60000,
+   "paid_cents": null
+  },
+  {
+   "property": "walkinstown",
+   "month": "2026-12",
+   "room": "3",
+   "raw_name": "DOMING 女儿",
+   "reason": "only a family relation is recorded (DOMING 女儿), not a name",
+   "due_cents": 60000,
+   "paid_cents": null
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-06",
+   "room": "2",
+   "raw_name": "(blank)",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 60000,
+   "paid_cents": 60000
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-06",
+   "room": "4",
+   "raw_name": "(blank)",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 60000,
+   "paid_cents": 60000
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-06",
+   "room": "5",
+   "raw_name": "(blank)",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 60000,
+   "paid_cents": 60000
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-07",
+   "room": "3",
+   "raw_name": "(blank)",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 62500,
+   "paid_cents": 0
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-08",
+   "room": "3",
+   "raw_name": "和同屋一起付",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 62500,
+   "paid_cents": 0
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-09",
+   "room": "3",
+   "raw_name": "和同屋一起付",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 62500,
+   "paid_cents": 0
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-10",
+   "room": "3",
+   "raw_name": "和同屋一起付",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 62500,
+   "paid_cents": null
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-11",
+   "room": "3",
+   "raw_name": "和同屋一起付",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 62500,
+   "paid_cents": null
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-12",
+   "room": "3",
+   "raw_name": "和同屋一起付",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 62500,
+   "paid_cents": null
+  },
+  {
+   "property": "kimmage",
+   "month": "2026-05",
+   "room": "05",
+   "raw_name": "(blank)",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 50000,
+   "paid_cents": 50000
+  },
+  {
+   "property": "kimmage",
+   "month": "2026-05",
+   "room": "05",
+   "raw_name": "(blank)",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 50000,
+   "paid_cents": 50000
+  },
+  {
+   "property": "kimmage",
+   "month": "2026-06",
+   "room": "05",
+   "raw_name": "(blank)",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 50000,
+   "paid_cents": 50000
+  },
+  {
+   "property": "kimmage",
+   "month": "2026-06",
+   "room": "05",
+   "raw_name": "(blank)",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 50000,
+   "paid_cents": 50000
+  },
+  {
+   "property": "windmill",
+   "month": "2026-05",
+   "room": "06",
+   "raw_name": "(blank)",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 120000,
+   "paid_cents": 120000
+  },
+  {
+   "property": "windmill",
+   "month": "2026-06",
+   "room": "04",
+   "raw_name": "(blank)",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 80000,
+   "paid_cents": 40000
+  },
+  {
+   "property": "windmill",
+   "month": "2026-06",
+   "room": "06",
+   "raw_name": "(blank)",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 120000,
+   "paid_cents": 120000
+  },
+  {
+   "property": "windmill",
+   "month": "2026-07",
+   "room": "04",
+   "raw_name": "(blank)",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 80000,
+   "paid_cents": 80000
+  },
+  {
+   "property": "windmill",
+   "month": "2026-08",
+   "room": "04",
+   "raw_name": "(blank)",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 80000,
+   "paid_cents": 80000
+  },
+  {
+   "property": "windmill",
+   "month": "2026-10",
+   "room": "04",
+   "raw_name": "(blank)",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 80000,
+   "paid_cents": null
+  },
+  {
+   "property": "windmill",
+   "month": "2026-11",
+   "room": "04",
+   "raw_name": "(blank)",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 80000,
+   "paid_cents": null
+  },
+  {
+   "property": "windmill",
+   "month": "2026-12",
+   "room": "04",
+   "raw_name": "(blank)",
+   "reason": "placeholder, not a person name (prd.md R5)",
+   "due_cents": 80000,
+   "paid_cents": null
+  }
+ ],
+ "unknown_names": [],
+ "unknown_properties": [],
+ "unbilled_rows": [
+  {
+   "property": "windmill",
+   "month": "2026-05",
+   "room": "05",
+   "slot": 2,
+   "name": "Mohd Anamul Haq",
+   "reason": "named row with an empty 应收; the month's 合计 does not include them"
+  }
+ ],
+ "blank_fills": [
+  {
+   "property": "walkinstown",
+   "month": "2026-10",
+   "room": "3",
+   "slot": 1,
+   "filled_with": "Domingo Jose Cristo Sanches",
+   "reference_month": "2026-09"
+  },
+  {
+   "property": "walkinstown",
+   "month": "2026-11",
+   "room": "3",
+   "slot": 1,
+   "filled_with": "Domingo Jose Cristo Sanches",
+   "reference_month": "2026-10"
+  },
+  {
+   "property": "walkinstown",
+   "month": "2026-12",
+   "room": "3",
+   "slot": 1,
+   "filled_with": "Domingo Jose Cristo Sanches",
+   "reference_month": "2026-11"
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-06",
+   "room": "2",
+   "slot": 1,
+   "filled_with": "Sai Chitraksh Amram",
+   "reference_month": "2026-05"
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-06",
+   "room": "4",
+   "slot": 2,
+   "filled_with": "Chu Sandy Kyaw",
+   "reference_month": "2026-05"
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-06",
+   "room": "5",
+   "slot": 2,
+   "filled_with": "Min Myat Moe",
+   "reference_month": "2026-05"
+  },
+  {
+   "property": "kimmage",
+   "month": "2026-06",
+   "room": "05",
+   "slot": 2,
+   "filled_with": "Priteesh Nandan",
+   "reference_month": "2026-07"
+  },
+  {
+   "property": "kimmage",
+   "month": "2026-06",
+   "room": "05",
+   "slot": 3,
+   "filled_with": "Hardik Gattu",
+   "reference_month": "2026-07"
+  },
+  {
+   "property": "kimmage",
+   "month": "2026-05",
+   "room": "05",
+   "slot": 2,
+   "filled_with": "Priteesh Nandan",
+   "reference_month": "2026-06"
+  },
+  {
+   "property": "kimmage",
+   "month": "2026-05",
+   "room": "05",
+   "slot": 3,
+   "filled_with": "Hardik Gattu",
+   "reference_month": "2026-06"
+  },
+  {
+   "property": "windmill",
+   "month": "2026-06",
+   "room": "04",
+   "slot": 1,
+   "filled_with": "Rafael de Souza Santos Cunha",
+   "reference_month": "2026-05"
+  },
+  {
+   "property": "windmill",
+   "month": "2026-06",
+   "room": "06",
+   "slot": 1,
+   "filled_with": "Qiang Li",
+   "reference_month": "2026-07"
+  },
+  {
+   "property": "windmill",
+   "month": "2026-07",
+   "room": "04",
+   "slot": 1,
+   "filled_with": "Rafael de Souza Santos Cunha",
+   "reference_month": "2026-06"
+  },
+  {
+   "property": "windmill",
+   "month": "2026-08",
+   "room": "04",
+   "slot": 1,
+   "filled_with": "Rafael de Souza Santos Cunha",
+   "reference_month": "2026-07"
+  },
+  {
+   "property": "windmill",
+   "month": "2026-10",
+   "room": "04",
+   "slot": 1,
+   "filled_with": "Rafael de Souza Santos Cunha",
+   "reference_month": "2026-09"
+  },
+  {
+   "property": "windmill",
+   "month": "2026-11",
+   "room": "04",
+   "slot": 1,
+   "filled_with": "Rafael de Souza Santos Cunha",
+   "reference_month": "2026-10"
+  },
+  {
+   "property": "windmill",
+   "month": "2026-12",
+   "room": "04",
+   "slot": 1,
+   "filled_with": "Rafael de Souza Santos Cunha",
+   "reference_month": "2026-11"
+  },
+  {
+   "property": "windmill",
+   "month": "2026-05",
+   "room": "06",
+   "slot": 1,
+   "filled_with": "Qiang Li",
+   "reference_month": "2026-06"
+  }
+ ],
+ "due_column_fallback": [],
+ "rate_changes": [
+  {
+   "property": "kimmage",
+   "room": "02",
+   "person": "siddarth",
+   "person_display": "Siddarth Janagouda",
+   "month": "2026-07",
+   "observed_cents": 68000,
+   "modelled_cents": 66000
+  },
+  {
+   "property": "kimmage",
+   "room": "02",
+   "person": "siddarth",
+   "person_display": "Siddarth Janagouda",
+   "month": "2026-08",
+   "observed_cents": 68000,
+   "modelled_cents": 66000
+  },
+  {
+   "property": "kimmage",
+   "room": "03",
+   "person": "neil",
+   "person_display": "Neil Jose",
+   "month": "2026-05",
+   "observed_cents": 66000,
+   "modelled_cents": 63000
+  },
+  {
+   "property": "kimmage",
+   "room": "03",
+   "person": "neil",
+   "person_display": "Neil Jose",
+   "month": "2026-06",
+   "observed_cents": 66000,
+   "modelled_cents": 63000
+  },
+  {
+   "property": "kimmage",
+   "room": "03",
+   "person": "sravan",
+   "person_display": "Sravan",
+   "month": "2026-05",
+   "observed_cents": 63000,
+   "modelled_cents": 66000
+  },
+  {
+   "property": "kimmage",
+   "room": "03",
+   "person": "sravan",
+   "person_display": "Sravan",
+   "month": "2026-06",
+   "observed_cents": 63000,
+   "modelled_cents": 66000
+  },
+  {
+   "property": "walkinstown",
+   "room": "8",
+   "person": "ajay",
+   "person_display": "Ajay Pandikasala",
+   "month": "2026-05",
+   "observed_cents": 79000,
+   "modelled_cents": 80000
+  },
+  {
+   "property": "walkinstown",
+   "room": "8",
+   "person": "ajay",
+   "person_display": "Ajay Pandikasala",
+   "month": "2026-06",
+   "observed_cents": 79000,
+   "modelled_cents": 80000
+  },
+  {
+   "property": "walkinstown",
+   "room": "8",
+   "person": "ajay",
+   "person_display": "Ajay Pandikasala",
+   "month": "2026-07",
+   "observed_cents": 79000,
+   "modelled_cents": 80000
+  },
+  {
+   "property": "walkinstown",
+   "room": "8",
+   "person": "ajay",
+   "person_display": "Ajay Pandikasala",
+   "month": "2026-08",
+   "observed_cents": 79000,
+   "modelled_cents": 80000
+  },
+  {
+   "property": "windmill",
+   "room": "05",
+   "person": "atif",
+   "person_display": "Atif Anam",
+   "month": "2026-05",
+   "observed_cents": 45000,
+   "modelled_cents": 65000
+  }
+ ],
+ "tenants_without_rent": [],
+ "payment_capped": [
+  {
+   "property": "kimmage",
+   "month": "2026-06",
+   "room": "02",
+   "person": "siddarth",
+   "source_paid_cents": 68000,
+   "captured_cents": 66000,
+   "note": "payment covered more than this tenant's share (a flatmate paid both halves)"
+  },
+  {
+   "property": "kimmage",
+   "month": "2026-07",
+   "room": "02",
+   "person": "siddarth",
+   "source_paid_cents": 68000,
+   "captured_cents": 66000,
+   "note": "payment covered more than this tenant's share (a flatmate paid both halves)"
+  },
+  {
+   "property": "kimmage",
+   "month": "2026-08",
+   "room": "02",
+   "person": "siddarth",
+   "source_paid_cents": 68000,
+   "captured_cents": 66000,
+   "note": "payment covered more than this tenant's share (a flatmate paid both halves)"
+  },
+  {
+   "property": "kimmage",
+   "month": "2026-09",
+   "room": "02",
+   "person": "siddarth",
+   "source_paid_cents": 68000,
+   "captured_cents": 66000,
+   "note": "payment covered more than this tenant's share (a flatmate paid both halves)"
+  },
+  {
+   "property": "kimmage",
+   "month": "2026-05",
+   "room": "03",
+   "person": "neil",
+   "source_paid_cents": 66000,
+   "captured_cents": 63000,
+   "note": "payment covered more than this tenant's share (a flatmate paid both halves)"
+  },
+  {
+   "property": "kimmage",
+   "month": "2026-06",
+   "room": "03",
+   "person": "neil",
+   "source_paid_cents": 66000,
+   "captured_cents": 63000,
+   "note": "payment covered more than this tenant's share (a flatmate paid both halves)"
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-05",
+   "room": "3",
+   "person": "nghiem",
+   "source_paid_cents": 67500,
+   "captured_cents": 62500,
+   "note": "payment covered more than this tenant's share (a flatmate paid both halves)"
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-05",
+   "room": "3",
+   "person": "pham",
+   "source_paid_cents": 67500,
+   "captured_cents": 62500,
+   "note": "payment covered more than this tenant's share (a flatmate paid both halves)"
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-07",
+   "room": "3",
+   "person": "wahajullah",
+   "source_paid_cents": 125000,
+   "captured_cents": 62500,
+   "note": "payment covered more than this tenant's share (a flatmate paid both halves)"
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-08",
+   "room": "3",
+   "person": "wahajullah",
+   "source_paid_cents": 125000,
+   "captured_cents": 62500,
+   "note": "payment covered more than this tenant's share (a flatmate paid both halves)"
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-09",
+   "room": "3",
+   "person": "wahajullah",
+   "source_paid_cents": 125000,
+   "captured_cents": 62500,
+   "note": "payment covered more than this tenant's share (a flatmate paid both halves)"
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-09",
+   "room": "5",
+   "person": "satvik",
+   "source_paid_cents": 120000,
+   "captured_cents": 60000,
+   "note": "payment covered more than this tenant's share (a flatmate paid both halves)"
+  },
+  {
+   "property": "walkinstown",
+   "month": "2026-07",
+   "room": "3",
+   "person": "avila",
+   "source_paid_cents": 120000,
+   "captured_cents": 60000,
+   "note": "payment covered more than this tenant's share (a flatmate paid both halves)"
+  },
+  {
+   "property": "windmill",
+   "month": "2026-07",
+   "room": "05",
+   "person": "mohd",
+   "source_paid_cents": 100000,
+   "captured_cents": 65000,
+   "note": "payment covered more than this tenant's share (a flatmate paid both halves)"
+  }
+ ],
+ "decisions": [
+  "Every tenant is written with status='active': ensureMonthlyObligations only bills tenants whose status is active, and it then uses rent_start_date/rent_end_date to decide the months. A tenant who moved out in June must therefore stay 'active' with rent_end_date=2026-06-30, otherwise their May/June bills would never be generated.",
+  "No rent_charges rows are written (design.md §4): billing goes through the lazy tenants.monthly_rent_cents path, so /rent-dashboard?view=rooms shows each room's tenant count from agreement_parties, and the room rows read 待处理 because a room with an arrangement but no charge is deliberately surfaced that way by buildRentWorkspace.",
+  "tenants.room_label / room_address / property_hint, tenancy_agreements and agreement_parties are all projected from the same occupancy map, so the dashboard and the room tree can never disagree (design.md §4).",
+  "One tenants row per (person, room, contiguous month run). Two people swap rooms between 2026-06 and 2026-07 at 72 Walkinstown (Bhuvaneswaran and Kaushik Kannan), which is two tenancy segments each.",
+  "Rent revisions are folded into a single monthly_rent_cents per tenant (most frequent observation, ties to the latest); the deviations are listed under rate_changes and the per-month reconciliation against the ledger's 合计 row is under reconciliation.",
+  "One tenants row per (person, room, contiguous month run) means a person is never billed for a month the ledger did not bill: 169 Windmill Park room 05 joins in 2026-06, not 2026-05, because that row's 应收 is empty and the month's 合计 excludes it (see unbilled_rows).",
+  "seed-data.sql and seed-match.sql are generated here because scripts/seed-rosewood.sh is bash + mysql only, and mysql cannot read JSON. Stage data is a full key-scoped delete-and-insert; stage match is set-based SQL because every decision it needs is derivable from the rows stage data wrote.",
+  "The matched subset in stage match is the rule `amount_cents < expected_amount_cents OR CRC32(stable_transaction_key) % 4 = 0`. It is written once, in seed-match.sql; the same expression is computed here with zlib.crc32 (the same ISO-HDLC CRC-32 as MySQL's CRC32) purely so payment_summary below can report the split.",
+  "A tenant_payers row is written for every tenant that has at least one pre-matched transaction, so the remaining unmatched transactions offer a 一键匹配 suggestion on /transactions."
+ ],
+ "payment_summary": {
+  "transactions": 186,
+  "matched": 53,
+  "unmatched": 133,
+  "matched_short": 15,
+  "remembered_payers": 31
+ },
+ "reconciliation": [
+  {
+   "property": "kimmage",
+   "month": "2026-05",
+   "source_due_cents": 710000,
+   "modelled_due_cents": 710000,
+   "unnamed_slot_cents": 0,
+   "folded_cents": 0,
+   "delta_cents": 0,
+   "residual_cents": 0
+  },
+  {
+   "property": "kimmage",
+   "month": "2026-06",
+   "source_due_cents": 710000,
+   "modelled_due_cents": 710000,
+   "unnamed_slot_cents": 0,
+   "folded_cents": 0,
+   "delta_cents": 0,
+   "residual_cents": 0
+  },
+  {
+   "property": "kimmage",
+   "month": "2026-07",
+   "source_due_cents": 712000,
+   "modelled_due_cents": 710000,
+   "unnamed_slot_cents": 0,
+   "folded_cents": 2000,
+   "delta_cents": -2000,
+   "residual_cents": 0
+  },
+  {
+   "property": "kimmage",
+   "month": "2026-08",
+   "source_due_cents": 712000,
+   "modelled_due_cents": 710000,
+   "unnamed_slot_cents": 0,
+   "folded_cents": 2000,
+   "delta_cents": -2000,
+   "residual_cents": 0
+  },
+  {
+   "property": "kimmage",
+   "month": "2026-09",
+   "source_due_cents": 710000,
+   "modelled_due_cents": 710000,
+   "unnamed_slot_cents": 0,
+   "folded_cents": 0,
+   "delta_cents": 0,
+   "residual_cents": 0
+  },
+  {
+   "property": "kimmage",
+   "month": "2026-10",
+   "source_due_cents": 710000,
+   "modelled_due_cents": 710000,
+   "unnamed_slot_cents": 0,
+   "folded_cents": 0,
+   "delta_cents": 0,
+   "residual_cents": 0
+  },
+  {
+   "property": "kimmage",
+   "month": "2026-11",
+   "source_due_cents": 710000,
+   "modelled_due_cents": 710000,
+   "unnamed_slot_cents": 0,
+   "folded_cents": 0,
+   "delta_cents": 0,
+   "residual_cents": 0
+  },
+  {
+   "property": "kimmage",
+   "month": "2026-12",
+   "source_due_cents": 710000,
+   "modelled_due_cents": 710000,
+   "unnamed_slot_cents": 0,
+   "folded_cents": 0,
+   "delta_cents": 0,
+   "residual_cents": 0
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-05",
+   "source_due_cents": 553000,
+   "modelled_due_cents": 553000,
+   "unnamed_slot_cents": 0,
+   "folded_cents": 0,
+   "delta_cents": 0,
+   "residual_cents": 0
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-06",
+   "source_due_cents": 553000,
+   "modelled_due_cents": 553000,
+   "unnamed_slot_cents": 0,
+   "folded_cents": 0,
+   "delta_cents": 0,
+   "residual_cents": 0
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-07",
+   "source_due_cents": 553000,
+   "modelled_due_cents": 490500,
+   "unnamed_slot_cents": 62500,
+   "folded_cents": 0,
+   "delta_cents": -62500,
+   "residual_cents": 0
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-08",
+   "source_due_cents": 553000,
+   "modelled_due_cents": 490500,
+   "unnamed_slot_cents": 62500,
+   "folded_cents": 0,
+   "delta_cents": -62500,
+   "residual_cents": 0
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-09",
+   "source_due_cents": 553000,
+   "modelled_due_cents": 490500,
+   "unnamed_slot_cents": 62500,
+   "folded_cents": 0,
+   "delta_cents": -62500,
+   "residual_cents": 0
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-10",
+   "source_due_cents": 553000,
+   "modelled_due_cents": 490500,
+   "unnamed_slot_cents": 62500,
+   "folded_cents": 0,
+   "delta_cents": -62500,
+   "residual_cents": 0
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-11",
+   "source_due_cents": 553000,
+   "modelled_due_cents": 490500,
+   "unnamed_slot_cents": 62500,
+   "folded_cents": 0,
+   "delta_cents": -62500,
+   "residual_cents": 0
+  },
+  {
+   "property": "oldcounty",
+   "month": "2026-12",
+   "source_due_cents": 553000,
+   "modelled_due_cents": 490500,
+   "unnamed_slot_cents": 62500,
+   "folded_cents": 0,
+   "delta_cents": -62500,
+   "residual_cents": 0
+  },
+  {
+   "property": "walkinstown",
+   "month": "2026-05",
+   "source_due_cents": 752000,
+   "modelled_due_cents": 753000,
+   "unnamed_slot_cents": 0,
+   "folded_cents": -1000,
+   "delta_cents": 1000,
+   "residual_cents": 0
+  },
+  {
+   "property": "walkinstown",
+   "month": "2026-06",
+   "source_due_cents": 752000,
+   "modelled_due_cents": 753000,
+   "unnamed_slot_cents": 0,
+   "folded_cents": -1000,
+   "delta_cents": 1000,
+   "residual_cents": 0
+  },
+  {
+   "property": "walkinstown",
+   "month": "2026-07",
+   "source_due_cents": 752000,
+   "modelled_due_cents": 753000,
+   "unnamed_slot_cents": 0,
+   "folded_cents": -1000,
+   "delta_cents": 1000,
+   "residual_cents": 0
+  },
+  {
+   "property": "walkinstown",
+   "month": "2026-08",
+   "source_due_cents": 752000,
+   "modelled_due_cents": 633000,
+   "unnamed_slot_cents": 120000,
+   "folded_cents": -1000,
+   "delta_cents": -119000,
+   "residual_cents": 0
+  },
+  {
+   "property": "walkinstown",
+   "month": "2026-09",
+   "source_due_cents": 753000,
+   "modelled_due_cents": 693000,
+   "unnamed_slot_cents": 60000,
+   "folded_cents": 0,
+   "delta_cents": -60000,
+   "residual_cents": 0
+  },
+  {
+   "property": "walkinstown",
+   "month": "2026-10",
+   "source_due_cents": 753000,
+   "modelled_due_cents": 693000,
+   "unnamed_slot_cents": 60000,
+   "folded_cents": 0,
+   "delta_cents": -60000,
+   "residual_cents": 0
+  },
+  {
+   "property": "walkinstown",
+   "month": "2026-11",
+   "source_due_cents": 753000,
+   "modelled_due_cents": 693000,
+   "unnamed_slot_cents": 60000,
+   "folded_cents": 0,
+   "delta_cents": -60000,
+   "residual_cents": 0
+  },
+  {
+   "property": "walkinstown",
+   "month": "2026-12",
+   "source_due_cents": 753000,
+   "modelled_due_cents": 693000,
+   "unnamed_slot_cents": 60000,
+   "folded_cents": 0,
+   "delta_cents": -60000,
+   "residual_cents": 0
+  },
+  {
+   "property": "windmill",
+   "month": "2026-05",
+   "source_due_cents": 520000,
+   "modelled_due_cents": 540000,
+   "unnamed_slot_cents": 0,
+   "folded_cents": -20000,
+   "delta_cents": 20000,
+   "residual_cents": 0
+  },
+  {
+   "property": "windmill",
+   "month": "2026-06",
+   "source_due_cents": 605000,
+   "modelled_due_cents": 605000,
+   "unnamed_slot_cents": 0,
+   "folded_cents": 0,
+   "delta_cents": 0,
+   "residual_cents": 0
+  },
+  {
+   "property": "windmill",
+   "month": "2026-07",
+   "source_due_cents": 605000,
+   "modelled_due_cents": 605000,
+   "unnamed_slot_cents": 0,
+   "folded_cents": 0,
+   "delta_cents": 0,
+   "residual_cents": 0
+  },
+  {
+   "property": "windmill",
+   "month": "2026-08",
+   "source_due_cents": 605000,
+   "modelled_due_cents": 605000,
+   "unnamed_slot_cents": 0,
+   "folded_cents": 0,
+   "delta_cents": 0,
+   "residual_cents": 0
+  },
+  {
+   "property": "windmill",
+   "month": "2026-09",
+   "source_due_cents": 605000,
+   "modelled_due_cents": 605000,
+   "unnamed_slot_cents": 0,
+   "folded_cents": 0,
+   "delta_cents": 0,
+   "residual_cents": 0
+  },
+  {
+   "property": "windmill",
+   "month": "2026-10",
+   "source_due_cents": 605000,
+   "modelled_due_cents": 605000,
+   "unnamed_slot_cents": 0,
+   "folded_cents": 0,
+   "delta_cents": 0,
+   "residual_cents": 0
+  },
+  {
+   "property": "windmill",
+   "month": "2026-11",
+   "source_due_cents": 605000,
+   "modelled_due_cents": 605000,
+   "unnamed_slot_cents": 0,
+   "folded_cents": 0,
+   "delta_cents": 0,
+   "residual_cents": 0
+  },
+  {
+   "property": "windmill",
+   "month": "2026-12",
+   "source_due_cents": 605000,
+   "modelled_due_cents": 605000,
+   "unnamed_slot_cents": 0,
+   "folded_cents": 0,
+   "delta_cents": 0,
+   "residual_cents": 0
+  }
+ ]
+}
