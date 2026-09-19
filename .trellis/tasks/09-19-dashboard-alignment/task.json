@@ -3,7 +3,7 @@
   "name": "dashboard-alignment",
   "title": "收租总览对齐",
   "description": "布局归位、chips 行、区块标题、指标卡强调、三视角表格列合并、树形展开、租客视角一键平账。",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

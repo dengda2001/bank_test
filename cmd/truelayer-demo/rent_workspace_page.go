@@ -22,6 +22,7 @@ type rentWorkspacePageData struct {
 	NextPeriod       string
 	View             string
 	Summary          rentWorkspaceSummary
+	DimensionSummary rentWorkspaceDimensionSummary
 	PendingCount     int
 	PendingItems     []rentWorkspacePendingItem
 	PropertyOptions  []rentWorkspacePropertyOption
@@ -40,11 +41,42 @@ type rentWorkspacePageData struct {
 }
 
 type rentWorkspacePendingItem struct {
+	// Index is the 01/02/03 badge the prototype puts in front of every queued
+	// row. It is numbered at the source because Go templates cannot add, and a
+	// template func for one badge would be a poor trade.
+	Index     int
 	Title     string
 	Subtitle  string
 	Amount    string
 	DetailURL string
 	ListURL   string
+}
+
+// rentWorkspacePendingItems maps the queued transactions to the panel's rows and
+// numbers them 01/02/03 for the prototype's index badge. It stays a plain
+// function (no *app, no request) so the numbering is unit-testable without a
+// database session.
+func rentWorkspacePendingItems(rows []paymentTransaction, periodMonth time.Time) []rentWorkspacePendingItem {
+	items := make([]rentWorkspacePendingItem, 0, len(rows))
+	for i, transaction := range rows {
+		payer := stringValue(transaction.PayerName)
+		if strings.TrimSpace(payer) == "" {
+			payer = "付款人待识别"
+		}
+		subtitle := firstNonEmpty(strings.TrimSpace(transaction.Description), strings.TrimSpace(transaction.Reference), "银行收款需要核对")
+		if transaction.TransactionTime != nil {
+			subtitle = transaction.TransactionTime.In(time.UTC).Format("01-02") + " · " + subtitle
+		}
+		items = append(items, rentWorkspacePendingItem{
+			Index:     i + 1,
+			Title:     payer,
+			Subtitle:  subtitle,
+			Amount:    formatMoney(centsToMoney(transaction.AmountCents), firstNonEmpty(transaction.Currency, ledgerCurrencyEUR), 2),
+			DetailURL: rentWorkspaceTransactionDetailURL(transaction.ID, periodMonth),
+			ListURL:   "/transactions?period=" + url.QueryEscape(periodMonth.Format("2006-01")) + "&match_status=pending",
+		})
+	}
+	return items
 }
 
 func rentWorkspacePageFromData(a *app, r *http.Request, data rentWorkspaceData, message, pageError string) rentWorkspacePageData {
@@ -71,6 +103,7 @@ func rentWorkspacePageFromData(a *app, r *http.Request, data rentWorkspaceData, 
 		NextPeriod:       period.AddDate(0, 1, 0).Format("2006-01"),
 		View:             data.Filters.View,
 		Summary:          data.Summary,
+		DimensionSummary: data.DimensionSummary,
 		PropertyOptions:  data.PropertyOptions,
 		PropertyRows:     data.PropertyRows,
 		PropertyTreeRows: data.PropertyTreeRows,
@@ -133,24 +166,7 @@ func (a *app) renderRentWorkspaceDashboard(w http.ResponseWriter, r *http.Reques
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	page.PendingItems = make([]rentWorkspacePendingItem, 0, len(pendingRows))
-	for _, transaction := range pendingRows {
-		payer := stringValue(transaction.PayerName)
-		if strings.TrimSpace(payer) == "" {
-			payer = "付款人待识别"
-		}
-		subtitle := firstNonEmpty(strings.TrimSpace(transaction.Description), strings.TrimSpace(transaction.Reference), "银行收款需要核对")
-		if transaction.TransactionTime != nil {
-			subtitle = transaction.TransactionTime.In(time.UTC).Format("01-02") + " · " + subtitle
-		}
-		page.PendingItems = append(page.PendingItems, rentWorkspacePendingItem{
-			Title:     payer,
-			Subtitle:  subtitle,
-			Amount:    formatMoney(centsToMoney(transaction.AmountCents), firstNonEmpty(transaction.Currency, ledgerCurrencyEUR), 2),
-			DetailURL: rentWorkspaceTransactionDetailURL(transaction.ID, filters.PeriodMonth),
-			ListURL:   "/transactions?period=" + url.QueryEscape(filters.PeriodMonth.Format("2006-01")) + "&match_status=pending",
-		})
-	}
+	page.PendingItems = rentWorkspacePendingItems(pendingRows, filters.PeriodMonth)
 	if filterErr != nil {
 		page.Error = "invalid_workspace_filter"
 	}
@@ -446,6 +462,27 @@ var rentWorkspaceTemplateFuncs = template.FuncMap{
 	},
 	"propertyDetailURL": func(propertyID uint64, period string) string {
 		return "/properties/" + strconv.FormatUint(propertyID, 10) + "?period=" + url.QueryEscape(period)
+	},
+	"tenantDetailURL": func(tenantID uint64, period string) string {
+		return "/tenants/" + strconv.FormatUint(tenantID, 10) + "?from_month=" + url.QueryEscape(period) + "&to_month=" + url.QueryEscape(period)
+	},
+	// The section note renders the ledger currency only. The prototype put
+	// "演示数据 · EUR" there; the 演示数据 half is a prototype-only label
+	// (DESIGN-HANDOFF.md:9) and is deliberately dropped (prd.md 已确认的决策).
+	"workspaceCurrency": func() string {
+		return ledgerCurrencyEUR
+	},
+	// The 收缴率 progress bar needs a real CSS width. Returning template.CSS from
+	// Go keeps html/template's CSS sanitiser out of it and clamps the value so a
+	// stray percent can never escape the track.
+	"workspaceRateStyle": func(percent int) template.CSS {
+		if percent < 0 {
+			percent = 0
+		}
+		if percent > 100 {
+			percent = 100
+		}
+		return template.CSS("width:" + strconv.Itoa(percent) + "%")
 	},
 	"workspacePropertyURL": func(filters rentWorkspaceFilters, propertyID uint64) string {
 		filters.View = rentWorkspaceViewRooms

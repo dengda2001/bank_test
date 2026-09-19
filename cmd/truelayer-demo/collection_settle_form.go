@@ -101,6 +101,38 @@ func (data rentDashboardPageData) SettleForm(row rentDashboardRow) collectionSet
 	}
 }
 
+// TenantSettleForm is the rent workspace's adapter: the tenant view hands it one
+// of its own rows and gets back the same view /bills builds, so both carriers
+// render one definition of the form. The return context is the workspace's own
+// filter state rather than /bills'.
+func (data rentWorkspacePageData) TenantSettleForm(row rentWorkspaceTenantRow) collectionSettleFormView {
+	duty := strings.TrimSpace(firstNonEmpty(data.PeriodLabel, data.Period, row.Period))
+	if duty == "" {
+		duty = "本月"
+	}
+	duty += " 租金责任"
+	if name := strings.TrimSpace(firstNonEmpty(row.TenantName, row.TenantAlias)); name != "" {
+		duty = name + " · " + duty
+	}
+	amount := strings.TrimSpace(row.BalanceAmount)
+	if amount == "" {
+		amount = row.ExpectedAmount
+	}
+	return collectionSettleFormView{
+		ObligationID:      row.ObligationID,
+		DutyLabel:         duty,
+		OutstandingAmount: amount,
+		EffectiveDate:     time.Now().UTC().Format("2006-01-02"),
+		Dispositions:      collectionSettleDispositions(settleDispositionMatchPayment),
+		ReturnPeriod:      data.Period,
+		ReturnSearch:      data.Filters.Search,
+		ReturnStatus:      data.Filters.Status,
+		ReturnSort:        data.Filters.Sort,
+		ReturnPage:        data.Page,
+		ReturnPageSize:    data.PageSize,
+	}
+}
+
 // billsMessageText / billsErrorText translate the codes the bills handlers emit.
 // Unrecognised codes fall through verbatim: the raw-code contract that
 // TestBillsPageSurfacesInvalidFilterAndPeriodErrors pins (invalid_dashboard_filter,

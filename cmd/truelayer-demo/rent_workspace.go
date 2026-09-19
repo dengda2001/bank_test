@@ -190,9 +190,23 @@ type rentWorkspaceSummary struct {
 	NetAmount           string
 }
 
+// rentWorkspaceDimensionSummary is the chips row above the list panel. It is
+// aggregated from the rows the active view has already loaded and filtered
+// (design.md §2.4) -- never from a second query, so the chips cannot disagree
+// with the numbers in the table directly beneath them. The three buckets reuse
+// the workspace's own status vocabulary (the same words the status filter
+// offers), so a chip and its filter always describe the same rows.
+type rentWorkspaceDimensionSummary struct {
+	Total   int
+	Overdue int
+	Partial int
+	Paid    int
+}
+
 type rentWorkspaceData struct {
 	Filters          rentWorkspaceFilters
 	Summary          rentWorkspaceSummary
+	DimensionSummary rentWorkspaceDimensionSummary
 	PropertyOptions  []rentWorkspacePropertyOption
 	PropertyRows     []rentWorkspacePropertyRow
 	PropertyTreeRows []rentWorkspacePropertyTreeRow
@@ -268,28 +282,29 @@ type rentWorkspaceRoomRow struct {
 }
 
 type rentWorkspaceTenantRow struct {
-	TenantID       uint64
-	PropertyID     uint64
-	PropertyName   string
-	RoomID         uint64
-	RoomLabel      string
-	RoomAddress    string
-	TenantName     string
-	TenantAlias    string
-	ObligationID   uint64
-	Period         string
-	DueDate        string
-	DueDateValue   time.Time
-	ExpectedCents  int64
-	PaidCents      int64
-	BalanceCents   int64
-	ExpectedAmount string
-	PaidAmount     string
-	BalanceAmount  string
-	Status         string
-	StatusLabel    string
-	PaidByOther    bool
-	Payments       []rentPaymentDetail
+	TenantID          uint64
+	PropertyID        uint64
+	PropertyName      string
+	RoomID            uint64
+	RoomLabel         string
+	RoomAddress       string
+	TenantName        string
+	TenantAlias       string
+	ObligationID      uint64
+	Period            string
+	DueDate           string
+	DueDateValue      time.Time
+	ExpectedCents     int64
+	PaidCents         int64
+	BalanceCents      int64
+	ExpectedAmount    string
+	PaidAmount        string
+	BalanceAmount     string
+	CollectionPercent int
+	Status            string
+	StatusLabel       string
+	PaidByOther       bool
+	Payments          []rentPaymentDetail
 }
 
 type rentWorkspaceRoomAggregate struct {
@@ -502,28 +517,29 @@ func buildRentWorkspace(input rentWorkspaceInput, filters rentWorkspaceFilters) 
 			name := firstNonEmpty(stringValue(projected.TenantNameSnapshot), tenantByID[projected.TenantID].Name, "Unknown tenant")
 			payments, paidByOther := workspacePayments(projected, allocationsByObligation[projected.ID], cashByObligation[projected.ID], transactionsByID)
 			tenantRow := rentWorkspaceTenantRow{
-				TenantID:       projected.TenantID,
-				PropertyID:     propertyRow.ID,
-				PropertyName:   propertyRow.Name,
-				RoomID:         roomRow.ID,
-				RoomLabel:      roomRow.RoomLabel,
-				RoomAddress:    propertyAddress(propertyRow),
-				TenantName:     name,
-				TenantAlias:    tenantByID[projected.TenantID].DisplayAlias,
-				ObligationID:   projected.ID,
-				Period:         filters.PeriodMonth.Format("2006-01"),
-				DueDate:        projected.DueDate.Format(dateLayout),
-				DueDateValue:   projected.DueDate,
-				ExpectedCents:  projected.ExpectedAmountCents,
-				PaidCents:      projected.PaidAmountCents,
-				BalanceCents:   balance,
-				ExpectedAmount: formatMoney(centsToMoney(projected.ExpectedAmountCents), currency, 2),
-				PaidAmount:     formatMoney(centsToMoney(projected.PaidAmountCents), currency, 2),
-				BalanceAmount:  formatMoney(centsToMoney(balance), currency, 2),
-				Status:         projected.Status,
-				StatusLabel:    workspaceStatusLabel(projected.Status),
-				PaidByOther:    paidByOther,
-				Payments:       payments,
+				TenantID:          projected.TenantID,
+				PropertyID:        propertyRow.ID,
+				PropertyName:      propertyRow.Name,
+				RoomID:            roomRow.ID,
+				RoomLabel:         roomRow.RoomLabel,
+				RoomAddress:       propertyAddress(propertyRow),
+				TenantName:        name,
+				TenantAlias:       tenantByID[projected.TenantID].DisplayAlias,
+				ObligationID:      projected.ID,
+				Period:            filters.PeriodMonth.Format("2006-01"),
+				DueDate:           projected.DueDate.Format(dateLayout),
+				DueDateValue:      projected.DueDate,
+				ExpectedCents:     projected.ExpectedAmountCents,
+				PaidCents:         projected.PaidAmountCents,
+				BalanceCents:      balance,
+				ExpectedAmount:    formatMoney(centsToMoney(projected.ExpectedAmountCents), currency, 2),
+				PaidAmount:        formatMoney(centsToMoney(projected.PaidAmountCents), currency, 2),
+				BalanceAmount:     formatMoney(centsToMoney(balance), currency, 2),
+				CollectionPercent: collectionPercent(projected.ExpectedAmountCents, projected.PaidAmountCents),
+				Status:            projected.Status,
+				StatusLabel:       workspaceStatusLabel(projected.Status),
+				PaidByOther:       paidByOther,
+				Payments:          payments,
 			}
 			aggregate.Obligations = append(aggregate.Obligations, tenantRow)
 			aggregate.ExpectedCents += projected.ExpectedAmountCents
@@ -645,6 +661,9 @@ func buildRentWorkspace(input rentWorkspaceInput, filters rentWorkspaceFilters) 
 	roomRows = filterAndSortWorkspaceRooms(roomRows, filters)
 	tenantRows = filterAndSortWorkspaceTenants(tenantRows, filters)
 	propertyFilteredCount, roomFilteredCount, tenantFilteredCount := len(propertyRows), len(roomRows), len(tenantRows)
+	// Chips are read off the filtered-but-not-yet-paginated slice, so they describe
+	// the same set of rows the table below them is showing.
+	dimensionSummary := workspaceDimensionSummaryForView(filters.View, propertyRows, roomRows, tenantRows)
 	propertyRows, propertyPages := paginateWorkspaceProperties(propertyRows, filters.Page, filters.PageSize)
 	roomRows, roomPages := paginateWorkspaceRooms(roomRows, filters.Page, filters.PageSize)
 	tenantRows, tenantPages := paginateWorkspaceTenants(tenantRows, filters.Page, filters.PageSize)
@@ -654,6 +673,7 @@ func buildRentWorkspace(input rentWorkspaceInput, filters rentWorkspaceFilters) 
 	return rentWorkspaceData{
 		Filters:          filters,
 		Summary:          summary,
+		DimensionSummary: dimensionSummary,
 		PropertyOptions:  propertyOptions,
 		PropertyRows:     propertyRows,
 		PropertyTreeRows: propertyTreeRows,
@@ -850,6 +870,44 @@ func collectionPercent(expected, paid int64) int {
 	return percent
 }
 
+// workspaceDimensionSummaryForView counts the active view's own rows. "Total"
+// counts every row the table is about to render (空置 / 未到期 included), while
+// the three buckets split them by the workspace status the row already carries,
+// so 逾期未缴 + 部分缴纳 + 已缴满 never exceeds the total and every bucket maps
+// one-to-one onto an option of the status filter next to it.
+func workspaceDimensionSummaryForView(view string, properties []rentWorkspacePropertyRow, rooms []rentWorkspaceRoomRow, tenants []rentWorkspaceTenantRow) rentWorkspaceDimensionSummary {
+	summary := rentWorkspaceDimensionSummary{}
+	switch view {
+	case rentWorkspaceViewRooms:
+		for _, row := range rooms {
+			summary.Total++
+			summary.addStatus(row.Status)
+		}
+	case rentWorkspaceViewTenants:
+		for _, row := range tenants {
+			summary.Total++
+			summary.addStatus(row.Status)
+		}
+	default:
+		for _, row := range properties {
+			summary.Total++
+			summary.addStatus(row.Status)
+		}
+	}
+	return summary
+}
+
+func (summary *rentWorkspaceDimensionSummary) addStatus(status string) {
+	switch status {
+	case "overdue":
+		summary.Overdue++
+	case "partial":
+		summary.Partial++
+	case "paid":
+		summary.Paid++
+	}
+}
+
 var workspaceStatusPriority = map[string]int{
 	"needs_review": 0,
 	"overdue":      1,
@@ -933,6 +991,9 @@ func filterAndSortWorkspaceProperties(rows []rentWorkspacePropertyRow, filters r
 		if left.BalanceCents != right.BalanceCents {
 			return left.BalanceCents > right.BalanceCents
 		}
+		if left.ExpectedCents != right.ExpectedCents {
+			return left.ExpectedCents > right.ExpectedCents
+		}
 		if strings.ToLower(left.Name) != strings.ToLower(right.Name) {
 			return strings.ToLower(left.Name) < strings.ToLower(right.Name)
 		}
@@ -975,6 +1036,9 @@ func filterAndSortWorkspaceRooms(rows []rentWorkspaceRoomRow, filters rentWorksp
 		}
 		if left.BalanceCents != right.BalanceCents {
 			return left.BalanceCents > right.BalanceCents
+		}
+		if left.ExpectedCents != right.ExpectedCents {
+			return left.ExpectedCents > right.ExpectedCents
 		}
 		if left.DueDateValue.IsZero() != right.DueDateValue.IsZero() {
 			return !left.DueDateValue.IsZero()
@@ -1033,6 +1097,9 @@ func filterAndSortWorkspaceTenants(rows []rentWorkspaceTenantRow, filters rentWo
 		}
 		if left.BalanceCents != right.BalanceCents {
 			return left.BalanceCents > right.BalanceCents
+		}
+		if left.ExpectedCents != right.ExpectedCents {
+			return left.ExpectedCents > right.ExpectedCents
 		}
 		if strings.ToLower(left.TenantName) != strings.ToLower(right.TenantName) {
 			return strings.ToLower(left.TenantName) < strings.ToLower(right.TenantName)

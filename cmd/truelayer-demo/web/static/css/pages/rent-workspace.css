@@ -2,17 +2,46 @@
     .workspace-period { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; min-width: 320px; }
     .workspace-period label { flex: 0 0 auto; white-space: nowrap; }
     .workspace-period input { flex: 0 0 160px; width: 160px; min-width: 160px; min-height: 42px; }
-    .workspace-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-    .workspace-tabs a { text-decoration: none; }
-    .workspace-tabs a.active { color: var(--accent-bright); border-color: var(--accent-bright); background: var(--surface-accent); }
     .workspace-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
     .workspace-summary .metric { min-height: 102px; }
-    .workspace-filters { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; padding: 16px 20px; border-bottom: 1px solid var(--border); background: var(--surface-muted); }
+    /* 原型首卡强调（figma/rentops-desktop-suite.html `.metric.main{border-top:3px solid
+       var(--accent)}`）。用 border-top 而不是背景色：指标卡在 1100 档会折成两栏，
+       边框强调在任何栏数下都能把首卡和其余三张区分开。 */
+    .workspace-summary .metric-main { border-top: 3px solid var(--accent-bright); }
+    /* 维度切换与筛选同处一条工具带：原型把两者放在同一 .filterbar 里
+       （figma/rentops-desktop-suite.html: dimension-switcher + 两个 select）。
+       带子本身承担底色与分隔线，两个子块都退回透明。 */
+    .workspace-list-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; padding: 14px 18px; border-bottom: 1px solid var(--border); background: var(--surface-muted); }
+    .workspace-tabs { display: flex; flex-wrap: wrap; gap: 8px; flex: 0 0 auto; }
+    .workspace-tabs a { text-decoration: none; }
+    .workspace-tabs a.active { color: var(--accent-bright); border-color: var(--accent-bright); background: var(--surface-accent); }
+    .workspace-filters { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; flex: 1 1 auto; margin: 0; padding: 0; border: 0; background: transparent; }
     .workspace-filters label { margin: 0; }
     .workspace-filters .search { flex: 1 1 220px; min-width: 200px; }
     .workspace-filters .property { flex: 0 1 190px; }
     .workspace-filters select, .workspace-filters input { min-height: 40px; background: var(--surface); }
-    .workspace-table { min-width: 920px; }
+    /* 统计 chips（原型 .dimension-summary / .summary-chip）。数值来自服务端对当前
+       维度已加载行的聚合，四个 chip 的口径见 rent_workspace.go 的
+       workspaceDimensionSummaryForView。 */
+    .workspace-dimension-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; padding: 12px 18px 0; }
+    .workspace-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 27px; padding: 4px 9px; border: 1px solid var(--border); border-radius: 999px; color: var(--foreground-muted); background: var(--surface); font-size: 11px; white-space: nowrap; }
+    .workspace-chip strong { color: var(--foreground); font: 600 12px var(--mono); }
+    .workspace-chip::before { flex: 0 0 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--foreground-muted); content: ""; }
+    .workspace-chip.total::before { background: var(--foreground); }
+    .workspace-chip.danger { border-color: color-mix(in oklch, var(--danger) 30%, var(--border)); background: color-mix(in oklch, var(--danger) 5%, var(--surface)); }
+    .workspace-chip.danger::before { background: var(--danger); }
+    .workspace-chip.warn { border-color: color-mix(in oklch, var(--warning) 34%, var(--border)); background: color-mix(in oklch, var(--warning) 6%, var(--surface)); }
+    .workspace-chip.warn::before { background: var(--warning); }
+    .workspace-chip.ok { border-color: color-mix(in oklch, var(--accent-bright) 28%, var(--border)); background: var(--surface-accent); }
+    .workspace-chip.ok::before { background: var(--accent-bright); }
+    /* 区块标题（原型 #dimension-title / #dimension-desc + 右侧币种标注）。 */
+    .workspace-dimension-head { align-items: center; }
+    .workspace-dimension-head h2 { margin: 0; }
+    .workspace-dimension-head p { margin: 5px 0 0; }
+    .workspace-currency-note { color: var(--foreground-muted); font: 700 10px var(--mono); letter-spacing: .06em; }
+    /* 不钉死表格最小宽：920px 的硬底会把 641–1100 档的表格推出容器，
+       造成整段横向滚动。表格自己的列最小宽已经能兜住内容。 */
+    .workspace-table { min-width: 0; }
     .workspace-table .amount { white-space: nowrap; }
     .workspace-table .status { white-space: nowrap; }
     .workspace-table a { color: inherit; }
@@ -28,16 +57,40 @@
     .workspace-action-queue .panel-head { background: color-mix(in oklch, #fff1f3 76%, var(--surface)); }
     .workspace-action-queue .panel-head h2 { margin: 0; }
     .workspace-action-queue .panel-head p { margin: 5px 0 0; }
+    .workspace-queue-head-meta { display: flex; align-items: center; gap: 12px; }
     .workspace-queue-count { display: grid; place-items: center; min-width: 32px; height: 32px; border-radius: 50%; color: #8c3346; background: color-mix(in oklch, #e995a4 22%, var(--surface)); font: 700 13px var(--mono); }
-    .workspace-queue-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
-    .workspace-queue-item { display: grid; grid-template-columns: minmax(0,1fr) auto; align-content: start; gap: 10px 12px; min-width: 0; padding: 14px 18px; border-top: 1px solid color-mix(in oklch, #d07b8a 24%, var(--border)); background: color-mix(in oklch, var(--surface) 48%, transparent); }
-    .workspace-queue-item > div:first-child { display: grid; align-content: start; gap: 4px; min-width: 0; }
+    /* 原型把「查看全部流水」放在 panel-head 右侧（.manual-queue 的 link-btn），
+       而不是清单底部 —— 它是这一块的出口，不随剩余条数出现或消失。 */
+    .workspace-queue-more { color: var(--accent-bright); font-size: 12px; text-decoration: none; white-space: nowrap; }
+    .workspace-queue-more:hover { text-decoration: underline; }
+    /* 紧凑多列清单（原型 .queue{grid-template-columns:repeat(3,minmax(0,1fr))}）。
+       每条仍保留「查看建议」与「处理流水」两个动作：处理流水是页面名，动线不能丢。
+
+       首列是原型每条前面的 01/02/03 序号徽标（原型 .queue-item 的
+       grid-template-columns:36px 1fr auto）。序号用 --warning 着色的窄档变体，
+       和原型 .manual-queue 里的 .queue-index 同一取值。 */
+    .workspace-queue-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .workspace-queue-item { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-content: start; gap: 8px 12px; min-width: 0; min-height: 96px; padding: 14px 16px; border-top: 1px solid color-mix(in oklch, #d07b8a 24%, var(--border)); background: color-mix(in oklch, var(--surface) 48%, transparent); }
+    /* 分隔线只写在“后面还有同排条目”的那一条上：原型用的是 :not(:last-child)。
+       按列号取模（:nth-child(3n)）在最后一行不满时会在行尾留下一条悬空的竖线。 */
+    .workspace-queue-item:not(:last-child) { border-right: 1px solid color-mix(in oklch, #d07b8a 24%, var(--border)); }
+    .workspace-queue-index { grid-column: 1; grid-row: 1; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 7px; color: color-mix(in oklch, var(--warning) 72%, var(--foreground)); background: color-mix(in oklch, var(--warning) 18%, var(--surface)); font: 11px var(--mono); }
+    .workspace-queue-body { grid-column: 2; grid-row: 1; display: grid; align-content: start; gap: 4px; min-width: 0; }
     .workspace-queue-item small { color: var(--foreground-muted); overflow-wrap: anywhere; }
-    .workspace-queue-amount { white-space: nowrap; font: 700 14px var(--mono); }
-    .workspace-queue-actions { grid-column: 1/-1; display: grid; grid-template-columns: 1fr 1.25fr; gap: 8px; }
-    .workspace-queue-actions .btn { min-height: 42px; }
-    .workspace-queue-more { display: block; padding: 10px 18px; border-top: 1px solid color-mix(in oklch, #d07b8a 24%, var(--border)); color: var(--foreground-muted); font-size: 12px; text-align: right; text-decoration: none; }
+    .workspace-queue-amount { grid-column: 3; grid-row: 1; justify-self: end; white-space: nowrap; font: 700 14px var(--mono); }
+    .workspace-queue-actions { grid-column: 2/-1; grid-row: 2; display: flex; align-items: center; gap: 8px; }
+    .workspace-queue-actions .btn { min-height: 36px; padding: 0 10px; font-size: 12px; }
 .workspace-queue-empty { padding: 18px 20px; text-align: left; }
+    /* 原型桌面的队列控件（原型 .manual-queue .queue-item 的 :not(:last-child)
+       右分隔线 + 一颗 .link-btn）：每条只在右侧留一颗无边框文字链按钮。
+       这里恢复的是 HEAD 的「≥981 只显示最后一个按钮、渲染为文字链」，
+       641–980 保持 HEAD 就有的两颗描边按钮降级形态，不动。
+       页面局部的分档块写在被覆盖规则之后（responsive-conventions.md §3.1）。 */
+    @media (min-width: 981px) {
+      .workspace-queue-actions { justify-content: flex-end; }
+      .workspace-queue-actions .btn { display: none; }
+      .workspace-queue-actions .btn:last-child { display: inline-flex; min-height: 36px; align-items: center; padding: 0 8px; border: 0; color: var(--foreground); background: transparent; }
+    }
 .workspace-status { display: inline-block; border-radius: 999px; padding: 5px 9px; font-size: 12px; }
     .workspace-status.needs_review, .workspace-status.overdue { color: #991b1b; background: #fee2e2; }
     .workspace-status.partial { color: #92400e; background: #fef3c7; }
@@ -45,15 +98,6 @@
     .workspace-status.paid { color: #065f46; background: #d1fae5; }
     .workspace-status.vacant { color: var(--foreground-muted); background: #e5e7eb; }
 .workspace-muted { color: var(--foreground-muted); }
-
-@media (min-width: 981px) {
-  .workspace-queue-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .workspace-queue-item { grid-template-columns: minmax(0, 1fr) auto; align-items: center; min-height: 78px; padding: 12px 16px; border-top: 0; }
-  .workspace-queue-item:not(:last-child) { border-right: 1px solid color-mix(in oklch, #d07b8a 24%, var(--border)); }
-  .workspace-queue-actions { grid-column: 2; display: block; }
-  .workspace-queue-actions .btn { display: none; }
-  .workspace-queue-actions .btn:last-child { display: inline-flex; min-height: 36px; align-items: center; padding: 0 8px; border: 0; color: var(--foreground); background: transparent; }
-}
 
     .workspace-desktop-list { display: block; }
     .workspace-mobile-list { display: none; }
@@ -87,10 +131,20 @@
       letter-spacing: 0.06em;
     }
     .workspace-card-grid dd { margin: 4px 0 0; color: var(--foreground); font-size: 14px; }
+    /* 行内操作列（原型 .detail-action）：一键平账 + 查看详情，右对齐、窄按钮。 */
+    .workspace-row-action { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px; min-width: 0; }
+    .workspace-row-action .btn { min-height: 30px; padding: 0 10px; font-size: 12px; }
+    .workspace-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .workspace-row-actions .btn { min-height: 38px; }
+    /* 收缴率：数值 + 进度条（原型 `<span class="num">%</span><div class="progress">`）。 */
+    .workspace-rate { display: grid; gap: 5px; min-width: 0; }
+    .workspace-rate-value { color: var(--foreground); font: 600 12px var(--mono); }
+    .workspace-progress { display: block; height: 6px; border-radius: 99px; background: color-mix(in oklch, var(--foreground) 12%, transparent); overflow: hidden; }
+    .workspace-progress > span { display: block; height: 100%; border-radius: 99px; background: var(--accent-bright); }
 
     .workspace-tree-list { padding: 0 12px; overflow-x: auto; }
     .workspace-tree-head,
-    .workspace-tree-summary { display: grid; align-items: center; gap: 12px; }
+    .workspace-tree-summary { display: grid; align-items: center; gap: 12px 10px; }
     .workspace-tree-head {
       min-height: 42px;
       padding: 0 14px;
@@ -100,10 +154,21 @@
       letter-spacing: .04em;
       white-space: nowrap;
     }
-    .workspace-tree-property-grid { grid-template-columns: minmax(150px, 1.6fr) repeat(3, minmax(52px, .48fr)) repeat(5, minmax(82px, .82fr)) minmax(82px, .8fr); }
-    .workspace-tree-room-grid { grid-template-columns: minmax(160px, 1.5fr) minmax(70px, .55fr) repeat(3, minmax(82px, .85fr)) minmax(64px, .6fr) minmax(82px, .75fr) minmax(76px, .65fr) minmax(70px, .55fr); }
-    .workspace-tree-item { display: block; min-width: 960px; border-bottom: 1px solid var(--border); background: var(--surface); }
-    .workspace-room-item { min-width: 920px; }
+    /* 列序：PRD 业务列不动，原型的收缴率/状态/操作按“对象 → 业务量 → 强调列 →
+       状态 → 操作”追加在后面（design.md §2.3）。
+
+       最小宽度按“实测内容”定，不按视觉比例估：这一页的货币统一带币种前缀和
+       小数位（"EUR 4200.00" 实画 99px，比原型里的 "€5,200" 长得多），轨道给
+       窄了文字会互相压过去。同时**不写 min-width 钉死整表宽度** —— 钉死时
+       12 列最小宽之和会恰好顶到容器，却漏算了 11 条列间距和网格自身的
+       padding，于是整块横滚；去掉钉死后 minmax() 的下界就是真正的下界，
+       fr 只在有余量时才会伸。表头与行共用同一个网格类，横向滚动（1024 档
+       仍会滚）时两者不会错位。
+       实测（scripts/audit/probe-grid-fit.mjs）：1366/1440/1920 × 三视角
+       全部 wrapScroll === wrapClient 且 0 处压字。 */
+    .workspace-tree-property-grid { grid-template-columns: minmax(98px, 1.4fr) minmax(28px, .3fr) repeat(2, minmax(36px, .42fr)) repeat(5, minmax(104px, .8fr)) minmax(44px, .6fr) minmax(68px, .7fr) minmax(72px, .7fr); }
+    .workspace-tree-room-grid { grid-template-columns: minmax(104px, 1.4fr) minmax(50px, .5fr) repeat(3, minmax(104px, .8fr)) minmax(44px, .6fr) minmax(72px, .7fr) minmax(68px, .7fr) minmax(72px, .7fr); }
+    .workspace-tree-item { display: block; border-bottom: 1px solid var(--border); background: var(--surface); }
     .workspace-tree-summary {
       min-height: 64px;
       padding: 10px 14px;
@@ -129,11 +194,13 @@
     .workspace-obligation-row small { display: block; margin-top: 3px; overflow: hidden; color: var(--foreground-muted); font-size: 11px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
     .workspace-tree-caret { flex: 0 0 10px; width: 10px; height: 10px; transition: transform .16s ease; }
     .workspace-tree-caret::before { display: block; width: 0; height: 0; content: ""; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 6px solid var(--foreground-muted); }
+    /* 展开/收起仍由原生 <details> 驱动，这里只负责旋转箭头。键盘可达性与
+       aria-expanded 由浏览器维护，本页不引入 JS 状态（design.md §2.2）。 */
     .workspace-tree-item[open] > .workspace-tree-summary .workspace-tree-caret,
     .workspace-room-tree[open] > .workspace-tree-summary .workspace-tree-caret,
     .workspace-tree-mobile[open] > summary .workspace-tree-caret,
     .workspace-room-mobile[open] > summary .workspace-tree-caret { transform: rotate(90deg); }
-    .workspace-tree-content { padding: 12px 18px 16px 34px; background: var(--surface-muted); }
+    .workspace-tree-content { padding: 12px 18px 16px; background: var(--surface-muted); }
     .workspace-tree-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 32px; margin-bottom: 8px; color: var(--foreground-muted); font-size: 12px; }
     .workspace-tree-toolbar > span { display: flex; gap: 14px; }
     .workspace-tree-toolbar a,
@@ -142,13 +209,19 @@
     .workspace-tree-link a:hover { text-decoration: underline; }
     .workspace-room-tree { display: block; border-top: 1px solid var(--border); }
     .workspace-room-tree > .workspace-tree-summary { min-height: 56px; padding-right: 8px; padding-left: 8px; }
+    /* 三级缩进（原型 .tree-level-1/.tree-level-2）。缩进量写在“这一行”的身上，
+       不靠容器 padding 猜层级：房产 18px → 房间 +22px → 租客责任 +30px。 */
+    .tree-level-1 { padding-left: 22px; }
+    .tree-level-2 { padding-left: 30px; }
     .workspace-tree-link { font-size: 11px; }
-    .workspace-obligation-list { padding: 8px 10px 10px 28px; background: var(--surface); }
+    /* 只写三边：左边距归 .tree-level-2 管，写成 padding 简写会把缩进清零。 */
+    .workspace-obligation-list { padding-top: 8px; padding-right: 10px; padding-bottom: 10px; background: var(--surface); }
     .workspace-obligation-head,
-    .workspace-obligation-row { display: grid; grid-template-columns: minmax(135px, 1.3fr) repeat(3, minmax(84px, .75fr)) minmax(150px, 1.1fr) minmax(88px, .7fr); align-items: center; gap: 12px; }
+    .workspace-obligation-row { display: grid; grid-template-columns: minmax(104px, 1.3fr) repeat(3, minmax(104px, .75fr)) minmax(42px, .55fr) minmax(100px, .9fr) minmax(68px, .7fr) minmax(72px, .8fr); align-items: center; gap: 12px 10px; }
     .workspace-obligation-head { min-height: 32px; color: var(--foreground-muted); font: 700 10px var(--mono); }
     .workspace-obligation-row { min-height: 48px; border-top: 1px solid var(--border); font-size: 12px; }
     .workspace-obligation-row > span { min-width: 0; }
+    .workspace-obligation-row .workspace-row-action .btn { min-height: 28px; padding: 0 8px; font-size: 11px; }
     .workspace-tree-empty { margin: 0; padding: 14px 10px; color: var(--foreground-muted); font-size: 12px; }
     .workspace-tree-mobile-list { display: none; }
     .workspace-tree-card { padding: 0; border-bottom: 1px solid var(--border); }
@@ -186,21 +259,35 @@
       .workspace-action-queue { order: 2; }
       .workspace-action-queue .panel-head { padding: 12px 14px; }
       .workspace-action-queue .panel-head p { display: none; }
+      .workspace-queue-head-meta { gap: 8px; }
       .workspace-queue-list { grid-template-columns: 1fr; }
       .workspace-queue-item { min-height: 132px; padding: 12px 14px; }
+      .workspace-queue-item:not(:last-child) { border-right: 0; }
       .workspace-queue-actions .btn { min-height: 44px; }
-      .workspace-queue-more { padding: 10px 14px; }
       .workspace-queue-empty { padding: 14px; }
       .workspace-mobile-view-heading { order: 3; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
       .workspace-mobile-view-heading strong { font-size: 18px; }
       .workspace-mobile-view-heading span { color: var(--foreground-muted); font-size: 11px; text-align: right; }
-      .workspace-tabs { order: 4; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin: 0; }
+      /* 维度切换与筛选在表格卡内（本子任务把 .workspace-tabs 移了进来），
+         手机端整卡片就是 order 4，不再需要单独给 tabs 排序号。 */
+      .workspace-list-panel { order: 4; width: 100%; }
+      .workspace-list-controls { display: grid; gap: 10px; padding: 12px 14px; }
+      .workspace-tabs { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
       .workspace-tabs .btn { min-height: 42px; padding: 8px; }
       .workspace-tab-desktop { display: none; }
       .workspace-tab-mobile { display: inline; }
-      .workspace-list-panel { order: 5; width: 100%; }
+      .workspace-filters { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+      .workspace-filters .search { grid-column: 1/-1; min-width: 0; }
+      .workspace-filters .property { min-width: 0; }
+      .workspace-filters select, .workspace-filters input { min-height: 44px; }
+      .workspace-filters .btn { min-height: 44px; }
+      .workspace-dimension-summary { gap: 6px; padding: 12px 14px 0; }
+      .workspace-dimension-head { padding: 14px; }
+      .workspace-row-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+      .workspace-row-actions > .btn, .workspace-row-actions > .collection-settle > summary { display: flex; width: 100%; min-height: 44px; align-items: center; justify-content: center; }
+      .workspace-row-actions .collection-settle { min-width: 0; }
+      .workspace-row-actions .collection-balance-form { position: static; display: grid; gap: 7px; min-width: 0; margin-top: 8px; box-shadow: none; }
       .workspace > .notice { order: 1; margin: 0; }
-      .workspace-summary { grid-template-columns: repeat(2,minmax(0,1fr)); }
       .workspace-period input { flex: 1 1 0; width: auto; min-width: 0; }
       .workspace-desktop-list { display: none; }
       .workspace-mobile-list { display: grid; gap: 0; }

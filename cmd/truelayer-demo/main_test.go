@@ -1165,7 +1165,10 @@ func TestFallbackTransactionPageRowsFiltersPendingTransactionsByPeriod(t *testin
 // The pending-transactions entry point must carry the selected month, so acting
 // on it keeps the user on the month they were reviewing. This used to be asserted
 // on the removed legacy dashboard template; the live carrier is the room
-// workspace, whose own "查看全部待处理流水" link the template builds from .Period.
+// workspace, whose own "查看全部流水" link the template builds from .Period. The
+// 09-19 alignment moved that link out of the queue footer and into the panel
+// head (the prototype's .link-btn), which is why the needle is now the anchor
+// inside .workspace-queue-head-meta rather than a footer element.
 //
 // The item-level ListURL is loader-supplied, so it must not be able to satisfy
 // this assertion: the fixture deliberately points it at another month, and the
@@ -1176,7 +1179,7 @@ func TestRentWorkspaceLinksPendingCountToSelectedPeriod(t *testing.T) {
 		Period:       "2026-09",
 		PeriodLabel:  "2026年9月",
 		PendingCount: 4,
-		PendingItems: []rentWorkspacePendingItem{{Title: "待确认付款人", Amount: "EUR 800.00", ListURL: "/transactions?period=2026-08&match_status=pending"}},
+		PendingItems: []rentWorkspacePendingItem{{Index: 1, Title: "待确认付款人", Amount: "EUR 800.00", ListURL: "/transactions?period=2026-08&match_status=pending"}},
 	})
 	if err != nil {
 		t.Fatal(err)

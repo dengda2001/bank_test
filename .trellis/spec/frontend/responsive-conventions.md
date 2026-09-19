@@ -138,7 +138,7 @@ disposition is fixed:
 |---|---|---|---|
 | `collection-pages.css` | 900 | `.dunning-layout` two-column → one | kept at 900; it is a page-local layout choice the prototype makes at 760 |
 | `collection-pages.css` | 900 → **1100** | `.collection-summary` four columns → two | **moved to 1100**: the prototype does it in its own `@media(max-width:1100px)` |
-| `rent-workspace.css` | 981 | the desktop action-queue (3 columns, inline buttons) | kept; it owns the same rail switch as the shared 981 |
+| `rent-workspace.css` | 981 | the desktop action-queue's **single link-styled button** | kept, but **narrowed**: the 3-column grid and the `:not(:last-child)` border moved down into the base rules (the prototype lays the queue out the same way at every width it draws), so the 981 block now owns only the desktop button treatment. It never owned the nav rail switch — the shared 981 in `workspace.css` does. Recorded 2026-09-20 after `09-19-dashboard-alignment` deleted the whole block and regressed both the button count and the border rule |
 | `object-lists.css` | 980/981 | table floors / a heading nudge | kept; it is the page-local copy of the nav threshold |
 | `property-detail.css`, `room-detail.css` | 980 / 900 | two-column detail grids → one | candidates for 1100 in the page-alignment subtasks; not moved here |
 
