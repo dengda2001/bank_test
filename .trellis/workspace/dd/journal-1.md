@@ -895,3 +895,37 @@ Seeded the local rentops database from the Rosewood rent ledger (4 properties / 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 26: 删除无库降级 dashboard 模板（死代码收敛）
+
+**Date**: 2026-09-19
+**Task**: 删除无库降级 dashboard 模板（死代码收敛）
+**Branch**: `main`
+
+### Summary
+
+删掉 rentDashboardTemplate 及其唯一的 db==nil 入口，dashboard.go 569→189 行。/bills 与 /dunning 逐字节不变（独立复现）。计划阶段核实推翻了一半前提：renderRentDashboard 有 4 个调用点、3 个是活的，函数与 switch 必须留。复核推翻首轮「全绿」——修了 1 处恒真断言、1 处丢失的别名覆盖、1 个丢失的非法输入测试。两处原型功能缺口（催收抽屉、重试此人按钮）已登记交给 ③。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c3c6ecb` | (see git log) |
+| `95ba6e7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

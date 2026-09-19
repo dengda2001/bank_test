@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 25
+- **Total Sessions**: 26
 - **Last Active**: 2026-09-19
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~897 | Active |
+| `journal-1.md` | ~931 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 26 | 2026-09-19 | 删除无库降级 dashboard 模板（死代码收敛） | `c3c6ecb`, `95ba6e7` | `main` |
 | 25 | 2026-09-19 | 桌面契约解冻与 1100 断点（子任务 ①） | `c944538`, `3951263` | `main` |
 | 24 | 2026-09-19 | 房间视角金额：改读租客义务，放弃 charge 生产者 | `77739ff` | `main` |
 | 23 | 2026-09-19 | Rosewood test data seeding and audit seeder repair | `98a692a`, `ec60726`, `15d49bb`, `abb74ac`, `8e9dc5c` | `main` |
