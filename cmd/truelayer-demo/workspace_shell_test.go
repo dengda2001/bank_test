@@ -256,3 +256,45 @@ func TestOnlySuccessFlashesAreMarkedForTheToast(t *testing.T) {
 		t.Fatalf("found only %d data-toast markers; the scan is not reading the real sources", scanned)
 	}
 }
+
+// The 641 tier gives the rail `position: sticky`, and a `min-width` media query
+// keeps matching above its own threshold -- so the rule is still in force in the
+// 641-980 range, where the 980 tier collapses `.app` to one column. There the
+// rail becomes a 100vh sticky box that scrolls with the document and paints over
+// the body. The 980 block must therefore undo it explicitly; "we did not write
+// position there" is not an undo. Scanned on the stylesheet because no Go test
+// can evaluate a cascade, and the source order is half of the fix.
+func TestTheCollapsedTierUnswebsTheStickyRail(t *testing.T) {
+	index981 := strings.Index(workspacePageCSS, "@media (max-width: 980px)")
+	index641 := strings.Index(workspacePageCSS, "@media (min-width: 641px)")
+	index640 := strings.Index(workspacePageCSS, "@media (max-width: 640px)")
+	if index641 < 0 || index981 < 0 || index640 < 0 {
+		t.Fatal("the 641 / 980 / 640 tiers must all exist; a missing one would make this scan vacuous")
+	}
+	if !(index641 < index981 && index981 < index640) {
+		t.Fatalf("tier order is 641=%d, 980=%d, 640=%d; the undo only wins if 980 comes after 641 and before the 640 drawer", index641, index981, index640)
+	}
+
+	block := func(start int) string {
+		end := strings.Index(workspacePageCSS[start:], "\n    }")
+		if end < 0 {
+			end = len(workspacePageCSS) - start
+		}
+		return workspacePageCSS[start : start+end]
+	}
+
+	tier641 := block(index641)
+	if !strings.Contains(tier641, ".sidebar {") || !regexp.MustCompile(`\.sidebar\s*\{[^}]*position:\s*sticky`).MatchString(tier641) {
+		t.Fatal("the 641 tier must make the rail sticky; otherwise the undo below has nothing to undo and this test proves nothing")
+	}
+
+	tier981 := block(index981)
+	if !regexp.MustCompile(`\.sidebar\s*\{[^}]*position:\s*static`).MatchString(tier981) {
+		t.Fatal("the 980 tier collapses .app to one column, so it must write `.sidebar { position: static }`; leaving position unset keeps the 641 sticky and lets the rail cover the body")
+	}
+
+	tier640 := block(index640)
+	if !regexp.MustCompile(`\.sidebar\s*\{[^}]*position:\s*fixed`).MatchString(tier640) {
+		t.Fatal("the 640 tier must still turn the rail into a fixed off-canvas drawer; the 980 static must not leak past it")
+	}
+}

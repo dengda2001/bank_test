@@ -1,0 +1,62 @@
+{
+  "base": "http://127.0.0.1:18097",
+  "period": "2026-09",
+  "overflow": [],
+  "errors": [],
+  "toggle": {
+    "properties": {
+      "togglePresent": true,
+      "ariaBefore": "false",
+      "ariaAfter": "false",
+      "panelDisplayBefore": "none",
+      "panelDisplayAfter": "none",
+      "expanded": false
+    },
+    "rooms": {
+      "togglePresent": true,
+      "ariaBefore": "false",
+      "ariaAfter": "false",
+      "panelDisplayBefore": "none",
+      "panelDisplayAfter": "none",
+      "expanded": false
+    },
+    "tenancies": {
+      "togglePresent": false
+    }
+  },
+  "sidebar": {
+    "800": {
+      "railPresent": true,
+      "position": "static",
+      "railRect": {
+        "top": -1084,
+        "bottom": -384,
+        "height": 700
+      },
+      "centerHitInsideRail": false,
+      "centerHit": "SELECT."
+    },
+    "900": {
+      "railPresent": true,
+      "position": "static",
+      "railRect": {
+        "top": -1008,
+        "bottom": -308,
+        "height": 700
+      },
+      "centerHitInsideRail": false,
+      "centerHit": "LABEL.property"
+    },
+    "980": {
+      "railPresent": true,
+      "position": "static",
+      "railRect": {
+        "top": -978,
+        "bottom": -278,
+        "height": 700
+      },
+      "centerHitInsideRail": false,
+      "centerHit": "LABEL.property"
+    }
+  }
+}

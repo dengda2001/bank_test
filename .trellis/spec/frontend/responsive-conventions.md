@@ -634,3 +634,30 @@ its toast is a save confirmation (`showToast("操作已完成")`,
 same failure is never announced twice. `TestOnlySuccessFlashesAreMarkedForTheToast`
 scans every template and Go template literal, so a page added later cannot quietly
 mark an error.
+
+A marked notice renders **fixed text chosen by the template**, never a value taken
+from the request. The `Message` query parameter is a *code*, matched with
+`{{if eq .Message "some_code"}}`, and the sentence lives in the template; the
+`{{if .Message}}{{.Message}}{{end}}` form prints whatever the URL said, so a crafted
+link shows arbitrary text in a green success toast inside the trusted UI
+(`html/template` escapes it, so this is content injection, not XSS, but the
+affordance is a system-generated confirmation the user did not cause). Only the
+code form may carry `data-toast`. Recorded 2026-09-20: three pages still used the
+raw form and are tracked in `09-20-mobile-filter-and-duplicate-errors`.
+
+### 8.2 The 980 tier must undo the rail's sticky explicitly
+
+`@media (min-width: 641px)` gives `.sidebar` `position: sticky; top: 0;
+height: 100vh`. That tier **also matches from 641 to 980**, where
+`@media (max-width: 980px)` collapses `.app` to one column — so the rail becomes a
+100vh sticky box in the normal flow, scrolls with the document, and, because
+positioned elements paint above in-flow content, **covers the body**: at 800×700
+scrolled to the bottom, `elementFromPoint` at the viewport centre hits a node
+inside the rail and no heading is visible.
+
+"Leave `position` unset in the 980 tier" does not mean "unset" — the 641 rule is
+still in force there. The 980 block must write `position: static`. Source order
+makes it win (`.sidebar` in both, equal specificity, the 980 block comes later),
+and the `max-width: 640px` drawer that follows still turns the rail into a `fixed`
+off-canvas panel. Recorded 2026-09-20 after `09-19-shell-alignment` shipped the
+sticky without the reset.
