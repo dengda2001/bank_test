@@ -151,25 +151,30 @@ func TestRentWorkspaceFiltersRejectInvalidScopeAndView(t *testing.T) {
 	}
 }
 
-func TestBuildRentWorkspaceSeparatesVacantMissingChargeAndPaidRooms(t *testing.T) {
+func TestBuildRentWorkspaceAggregatesLazyRoomObligationsWithoutCharges(t *testing.T) {
 	period := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	propertyOne := property{ID: 1, UserID: 7, Name: "Canal House", Status: "active"}
 	propertyTwo := property{ID: 2, UserID: 7, Name: "Park House", Status: "active"}
-	roomPaid := room{ID: 11, UserID: 7, PropertyID: 1, RoomLabel: "A-01", Status: "active", ActiveFrom: period.AddDate(0, -3, 0)}
+	roomShared := room{ID: 11, UserID: 7, PropertyID: 1, RoomLabel: "A-01", Status: "active", ActiveFrom: period.AddDate(0, -3, 0)}
 	roomVacant := room{ID: 12, UserID: 7, PropertyID: 1, RoomLabel: "A-02", Status: "active", ActiveFrom: period.AddDate(0, -3, 0)}
-	roomMissingCharge := room{ID: 21, UserID: 7, PropertyID: 2, RoomLabel: "P-01", Status: "active", ActiveFrom: period.AddDate(0, -3, 0)}
+	roomMissingObligation := room{ID: 21, UserID: 7, PropertyID: 2, RoomLabel: "P-01", Status: "active", ActiveFrom: period.AddDate(0, -3, 0)}
 	tenantOne := tenant{ID: 101, UserID: 7, Name: "Aoife Murphy", Status: "active", RentStartDate: period.AddDate(0, -3, 0)}
 	tenantTwo := tenant{ID: 102, UserID: 7, Name: "Zoe Byrne", Status: "active", RentStartDate: period.AddDate(0, -3, 0)}
-	agreementPaid := tenancyAgreement{ID: 301, UserID: 7, RoomID: 11, Status: "active", StartDate: period.AddDate(0, -3, 0), MonthlyRentCents: 100000, Currency: "EUR", DueDay: 5}
-	agreementMissing := tenancyAgreement{ID: 302, UserID: 7, RoomID: 21, Status: "active", StartDate: period.AddDate(0, -3, 0), MonthlyRentCents: 80000, Currency: "EUR", DueDay: 5}
-	charge := rentCharge{ID: 401, UserID: 7, PropertyID: 1, RoomID: 11, TenancyAgreementID: agreementPaid.ID, PeriodMonth: period, DueDate: dueDateForMonth(period, 5), ExpectedAmountCents: 100000, Currency: "EUR", RecordStatus: obligationRecordActive}
-	obligationOne := rentObligation{ID: 501, UserID: 7, RentChargeID: &charge.ID, TenantID: tenantOne.ID, TenantNameSnapshot: nullableString(tenantOne.Name), PeriodMonth: period, DueDate: charge.DueDate, ExpectedAmountCents: 60000, Currency: "EUR", RecordStatus: obligationRecordActive}
-	obligationTwo := rentObligation{ID: 502, UserID: 7, RentChargeID: &charge.ID, TenantID: tenantTwo.ID, TenantNameSnapshot: nullableString(tenantTwo.Name), PeriodMonth: period, DueDate: charge.DueDate, ExpectedAmountCents: 40000, Currency: "EUR", RecordStatus: obligationRecordActive}
+	tenantThree := tenant{ID: 103, UserID: 7, Name: "Niamh Kelly", Status: "active", RentStartDate: period.AddDate(0, -3, 0)}
+	// The agreement rent is deliberately different from the sum of the tenants'
+	// obligations so a regression that starts reading room rent (or rent × heads)
+	// cannot pass this test.
+	agreementShared := tenancyAgreement{ID: 301, UserID: 7, RoomID: roomShared.ID, Status: "active", StartDate: period.AddDate(0, -3, 0), MonthlyRentCents: 300000, Currency: "EUR", DueDay: 5}
+	agreementUnbilled := tenancyAgreement{ID: 302, UserID: 7, RoomID: roomMissingObligation.ID, Status: "active", StartDate: period.AddDate(0, -3, 0), MonthlyRentCents: 80000, Currency: "EUR", DueDay: 5}
+	// Lazy obligations keep rent_charge_id NULL: room money must come from these
+	// rows, not from a rent_charges snapshot.
+	obligationOne := rentObligation{ID: 501, UserID: 7, TenantID: tenantOne.ID, TenantNameSnapshot: nullableString(tenantOne.Name), PeriodMonth: period, DueDate: dueDateForMonth(period, 3), ExpectedAmountCents: 60000, Currency: "EUR", RecordStatus: obligationRecordActive}
+	obligationTwo := rentObligation{ID: 502, UserID: 7, TenantID: tenantTwo.ID, TenantNameSnapshot: nullableString(tenantTwo.Name), PeriodMonth: period, DueDate: dueDateForMonth(period, 9), ExpectedAmountCents: 40000, Currency: "EUR", RecordStatus: obligationRecordActive}
 	transaction := paymentTransaction{ID: 601, UserID: 7, Direction: "income", AmountCents: 100000, Currency: "EUR", MatchedTenantID: &tenantOne.ID, PayerName: nullableString(tenantOne.Name), TransactionTime: timePtr(period.AddDate(0, 0, 4))}
 	allocationOne := paymentAllocation{ID: 701, UserID: 7, PaymentTransactionID: transaction.ID, RentObligationID: &obligationOne.ID, TenantID: &tenantOne.ID, AmountCents: 60000, AllocationKind: allocationKindRent, Status: allocationStatusConfirmed, ConfirmationSource: "manual"}
 	allocationTwo := paymentAllocation{ID: 702, UserID: 7, PaymentTransactionID: transaction.ID, RentObligationID: &obligationTwo.ID, TenantID: &tenantTwo.ID, AmountCents: 40000, AllocationKind: allocationKindRent, Status: allocationStatusConfirmed, ConfirmationSource: "manual"}
 	expensePropertyID := propertyOne.ID
-	expenseRoomID := roomPaid.ID
+	expenseRoomID := roomShared.ID
 	expenses := []manualExpense{
 		{ID: 801, UserID: 7, PropertyID: &expensePropertyID, AmountCents: 5000, Currency: "EUR", ExpenseDate: period.AddDate(0, 0, 3), RecordStatus: obligationRecordActive},
 		{ID: 802, UserID: 7, PropertyID: &expensePropertyID, RoomID: &expenseRoomID, AmountCents: 10000, Currency: "EUR", ExpenseDate: period.AddDate(0, 0, 6), RecordStatus: obligationRecordActive},
@@ -179,12 +184,11 @@ func TestBuildRentWorkspaceSeparatesVacantMissingChargeAndPaidRooms(t *testing.T
 		UserID:       7,
 		PeriodMonth:  period,
 		Properties:   []property{propertyOne, propertyTwo},
-		Rooms:        []room{roomPaid, roomVacant, roomMissingCharge},
-		Agreements:   []tenancyAgreement{agreementPaid, agreementMissing},
-		Parties:      []agreementParty{{UserID: 7, AgreementID: agreementPaid.ID, TenantID: tenantOne.ID, ResponsibilityCents: 60000, Status: "active"}, {UserID: 7, AgreementID: agreementPaid.ID, TenantID: tenantTwo.ID, ResponsibilityCents: 40000, Status: "active"}, {UserID: 7, AgreementID: agreementMissing.ID, TenantID: tenantOne.ID, ResponsibilityCents: 80000, Status: "active"}},
-		Charges:      []rentCharge{charge},
+		Rooms:        []room{roomShared, roomVacant, roomMissingObligation},
+		Agreements:   []tenancyAgreement{agreementShared, agreementUnbilled},
+		Parties:      []agreementParty{{UserID: 7, AgreementID: agreementShared.ID, TenantID: tenantOne.ID, ResponsibilityCents: 60000, Status: "active"}, {UserID: 7, AgreementID: agreementShared.ID, TenantID: tenantTwo.ID, ResponsibilityCents: 40000, Status: "active"}, {UserID: 7, AgreementID: agreementUnbilled.ID, TenantID: tenantThree.ID, ResponsibilityCents: 80000, Status: "active"}},
 		Obligations:  []rentObligation{obligationOne, obligationTwo},
-		Tenants:      []tenant{tenantOne, tenantTwo},
+		Tenants:      []tenant{tenantOne, tenantTwo, tenantThree},
 		Transactions: []paymentTransaction{transaction},
 		Allocations:  []paymentAllocation{allocationOne, allocationTwo},
 		Expenses:     expenses,
@@ -195,6 +199,10 @@ func TestBuildRentWorkspaceSeparatesVacantMissingChargeAndPaidRooms(t *testing.T
 	}
 	if len(data.RoomRows) != 3 || data.RoomRows[0].Status != "needs_review" || data.RoomRows[0].TenantCount != 1 || data.RoomRows[1].Status != "paid" || data.RoomRows[2].Status != "vacant" {
 		t.Fatalf("room rows=%+v", data.RoomRows)
+	}
+	// A shared room is the sum of its tenants' obligations, never room rent × headcount.
+	if data.RoomRows[1].ExpectedCents != 100000 || data.RoomRows[1].TenantCount != 2 || data.RoomRows[1].DueDate != "2026-09-03" {
+		t.Fatalf("shared room row=%+v", data.RoomRows[1])
 	}
 	if data.Summary.ExpectedCents != 100000 || data.Summary.PaidCents != 100000 || data.Summary.BalanceCents != 0 || data.Summary.ExpenseCents != 15000 {
 		t.Fatalf("summary=%+v", data.Summary)
@@ -221,15 +229,119 @@ func TestBuildRentWorkspaceSeparatesVacantMissingChargeAndPaidRooms(t *testing.T
 	if propertyTree == nil || len(propertyTree.Rooms) != 2 || len(propertyTree.Rooms[0].Tenants) != 2 {
 		t.Fatalf("property tree=%+v", data.PropertyTreeRows)
 	}
-	var paidRoomTree *rentWorkspaceRoomTreeRow
+	var sharedRoomTree *rentWorkspaceRoomTreeRow
 	for index := range data.RoomTreeRows {
-		if data.RoomTreeRows[index].Room.RoomID == roomPaid.ID {
-			paidRoomTree = &data.RoomTreeRows[index]
+		if data.RoomTreeRows[index].Room.RoomID == roomShared.ID {
+			sharedRoomTree = &data.RoomTreeRows[index]
 			break
 		}
 	}
-	if paidRoomTree == nil || len(paidRoomTree.Tenants) != 2 {
+	if sharedRoomTree == nil || len(sharedRoomTree.Tenants) != 2 {
 		t.Fatalf("room tree=%+v", data.RoomTreeRows)
+	}
+}
+
+func TestBuildRentWorkspaceVacantRoomStaysEmptyWithoutObligations(t *testing.T) {
+	period := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	propertyRow := property{ID: 1, UserID: 7, Name: "Canal House", Status: "active"}
+	roomRow := room{ID: 11, UserID: 7, PropertyID: propertyRow.ID, RoomLabel: "A-01", Status: "active", ActiveFrom: period.AddDate(0, -3, 0)}
+	data, err := buildRentWorkspace(rentWorkspaceInput{
+		UserID:      7,
+		PeriodMonth: period,
+		Properties:  []property{propertyRow},
+		Rooms:       []room{roomRow},
+		Now:         time.Date(2026, 9, 20, 0, 0, 0, 0, time.UTC),
+	}, defaultRentWorkspaceFilters(period))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(data.RoomRows) != 1 || data.RoomRows[0].Status != "vacant" || data.RoomRows[0].ExpectedCents != 0 || data.RoomRows[0].ExpectedAmount != "—" || data.RoomRows[0].PaidAmount != "—" || data.RoomRows[0].DueDate != "—" {
+		t.Fatalf("vacant room row=%+v", data.RoomRows)
+	}
+	if data.Summary.ExpectedCents != 0 || data.Summary.VacantRooms != 1 || len(data.TenantRows) != 0 {
+		t.Fatalf("vacant summary=%+v tenants=%+v", data.Summary, data.TenantRows)
+	}
+}
+
+func TestBuildRentWorkspaceAmbiguousTenantCountsInNeitherRoom(t *testing.T) {
+	period := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	propertyRow := property{ID: 1, UserID: 7, Name: "Canal House", Status: "active"}
+	roomOne := room{ID: 11, UserID: 7, PropertyID: propertyRow.ID, RoomLabel: "A-01", Status: "active", ActiveFrom: period.AddDate(0, -3, 0)}
+	roomTwo := room{ID: 12, UserID: 7, PropertyID: propertyRow.ID, RoomLabel: "A-02", Status: "active", ActiveFrom: period.AddDate(0, -3, 0)}
+	tenantRow := tenant{ID: 101, UserID: 7, Name: "Aoife Murphy", Status: "active", RentStartDate: period.AddDate(0, -3, 0)}
+	agreementOne := tenancyAgreement{ID: 301, UserID: 7, RoomID: roomOne.ID, Status: "active", StartDate: period.AddDate(0, -3, 0), MonthlyRentCents: 100000, Currency: "EUR", DueDay: 5}
+	agreementTwo := tenancyAgreement{ID: 302, UserID: 7, RoomID: roomTwo.ID, Status: "active", StartDate: period.AddDate(0, -3, 0), MonthlyRentCents: 100000, Currency: "EUR", DueDay: 5}
+	obligation := rentObligation{ID: 501, UserID: 7, TenantID: tenantRow.ID, PeriodMonth: period, DueDate: dueDateForMonth(period, 5), ExpectedAmountCents: 100000, Currency: "EUR", RecordStatus: obligationRecordActive}
+	data, err := buildRentWorkspace(rentWorkspaceInput{
+		UserID:      7,
+		PeriodMonth: period,
+		Properties:  []property{propertyRow},
+		Rooms:       []room{roomOne, roomTwo},
+		Agreements:  []tenancyAgreement{agreementOne, agreementTwo},
+		Parties:     []agreementParty{{UserID: 7, AgreementID: agreementOne.ID, TenantID: tenantRow.ID, ResponsibilityCents: 100000, Status: "active"}, {UserID: 7, AgreementID: agreementTwo.ID, TenantID: tenantRow.ID, ResponsibilityCents: 100000, Status: "active"}},
+		Obligations: []rentObligation{obligation},
+		Tenants:     []tenant{tenantRow},
+		Now:         time.Date(2026, 9, 20, 0, 0, 0, 0, time.UTC),
+	}, defaultRentWorkspaceFilters(period))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(data.RoomRows) != 2 || data.RoomRows[0].ExpectedCents != 0 || data.RoomRows[1].ExpectedCents != 0 || data.RoomRows[0].Status != "needs_review" || data.RoomRows[1].Status != "needs_review" {
+		t.Fatalf("ambiguous rooms=%+v", data.RoomRows)
+	}
+	if data.Summary.ExpectedCents != 0 || len(data.TenantRows) != 0 {
+		t.Fatalf("ambiguous summary=%+v tenants=%+v", data.Summary, data.TenantRows)
+	}
+}
+
+// The test above cannot tell the "ambiguous room" flag apart from the
+// "agreement but no obligations" branch, because its ambiguous tenant is each
+// room's only occupant. Here the ambiguous tenant shares a room with a settled
+// one, so the room has obligations and that branch never fires: the room total
+// is knowingly short, and the only thing that can say so is the flag.
+func TestBuildRentWorkspaceAmbiguousTenantFlagsMixedRoom(t *testing.T) {
+	period := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	propertyRow := property{ID: 1, UserID: 7, Name: "Canal House", Status: "active"}
+	roomOne := room{ID: 11, UserID: 7, PropertyID: propertyRow.ID, RoomLabel: "A-01", Status: "active", ActiveFrom: period.AddDate(0, -3, 0)}
+	roomTwo := room{ID: 12, UserID: 7, PropertyID: propertyRow.ID, RoomLabel: "A-02", Status: "active", ActiveFrom: period.AddDate(0, -3, 0)}
+	ambiguousTenantRow := tenant{ID: 101, UserID: 7, Name: "Aoife Murphy", Status: "active", RentStartDate: period.AddDate(0, -3, 0)}
+	settledTenantRow := tenant{ID: 102, UserID: 7, Name: "Brian Kelly", Status: "active", RentStartDate: period.AddDate(0, -3, 0)}
+	ambiguousAgreementOne := tenancyAgreement{ID: 301, UserID: 7, RoomID: roomOne.ID, Status: "active", StartDate: period.AddDate(0, -3, 0), MonthlyRentCents: 100000, Currency: "EUR", DueDay: 5}
+	ambiguousAgreementTwo := tenancyAgreement{ID: 302, UserID: 7, RoomID: roomTwo.ID, Status: "active", StartDate: period.AddDate(0, -3, 0), MonthlyRentCents: 100000, Currency: "EUR", DueDay: 5}
+	settledAgreement := tenancyAgreement{ID: 303, UserID: 7, RoomID: roomOne.ID, Status: "active", StartDate: period.AddDate(0, -3, 0), MonthlyRentCents: 100000, Currency: "EUR", DueDay: 5}
+	data, err := buildRentWorkspace(rentWorkspaceInput{
+		UserID:      7,
+		PeriodMonth: period,
+		Properties:  []property{propertyRow},
+		Rooms:       []room{roomOne, roomTwo},
+		Agreements:  []tenancyAgreement{ambiguousAgreementOne, ambiguousAgreementTwo, settledAgreement},
+		Parties: []agreementParty{
+			{UserID: 7, AgreementID: ambiguousAgreementOne.ID, TenantID: ambiguousTenantRow.ID, ResponsibilityCents: 100000, Status: "active"},
+			{UserID: 7, AgreementID: ambiguousAgreementTwo.ID, TenantID: ambiguousTenantRow.ID, ResponsibilityCents: 100000, Status: "active"},
+			{UserID: 7, AgreementID: settledAgreement.ID, TenantID: settledTenantRow.ID, ResponsibilityCents: 100000, Status: "active"},
+		},
+		Obligations: []rentObligation{
+			{ID: 501, UserID: 7, TenantID: ambiguousTenantRow.ID, PeriodMonth: period, DueDate: dueDateForMonth(period, 5), ExpectedAmountCents: 100000, Currency: "EUR", RecordStatus: obligationRecordActive},
+			{ID: 502, UserID: 7, TenantID: settledTenantRow.ID, PeriodMonth: period, DueDate: dueDateForMonth(period, 5), ExpectedAmountCents: 100000, Currency: "EUR", RecordStatus: obligationRecordActive},
+		},
+		Tenants: []tenant{ambiguousTenantRow, settledTenantRow},
+		Now:     time.Date(2026, 9, 20, 0, 0, 0, 0, time.UTC),
+	}, defaultRentWorkspaceFilters(period))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rooms := make(map[uint64]rentWorkspaceRoomRow, len(data.RoomRows))
+	for _, row := range data.RoomRows {
+		rooms[row.RoomID] = row
+	}
+	if got := rooms[roomOne.ID]; got.ExpectedCents != 100000 || got.Status != "needs_review" {
+		t.Fatalf("mixed room should keep the settled tenant's 100000 and be flagged: %+v", got)
+	}
+	if got := rooms[roomTwo.ID]; got.ExpectedCents != 0 || got.Status != "needs_review" {
+		t.Fatalf("second ambiguous room should be flagged: %+v", got)
+	}
+	if data.Summary.ExpectedCents != 100000 || len(data.TenantRows) != 1 || data.TenantRows[0].TenantID != settledTenantRow.ID {
+		t.Fatalf("summary=%+v tenants=%+v", data.Summary, data.TenantRows)
 	}
 }
 
@@ -352,7 +464,7 @@ func TestRoomDetailHandlerRejectsInvalidPathBeforeDatabaseAccess(t *testing.T) {
 	}
 }
 
-func TestRentWorkspaceServiceAggregatesPropertiesRoomsAndDetailOnMySQL(t *testing.T) {
+func TestRentWorkspaceServiceAggregatesLazyObligationsAndDetailOnMySQL(t *testing.T) {
 	db, sqlDB := openLedgerMySQLTestDB(t)
 	if err := runMigrations(sqlDB, "../../migrations"); err != nil {
 		t.Fatalf("run migrations: %v", err)
@@ -392,23 +504,35 @@ func TestRentWorkspaceServiceAggregatesPropertiesRoomsAndDetailOnMySQL(t *testin
 	if _, err := repo.createAgreementParty(ctx, owner.ID, agreementParty{AgreementID: agreement.ID, TenantID: primaryTenant.ID, ResponsibilityCents: 100000}); err != nil {
 		t.Fatal(err)
 	}
-	ledger := newRentLedgerService(db)
-	charge, err := ledger.ensureRentCharge(ctx, owner.ID, propertyOne.ID, roomOne.ID, period)
+	// No rent_charges row exists for this room. The workspace must materialize the
+	// tenant's monthly obligation itself and attribute it to the room through the
+	// agreement/party relationship.
+	service := newRentWorkspaceService(db)
+	generated, err := service.load(ctx, owner.ID, defaultRentWorkspaceFilters(period))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(generated.RoomRows) != 2 || generated.Summary.ExpectedCents != 100000 || generated.Summary.PaidCents != 0 {
+		t.Fatalf("generated workspace data=%+v", generated)
+	}
+	var obligation rentObligation
+	if err := db.WithContext(ctx).Where("user_id = ? AND tenant_id = ? AND period_month = ?", owner.ID, primaryTenant.ID, period).First(&obligation).Error; err != nil {
+		t.Fatalf("lazy obligation was not materialized: %v", err)
+	}
+	if obligation.RentChargeID != nil || obligation.ExpectedAmountCents != 100000 {
+		t.Fatalf("lazy obligation=%+v", obligation)
 	}
 	transaction := paymentTransaction{UserID: owner.ID, Source: "test", StableTransactionKey: "workspace-payment-" + time.Now().UTC().Format("20060102150405.000000000"), Direction: "income", AmountCents: 100000, Currency: "EUR", MatchedTenantID: &primaryTenant.ID, MatchStatus: "unmatched"}
 	if err := db.WithContext(ctx).Create(&transaction).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := newTransactionService(db).allocateTransaction(ctx, owner.ID, transaction.ID, []transactionAllocationDraft{{TenantID: primaryTenant.ID, RentObligationID: charge.Obligations[0].ID, AmountCents: 100000, Kind: allocationKindRent}}, "workspace-allocation", "manual"); err != nil {
+	if _, err := newTransactionService(db).allocateTransaction(ctx, owner.ID, transaction.ID, []transactionAllocationDraft{{TenantID: primaryTenant.ID, RentObligationID: obligation.ID, AmountCents: 100000, Kind: allocationKindRent}}, "workspace-allocation", "manual"); err != nil {
 		t.Fatal(err)
 	}
 	expensePropertyID := propertyOne.ID
 	if err := db.WithContext(ctx).Create(&manualExpense{UserID: owner.ID, PropertyID: &expensePropertyID, Description: "Repairs", Category: "Maintenance", AmountCents: 10000, Currency: "EUR", ExpenseDate: period.AddDate(0, 0, 4), PaymentMethod: "Manual", RecordStatus: obligationRecordActive}).Error; err != nil {
 		t.Fatal(err)
 	}
-	service := newRentWorkspaceService(db)
 	data, err := service.load(ctx, owner.ID, defaultRentWorkspaceFilters(period))
 	if err != nil {
 		t.Fatal(err)

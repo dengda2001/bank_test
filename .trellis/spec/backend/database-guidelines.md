@@ -1394,58 +1394,90 @@ used only for pending and other-income navigation.
 - `app.renderRentWorkspaceDashboard(w, r)` — `rent_workspace_page.go:91`.
 - `rentWorkspaceData` / `rentWorkspaceRoomAggregate` — the loader's typed input
   and the per-room aggregate.
+- `rentWorkspaceService.load(ctx, userID, filters)` calls
+  `obligationService.ensureMonthlyObligations` before its reads
+  (`rent_workspace.go:1133`), exactly like `summarizeRentDashboardWithFilters`.
+- `roomIDByTenant` / `ambiguousTenant` / `ambiguousRoom`
+  (`rent_workspace.go:399-417`) — the tenant-to-room attribution built from
+  active agreement parties, plus the tenants that map to more than one room and
+  the rooms they touch.
 - `rentLedgerService.ensureRentCharge(ctx, userID, propertyID, roomID, period)`
-  — `landlord_rent_ledger.go:244`; the only writer of `rent_charges`.
+  — `landlord_rent_ledger.go:244`; still has **no production caller**, and
+  nothing in this read path depends on it.
 
 ### 3. Contracts
 
-- **Room amounts are charge-gated.** The workspace obligation query carries
-  `AND rent_charge_id IS NOT NULL` (`rent_workspace.go:1118`); the projection
-  loop additionally skips rows whose `RentChargeID` is nil
-  (`rent_workspace.go:433`); and the per-room aggregation is entered only when
-  a charge exists for that room (`rent_workspace.go:461`). A room's
-  expected/paid/balance therefore comes **only** from obligations backed by a
-  `rent_charges` row. Lazy obligations (`rent_charge_id IS NULL`) are invisible
-  here even though `/bills` lists them at full value.
-- `ensureRentCharge` has **no production caller** — it is reached only from
-  `landlord_rent_ledger_test.go` and `rent_workspace_test.go`. Nothing in a
-  running server writes `rent_charges`, so `chargeByRoom` stays empty and every
-  room reports zero amounts. This is a product gap, not a data gap: no seeding
-  can close it.
-- Occupancy is computed from the agreement/party model
-  (`activePartyCountByRoom`), independently of charges. A room can therefore
-  show a correct tenant count with all-zero amounts; the two numbers do not
-  share a source and must not be validated against each other.
-- A room that has an active agreement and an active party but no charge is
-  reported as `needs_review` (`rent_workspace.go:508-509`), never as `vacant`
-  and never as settled.
+- **Room amounts come from obligations, not charges.** The workspace reads the
+  same rows as `/bills` — active, user-owned obligations for the requested
+  `period_month`, with no `rent_charge_id` predicate
+  (`rent_workspace.go:1152`) — and it materializes them first through the
+  idempotent `OnConflict{DoNothing: true}` upsert, so a GET never rewrites an
+  existing obligation.
+- **Room attribution is tenant → active party → agreement room.** A tenant is
+  attributed to a room when an active `agreement_parties` row joins an active
+  agreement whose dates cover the month (`rent_workspace.go:399-417`). A tenant
+  that maps to two different rooms in the same month is ambiguous: it is counted
+  in **neither** room (`rent_workspace.go:463`) and **both** rooms are flagged
+  `needs_review` (`rent_workspace.go:544`), because such a room's total is
+  knowingly short. The flag is load-bearing, not decorative: without it a room
+  shared by an ambiguous tenant and a settled one would show a quietly small
+  number with a normal status, and only a room whose sole occupant is ambiguous
+  would happen to look wrong. A tenant with no mapping is not counted at all.
+  Room money is the sum of its tenants' `expected_amount_cents`, never room rent
+  × headcount.
+- **A charge is no longer required.** `chargeByRoom` is still loaded
+  (`rent_workspace.go:489`) because a future charge's `currency` is a valid
+  fallback, but a room with attributed obligations reports its totals with or
+  without one. Occupancy remains the independent `activePartyCountByRoom`
+  computation, so the tenant count and the money share no source.
+- A room with an active agreement and active party but **no attributable
+  obligation** (including a row skipped for a non-EUR currency) is reported as
+  `needs_review` (`rent_workspace.go:537-542`), never as `vacant` and never as
+  settled. The room-level due date is the earliest attributed obligation's due
+  date (`rent_workspace.go:533`).
+- `rent_charges` still has no production writer. Its removal is a separate
+  task; this read path just no longer waits for it.
 
 ### 4. Validation & Error Matrix
 
-- No charge for a room with an active agreement and active party ->
-  `needs_review` with zero amounts; never render it as vacant or settled.
-- No charge and no agreement -> `vacant`.
-- Charge present but no obligations linked to it -> `needs_review` rather than
-  a zero-paid room (`rent_workspace.go:505-507`).
-- Non-EUR obligation currency -> `needs_review`; never convert into EUR
-  silently.
+- Room with attributed EUR obligations -> expected/paid/balance are the sums of
+  those obligations; the room is never `vacant`.
+- Room touched by an ambiguous tenant -> `needs_review` even when its other
+  tenants' obligations were counted. Its total is knowingly short of the truth,
+  and the status is the only thing that says so.
+- Room with an active agreement and active party but no attributable obligation
+  -> `needs_review` with zero amounts; never render it as vacant or settled.
+- No agreement and no party -> `vacant`; amounts render as `—`, not `0.00`.
+- Non-EUR obligation currency -> skip that row and mark the room
+  `needs_review`; never convert into EUR silently.
+- A tenant attributed to two rooms in one month -> excluded from both, so the
+  read is never double counted; both rooms are flagged `needs_review` so the
+  shortfall is visible rather than silently absent.
+- `userID == 0` -> the service refuses before any read or write.
 
 ### 5. Good/Base/Bad Cases
 
-- Good: create the charge first, link obligations to it, then read room totals
-  from the charge-backed rows.
-- Base: a room with one charge and one linked EUR obligation reports that
-  obligation's expected/paid/balance.
+- Good: let the loader materialize the month's lazy obligations, attribute each
+  obligation to its tenant's room through the active party relationship, and
+  sum the obligations per room.
+- Base: a shared room with three tenants each on €500 reports €1,500 expected,
+  not the room rent multiplied by three.
 - Bad: reading an all-zero room total as "no rent is due this month", or
   closing the gap by seeding `rent_charges` while leaving
   `tenants.monthly_rent_cents > 0` (see the warning below).
 
 ### 6. Tests Required
 
-- Database tests must assert that room totals come from charge-backed
-  obligations and that lazy obligations contribute nothing to them.
-- A test must pin `needs_review` for a room with an agreement and an active
-  party but no charge.
+- Database tests must assert that room totals come from attributed lazy
+  obligations without any `rent_charges` row, and that `load` materializes the
+  month's obligations itself.
+- Unit tests must pin a shared room's total as the sum of its tenants'
+  obligations, a vacant room's empty state, and an ambiguous tenant counting in
+  neither room. The ambiguous case must use a **mixed** room — an ambiguous
+  tenant sharing with a settled one — because a room whose sole occupant is
+  ambiguous is flagged by the empty-obligation branch anyway, so it cannot tell
+  the `needs_review` flag apart from that branch. Assert the settled tenant's
+  money is still counted **and** the room is flagged.
 - Run `go test ./... -count=1` and `go vet ./...` after changing workspace
   reads.
 
@@ -1454,27 +1486,29 @@ used only for pending and other-income navigation.
 Wrong:
 
 ```go
-// Lazy obligations are silently assumed to be part of the room totals.
-rows := loadActiveMonthlyObligations(userID, periodMonth)
-summary.ExpectedCents += sumByRoom(rows)
+// Room money is read only from charge-backed rows, so lazy obligations —
+// every row the seed actually produces — stay invisible.
+db.Where("user_id = ? AND period_month = ? AND record_status = ? AND rent_charge_id IS NOT NULL",
+    userID, periodMonth, obligationRecordActive).Find(&input.Obligations)
 ```
 
 Correct:
 
 ```go
-// The workspace reads only charge-backed obligations; a parallel lazy
-// population backs /bills and must not be merged into this read.
-db.Where("user_id = ? AND period_month = ? AND record_status = ? AND rent_charge_id IS NOT NULL",
+// Materialize and read the same obligation rows as /bills, then attribute each
+// one to its tenant's room through the active agreement party.
+db.Where("user_id = ? AND period_month = ? AND record_status = ?",
     userID, periodMonth, obligationRecordActive).Find(&input.Obligations)
 ```
 
-> **Do not close this gap by seeding `rent_charges` alone.** With
+> **Do not close the amount gap by seeding `rent_charges` alone.** With
 > `tenants.monthly_rent_cents > 0`, `ensureMonthlyObligations` still inserts a
 > lazy row for the same `(tenant_id, period_month)`. A charge-backed row's
 > generated `lazy_period_month` is NULL, and NULLs are distinct in a MySQL
 > unique index, so neither unique key collides and the pair becomes two rows —
-> breaking the lazy uniqueness invariant established by migration 013.
-> Verified by direct SQL experiment on 2026-09-19.
+> breaking the lazy uniqueness invariant established by migration 013. This
+> read now counts both rows, so a seeded charge is not just useless, it inflates
+> the room total. Verified by direct SQL experiment on 2026-09-19.
 
 ## Scenario: Local Test Data Seeding
 
@@ -1513,9 +1547,11 @@ db.Where("user_id = ? AND period_month = ? AND record_status = ? AND rent_charge
   seeded database therefore has **no** obligations until one of those pages is
   requested.
 - The fixture writes `tenants.monthly_rent_cents > 0`, which selects the lazy
-  obligation path. Room-centric amounts on `/rent-dashboard` stay zero — see
-  "Scenario: Room-Centric Rent Workspace Read Model"; that is expected, not a
-  seeding failure.
+  obligation path. `/rent-dashboard` now aggregates those lazy obligations per
+  room, so on a freshly seeded database the room tree stays empty until the
+  first load of a page materializes the month's obligations, after which room
+  amounts match `/bills` for the same month — see "Scenario: Room-Centric Rent
+  Workspace Read Model".
 - `tenants.room_label` / `room_address` / `property_hint` are denormalized
   copies and must agree with `properties` + `rooms`; the page list and the room
   tree read different sources.

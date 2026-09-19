@@ -392,6 +392,30 @@ func buildRentWorkspace(input rentWorkspaceInput, filters rentWorkspaceFilters) 
 		}
 	}
 
+	// Room money facts live on the obligations themselves. A tenant is attributed
+	// to a room through its active agreement/party relationship; a tenant that
+	// maps to more than one room in the same month is ambiguous and is counted in
+	// neither room rather than being double counted.
+	roomIDByTenant := make(map[uint64]uint64)
+	ambiguousTenant := make(map[uint64]bool)
+	ambiguousRoom := make(map[uint64]bool)
+	for _, row := range input.Parties {
+		if row.UserID != input.UserID || !agreementPartyActiveInMonth(row, filters.PeriodMonth) {
+			continue
+		}
+		agreement, ok := agreementByID[row.AgreementID]
+		if !ok || !tenancyAgreementCoversMonth(agreement, filters.PeriodMonth) {
+			continue
+		}
+		if existing, seen := roomIDByTenant[row.TenantID]; seen && existing != agreement.RoomID {
+			ambiguousTenant[row.TenantID] = true
+			ambiguousRoom[existing] = true
+			ambiguousRoom[agreement.RoomID] = true
+			continue
+		}
+		roomIDByTenant[row.TenantID] = agreement.RoomID
+	}
+
 	chargeByRoom := make(map[uint64]rentCharge)
 	for _, row := range input.Charges {
 		if row.UserID != input.UserID || row.RecordStatus != obligationRecordActive || row.RoomID == 0 || monthStart(row.PeriodMonth) != filters.PeriodMonth {
@@ -428,18 +452,22 @@ func buildRentWorkspace(input rentWorkspaceInput, filters rentWorkspaceFilters) 
 		}
 	}
 
-	obligationsByCharge := make(map[uint64][]rentObligation)
+	obligationsByRoom := make(map[uint64][]rentObligation)
 	for _, row := range input.Obligations {
-		if row.UserID != input.UserID || row.RentChargeID == nil || row.RecordStatus != obligationRecordActive || monthStart(row.PeriodMonth) != filters.PeriodMonth {
-			continue
-		}
-		if _, ok := chargeByRoomByID(chargeByRoom, *row.RentChargeID); !ok {
+		if row.UserID != input.UserID || row.RecordStatus != obligationRecordActive || monthStart(row.PeriodMonth) != filters.PeriodMonth {
 			continue
 		}
 		if _, ok := tenantByID[row.TenantID]; !ok {
 			continue
 		}
-		obligationsByCharge[*row.RentChargeID] = append(obligationsByCharge[*row.RentChargeID], row)
+		if ambiguousTenant[row.TenantID] {
+			continue
+		}
+		roomID, ok := roomIDByTenant[row.TenantID]
+		if !ok || roomByID[roomID].ID == 0 {
+			continue
+		}
+		obligationsByRoom[roomID] = append(obligationsByRoom[roomID], row)
 	}
 
 	roomExpenseCents, propertyExpenseCents := workspaceExpenseTotals(input, propertyByID, roomPropertyByID, filters.PeriodMonth)
@@ -458,57 +486,66 @@ func buildRentWorkspace(input rentWorkspaceInput, filters rentWorkspaceFilters) 
 			ActivePartyCount: activePartyCountByRoom[roomRow.ID],
 			ExpenseCents:     roomExpenseCents[roomRow.ID],
 		}
-		if charge, ok := chargeByRoom[roomRow.ID]; ok {
+		charge, hasCharge := chargeByRoom[roomRow.ID]
+		if hasCharge {
 			chargeCopy := charge
 			aggregate.Charge = &chargeCopy
-			aggregate.DueDate = charge.DueDate
-			for _, obligation := range obligationsByCharge[charge.ID] {
-				projected := projectRentObligation(obligation, allocationsByObligation[obligation.ID], cashByObligation[obligation.ID], input.Now)
-				currency := firstNonEmpty(projected.Currency, charge.Currency, ledgerCurrencyEUR)
-				if !strings.EqualFold(currency, ledgerCurrencyEUR) {
-					aggregate.Status = workspaceWorstStatus(aggregate.Status, "needs_review")
-					continue
-				}
-				balance := maxInt64(projected.ExpectedAmountCents-projected.PaidAmountCents, 0)
-				name := firstNonEmpty(stringValue(projected.TenantNameSnapshot), tenantByID[projected.TenantID].Name, "Unknown tenant")
-				payments, paidByOther := workspacePayments(projected, allocationsByObligation[projected.ID], cashByObligation[projected.ID], transactionsByID)
-				tenantRow := rentWorkspaceTenantRow{
-					TenantID:       projected.TenantID,
-					PropertyID:     propertyRow.ID,
-					PropertyName:   propertyRow.Name,
-					RoomID:         roomRow.ID,
-					RoomLabel:      roomRow.RoomLabel,
-					RoomAddress:    propertyAddress(propertyRow),
-					TenantName:     name,
-					TenantAlias:    tenantByID[projected.TenantID].DisplayAlias,
-					ObligationID:   projected.ID,
-					Period:         filters.PeriodMonth.Format("2006-01"),
-					DueDate:        projected.DueDate.Format(dateLayout),
-					DueDateValue:   projected.DueDate,
-					ExpectedCents:  projected.ExpectedAmountCents,
-					PaidCents:      projected.PaidAmountCents,
-					BalanceCents:   balance,
-					ExpectedAmount: formatMoney(centsToMoney(projected.ExpectedAmountCents), currency, 2),
-					PaidAmount:     formatMoney(centsToMoney(projected.PaidAmountCents), currency, 2),
-					BalanceAmount:  formatMoney(centsToMoney(balance), currency, 2),
-					Status:         projected.Status,
-					StatusLabel:    workspaceStatusLabel(projected.Status),
-					PaidByOther:    paidByOther,
-					Payments:       payments,
-				}
-				aggregate.Obligations = append(aggregate.Obligations, tenantRow)
-				aggregate.ExpectedCents += projected.ExpectedAmountCents
-				aggregate.PaidCents += projected.PaidAmountCents
-				aggregate.BalanceCents += balance
-				aggregate.Status = workspaceWorstStatus(aggregate.Status, projected.Status)
+		}
+		for _, obligation := range obligationsByRoom[roomRow.ID] {
+			projected := projectRentObligation(obligation, allocationsByObligation[obligation.ID], cashByObligation[obligation.ID], input.Now)
+			currency := firstNonEmpty(projected.Currency, charge.Currency, ledgerCurrencyEUR)
+			if !strings.EqualFold(currency, ledgerCurrencyEUR) {
+				aggregate.Status = workspaceWorstStatus(aggregate.Status, "needs_review")
+				continue
 			}
-			if len(aggregate.Obligations) == 0 {
+			balance := maxInt64(projected.ExpectedAmountCents-projected.PaidAmountCents, 0)
+			name := firstNonEmpty(stringValue(projected.TenantNameSnapshot), tenantByID[projected.TenantID].Name, "Unknown tenant")
+			payments, paidByOther := workspacePayments(projected, allocationsByObligation[projected.ID], cashByObligation[projected.ID], transactionsByID)
+			tenantRow := rentWorkspaceTenantRow{
+				TenantID:       projected.TenantID,
+				PropertyID:     propertyRow.ID,
+				PropertyName:   propertyRow.Name,
+				RoomID:         roomRow.ID,
+				RoomLabel:      roomRow.RoomLabel,
+				RoomAddress:    propertyAddress(propertyRow),
+				TenantName:     name,
+				TenantAlias:    tenantByID[projected.TenantID].DisplayAlias,
+				ObligationID:   projected.ID,
+				Period:         filters.PeriodMonth.Format("2006-01"),
+				DueDate:        projected.DueDate.Format(dateLayout),
+				DueDateValue:   projected.DueDate,
+				ExpectedCents:  projected.ExpectedAmountCents,
+				PaidCents:      projected.PaidAmountCents,
+				BalanceCents:   balance,
+				ExpectedAmount: formatMoney(centsToMoney(projected.ExpectedAmountCents), currency, 2),
+				PaidAmount:     formatMoney(centsToMoney(projected.PaidAmountCents), currency, 2),
+				BalanceAmount:  formatMoney(centsToMoney(balance), currency, 2),
+				Status:         projected.Status,
+				StatusLabel:    workspaceStatusLabel(projected.Status),
+				PaidByOther:    paidByOther,
+				Payments:       payments,
+			}
+			aggregate.Obligations = append(aggregate.Obligations, tenantRow)
+			aggregate.ExpectedCents += projected.ExpectedAmountCents
+			aggregate.PaidCents += projected.PaidAmountCents
+			aggregate.BalanceCents += balance
+			aggregate.Status = workspaceWorstStatus(aggregate.Status, projected.Status)
+			if aggregate.DueDate.IsZero() || projected.DueDate.Before(aggregate.DueDate) {
+				aggregate.DueDate = projected.DueDate
+			}
+		}
+		if len(aggregate.Obligations) == 0 {
+			if aggregate.HasAgreement && aggregate.HasActiveParty {
 				aggregate.Status = "needs_review"
+			} else {
+				aggregate.Status = "vacant"
 			}
-		} else if aggregate.HasAgreement && aggregate.HasActiveParty {
-			aggregate.Status = "needs_review"
-		} else {
-			aggregate.Status = "vacant"
+		}
+		if ambiguousRoom[roomRow.ID] {
+			// A tenant that maps to two rooms in one month is counted in neither,
+			// so this room's total is knowingly short. Flag it rather than let a
+			// mixed room show a quietly small number with a normal status.
+			aggregate.Status = workspaceWorstStatus(aggregate.Status, "needs_review")
 		}
 		if aggregate.Status == "" {
 			aggregate.Status = "needs_review"
@@ -691,15 +728,6 @@ func workspaceScopeMatches(propertyID, roomID uint64, filters rentWorkspaceFilte
 	return true
 }
 
-func chargeByRoomByID(charges map[uint64]rentCharge, chargeID uint64) (rentCharge, bool) {
-	for _, charge := range charges {
-		if charge.ID == chargeID {
-			return charge, true
-		}
-	}
-	return rentCharge{}, false
-}
-
 func propertyAddress(propertyRow property) string {
 	if propertyRow.Address != nil {
 		return *propertyRow.Address
@@ -784,7 +812,7 @@ func workspaceRoomRow(aggregate rentWorkspaceRoomAggregate) rentWorkspaceRoomRow
 		HasCharge:         aggregate.Charge != nil,
 		CollectionPercent: collectionPercent(aggregate.ExpectedCents, aggregate.PaidCents),
 	}
-	if aggregate.Charge != nil && aggregate.ExpectedCents > 0 {
+	if aggregate.ExpectedCents > 0 {
 		row.DueDateValue = aggregate.DueDate
 		row.DueDate = aggregate.DueDate.Format(dateLayout)
 	}
@@ -1099,6 +1127,12 @@ func (s *rentWorkspaceService) load(ctx context.Context, userID uint64, filters 
 			return rentWorkspaceData{}, gorm.ErrRecordNotFound
 		}
 	}
+	// The room workspace aggregates the same monthly obligations as /bills, so it
+	// must materialize them for the requested month first. This is an idempotent
+	// DoNothing upsert: it only adds missing rows and never rewrites existing ones.
+	if err := newObligationService(s.db).ensureMonthlyObligations(ctx, userID, filters.PeriodMonth); err != nil {
+		return rentWorkspaceData{}, err
+	}
 	input := rentWorkspaceInput{UserID: userID, PeriodMonth: filters.PeriodMonth, Now: time.Now().UTC()}
 	if err := s.db.WithContext(ctx).Where("user_id = ? AND status = ?", userID, "active").Order("name ASC, id ASC").Find(&input.Properties).Error; err != nil {
 		return rentWorkspaceData{}, err
@@ -1115,7 +1149,7 @@ func (s *rentWorkspaceService) load(ctx context.Context, userID uint64, filters 
 	if err := s.db.WithContext(ctx).Where("user_id = ? AND period_month = ? AND record_status = ?", userID, filters.PeriodMonth, obligationRecordActive).Find(&input.Charges).Error; err != nil {
 		return rentWorkspaceData{}, err
 	}
-	if err := s.db.WithContext(ctx).Where("user_id = ? AND period_month = ? AND record_status = ? AND rent_charge_id IS NOT NULL", userID, filters.PeriodMonth, obligationRecordActive).Find(&input.Obligations).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("user_id = ? AND period_month = ? AND record_status = ?", userID, filters.PeriodMonth, obligationRecordActive).Find(&input.Obligations).Error; err != nil {
 		return rentWorkspaceData{}, err
 	}
 	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Find(&input.Tenants).Error; err != nil {
