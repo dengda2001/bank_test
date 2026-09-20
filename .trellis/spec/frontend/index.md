@@ -26,6 +26,7 @@ that parse the rendered markup. Those are the things that bite.
 | Guide | Description | Status |
 |-------|-------------|--------|
 | [Responsive Conventions](./responsive-conventions.md) | Breakpoints, touch targets, the drawer, frozen columns, CSS ordering | Filled |
+| [Status Vocabulary](./status-vocabulary.md) | One word and one control per stored status value; pseudo-filters; known vocabulary splits | Filled |
 
 ---
 

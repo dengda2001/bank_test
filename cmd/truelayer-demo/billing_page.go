@@ -93,7 +93,6 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
     .transaction-route-quickfilter { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding: 0; border: 0; background: transparent; }
     .transaction-route-quickfilter input, .transaction-route-quickfilter select { min-height: 36px; }
     .transaction-route-quickfilter input[type="search"] { flex: 1 1 320px; }
-    .transaction-route-quickfilter select[name="match_status"] { flex: 0 0 190px; width: 190px; }
     .transaction-route-quickfilter input[type="month"] { flex: 0 0 180px; width: 180px; }
     .transaction-route-quickfilter .btn { min-height: 36px; }
     .transaction-route-page > .panel.surface > .panel-head { display: none; }
@@ -251,7 +250,7 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
       </header>
       <nav class="transaction-route-tabs" aria-label="流水状态">
         <a{{if eq .TransactionScope "pending"}} class="active"{{end}} href="{{.CanonicalPath}}?match_status=pending{{if .PeriodFilter}}&amp;period={{.PeriodFilter}}{{end}}">待处理 <span>{{.PendingCount}}</span></a>
-        <a{{if eq .TransactionScope "matched"}} class="active"{{end}} href="{{.CanonicalPath}}?match_status=matched{{if .PeriodFilter}}&amp;period={{.PeriodFilter}}{{end}}">已匹配</a>
+        <a{{if eq .TransactionScope "matched"}} class="active"{{end}} href="{{.CanonicalPath}}?match_status=matched{{if .PeriodFilter}}&amp;period={{.PeriodFilter}}{{end}}">已关联</a>
         <a{{if eq .TransactionScope "all"}} class="active"{{end}} href="{{.CanonicalPath}}?scope=all{{if .PeriodFilter}}&amp;period={{.PeriodFilter}}{{end}}">全部</a>
       </nav>
       {{else}}
@@ -292,7 +291,6 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
       <form class="transaction-route-quickfilter" method="get" action="/transactions" aria-label="搜索流水">
         <input type="hidden" name="scope" value="{{.TransactionScope}}">
         <input type="search" name="payer" value="{{.PayerFilter}}" placeholder="搜索当前列表" aria-label="搜索付款人">
-        <select name="match_status" aria-label="流水状态" onchange="this.form.requestSubmit()"><option value="pending"{{if eq .MatchStatusSelection "pending"}} selected{{end}}>待处理</option><option value="matched"{{if eq .MatchStatusSelection "matched"}} selected{{end}}>已匹配</option><option value=""{{if and (eq .TransactionScope "all") (eq .MatchStatusSelection "")}} selected{{end}}>全部状态</option><option value="partial"{{if eq .MatchStatusSelection "partial"}} selected{{end}}>部分匹配</option><option value="candidate"{{if eq .MatchStatusSelection "candidate"}} selected{{end}}>待确认</option><option value="unmatched"{{if eq .MatchStatusSelection "unmatched"}} selected{{end}}>未匹配</option><option value="needs_review"{{if eq .MatchStatusSelection "needs_review"}} selected{{end}}>需处理</option></select>
         <input type="month" name="period" value="{{.PeriodFilter}}" aria-label="到账月份">
         <button class="btn" type="submit">搜索</button>
       </form>
@@ -304,7 +302,7 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
         <label for="rent_period">租金所属月<input id="rent_period" name="rent_period" type="month" value="{{.RentPeriodFilter}}"></label>
         <label for="allocation">入账用途<select id="allocation" name="allocation"><option value="">全部用途</option><option value="rent" {{if eq .AllocationFilter "rent"}}selected{{end}}>房租</option><option value="deposit" {{if eq .AllocationFilter "deposit"}}selected{{end}}>押金</option><option value="other_income" {{if eq .AllocationFilter "other_income"}}selected{{end}}>其他收入</option></select></label>
         <label for="direction">收支<select id="direction" name="direction"><option value="">全部</option><option value="income" {{if eq .DirectionFilter "income"}}selected{{end}}>收入</option><option value="expense" {{if eq .DirectionFilter "expense"}}selected{{end}}>支出</option></select></label>
-        <label for="match_status">匹配状态<select id="match_status" name="match_status" onchange="this.form.requestSubmit()"><option value="">全部状态</option><option value="pending" {{if eq .MatchStatusSelection "pending"}}selected{{end}}>待处理（需关联或确认）</option><option value="matched" {{if eq .MatchStatusSelection "matched"}}selected{{end}}>已关联</option><option value="partial" {{if eq .MatchStatusSelection "partial"}}selected{{end}}>部分关联</option><option value="candidate" {{if eq .MatchStatusSelection "candidate"}}selected{{end}}>待确认</option><option value="unmatched" {{if eq .MatchStatusSelection "unmatched"}}selected{{end}}>未关联</option><option value="needs_review" {{if eq .MatchStatusSelection "needs_review"}}selected{{end}}>需处理</option><option value="ignored" {{if eq .MatchStatusSelection "ignored"}}selected{{end}}>已忽略</option></select></label>
+        <label for="match_status">关联状态<select id="match_status" name="match_status" onchange="this.form.requestSubmit()"><option value="">全部状态</option><option value="pending" {{if eq .MatchStatusSelection "pending"}}selected{{end}}>待处理（需关联或确认）</option><option value="matched" {{if eq .MatchStatusSelection "matched"}}selected{{end}}>已关联</option><option value="partial" {{if eq .MatchStatusSelection "partial"}}selected{{end}}>部分关联</option><option value="candidate" {{if eq .MatchStatusSelection "candidate"}}selected{{end}}>待确认</option><option value="unmatched" {{if eq .MatchStatusSelection "unmatched"}}selected{{end}}>未关联</option><option value="needs_review" {{if eq .MatchStatusSelection "needs_review"}}selected{{end}}>需处理</option><option value="ignored" {{if eq .MatchStatusSelection "ignored"}}selected{{end}}>已忽略</option></select></label>
         {{if .ArrivalFromFilter}}<input type="hidden" name="arrival_from" value="{{.ArrivalFromFilter}}">{{end}}
         {{if .ArrivalToFilter}}<input type="hidden" name="arrival_to" value="{{.ArrivalToFilter}}">{{end}}
         {{if .SortFilter}}<input type="hidden" name="sort" value="{{.SortFilter}}">{{end}}

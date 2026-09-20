@@ -82,6 +82,83 @@ func TestRentWorkspaceMonthFormPreservesWorkspaceContext(t *testing.T) {
 	}
 }
 
+// The status dropdown and the row badges are two renderings of one vocabulary, and
+// they had drifted: the dropdown offered 逾期 / 已交满 / 未到期未缴 where the badge
+// on the same row said 已逾期 / 已缴清 / 未缴. The dropdown now borrows the badge's
+// words. Its values — the filter contract — stay exactly as they were.
+func TestRentWorkspaceStatusFilterUsesTheBadgeVocabulary(t *testing.T) {
+	filters := defaultRentWorkspaceFilters(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
+	page, err := executeTemplate(rentWorkspaceTemplate, rentWorkspacePageData{
+		Filters:  filters,
+		Period:   "2026-09",
+		View:     filters.View,
+		PageSize: filters.PageSize,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	status := markupBetween(t, page, `<select id="workspace-status"`, `</select>`)
+
+	for _, value := range []string{"all", "unpaid", "needs_review", "overdue", "partial", "open", "paid", "vacant"} {
+		if !strings.Contains(status, `value="`+value+`"`) {
+			t.Errorf("status filter lost the value %q: %s", value, status)
+		}
+	}
+
+	// Asserted against workspaceStatusLabel rather than a copy of its output, so the
+	// two cannot drift apart again without turning this red.
+	for statusValue := range map[string]bool{
+		"needs_review": true, "overdue": true, "partial": true,
+		"open": true, "paid": true, "vacant": true,
+	} {
+		label := workspaceStatusLabel(statusValue)
+		start := strings.Index(status, `value="`+statusValue+`"`)
+		if start < 0 {
+			t.Errorf("status filter has no option for %q: %s", statusValue, status)
+			continue
+		}
+		end := strings.Index(status[start:], `</option>`)
+		if end < 0 {
+			t.Errorf("status option %q is not closed: %s", statusValue, status)
+			continue
+		}
+		if option := status[start : start+end]; !strings.HasSuffix(option, ">"+label) {
+			t.Errorf("status %q renders %q, but its row badge says %q", statusValue, option, label)
+		}
+	}
+}
+
+// The confirmation toast is the one place the workspace names a state in prose
+// instead of in a badge, so it drifts on its own schedule: it still said 流水已匹配
+// after every badge and every dropdown had moved to 关联. 已匹配 is the retired
+// word; keep it retired here too.
+func TestRentWorkspaceConfirmationToastUsesTheBadgeVocabulary(t *testing.T) {
+	filters := defaultRentWorkspaceFilters(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
+	page, err := executeTemplate(rentWorkspaceTemplate, rentWorkspacePageData{
+		Filters:  filters,
+		Period:   "2026-09",
+		View:     filters.View,
+		PageSize: filters.PageSize,
+		Message:  "rent_confirmed",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	toast := markupBetween(t, page, `<div class="notice ok" data-toast>`, `</div>`)
+	if toast == "" {
+		t.Fatalf("rent_confirmed rendered no confirmation toast")
+	}
+	if !strings.Contains(toast, "已关联") {
+		t.Errorf("confirmation toast does not use the badge word 已关联: %s", toast)
+	}
+	for _, stale := range []string{"已匹配", "未匹配", "部分匹配"} {
+		if strings.Contains(toast, stale) {
+			t.Errorf("confirmation toast still renders the retired word %q: %s", stale, toast)
+		}
+	}
+}
+
 func TestRentWorkspaceShowsDimensionsBeforePropertySetup(t *testing.T) {
 	filters := defaultRentWorkspaceFilters(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
 	page, err := executeTemplate(rentWorkspaceTemplate, rentWorkspacePageData{

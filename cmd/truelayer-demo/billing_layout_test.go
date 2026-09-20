@@ -50,14 +50,21 @@ func TestTransactionRouteUsesPrototypeQueueAndKeepsLocalReturnPath(t *testing.T)
 			t.Errorf("transaction route missing %q", marker)
 		}
 	}
+	// The compact form used to carry its own 关联状态 selector next to this one.
+	// It is gone: the two drifted apart, and the surviving selector owns the question.
 	quickFilters := markupBetween(t, page, `<form class="transaction-route-quickfilter"`, `</form>`)
-	quickStatus := markupBetween(t, quickFilters, `<select name="match_status"`, `</select>`)
+	if strings.Contains(quickFilters, `<select name="match_status"`) {
+		t.Errorf("compact filter form duplicates the status selector the filter bar already owns: %s", quickFilters)
+	}
+	for _, kept := range []string{`name="scope"`, `name="payer"`, `name="period"`} {
+		if !strings.Contains(quickFilters, kept) {
+			t.Errorf("compact filter form lost %q: %s", kept, quickFilters)
+		}
+	}
 	advancedFilters := markupBetween(t, page, `<form class="filterbar"`, `</form>`)
 	advancedStatus := markupBetween(t, advancedFilters, `<select id="match_status"`, `</select>`)
-	for name, control := range map[string]string{"compact": quickStatus, "advanced": advancedStatus} {
-		if !strings.Contains(control, `onchange="this.form.requestSubmit()"`) {
-			t.Errorf("%s match-status selector does not submit its filter form on change: %s", name, control)
-		}
+	if !strings.Contains(advancedStatus, `onchange="this.form.requestSubmit()"`) {
+		t.Errorf("match-status selector does not submit its filter form on change: %s", advancedStatus)
 	}
 	actionStart := strings.Index(page, `<td class="route-txn-action">`)
 	if actionStart < 0 {
@@ -70,6 +77,53 @@ func TestTransactionRouteUsesPrototypeQueueAndKeepsLocalReturnPath(t *testing.T)
 	actionCell := page[actionStart : actionStart+actionEnd]
 	if !strings.Contains(actionCell, `href="/transactions?detail=7&amp;match_status=pending"`) || !strings.Contains(actionCell, `>匹配流水</summary>`) {
 		t.Errorf("directly matchable transaction row must keep both detail and match actions: %s", actionCell)
+	}
+}
+
+// The compact form and the filter bar each carried a 关联状态 selector, and they
+// drifted: the compact one never gained 已忽略, so a reader who used it could not
+// reach ignored rows at all. The filter bar keeps the only one, and it has to stay
+// able to reach every status the filter parser accepts.
+func TestTransactionStatusSelectorExistsExactlyOnceAndReachesEveryStatus(t *testing.T) {
+	page := renderBillingPage(t, billingPageData{
+		workspaceShell: workspaceShell{ActivePage: "transactions"},
+		PageKey:        "transactions", CanonicalPath: "/transactions",
+		// Non-empty on purpose: the pager then renders its own hidden
+		// name="match_status" field, which must not be mistaken for a selector.
+		MatchStatusSelection: "partial",
+	})
+
+	// The survivor carries an id; the compact one did not. Counting the bare
+	// name="match_status" would also catch the pager's hidden field, so both shapes
+	// are asserted separately.
+	if got := strings.Count(page, `id="match_status"`); got != 1 {
+		t.Fatalf("transactions page renders %d status selectors, want 1: %s", got, page)
+	}
+	if strings.Contains(page, `<select name="match_status"`) {
+		t.Error("transactions page still renders the retired compact status selector")
+	}
+	status := markupBetween(t, page, `<select id="match_status"`, `</select>`)
+	for _, option := range []string{
+		`value="pending"`, `value="matched"`, `value="partial"`,
+		`value="candidate"`, `value="unmatched"`, `value="needs_review"`, `value="ignored"`,
+	} {
+		if !strings.Contains(status, option) {
+			t.Errorf("the surviving status selector cannot reach %s: %s", option, status)
+		}
+	}
+
+	// The selector's own label has to keep the word its options use. It read
+	// 关联状态 while every option under it said 关联 — the same split, one line up.
+	if !strings.Contains(page, `for="match_status">关联状态<`) {
+		t.Error("the status selector's label does not use the 关联 word its own options use")
+	}
+
+	// 已关联 is the app-wide word for matched, borrowed from the status labels the
+	// row markup already renders. The 匹配/关联 split must not come back.
+	for _, stale := range []string{"已匹配", "未匹配", "部分匹配"} {
+		if strings.Contains(page, stale) {
+			t.Errorf("transactions page still renders the retired word %q", stale)
+		}
 	}
 }
 
@@ -94,11 +148,11 @@ func TestBillingFilterBarKeepsOnlyTheSixQuestions(t *testing.T) {
 		}
 	}
 
-	// 待处理 is no longer its own checkbox: it is the first option of 匹配状态, and
+	// 待处理 is no longer its own checkbox: it is the first option of 关联状态, and
 	// a link that still carries pending=1 has to light it up.
 	matchStatus := markupBetween(t, filterBar, `<select id="match_status"`, `</select>`)
 	if !strings.Contains(matchStatus, `<option value="pending" selected>待处理`) {
-		t.Fatalf("匹配状态 does not absorb the 待处理 filter: %s", matchStatus)
+		t.Fatalf("关联状态 does not absorb the 待处理 filter: %s", matchStatus)
 	}
 }
 
@@ -309,7 +363,7 @@ func TestBillingListCarriesTheColumnSort(t *testing.T) {
 	}
 }
 
-// 待处理 used to be a checkbox of its own. It is now one option of 匹配状态, so the
+// 待处理 used to be a checkbox of its own. It is now one option of 关联状态, so the
 // query parameter it used to send and the option it now sends must parse alike.
 func TestPendingFilterAndPendingMatchStatusParseAlike(t *testing.T) {
 	legacy := filtersFromQuery(url.Values{"pending": {"1"}, "period": {"2026-09"}})
