@@ -1016,3 +1016,36 @@ Seeded the local rentops database from the Rosewood rent ledger (4 properties / 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 28: 工作台交互与控件改造
+
+**Date**: 2026-09-20
+**Task**: 工作台交互与控件改造
+**Branch**: `fix/workspace-quick-fixes`
+
+### Summary
+
+完成工作台筛选、分页、日历与下拉控件统一；补充租客搜索和详情编辑抽屉、房产支出抽屉、流水匹配及首页人工处理队列。构建与 diff 检查通过，未运行测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `24d218f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
