@@ -119,6 +119,10 @@ func (a *app) renderRentDashboard(w http.ResponseWriter, r *http.Request, action
 		data.TotalPages = summary.TotalPages
 		data.Page = summary.Page
 		data.PageSize = summary.PageSize
+		// The bills pager builds its own hrefs with billsPageURL, so it reads only
+		// the page numbers: passing nil keeps this from growing a second, unused
+		// URL builder that could drift from the template's.
+		data.Pagination = paginationLinks(summary.Page, summary.TotalPages, nil)
 		currency := firstNonEmpty(summary.Currency, "EUR")
 		data.ExpectedTotal = formatMoney(centsToMoney(summary.ExpectedCents), currency, 2)
 		data.PaidTotal = formatMoney(centsToMoney(summary.PaidCents), currency, 2)

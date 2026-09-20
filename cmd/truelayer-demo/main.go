@@ -326,6 +326,7 @@ type rentDashboardPageData struct {
 	FilteredCount              int
 	TotalRows                  int
 	TotalPages                 int
+	Pagination                 []paginationLink
 	ExpectedTotal              string
 	PaidTotal                  string
 	BalanceTotal               string
