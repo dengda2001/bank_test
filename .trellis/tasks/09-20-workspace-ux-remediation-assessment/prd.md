@@ -65,3 +65,9 @@ Assess the real code impact, dependencies, delivery order and effort for the 15 
 ## Confirmed product decision
 
 “暂不处理” uses a distinct persistent `deferred` transaction state/action. It disappears from the dashboard queue, remains visible and directly matchable in the transaction list, and does not acquire the incorrect “非租金/无需匹配” meaning of the existing `ignored` state. A later successful match replaces `deferred` with the resulting matched or partial state.
+
+## Follow-up request added 2026-09-20
+
+The user supplied additional interaction details after reviewing the first implementation. These are tracked in child task [`09-20-workspace-interaction-followup`](../09-20-workspace-interaction-followup/prd.md): keep transaction and tenant cash-entry actions in local drawers, create rooms from property detail in a local drawer, retain tenant-detail editing in its local drawer, use calendar controls for property/room month filters, remove the dashboard month submit button, expose transaction matching in a separate operations column, open dashboard processing in a floating panel, keep the remember-payer checkbox next to match, remove the gray hover overlay from search clear, and add a clear action to the optional expense room selector.
+
+The child PRD records the current source-tree evidence and its acceptance criteria. The earlier “Confirmed repository facts” above describe the assessment snapshot and may have been superseded by later implementation commits.

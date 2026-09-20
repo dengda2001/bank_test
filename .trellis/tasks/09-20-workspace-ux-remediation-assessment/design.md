@@ -147,11 +147,13 @@ The state transition and audit write occur in one transaction. Repeated defer re
 
 ### D15. Dashboard shows a three-item queue with per-item processing
 
-The dashboard query loads the first three eligible pending transactions in stable priority/order. Each rounded card always shows a short summary and a “处理” action. Expanded processing shows payer, arrival time, bank note/reference and amount, followed by separate tenant and month selectors, “匹配” and “暂不处理”.
+The dashboard query loads the first three eligible pending transactions in stable priority/order. Each rounded card always shows a short summary and a “处理” action. Processing opens a floating panel with payer, arrival time, bank note/reference and amount, followed by separate tenant and month selectors, “匹配” and “暂不处理”.
 
 Both POST actions include the dashboard month and an allowlisted dashboard return context. After a successful action the server redirects back; the next eligible row naturally fills the vacated slot. The page therefore shows up to three current rows without client-side cache reconciliation.
 
 Concurrent handling is resolved by the transaction service: if the row changed after render, the action returns a clear stale-state message and reloads current queue data instead of overwriting the newer result.
+
+**Follow-up clarification:** the panel overlays the queue without reflowing its cards; the remember-payer checkbox sits beside the match action and its submitted state is honored.
 
 ### D16. Reuse one transaction-match form contract
 
@@ -169,3 +171,9 @@ Transaction detail and dashboard cards use the same match-form view model, optio
 ## 8. Verification strategy for implementation
 
 Each implementation slice should include focused Go checks for query parsing, view-model output, state transitions and safe return handling, plus real-browser checks for anchored popovers, keyboard behavior, focus, drawer validation and responsive geometry. Full repository tests and visual regression checks belong to the final integration task.
+
+## Follow-up implementation clarification (2026-09-20)
+
+The current user follow-up is scoped in `09-20-workspace-interaction-followup/design.md`. It also covers transaction cash/expense drawers, tenant-detail cash entry, property-detail room creation, property/room month calendars, a transaction-list match action with separate status/operations columns, the search-clear hover treatment and a clear action on the optional expense-room select.
+
+The older research records the assessment-time source state. The child task's current-code map is authoritative where later commits have changed behavior. In particular, tenant detail already has a local edit drawer and currently has a cash action but no expense action. The child plan assumes those current actions remain; the user can adjust this while reviewing the child PRD.

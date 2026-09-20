@@ -221,3 +221,7 @@ Deliver in four user-visible batches:
 4. **Matching workflow:** requirements 10 and 11, including the confirmed deferred state.
 
 Each batch is independently reviewable. The Trellis implementation phase should start only after the user reviews this assessment and confirms which batch to implement first.
+
+## 6. Current follow-up child task
+
+The additional user request is tracked by [`09-20-workspace-interaction-followup`](../09-20-workspace-interaction-followup/implement.md). It covers the current outstanding page-local drawers, property/room calendar filters, transaction-list match actions, dashboard processing popup and clear-control refinements. Start this child only after the user approves its `prd.md`, `design.md` and `implement.md`.
