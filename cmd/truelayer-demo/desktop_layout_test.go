@@ -114,7 +114,7 @@ func TestDesktopAssetFormsExposeCreateAndEditControls(t *testing.T) {
 	}
 }
 
-func TestRoomDetailEditDrawerIncludesPrototypeFields(t *testing.T) {
+func TestRoomDetailEditDrawerOmitsRoomTypeAndCapacity(t *testing.T) {
 	var page bytes.Buffer
 	err := rentRoomDetailTemplate.Execute(&page, rentRoomDetailPageData{
 		workspaceShell: workspaceShell{ActivePage: "rooms", Username: "owner", Environment: "test"},
@@ -130,14 +130,14 @@ func TestRoomDetailEditDrawerIncludesPrototypeFields(t *testing.T) {
 		Editing:        true,
 		Form:           roomPageForm{ID: 9, PropertyID: 7, RoomLabel: "03", RoomType: "双人间", Capacity: 2, MonthlyRentValue: "1250.00", DueDay: 1, Notes: "两人同住", ActiveFrom: "2026-09"},
 		Properties:     []propertyPageRow{{ID: 7, Name: "78 Old County Road"}},
-		Summary:        rentWorkspaceRoomRow{PropertyID: 7},
+		Summary:        rentWorkspaceRoomRow{PropertyID: 7, TenantCount: 3},
 	})
 	if err != nil {
 		t.Fatalf("render room detail edit state: %v", err)
 	}
 	html := page.String()
 	previous := -1
-	for _, marker := range []string{`name="room_label"`, `name="property_id"`, `name="room_type"`, `name="capacity"`, `name="monthly_rent"`, `name="due_day"`, `name="notes"`} {
+	for _, marker := range []string{`name="room_label"`, `name="property_id"`, `name="monthly_rent"`, `name="due_day"`, `name="notes"`} {
 		position := strings.Index(html, marker)
 		if position < 0 {
 			t.Fatalf("room edit drawer is missing prototype field %q", marker)
@@ -146,6 +146,14 @@ func TestRoomDetailEditDrawerIncludesPrototypeFields(t *testing.T) {
 			t.Fatalf("room edit field %q is out of prototype order", marker)
 		}
 		previous = position
+	}
+	for _, removed := range []string{`name="room_type"`, `name="capacity"`, "房间类型", "可住人数", "双人间"} {
+		if strings.Contains(html, removed) {
+			t.Fatalf("room detail should not expose removed field %q", removed)
+		}
+	}
+	if !strings.Contains(html, `<dt>在住人数</dt><dd>3 位</dd>`) {
+		t.Fatal("room detail must retain the actual current occupant count")
 	}
 	if strings.Contains(html, `name="active_from"`) {
 		t.Fatal("room edit drawer should not expose the active-from field omitted by the prototype")

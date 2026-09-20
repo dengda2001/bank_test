@@ -20,7 +20,7 @@
           <div>
             <div class="eyebrow">房间详情</div>
             <h1>{{.PropertyName}} · {{.RoomLabel}}</h1>
-            <div class="identity-meta"><span>{{.RoomType}} · {{.Summary.TenantCount}} 条个人责任 · {{.PeriodLabel}}</span><span class="detail-status {{.Summary.Status}}">{{.Summary.StatusLabel}}</span></div>
+            <div class="identity-meta"><span>{{.Summary.TenantCount}} 位当前租客 · {{.PeriodLabel}}</span><span class="detail-status {{.Summary.Status}}">{{.Summary.StatusLabel}}</span></div>
           </div>
         </div>
         <div class="actions">
@@ -46,8 +46,6 @@
             <div class="room-edit-grid">
               <div class="form-field"><label for="room-label">房间名称</label><input id="room-label" name="room_label" value="{{.Form.RoomLabel}}" maxlength="191" required autofocus></div>
               <div class="form-field"><label for="room-property">所属房产</label><select id="room-property" name="property_id" required>{{range .Properties}}<option value="{{.ID}}"{{if eq $.Form.PropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></div>
-              <div class="form-field room-edit-desktop-only"><label for="room-type">房间类型</label><select id="room-type" name="room_type" required><option value="单人间"{{if eq .Form.RoomType "单人间"}} selected{{end}}>单人间</option><option value="双人间"{{if eq .Form.RoomType "双人间"}} selected{{end}}>双人间</option><option value="整租单元"{{if or (eq .Form.RoomType "整租单元") (eq .Form.RoomType "整套")}} selected{{end}}>整租单元</option><option value="其他"{{if eq .Form.RoomType "其他"}} selected{{end}}>其他</option></select></div>
-              <div class="form-field room-edit-desktop-only"><label for="room-capacity">可住人数</label><input id="room-capacity" name="capacity" type="number" min="1" max="100" value="{{.Form.Capacity}}" required></div>
               <div class="form-field room-edit-desktop-only"><label for="room-monthly-rent">月度房间应收</label><input id="room-monthly-rent" name="monthly_rent" type="number" min="0.01" step="0.01" value="{{.Form.MonthlyRentValue}}" placeholder="0.00" inputmode="decimal"></div>
               <div class="form-field room-edit-desktop-only"><label for="room-due-day">账单日</label><input id="room-due-day" name="due_day" type="number" min="1" max="31" value="{{if .Form.DueDay}}{{.Form.DueDay}}{{else}}1{{end}}" required></div>
               <div class="form-field full"><label for="room-notes">房间备注</label><textarea id="room-notes" name="notes" maxlength="2000">{{.Form.Notes}}</textarea></div>
@@ -92,8 +90,6 @@
         <aside class="detail-stack">
           <section class="panel surface detail-section room-facts-section room-desktop-facts"><div class="panel-head"><h2>房间与租约</h2></div><dl class="room-facts">
             <div><dt>所属房产</dt><dd><a href="/properties/{{.Summary.PropertyID}}">{{.PropertyName}}</a></dd></div>
-            <div><dt>房间类型</dt><dd>{{.RoomType}}</dd></div>
-            <div><dt>可住人数</dt><dd>{{.Capacity}} 位</dd></div>
             <div><dt>房间状态</dt><dd>{{.Summary.StatusLabel}}</dd></div>
             <div><dt>房间生效月份</dt><dd>{{.RoomActiveFrom}}</dd></div>
             <div><dt>当前月租</dt><dd>{{.MonthlyRent}}</dd></div>
@@ -103,7 +99,7 @@
             <div><dt>在住人数</dt><dd>{{.Summary.TenantCount}} 位</dd></div>
             {{if .RoomNotes}}<div><dt>房间备注</dt><dd>{{.RoomNotes}}</dd></div>{{end}}
           </dl></section>
-          <section class="panel surface detail-section room-mobile-facts"><div class="panel-head"><h2>房间与租约</h2></div><dl class="room-facts"><div><dt>房间类型</dt><dd>{{.RoomType}}</dd></div><div><dt>账单日</dt><dd>每月 {{.DueDay}} 日</dd></div><div><dt>当前租客</dt><dd>{{.Summary.TenantCount}} 位</dd></div></dl></section>
+          <section class="panel surface detail-section room-mobile-facts"><div class="panel-head"><h2>房间与租约</h2></div><dl class="room-facts"><div><dt>账单日</dt><dd>每月 {{.DueDay}} 日</dd></div><div><dt>当前租客</dt><dd>{{.Summary.TenantCount}} 位</dd></div></dl></section>
           <div class="risk-note">房产级公共支出不会计入本房间。房间净额只使用明确关联本房间的收支。</div>
           <section class="panel surface detail-section room-timeline-section"><div class="panel-head"><h2><span class="room-timeline-title-desktop">收租时间线</span><span class="room-timeline-title-mobile">最近记录</span></h2></div>
             {{if or .Tenants .Expenses}}<div class="detail-list">{{range .Tenants}}{{$tenant := .}}{{range .Payments}}<div class="audit-row"><time>{{.DateDisplay}}</time><i class="audit-line"></i><div><strong>{{.AmountDisplay}} · {{.Source}}</strong><p class="tiny">{{$tenant.TenantName}} · {{$.Period}} · {{.ConfirmationSource}}</p></div></div>{{end}}{{end}}{{range .Expenses}}<div class="audit-row"><time>{{.ExpenseDate}}</time><i class="audit-line"></i><div><strong>{{.Amount}} · {{.Description}}</strong><p class="tiny">{{.Category}} · 房间支出</p></div></div>{{end}}</div>{{else}}<div class="detail-list"><div class="workspace-empty">暂无账单或收款时间线。</div></div>{{end}}

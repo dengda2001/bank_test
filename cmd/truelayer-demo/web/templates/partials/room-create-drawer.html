@@ -9,8 +9,6 @@
       <div class="room-meta-form-grid">
         <div class="form-field"><label for="room-label">房间名称</label><input id="room-label" name="room_label" maxlength="191" required autofocus></div>
         <div class="form-field"><label for="room-property">所属房产</label><select id="room-property" name="property_id" required><option value="">请选择房产</option>{{range .Properties}}<option value="{{.ID}}"{{if eq $.Form.PropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></div>
-        <div class="form-field"><label for="room-type">房间类型</label><select id="room-type" name="room_type" required><option value="">请选择</option><option>单人间</option><option>双人间</option><option>整租单元</option><option>其他</option></select></div>
-        <div class="form-field"><label for="room-capacity">可住人数</label><input id="room-capacity" name="capacity" type="number" min="1" max="100" value="{{if .Form.Capacity}}{{.Form.Capacity}}{{else}}1{{end}}" required></div>
         <div class="form-field"><label for="room-monthly-rent">月度房间应收</label><input id="room-monthly-rent" name="monthly_rent" type="number" min="0.01" step="0.01" value="{{.Form.MonthlyRentValue}}" placeholder="0.00" inputmode="decimal"></div>
         <div class="form-field"><label for="room-due-day">账单日</label><input id="room-due-day" name="due_day" type="number" min="1" max="31" value="{{if .Form.DueDay}}{{.Form.DueDay}}{{else}}1{{end}}" required></div>
       </div>

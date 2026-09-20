@@ -125,10 +125,11 @@ func (s *landlordDomainService) createRoom(ctx context.Context, userID uint64, i
 	if len([]rune(input.RoomLabel)) > 191 {
 		return room{}, errors.New("room label is too long")
 	}
+	input.RoomType = strings.TrimSpace(input.RoomType)
 	if len([]rune(input.RoomType)) > 64 || len([]rune(input.Notes)) > 2000 || input.Capacity < 0 || input.Capacity > 100 || input.MonthlyRentCents < 0 {
 		return room{}, errors.New("room details are invalid")
 	}
-	input.RoomType = firstNonEmpty(strings.TrimSpace(input.RoomType), "其他")
+	input.RoomType = firstNonEmpty(input.RoomType, "其他")
 	if input.Capacity == 0 {
 		input.Capacity = 1
 	}
@@ -166,12 +167,9 @@ func (s *landlordDomainService) updateRoom(ctx context.Context, userID, roomID u
 	if input.RoomLabel == "" {
 		return room{}, errRoomLabelRequired
 	}
+	input.RoomType = strings.TrimSpace(input.RoomType)
 	if len([]rune(input.RoomType)) > 64 || len([]rune(input.Notes)) > 2000 || input.Capacity < 0 || input.Capacity > 100 || input.MonthlyRentCents < 0 {
 		return room{}, errors.New("room details are invalid")
-	}
-	input.RoomType = firstNonEmpty(strings.TrimSpace(input.RoomType), "其他")
-	if input.Capacity == 0 {
-		input.Capacity = 1
 	}
 	if input.DueDay < 0 || input.DueDay > 31 {
 		return room{}, errors.New("due day must be between 1 and 31")
@@ -197,7 +195,14 @@ func (s *landlordDomainService) updateRoom(ctx context.Context, userID, roomID u
 				return errors.New("property is not active")
 			}
 		}
-		if err := tx.Model(&row).Updates(map[string]any{"property_id": input.PropertyID, "room_label": input.RoomLabel, "room_type": strings.TrimSpace(input.RoomType), "capacity": input.Capacity, "notes": nullableString(strings.TrimSpace(input.Notes))}).Error; err != nil {
+		updates := map[string]any{"property_id": input.PropertyID, "room_label": input.RoomLabel, "notes": nullableString(strings.TrimSpace(input.Notes))}
+		if input.RoomType != "" {
+			updates["room_type"] = input.RoomType
+		}
+		if input.Capacity > 0 {
+			updates["capacity"] = input.Capacity
+		}
+		if err := tx.Model(&row).Updates(updates).Error; err != nil {
 			return err
 		}
 		if !input.EffectiveMonth.IsZero() {

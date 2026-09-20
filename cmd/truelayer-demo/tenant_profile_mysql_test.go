@@ -254,3 +254,63 @@ func tenantRoomIDForTest(records []tenantRecord, tenantID uint64) uint64 {
 	}
 	return 0
 }
+
+func TestRoomCreateDefaultsAndUpdatePreservesOptionalFieldsOnMySQL(t *testing.T) {
+	db, sqlDB := openLedgerMySQLTestDB(t)
+	if err := runMigrations(sqlDB, "../../migrations"); err != nil {
+		t.Fatalf("run migrations: %v", err)
+	}
+	ctx := context.Background()
+	owner := user{Username: fmt.Sprintf("room-optional-fields-%d", time.Now().UnixNano()), PasswordHash: "test"}
+	if err := db.WithContext(ctx).Create(&owner).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.WithContext(ctx).Delete(&user{}, owner.ID).Error })
+
+	domain := newLandlordDomainService(db)
+	propertyRow, err := domain.createProperty(ctx, owner.ID, propertyInput{Name: "Room optional fields test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	period := monthStart(time.Now().UTC())
+	legacyRoom, err := domain.createRoom(ctx, owner.ID, roomInput{
+		PropertyID: propertyRow.ID, RoomLabel: "Legacy values", RoomType: "双人间", Capacity: 4, ActiveFrom: period,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defaultRoom, err := domain.createRoom(ctx, owner.ID, roomInput{
+		PropertyID: propertyRow.ID, RoomLabel: "Create defaults", ActiveFrom: period,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if defaultRoom.RoomType != "其他" || defaultRoom.Capacity != 1 {
+		t.Fatalf("new room defaults=(%q,%d), want (其他,1)", defaultRoom.RoomType, defaultRoom.Capacity)
+	}
+
+	if _, err := domain.updateRoom(ctx, owner.ID, legacyRoom.ID, roomInput{
+		PropertyID: propertyRow.ID, RoomLabel: "Legacy values edited",
+	}); err != nil {
+		t.Fatalf("update room without optional fields: %v", err)
+	}
+	var stored room
+	if err := db.Where("id = ? AND user_id = ?", legacyRoom.ID, owner.ID).First(&stored).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.RoomType != "双人间" || stored.Capacity != 4 {
+		t.Fatalf("omitted room fields changed stored values to (%q,%d), want (双人间,4)", stored.RoomType, stored.Capacity)
+	}
+
+	if _, err := domain.updateRoom(ctx, owner.ID, legacyRoom.ID, roomInput{
+		PropertyID: propertyRow.ID, RoomLabel: "Legacy values edited", RoomType: "整租单元", Capacity: 5,
+	}); err != nil {
+		t.Fatalf("update explicitly supplied optional fields: %v", err)
+	}
+	if err := db.Where("id = ? AND user_id = ?", legacyRoom.ID, owner.ID).First(&stored).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.RoomType != "整租单元" || stored.Capacity != 5 {
+		t.Fatalf("explicit room fields=(%q,%d), want (整租单元,5)", stored.RoomType, stored.Capacity)
+	}
+}

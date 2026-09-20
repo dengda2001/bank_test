@@ -1304,6 +1304,9 @@ func (a *app) handleRoomMutation(w http.ResponseWriter, r *http.Request, pathID 
 		}
 	case "save":
 		capacity := 1
+		if roomID != 0 {
+			capacity = 0
+		}
 		if strings.TrimSpace(r.Form.Get("capacity")) != "" {
 			raw := strings.TrimSpace(r.Form.Get("capacity"))
 			capacity, err = strconv.Atoi(raw)

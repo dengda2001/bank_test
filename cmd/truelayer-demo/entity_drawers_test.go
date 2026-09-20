@@ -11,6 +11,7 @@ func TestPropertyAndRoomFormsRenderAsMobileObjectDrawers(t *testing.T) {
 		name   string
 		render func() (string, error)
 		want   []string
+		absent []string
 	}{
 		{
 			name: "property create",
@@ -24,7 +25,8 @@ func TestPropertyAndRoomFormsRenderAsMobileObjectDrawers(t *testing.T) {
 			render: func() (string, error) {
 				return executeTemplate(roomPageTemplate, roomPageData{workspaceShell: workspaceShell{ActivePage: "rooms"}, Period: "2026-09", PeriodLabel: "2026年9月", ShowForm: true, Form: roomPageForm{ActiveFrom: "2026-09"}, Properties: []propertyPageRow{{ID: 1, Name: "Canal House"}}})
 			},
-			want: []string{`class="object-tabs"`, `class="entity-drawer-backdrop"`, `name="property_id"`, "新建房间"},
+			want:   []string{`class="object-tabs"`, `class="entity-drawer-backdrop"`, `name="property_id"`, "新建房间"},
+			absent: []string{`name="room_type"`, `name="capacity"`, "房间类型", "可住人数"},
 		},
 	}
 	for _, test := range tests {
@@ -36,6 +38,11 @@ func TestPropertyAndRoomFormsRenderAsMobileObjectDrawers(t *testing.T) {
 			for _, expected := range test.want {
 				if !strings.Contains(page, expected) {
 					t.Fatalf("rendered form is missing %q", expected)
+				}
+			}
+			for _, unexpected := range test.absent {
+				if strings.Contains(page, unexpected) {
+					t.Fatalf("rendered form unexpectedly contains %q", unexpected)
 				}
 			}
 		})

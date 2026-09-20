@@ -24,7 +24,7 @@ func TestRoomDetailMobileFactsOwnTheirWrapper(t *testing.T) {
 		RoomType:       "双人间",
 		PropertyName:   "Canal House",
 		DueDay:         5,
-		Summary:        rentWorkspaceRoomRow{Status: "paid", StatusLabel: "已缴清"},
+		Summary:        rentWorkspaceRoomRow{Status: "paid", StatusLabel: "已缴清", TenantCount: 3},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -44,6 +44,16 @@ func TestRoomDetailMobileFactsOwnTheirWrapper(t *testing.T) {
 	}
 	if strings.Contains(page, `class="room-facts room-mobile-facts"`) || strings.Contains(page, `class="room-mobile-facts room-facts"`) {
 		t.Fatal("mobile-only facts are still welded onto the desktop .room-facts element, so display:none cannot win")
+	}
+	for _, removed := range []string{"房间类型", "可住人数", "双人间"} {
+		if strings.Contains(page, removed) {
+			t.Fatalf("room detail facts should not expose removed field %q", removed)
+		}
+	}
+	for _, retained := range []string{`<dt>在住人数</dt><dd>3 位</dd>`, `<dt>当前租客</dt><dd>3 位</dd>`} {
+		if !strings.Contains(page, retained) {
+			t.Fatalf("room detail should retain occupant count %q", retained)
+		}
 	}
 
 	pageCSS := embeddedWebText("web/static/css/pages/room-detail.css")
