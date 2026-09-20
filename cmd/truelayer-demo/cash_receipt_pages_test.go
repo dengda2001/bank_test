@@ -17,7 +17,7 @@ func TestCashReceiptPageRendersPrototypeListCardsAndDrawer(t *testing.T) {
 		t.Fatal(err)
 	}
 	page := body.String()
-	for _, marker := range []string{"现金收款", "搜索当前列表", "cash-receipt-table", "cash-receipt-mobile-list", "entity-drawer-backdrop", "return_to", "预览入账"} {
+	for _, marker := range []string{"现金收款", "搜索当前列表", "cash-receipt-table", "cash-receipt-mobile-list", "entity-drawer-backdrop", `name="tenant_id" data-searchable`, "return_to", "预览入账"} {
 		if !strings.Contains(page, marker) {
 			t.Errorf("cash receipt page missing %q", marker)
 		}

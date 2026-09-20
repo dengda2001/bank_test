@@ -169,7 +169,10 @@ function parseTenantId(html, name) {
   const rows = html.split('<tr class="tenant-row"').slice(1);
   for (const segment of rows) {
     if (!segment.includes(name) && !unescapeHtml(segment).includes(name)) continue;
-    const idMatch = /href="\/tenants\/(\d+)"/.exec(segment);
+    // The detail link carries the list's search term back as ?search=, so the
+    // id is not followed by the closing quote. Anchor on the digits alone, the
+    // way parseBillingRows' row pattern already does.
+    const idMatch = /href="\/tenants\/(\d+)/.exec(segment);
     if (idMatch) return idMatch[1];
   }
   fail(`tenant ${name} was not found on /tenants (did /import-legacy run?)`);

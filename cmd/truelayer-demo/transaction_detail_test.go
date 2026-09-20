@@ -137,6 +137,7 @@ func TestTransactionDetailHeaderActionsReuseListRowEndpoints(t *testing.T) {
 	})
 	for _, marker := range []string{
 		`action="/transactions/rematch"`,
+		`aria-label="修改匹配租客" data-searchable`,
 		`name="return_to" value="/transactions?page=2"`,
 		"2026-09-12 09:18",
 	} {
@@ -159,7 +160,7 @@ func TestTransactionDetailHeaderActionsReuseListRowEndpoints(t *testing.T) {
 	})
 	for _, marker := range []string{
 		`action="/transactions/confirm"`,
-		`name="tenant_id"`,
+		`name="tenant_id" aria-label="选择匹配租客" data-searchable`,
 		`name="period"`,
 		`data-tenant="9"`,
 		"C. CHEN",

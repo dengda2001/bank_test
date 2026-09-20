@@ -21,7 +21,8 @@
   "children": [
     "09-20-workspace-quick-fixes",
     "09-20-workspace-shared-controls",
-    "09-20-workspace-interaction-followup"
+    "09-20-workspace-interaction-followup",
+    "09-20-workspace-ui-polish"
   ],
   "parent": null,
   "relatedFiles": [],

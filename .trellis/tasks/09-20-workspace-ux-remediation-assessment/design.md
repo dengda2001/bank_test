@@ -177,3 +177,5 @@ Each implementation slice should include focused Go checks for query parsing, vi
 The current user follow-up is scoped in `09-20-workspace-interaction-followup/design.md`. It also covers transaction cash/expense drawers, tenant-detail cash entry, property-detail room creation, property/room month calendars, a transaction-list match action with separate status/operations columns, the search-clear hover treatment and a clear action on the optional expense-room select.
 
 The older research records the assessment-time source state. The child task's current-code map is authoritative where later commits have changed behavior. In particular, tenant detail already has a local edit drawer and currently has a cash action but no expense action. The child plan assumes those current actions remain; the user can adjust this while reviewing the child PRD.
+
+The next follow-up batch is tracked separately in `09-20-workspace-ui-polish/design.md`. It retains the existing data and transaction contracts while addressing room-field visibility, shared tenant selection, transaction filters/actions, the empty dashboard queue, and object-list status text.

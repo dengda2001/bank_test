@@ -27,7 +27,9 @@ func TestTransactionRouteUsesPrototypeQueueAndKeepsLocalReturnPath(t *testing.T)
 			Direction: "income", DirectionLabel: "收入", PayerName: "WAHAJULLAH KHAN", AmountDisplay: "€1,250.00",
 			RemainingAmountDisplay: "€1,250.00", AllocationUseDisplay: "同住代付", DateDisplay: "01 Sep 2026",
 			Description: "RENT SEPT", AccountName: "AIB", MatchStatus: "candidate", MatchStatusLabel: "待确认",
-			CandidateTenantName: "WAHAJULLAH KHAN", CandidateRentObligationID: 301, CandidatePeriod: "2026-09", CanConfirm: true,
+			CandidateTenantName: "WAHAJULLAH KHAN", CandidateRentObligationID: 301, CandidatePeriod: "2026-09", CanConfirm: true, ReturnURL: "/transactions",
+			ManualMatchTenantOptions: []billingTenantOption{{ID: 7, Name: "WAHAJULLAH KHAN"}},
+			ManualMatchOptions:       []billingRentMatchOption{{TenantID: 7, TenantName: "WAHAJULLAH KHAN", Period: "2026-09", PeriodLabel: "2026年9月", Remaining: "€1,250.00"}},
 		}},
 	})
 	for _, marker := range []string{
@@ -40,12 +42,34 @@ func TestTransactionRouteUsesPrototypeQueueAndKeepsLocalReturnPath(t *testing.T)
 		`class="transaction-route-mobile-list"`,
 		`class="transaction-review-card"`,
 		`action="/transactions/confirm"`,
+		`name="tenant_id" aria-label="选择匹配租客" data-searchable`,
 		`name="return_to" value="/transactions"`,
 		`href="/transactions?detail=7&amp;match_status=pending"`,
 	} {
 		if !strings.Contains(page, marker) {
 			t.Errorf("transaction route missing %q", marker)
 		}
+	}
+	quickFilters := markupBetween(t, page, `<form class="transaction-route-quickfilter"`, `</form>`)
+	quickStatus := markupBetween(t, quickFilters, `<select name="match_status"`, `</select>`)
+	advancedFilters := markupBetween(t, page, `<form class="filterbar"`, `</form>`)
+	advancedStatus := markupBetween(t, advancedFilters, `<select id="match_status"`, `</select>`)
+	for name, control := range map[string]string{"compact": quickStatus, "advanced": advancedStatus} {
+		if !strings.Contains(control, `onchange="this.form.requestSubmit()"`) {
+			t.Errorf("%s match-status selector does not submit its filter form on change: %s", name, control)
+		}
+	}
+	actionStart := strings.Index(page, `<td class="route-txn-action">`)
+	if actionStart < 0 {
+		t.Fatal("transaction row has no action cell")
+	}
+	actionEnd := strings.Index(page[actionStart:], `</td>`)
+	if actionEnd < 0 {
+		t.Fatal("transaction row action cell is not closed")
+	}
+	actionCell := page[actionStart : actionStart+actionEnd]
+	if !strings.Contains(actionCell, `href="/transactions?detail=7&amp;match_status=pending"`) || !strings.Contains(actionCell, `>匹配流水</summary>`) {
+		t.Errorf("directly matchable transaction row must keep both detail and match actions: %s", actionCell)
 	}
 }
 
@@ -59,7 +83,7 @@ func TestBillingFilterBarKeepsOnlyTheSixQuestions(t *testing.T) {
 	})
 	filterBar := markupBetween(t, page, `<form class="filterbar"`, `</form>`)
 
-	for _, expected := range []string{`id="payer"`, `id="tenant_id"`, `id="period"`, `id="rent_period"`, `id="allocation"`, `id="direction"`, `id="match_status"`} {
+	for _, expected := range []string{`id="payer"`, `id="tenant_id"`, `id="tenant_id" name="tenant_id" data-searchable`, `id="period"`, `id="rent_period"`, `id="allocation"`, `id="direction"`, `id="match_status"`} {
 		if !strings.Contains(filterBar, expected) {
 			t.Fatalf("filter bar lost %q: %s", expected, filterBar)
 		}

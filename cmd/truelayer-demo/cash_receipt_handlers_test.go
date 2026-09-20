@@ -85,6 +85,16 @@ func TestCashReceiptTemplateRendersPreviewAndCorrectionActions(t *testing.T) {
 	}
 }
 
+func TestCashReceiptStandaloneFormUsesSearchableTenantPicker(t *testing.T) {
+	var body strings.Builder
+	if err := cashReceiptTemplate.Execute(&body, cashReceiptFormData{Tenants: []tenant{{ID: 7, Name: "Aoife Murphy"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body.String(), `name="tenant_id" data-searchable`) {
+		t.Fatal("standalone cash receipt form does not opt into searchable tenant selection")
+	}
+}
+
 func TestCashReceiptVoidTemplateShowsReasonAndOriginalReceipt(t *testing.T) {
 	var body strings.Builder
 	err := cashReceiptVoidTemplate.Execute(&body, cashReceiptVoidPageData{

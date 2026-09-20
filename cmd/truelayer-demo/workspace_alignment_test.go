@@ -207,7 +207,7 @@ func TestRentWorkspacePendingCardsExposeInlineActions(t *testing.T) {
 		Period: "2026-09", PeriodLabel: "2026年9月", View: rentWorkspaceViewTenants,
 		PendingCount: 2,
 		PendingItems: []rentWorkspacePendingItem{
-			{Index: 1, Title: "待确认付款人", Subtitle: "09-06 · Rent payment", Amount: "EUR 1200.00", DetailURL: "/transactions/9?period=2026-09", ListURL: "/transactions?period=2026-09&match_status=pending"},
+			{Index: 1, Title: "待确认付款人", Subtitle: "09-06 · Rent payment", Amount: "EUR 1200.00", TenantOptions: []billingTenantOption{{ID: 11, Name: "Aoife Murphy"}}, MatchOptions: []billingRentMatchOption{{TenantID: 11, TenantName: "Aoife Murphy", Period: "2026-09", PeriodLabel: "2026年9月", Remaining: "EUR 1200.00"}}, DetailURL: "/transactions/9?period=2026-09", ListURL: "/transactions?period=2026-09&match_status=pending"},
 			{Index: 2, Title: "责任人待匹配", Subtitle: "09-07 · Rent payment", Amount: "EUR 700.00", DetailURL: "/transactions/10?period=2026-09", ListURL: "/transactions?period=2026-09&match_status=pending"},
 		},
 		TenantRows: []rentWorkspaceTenantRow{{
@@ -220,11 +220,14 @@ func TestRentWorkspacePendingCardsExposeInlineActions(t *testing.T) {
 	if got := strings.Count(queue, `>查看流水详情</a>`); got != 2 {
 		t.Fatalf("detail link count=%d want one per queued row: %s", got, queue)
 	}
-	if got := strings.Count(queue, `>处理流水</summary>`); got != 2 {
+	if got := strings.Count(queue, `>处理流水</button>`); got != 2 {
 		t.Fatalf("process control count=%d want one per queued row: %s", got, queue)
 	}
 	if got := strings.Count(queue, `>暂不处理</button>`); got != 2 {
 		t.Fatalf("defer action count=%d want one per queued row: %s", got, queue)
+	}
+	if !strings.Contains(queue, `name="tenant_id" data-searchable`) {
+		t.Fatal("dashboard tenant picker does not opt into searchable tenant selection")
 	}
 	// The prototype numbers each queued row (01/02/03) in front of its body.
 	for _, badge := range []string{`class="workspace-queue-index">01<`, `class="workspace-queue-index">02<`} {
@@ -238,6 +241,28 @@ func TestRentWorkspacePendingCardsExposeInlineActions(t *testing.T) {
 	list := strings.Index(page, `class="workspace-queue-list"`)
 	if !(head >= 0 && head < more && more < list) {
 		t.Fatalf("the see-all link is not in the queue panel head: head=%d more=%d list=%d", head, more, list)
+	}
+}
+
+func TestRentWorkspaceEmptyQueueUsesGreenState(t *testing.T) {
+	emptyPage := renderRentWorkspace(t, rentWorkspacePageData{Period: "2026-09", PeriodLabel: "2026年9月", PendingCount: 0})
+	if !strings.Contains(emptyPage, `class="panel surface workspace-action-queue is-empty"`) {
+		t.Fatal("empty manual-review queue does not render the empty-state modifier")
+	}
+	if !strings.Contains(emptyPage, "当前没有待处理流水。") {
+		t.Fatal("empty manual-review queue lost its empty message")
+	}
+
+	activePage := renderRentWorkspace(t, rentWorkspacePageData{Period: "2026-09", PeriodLabel: "2026年9月", PendingCount: 1})
+	if strings.Contains(activePage, `workspace-action-queue is-empty`) {
+		t.Fatal("non-empty manual-review queue should retain its attention state")
+	}
+
+	css := embeddedWebText("web/static/css/pages/rent-workspace.css")
+	for _, marker := range []string{`.workspace-action-queue.is-empty`, `.workspace-action-queue.is-empty .workspace-queue-count`, `.workspace-action-queue.is-empty .workspace-queue-empty`, `color: #256444`} {
+		if !strings.Contains(css, marker) {
+			t.Fatalf("empty queue green treatment is missing %q", marker)
+		}
 	}
 }
 

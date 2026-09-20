@@ -74,11 +74,35 @@
 
     const popup = document.createElement("div");
     popup.className = "workspace-select-popup";
-    popup.id = select.id ? select.id + "-options" : "workspace-select-options-" + (++selectSequence);
-    popup.setAttribute("role", "listbox");
-    popup.setAttribute("aria-label", label);
     popup.hidden = true;
-    trigger.setAttribute("aria-controls", popup.id);
+    const searchable = select.hasAttribute("data-searchable");
+    const listbox = document.createElement("div");
+    listbox.className = "workspace-select-options";
+    listbox.id = select.id ? select.id + "-options" : "workspace-select-options-" + (++selectSequence);
+    listbox.setAttribute("role", "listbox");
+    listbox.setAttribute("aria-label", label);
+    trigger.setAttribute("aria-controls", listbox.id);
+
+    let searchInput = null;
+    let noResults = null;
+    if (searchable) {
+      searchInput = document.createElement("input");
+      searchInput.type = "search";
+      searchInput.className = "workspace-select-search";
+      searchInput.setAttribute("role", "searchbox");
+      searchInput.setAttribute("aria-label", "搜索" + label.replace(/^(选择|修改)/, ""));
+      searchInput.placeholder = "输入关键词搜索";
+      searchInput.autocomplete = "off";
+      // The shared search-clear enhancement is for page filters, not this popup.
+      searchInput.dataset.workspaceSearchReady = "true";
+      popup.appendChild(searchInput);
+      noResults = document.createElement("div");
+      noResults.className = "workspace-select-empty";
+      noResults.setAttribute("role", "status");
+      noResults.textContent = "没有匹配的租客";
+    }
+    popup.appendChild(listbox);
+    if (noResults) popup.appendChild(noResults);
 
     let clearButton = null;
     if (select.hasAttribute("data-clearable")) {
@@ -96,7 +120,7 @@
     wrapper.appendChild(select);
     wrapper.appendChild(trigger);
     if (clearButton) wrapper.appendChild(clearButton);
-    wrapper.appendChild(popup);
+    document.body.appendChild(popup);
     select.classList.add("workspace-select-native");
     select.tabIndex = -1;
     select.setAttribute("aria-hidden", "true");
@@ -118,8 +142,23 @@
       }
     };
 
+    const applySearchFilter = () => {
+      const query = searchInput ? searchInput.value.trim().toLocaleLowerCase() : "";
+      let visibleCount = 0;
+      optionNodes.forEach((item, index) => {
+        const option = select.options[index];
+        const labelText = option ? option.textContent.trim() : "";
+        const matches = Boolean(option && !option.hidden && (!query || (option.value !== "" && labelText.toLocaleLowerCase().includes(query))));
+        item.hidden = !matches;
+        if (matches) visibleCount += 1;
+      });
+      if (noResults) noResults.hidden = visibleCount > 0;
+      listbox.hidden = visibleCount === 0;
+      if (!popup.hidden && activeSelect && activeSelect.select === select) placePopup();
+    };
+
     const renderOptions = () => {
-      popup.replaceChildren();
+      listbox.replaceChildren();
       optionNodes = Array.from(select.options).map((option, index) => {
         const item = document.createElement("div");
         item.className = "workspace-select-option";
@@ -128,12 +167,12 @@
         item.setAttribute("data-option-index", String(index));
         item.setAttribute("aria-selected", String(option.selected));
         item.setAttribute("aria-disabled", String(optionIsDisabled(option)));
-        item.hidden = option.hidden;
         item.appendChild(textNode(option.textContent.trim()));
-        popup.appendChild(item);
+        listbox.appendChild(item);
         return item;
       });
       updateSelectedValue();
+      applySearchFilter();
     };
 
     const placePopup = () => {
@@ -144,16 +183,18 @@
       const desiredHeight = Math.min(popup.scrollHeight, 320, availableHeight);
       const below = window.innerHeight - rect.bottom - viewportPadding;
       const above = rect.top - viewportPadding;
-      const openBelow = below >= Math.min(desiredHeight, 180) || below >= above;
+      const openBelow = below >= desiredHeight || below >= above;
+      const maxHeight = Math.max(96, Math.min(320, openBelow ? below : above));
+      const actualHeight = Math.min(desiredHeight, maxHeight);
       const top = openBelow
-        ? Math.min(rect.bottom + 4, window.innerHeight - desiredHeight - viewportPadding)
-        : Math.max(viewportPadding, rect.top - desiredHeight - 4);
+        ? rect.bottom + 4
+        : Math.max(viewportPadding, rect.top - actualHeight - 4);
       const width = Math.min(Math.max(rect.width, 120), window.innerWidth - viewportPadding * 2);
       const left = Math.min(Math.max(rect.left, viewportPadding), window.innerWidth - width - viewportPadding);
       popup.style.top = Math.round(top) + "px";
       popup.style.left = Math.round(left) + "px";
       popup.style.width = Math.round(width) + "px";
-      popup.style.maxHeight = Math.round(Math.max(96, Math.min(320, openBelow ? below : above))) + "px";
+      popup.style.maxHeight = Math.round(maxHeight) + "px";
     };
 
     const close = (restoreFocus) => {
@@ -168,9 +209,9 @@
       if (!optionNodes.length) return;
       let next = Math.min(Math.max(index, 0), optionNodes.length - 1);
       const step = direction || (index >= selectedIndex() ? 1 : -1);
-      while (next >= 0 && next < optionNodes.length && optionIsDisabled(select.options[next])) next += step;
+      while (next >= 0 && next < optionNodes.length && (optionIsDisabled(select.options[next]) || optionNodes[next].hidden)) next += step;
       if (next < 0 || next >= optionNodes.length) {
-        next = optionNodes.findIndex((_, optionIndex) => !optionIsDisabled(select.options[optionIndex]));
+        next = optionNodes.findIndex((node, optionIndex) => !optionIsDisabled(select.options[optionIndex]) && !node.hidden);
       }
       if (next < 0) return;
       optionNodes.forEach((node) => node.classList.remove("is-active"));
@@ -186,9 +227,15 @@
       popup.hidden = false;
       wrapper.classList.add("is-open");
       trigger.setAttribute("aria-expanded", "true");
-      activeSelect = { select, close: (restoreFocus) => close(restoreFocus), placePopup };
+      activeSelect = { select, wrapper, popup, close: (restoreFocus) => close(restoreFocus), placePopup };
       placePopup();
-      if (focusCurrent) requestAnimationFrame(() => focusOption(selectedIndex()));
+      if (searchInput) {
+        searchInput.value = "";
+        applySearchFilter();
+        requestAnimationFrame(() => searchInput.focus());
+      } else if (focusCurrent) {
+        requestAnimationFrame(() => focusOption(selectedIndex()));
+      }
     };
 
     const choose = (index) => {
@@ -261,8 +308,27 @@
       if (!item || !popup.contains(item) || item.getAttribute("aria-disabled") === "true") return;
       optionNodes.forEach((node) => node.classList.toggle("is-active", node === item));
     });
-    popup.addEventListener("keydown", (event) => {
+    searchInput?.addEventListener("input", applySearchFilter);
+    searchInput?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        close(true);
+      } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        const available = optionNodes.map((node, index) => ({ node, index })).filter(({ node, index }) => !node.hidden && !optionIsDisabled(select.options[index]));
+        if (!available.length) return;
+        event.preventDefault();
+        const target = event.key === "ArrowDown" ? available[0].index : available[available.length - 1].index;
+        focusOption(target, event.key === "ArrowDown" ? 1 : -1);
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        const activeIndex = optionNodes.findIndex((node, index) => node.classList.contains("is-active") && !node.hidden && !optionIsDisabled(select.options[index]));
+        const firstAvailable = optionNodes.findIndex((node, index) => !node.hidden && !optionIsDisabled(select.options[index]));
+        choose(activeIndex >= 0 ? activeIndex : firstAvailable);
+      }
+    });
+    listbox.addEventListener("keydown", (event) => {
       const focusedIndex = Number(event.target.dataset.optionIndex);
+      if (!Number.isInteger(focusedIndex)) return;
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
         focusOption(focusedIndex + (event.key === "ArrowDown" ? 1 : -1), event.key === "ArrowDown" ? 1 : -1);
@@ -353,7 +419,7 @@
     window.addEventListener("resize", () => activeSelect && activeSelect.placePopup());
     document.addEventListener("scroll", () => activeSelect && activeSelect.placePopup(), true);
     document.addEventListener("pointerdown", (event) => {
-      if (activeSelect && !activeSelect.select.closest(".workspace-select")?.contains(event.target)) activeSelect.close(false);
+      if (activeSelect && !activeSelect.wrapper.contains(event.target) && !activeSelect.popup.contains(event.target)) activeSelect.close(false);
     });
   };
 

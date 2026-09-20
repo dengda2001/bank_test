@@ -88,6 +88,18 @@ func TestEmbeddedObjectListsKeepFiltersAndResponsiveDetailLinks(t *testing.T) {
 	}
 }
 
+func TestObjectListCollectionFilterKeepsSelectedLabelReadable(t *testing.T) {
+	css := embeddedWebText("web/static/css/pages/object-lists.css")
+	for _, rule := range []string{
+		`.object-list-filter-fields select[name="collection"] { width: 132px; min-width: 132px; }`,
+		`.object-list-filter-fields label { min-width: 0; }`,
+	} {
+		if !strings.Contains(css, rule) {
+			t.Fatalf("object-list collection filter is missing readable-width rule %q", rule)
+		}
+	}
+}
+
 func TestPropertyDetailEditDrawerMatchesPrototypeFieldLayout(t *testing.T) {
 	page, err := executeTemplate(propertyDetailPageTemplate, propertyDetailPageData{
 		workspaceShell: workspaceShell{ActivePage: "properties"},

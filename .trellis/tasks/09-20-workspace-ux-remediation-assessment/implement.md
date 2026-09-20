@@ -225,3 +225,5 @@ Each batch is independently reviewable. The Trellis implementation phase should 
 ## 6. Current follow-up child task
 
 The additional user request is tracked by [`09-20-workspace-interaction-followup`](../09-20-workspace-interaction-followup/implement.md). It covers the current outstanding page-local drawers, property/room calendar filters, transaction-list match actions, dashboard processing popup and clear-control refinements. Start this child only after the user approves its `prd.md`, `design.md` and `implement.md`.
+
+The newer request is tracked by [`09-20-workspace-ui-polish`](../09-20-workspace-ui-polish/implement.md). It is a separate sibling implementation slice so its room-data preservation and shared-select behavior can be reviewed independently from the previous follow-up.

@@ -55,13 +55,23 @@
     .workspace-pager .disabled { opacity: .45; pointer-events: none; }
     .workspace-empty { padding: 36px 20px; text-align: center; color: var(--foreground-muted); }
     .workspace-title-mobile, .workspace-title-mobile-subtitle, .workspace-tab-mobile, .workspace-mobile-view-heading { display: none; }
-    .workspace-action-queue { overflow: hidden; border-color: color-mix(in oklch, #d07b8a 28%, var(--border)); background: color-mix(in oklch, #fff1f3 68%, var(--surface)); }
+    /* 这里的底色一律用 srgb 混合：--surface 是 oklch(100% 0 0)，色度 0 的颜色在
+       oklch 里 hue 会被折叠成 0，绿色底和粉色底会算成同一个近白的颜色 —— 空队列
+       的绿色态就看不出来了。srgb 混合保留 tint 本身的色相。 */
+    .workspace-action-queue { overflow: hidden; border-color: color-mix(in oklch, #d07b8a 28%, var(--border)); background: color-mix(in srgb, #fff1f3 68%, var(--surface)); }
     .workspace-action-queue .panel-head { align-items: center; }
-    .workspace-action-queue .panel-head { background: color-mix(in oklch, #fff1f3 76%, var(--surface)); }
+    .workspace-action-queue .panel-head { background: color-mix(in srgb, #fff1f3 76%, var(--surface)); }
     .workspace-action-queue .panel-head h2 { margin: 0; }
     .workspace-action-queue .panel-head p { margin: 5px 0 0; }
     .workspace-queue-head-meta { display: flex; align-items: center; gap: 12px; }
-    .workspace-queue-count { display: grid; place-items: center; min-width: 32px; height: 32px; border-radius: 50%; color: #8c3346; background: color-mix(in oklch, #e995a4 22%, var(--surface)); font: 700 13px var(--mono); }
+    .workspace-queue-count { display: grid; place-items: center; min-width: 32px; height: 32px; border-radius: 50%; color: #8c3346; background: color-mix(in srgb, #e995a4 22%, var(--surface)); font: 700 13px var(--mono); }
+    .workspace-action-queue.is-empty { border-color: color-mix(in oklch, #2b8a5e 32%, var(--border)); background: color-mix(in srgb, #e8f6ee 58%, var(--surface)); }
+    .workspace-action-queue.is-empty .panel-head { background: color-mix(in srgb, #e8f6ee 72%, var(--surface)); }
+    .workspace-action-queue.is-empty .panel-head h2,
+    .workspace-action-queue.is-empty .workspace-queue-count,
+    .workspace-action-queue.is-empty .workspace-queue-empty { color: #256444; }
+    .workspace-action-queue.is-empty .workspace-queue-count { background: color-mix(in srgb, #75c99b 26%, var(--surface)); }
+    .workspace-action-queue.is-empty .workspace-queue-empty { background: color-mix(in srgb, #e8f6ee 72%, var(--surface)); }
     /* 原型把「查看全部流水」放在 panel-head 右侧（.manual-queue 的 link-btn），
        而不是清单底部 —— 它是这一块的出口，不随剩余条数出现或消失。 */
     .workspace-queue-more { color: var(--accent-bright); font-size: 12px; text-decoration: none; white-space: nowrap; }
