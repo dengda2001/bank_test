@@ -243,11 +243,15 @@ func TestMorePageMatchesMobilePrototypeAndKeepsMoreNavigationActive(t *testing.T
 	for _, marker := range []string{
 		`class="mobile-bottom-nav-item active" href="/more"`,
 		`class="more-page-grid"`,
-		`href="/tenancies"`, `href="/dunning"`, `href="/cash-receipts"`,
-		`href="/expenses"`, `href="/bank"`, `低频操作集中在这里。`, `租约管理`, `到期、续约与责任周期`,
+		`href="/tenancies"`, `href="/dunning"`, `href="/bank"`, `低频操作集中在这里。`, `租约管理`, `到期、续约与责任周期`,
 	} {
 		if !strings.Contains(page, marker) {
 			t.Fatalf("more page missing %q", marker)
+		}
+	}
+	for _, removed := range []string{`href="/cash-receipts"`, `href="/expenses"`} {
+		if strings.Contains(page, removed) {
+			t.Fatalf("cash or expenses still has a navigation card %q", removed)
 		}
 	}
 }

@@ -2,8 +2,6 @@ package main
 
 import (
 	"io/fs"
-	"net/http/httptest"
-	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -24,119 +22,19 @@ func renderWorkspaceNav(t *testing.T, shell workspaceShell) string {
 	return page
 }
 
-// The topbar search box may only appear where submitting it actually filters the
-// list (prd.md A1: a page that cannot honour the box must not show one). The set
-// is the routes whose handler reads ?search=; the notable absences are
-// /transactions, whose list filter is ?payer=, and /tenants, which has no list
-// search at all.
-func TestTopbarSearchFillsOnlyRoutesThatParseSearch(t *testing.T) {
-	app := &app{}
-	wantSearch := []string{
-		"/rent-dashboard", "/bills", "/dunning", "/properties",
-		"/rooms", "/tenancies", "/cash-receipts", "/expenses",
+func TestWorkspaceNavKeepsBreadcrumbAndOmitsSharedTopbarActions(t *testing.T) {
+	markup := renderWorkspaceNav(t, workspaceShell{ActivePage: "bills", FootNote: "应收账单"})
+	if !strings.Contains(markup, `class="workspace-page-topbar-crumb"`) || !strings.Contains(markup, "应收账单") {
+		t.Fatal("the shared topbar breadcrumb should remain")
 	}
-	for _, path := range wantSearch {
-		r := httptest.NewRequest("GET", path, nil)
-		if got := app.fillWorkspaceShell(r, workspaceShell{}).TopSearch.Action; got != path {
-			t.Fatalf("%s: topbar search action = %q, want %q", path, got, path)
+	for _, removed := range []string{`class="workspace-topsearch"`, `class="workspace-topbar-count"`} {
+		if strings.Contains(markup, removed) {
+			t.Fatalf("shared topbar still rendered removed control %q", removed)
 		}
 	}
-	wantNone := []string{
-		"/transactions", "/tenants", "/bank", "/more",
-		"/properties/7", "/rooms/7", "/tenants/7", "/properties/7/rooms/3",
-	}
-	for _, path := range wantNone {
-		r := httptest.NewRequest("GET", path, nil)
-		if got := app.fillWorkspaceShell(r, workspaceShell{}).TopSearch.Action; got != "" {
-			t.Fatalf("%s: topbar search rendered with action %q, want none", path, got)
-		}
-	}
-}
-
-// Submitting the topbar box must keep the list state the user already chose and
-// drop the parts that are positional or one-shot: a new search starts at page 1,
-// and it must not reopen a drawer or re-show a message that was already read.
-func TestTopbarSearchKeepsListStateAndDropsTransientParams(t *testing.T) {
-	app := &app{}
-	query := url.Values{
-		"period": {"2026-09"}, "status": {"unpaid"}, "sort": {"amount_desc"},
-		"page_size": {"24"}, "page": {"3"}, "search": {"old term"},
-		"message": {"cash_receipt_saved"}, "error": {"invalid_filter"},
-		"add": {"1"}, "detail": {"42"},
-	}
-	r := httptest.NewRequest("GET", "/expenses?"+query.Encode(), nil)
-	shell := app.fillWorkspaceShell(r, workspaceShell{})
-
-	if shell.TopSearch.Action != "/expenses" {
-		t.Fatalf("topbar search action = %q, want /expenses", shell.TopSearch.Action)
-	}
-	if shell.TopSearch.Value != "old term" {
-		t.Fatalf("topbar search value = %q, want the current term", shell.TopSearch.Value)
-	}
-	for _, kept := range []string{"period", "status", "sort", "page_size"} {
-		if shell.TopSearch.Params.Get(kept) != query.Get(kept) {
-			t.Fatalf("topbar search dropped list state %q (got %q)", kept, shell.TopSearch.Params.Get(kept))
-		}
-	}
-	for _, dropped := range []string{"search", "message", "error", "add", "detail", "page"} {
-		if shell.TopSearch.Params.Has(dropped) {
-			t.Fatalf("topbar search replayed the transient parameter %q", dropped)
-		}
-	}
-}
-
-func TestWorkspaceNavRendersTopbarSearchOnlyWhenFilled(t *testing.T) {
-	without := renderWorkspaceNav(t, workspaceShell{ActivePage: "tenants"})
-	if strings.Contains(without, `class="workspace-topsearch"`) {
-		t.Fatal("a page with no list search still rendered the topbar search box")
-	}
-
-	with := renderWorkspaceNav(t, workspaceShell{
-		ActivePage: "expenses",
-		TopSearch: topbarSearch{
-			Action: "/expenses",
-			Value:  "electricity",
-			Params: url.Values{"period": {"2026-09"}, "sort": {"amount_desc"}},
-		},
-	})
-	for _, marker := range []string{
-		`<form class="workspace-topsearch" method="get" action="/expenses"`,
-		`name="search" value="electricity"`,
-	} {
-		if !strings.Contains(with, marker) {
-			t.Fatalf("topbar search box missing %q", marker)
-		}
-	}
-	// The hidden fields are what keep the period and the sort the user had chosen;
-	// without them the search would silently reset the list.
-	for _, kept := range []string{`name="period" value="2026-09"`, `name="sort" value="amount_desc"`} {
-		if !strings.Contains(with, kept) {
-			t.Fatalf("topbar search did not carry list state %q", kept)
-		}
-	}
-}
-
-// The count button is the topbar's view of the dashboard's "待人工处理流水"
-// panel. It renders only when the count was actually read (the URL is set with
-// it), so a page that could not reach the data shows no button rather than a
-// fabricated 0.
-func TestWorkspaceNavRendersCountButtonOnlyWithAReadCount(t *testing.T) {
-	without := renderWorkspaceNav(t, workspaceShell{ActivePage: "bills"})
-	if strings.Contains(without, `class="workspace-topbar-count"`) {
-		t.Fatal("the count button rendered without a readable pending count")
-	}
-
-	with := renderWorkspaceNav(t, workspaceShell{
-		ActivePage:         "bills",
-		PendingReviewCount: 4,
-		PendingReviewURL:   "/rent-dashboard?period=2026-09#pending-review",
-	})
-	for _, marker := range []string{
-		`class="workspace-topbar-count" href="/rent-dashboard?period=2026-09#pending-review"`,
-		`>4</a>`,
-	} {
-		if !strings.Contains(with, marker) {
-			t.Fatalf("count button missing %q", marker)
+	for _, removed := range []string{`data-mobile-search`, `href="/cash-receipts"`, `href="/expenses"`} {
+		if strings.Contains(markup, removed) {
+			t.Fatalf("shared navigation still rendered removed control %q", removed)
 		}
 	}
 }
@@ -313,15 +211,9 @@ func TestNoQueryParameterIsRenderedAsToastText(t *testing.T) {
 	}
 }
 
-// The shared chrome is rendered before the page body, so at parse time <main> and
-// everything in it -- the filter disclosure, its fields, the page's search box --
-// do not exist yet and a top-level querySelectorAll for them comes back empty. The
-// failure is not a dead button: the <=640px filter panel is opened only by that
-// listener, so the filter feature becomes unreachable on a narrow screen, and the
-// fields' change->submit is dead at every width. All page-body lookups therefore
-// live in initChrome(), which runs on DOMContentLoaded; the nav bindings move with
-// them so the block keeps one rule. The toast script above is the same rule applied
-// to the toast notice.
+// The shared chrome is rendered before the page body, so page-level filter
+// controls are only queried from initChrome() after DOMContentLoaded. The toast
+// script above uses the same delayed lookup for its page notice.
 func TestWorkspaceNavBodyLookupsWaitForDOMContentLoaded(t *testing.T) {
 	// The partial alone is the minimal page the failure needs: it is rendered
 	// on its own, exactly as the chrome is emitted before any <main> exists.
@@ -334,7 +226,6 @@ func TestWorkspaceNavBodyLookupsWaitForDOMContentLoaded(t *testing.T) {
 		t.Fatal("initChrome() must be registered for DOMContentLoaded; the chrome precedes the page body, so running it at parse time attaches no listeners")
 	}
 	for _, lookup := range []string{
-		`document.querySelector("[data-mobile-search]")`,
 		`document.querySelectorAll(".object-list-filter-toggle")`,
 		`document.querySelectorAll(".object-list-filter-fields select, .object-list-filter-fields input")`,
 	} {

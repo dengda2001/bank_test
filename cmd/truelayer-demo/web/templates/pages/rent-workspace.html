@@ -4,7 +4,6 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RentOps 月度工作台</title>
   <link rel="stylesheet" href="/static/css/workspace.css">
-  <link rel="stylesheet" href="/static/css/calendar.css">
   <link rel="stylesheet" href="/static/css/pages/collection-pages.css">
   <link rel="stylesheet" href="/static/css/pages/rent-workspace.css">
 </head>
@@ -14,10 +13,17 @@
   <main class="content workspace">
     <div class="workspace-toolbar">
       <div><div class="eyebrow workspace-title-eyebrow">RENTOPS · MONTHLY WORKSPACE</div><h1><span class="workspace-title-desktop">月度收租工作台</span><span class="workspace-title-mobile">本月收租</span></h1><div class="tiny workspace-title-subtitle">{{.PeriodLabel}} · 所有金额来自同一套月度账务事实</div><div class="tiny workspace-title-mobile-subtitle">先处理异常，再查看收缴进度。</div></div>
-      <form class="workspace-period" method="get" action="/rent-dashboard"><label for="workspace-period">月份</label><input id="workspace-period" name="period" type="month" value="{{.Period}}"><input type="hidden" name="view" value="{{.View}}"><input type="hidden" name="property_id" value="{{if .Filters.PropertyID}}{{.Filters.PropertyID}}{{end}}"><input type="hidden" name="room_id" value="{{if .Filters.RoomID}}{{.Filters.RoomID}}{{end}}"><input type="hidden" name="search" value="{{.Filters.Search}}"><input type="hidden" name="status" value="{{.Filters.Status}}"><input type="hidden" name="sort" value="{{.Filters.Sort}}"><input type="hidden" name="page_size" value="{{.PageSize}}"><button class="btn" type="submit">查看</button></form>
-      <nav class="workspace-period-mobile" aria-label="选择收租月份"><a class="btn subtle" href="{{workspacePeriodURL .Filters .PreviousPeriod}}" aria-label="上个月">‹</a><strong>{{.PeriodLabel}}</strong><a class="btn subtle" href="{{workspacePeriodURL .Filters .NextPeriod}}" aria-label="下个月">›</a></nav>
+      <div class="workspace-month-controls" aria-label="选择收租月份">
+        <a class="btn subtle workspace-month-step" href="{{workspacePeriodURL .Filters .PreviousPeriod}}" aria-label="上个月">‹</a>
+        <form class="workspace-period" method="get" action="/rent-dashboard"><label for="workspace-period">月份</label><input id="workspace-period" name="period" type="month" value="{{.Period}}" aria-label="月份"><input type="hidden" name="view" value="{{.View}}"><input type="hidden" name="property_id" value="{{if .Filters.PropertyID}}{{.Filters.PropertyID}}{{end}}"><input type="hidden" name="room_id" value="{{if .Filters.RoomID}}{{.Filters.RoomID}}{{end}}"><input type="hidden" name="search" value="{{.Filters.Search}}"><input type="hidden" name="status" value="{{.Filters.Status}}"><input type="hidden" name="sort" value="{{.Filters.Sort}}"><input type="hidden" name="page_size" value="{{.PageSize}}"><button class="btn" type="submit">搜索</button></form>
+        <a class="btn subtle workspace-month-step" href="{{workspacePeriodURL .Filters .NextPeriod}}" aria-label="下个月">›</a>
+      </div>
     </div>
     {{if eq .Error "invalid_workspace_filter"}}<div class="notice error">筛选条件无效，已恢复安全默认值。</div>{{end}}
+    {{if eq .Error "confirmation_failed"}}<div class="notice error">匹配失败，请检查所选租客、月份和未收金额。</div>{{end}}
+    {{if eq .Error "transaction_action_failed"}}<div class="notice error">暂不处理失败，请检查这笔流水当前是否已有分配。</div>{{end}}
+    {{if eq .Message "rent_confirmed"}}<div class="notice ok" data-toast>流水已匹配，待处理队列已更新。</div>{{end}}
+    {{if eq .Message "transaction_action_saved"}}<div class="notice ok" data-toast>流水已暂不处理，待处理队列已更新。</div>{{end}}
     {{if not .PropertyOptions}}<div class="notice workspace-empty-notice">尚未建立有效房产。旧版租金账单不会自动迁移；你可以先<a href="/properties?add=1">新建房产</a>，或前往<a href="/bills">应收账单</a>查看现有账单。</div>{{end}}
     <section class="workspace-summary" aria-label="月度汇总">
       <div class="panel metric metric-main"><div class="label">本月应收</div><strong>{{.Summary.ExpectedAmount}}</strong><span>{{.Summary.ResponsibilityCount}} 条租客责任</span></div>
@@ -27,7 +33,7 @@
     </section>
     <section class="panel surface workspace-action-queue" id="pending-review" aria-label="待人工处理流水">
       <div class="panel-head"><div><h2>待人工处理流水</h2><p class="tiny">核对付款人与租金责任，处理后同步更新收缴结果。</p></div><div class="workspace-queue-head-meta"><span class="workspace-queue-count">{{.PendingCount}}</span><a class="workspace-queue-more" href="/transactions?period={{.Period}}&amp;match_status=pending">查看全部流水</a></div></div>
-      {{if .PendingItems}}<div class="workspace-queue-list">{{range .PendingItems}}<article class="workspace-queue-item"><span class="workspace-queue-index">{{printf "%02d" .Index}}</span><div class="workspace-queue-body"><strong>{{.Title}}</strong><small>{{.Subtitle}}</small></div><strong class="workspace-queue-amount">{{.Amount}}</strong><div class="workspace-queue-actions"><a class="btn subtle" href="{{.DetailURL}}">查看建议</a><a class="btn primary" href="{{.ListURL}}">处理流水</a></div></article>{{end}}</div>{{else}}<div class="workspace-empty workspace-queue-empty">当前没有待处理流水。</div>{{end}}
+      {{if .PendingItems}}<div class="workspace-queue-list">{{range .PendingItems}}<article class="workspace-queue-item"><span class="workspace-queue-index">{{printf "%02d" .Index}}</span><div class="workspace-queue-body"><strong>{{.Title}}</strong><small>{{.Subtitle}}</small></div><strong class="workspace-queue-amount">{{.Amount}}</strong><details class="workspace-queue-process"><summary class="btn primary">处理流水</summary><div class="workspace-queue-process-body"><dl><div><dt>付款人</dt><dd>{{.Title}}</dd></div><div><dt>付款时间</dt><dd>{{.DateTime}}</dd></div><div><dt>备注</dt><dd>{{.Description}}{{if and .Reference (ne .Reference "—")}} · {{.Reference}}{{end}}</dd></div><div><dt>金额</dt><dd>{{.Amount}}</dd></div>{{if ne .Amount .RemainingAmount}}<div><dt>待匹配余额</dt><dd>{{.RemainingAmount}}</dd></div>{{end}}</dl>{{if .MatchOptions}}<form method="post" action="/transactions/confirm" data-tenant-period-match><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="remember_payer" value="0"><input type="hidden" name="return_to" value="{{.ReturnURL}}"><label>租客<select name="tenant_id" required><option value="">选择租客</option>{{range .TenantOptions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label><label>月份<select name="period" required><option value="">选择月份</option>{{range .MatchOptions}}<option value="{{.Period}}" data-tenant="{{.TenantID}}">{{.PeriodLabel}} · 未收 {{.Remaining}}</option>{{end}}</select></label><label class="tiny"><input type="checkbox" name="remember_payer" value="1" checked> 记住付款人</label><button class="btn primary" type="submit">匹配流水</button></form>{{else}}<p class="tiny">当前没有可直接匹配的未收账单，可以打开流水详情继续处理。</p>{{end}}<div class="workspace-queue-process-actions"><a class="btn subtle" href="{{.DetailURL}}">查看流水详情</a><form method="post" action="/transactions/defer"><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="reason" value="首页暂不处理"><input type="hidden" name="return_to" value="{{.ReturnURL}}"><button class="btn subtle" type="submit">暂不处理</button></form></div></div></details></article>{{end}}</div>{{else}}<div class="workspace-empty workspace-queue-empty">当前没有待处理流水。</div>{{end}}
     </section>
     <div class="workspace-mobile-view-heading"><strong>收缴视图</strong><span>点击房产展开房间，再点房间查看租客责任</span></div>
     <section class="panel surface workspace-list-panel" aria-label="工作台列表">
@@ -42,7 +48,7 @@
           <label class="search" for="workspace-search">搜索<input id="workspace-search" name="search" type="search" value="{{.Filters.Search}}" placeholder="房产、房间、租客"></label>
           <label class="property" for="workspace-property">房产<select id="workspace-property" name="property_id"><option value="">全部房产</option>{{range .PropertyOptions}}<option value="{{.ID}}"{{if eq $.Filters.PropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
           <label for="workspace-status">状态<select id="workspace-status" name="status"><option value="all"{{if eq .Filters.Status "all"}} selected{{end}}>全部</option><option value="unpaid"{{if eq .Filters.Status "unpaid"}} selected{{end}}>未交满</option><option value="needs_review"{{if eq .Filters.Status "needs_review"}} selected{{end}}>待处理</option><option value="overdue"{{if eq .Filters.Status "overdue"}} selected{{end}}>逾期</option><option value="partial"{{if eq .Filters.Status "partial"}} selected{{end}}>部分缴纳</option><option value="open"{{if eq .Filters.Status "open"}} selected{{end}}>未到期未缴</option><option value="paid"{{if eq .Filters.Status "paid"}} selected{{end}}>已交满</option><option value="vacant"{{if eq .Filters.Status "vacant"}} selected{{end}}>空置</option></select></label>
-          <input type="hidden" name="room_id" value="{{if .Filters.RoomID}}{{.Filters.RoomID}}{{end}}"><input type="hidden" name="sort" value="{{.Filters.Sort}}"><input type="hidden" name="page_size" value="{{.PageSize}}"><button class="btn" type="submit">筛选</button><a class="btn subtle" href="{{workspaceViewURL .Filters .View .Filters.PropertyID .Filters.RoomID}}">清除筛选</a>
+          <input type="hidden" name="room_id" value="{{if .Filters.RoomID}}{{.Filters.RoomID}}{{end}}"><input type="hidden" name="sort" value="{{.Filters.Sort}}"><input type="hidden" name="page_size" value="{{.PageSize}}"><button class="btn" type="submit">搜索</button><a class="btn subtle" href="{{workspaceViewURL .Filters .View .Filters.PropertyID .Filters.RoomID}}">清除筛选</a>
         </form>
       </div>
       <div class="workspace-dimension-summary" aria-live="polite">
@@ -151,9 +157,33 @@
   <div class="workspace-row-actions">{{if gt .BalanceCents 0}}{{template "collection-settle-form" ($.TenantSettleForm .)}}{{end}}<a class="btn subtle" href="{{tenantDetailURL .TenantID $.Period}}">查看详情</a></div>
 </article>{{end}}</div>{{else}}<div class="workspace-empty">暂无符合条件的租客责任。</div>{{end}}
       {{end}}
-      {{if .TotalRows}}<div class="workspace-pager"><form method="get" action="/rent-dashboard"><input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="view" value="{{.View}}"><input type="hidden" name="property_id" value="{{if .Filters.PropertyID}}{{.Filters.PropertyID}}{{end}}"><input type="hidden" name="room_id" value="{{if .Filters.RoomID}}{{.Filters.RoomID}}{{end}}"><input type="hidden" name="search" value="{{.Filters.Search}}"><input type="hidden" name="status" value="{{.Filters.Status}}"><input type="hidden" name="sort" value="{{.Filters.Sort}}"><label>每页<select name="page_size" onchange="this.form.submit()"><option value="12"{{if eq .PageSize 12}} selected{{end}}>12</option><option value="24"{{if eq .PageSize 24}} selected{{end}}>24</option><option value="50"{{if eq .PageSize 50}} selected{{end}}>50</option></select></label></form><span class="tiny">当前显示 {{.FilteredCount}} / {{.TotalRows}} 条</span><div class="pager-actions"><a class="btn subtle{{if eq .Page 1}} disabled{{end}}" href="{{workspaceURL .Filters (workspacePreviousPage .Page)}}">上一页</a><span class="tiny">第 {{.Page}} / {{.TotalPages}} 页</span><a class="btn subtle{{if eq .Page .TotalPages}} disabled{{end}}" href="{{workspaceURL .Filters (workspaceNextPage .Page .TotalPages)}}">下一页</a></div></div>{{end}}
+      {{if .TotalRows}}<div class="workspace-pager"><form method="get" action="/rent-dashboard"><input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="view" value="{{.View}}"><input type="hidden" name="property_id" value="{{if .Filters.PropertyID}}{{.Filters.PropertyID}}{{end}}"><input type="hidden" name="room_id" value="{{if .Filters.RoomID}}{{.Filters.RoomID}}{{end}}"><input type="hidden" name="search" value="{{.Filters.Search}}"><input type="hidden" name="status" value="{{.Filters.Status}}"><input type="hidden" name="sort" value="{{.Filters.Sort}}"><label>每页<select name="page_size" onchange="this.form.submit()"><option value="10"{{if eq .PageSize 10}} selected{{end}}>10</option><option value="12"{{if eq .PageSize 12}} selected{{end}}>12</option><option value="24"{{if eq .PageSize 24}} selected{{end}}>24</option><option value="50"{{if eq .PageSize 50}} selected{{end}}>50</option></select></label></form><span class="tiny">当前显示 {{.FilteredCount}} / {{.TotalRows}} 条</span><div class="pager-actions"><a class="btn subtle{{if eq .Page 1}} disabled{{end}}" href="{{workspaceURL .Filters (workspacePreviousPage .Page)}}">上一页</a><span class="pagination-numbers" aria-label="选择页码">{{range .Pagination}}{{if .Ellipsis}}<span class="pagination-ellipsis" aria-hidden="true">…</span>{{else if .Current}}<span class="pagination-number is-current" aria-current="page">{{.Number}}</span>{{else}}<a class="pagination-number" href="{{workspaceURL $.Filters .Number}}">{{.Number}}</a>{{end}}{{end}}</span><span class="tiny">第 {{.Page}} / {{.TotalPages}} 页</span><a class="btn subtle{{if eq .Page .TotalPages}} disabled{{end}}" href="{{workspaceURL .Filters (workspaceNextPage .Page .TotalPages)}}">下一页</a></div></div>{{end}}
     </section>
   </main>
   </div>
+  <script>
+    (() => {
+      document.querySelectorAll("[data-tenant-period-match]").forEach((form) => {
+        const tenant = form.querySelector('select[name="tenant_id"]');
+        const period = form.querySelector('select[name="period"]');
+        if (!tenant || !period) return;
+        const filterPeriods = () => {
+          const selectedTenant = tenant.value;
+          let selectedStillAvailable = false;
+          Array.from(period.options).forEach((option) => {
+            if (!option.value) return;
+            const visible = !selectedTenant || option.dataset.tenant === selectedTenant;
+            option.hidden = !visible;
+            option.disabled = !visible;
+            if (visible && option.selected) selectedStillAvailable = true;
+          });
+          if (!selectedStillAvailable) period.value = "";
+          period.dispatchEvent(new Event("change", {bubbles: true}));
+        };
+        tenant.addEventListener("change", filterPeriods);
+        filterPeriods();
+      });
+    })();
+  </script>
 </body>
 </html>

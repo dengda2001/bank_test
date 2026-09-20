@@ -90,6 +90,7 @@ type propertyDetailPageData struct {
 	Property       propertyPageRow
 	Rooms          []roomPageRow
 	Expenses       []expenseRecord
+	ExpenseDrawer  *expenseDrawerData
 	Editing        bool
 	Error          string
 	Message        string
@@ -803,6 +804,15 @@ func (a *app) handlePropertyDetail(w http.ResponseWriter, r *http.Request, prope
 		listCollection = "all"
 	}
 	data := propertyDetailPageData{workspaceShell: canonicalPageShell(a, r, "properties", "房产详情"), Period: period.Format("2006-01"), PeriodLabel: formatMonthLabel(period), ListStatus: listStatus, ListSearch: strings.TrimSpace(r.URL.Query().Get("list_search")), ListCollection: listCollection, Property: propertyPageRow{ID: propertyRow.ID, Mark: propertyMark(propertyRow.Name), Name: propertyRow.Name, CityRegion: propertyRow.CityRegion, Address: propertyAddress(propertyRow), Timezone: propertyRow.Timezone, Notes: stringValue(propertyRow.Notes), Status: propertyRow.Status, StatusLabel: pageStatusLabel(propertyRow.Status), Actions: propertyActions(propertyRow.ID, propertyRow.Status == "active")}, Rooms: rooms, Expenses: filteredExpenses, Editing: r.URL.Query().Get("edit") == "1", Message: r.URL.Query().Get("message"), Error: r.URL.Query().Get("error")}
+	if r.URL.Query().Get("expense") == "1" || isExpenseFormError(r.URL.Query().Get("error")) {
+		returnURL := expenseFormReturnURL(r)
+		expenseDrawer, drawerErr := a.loadExpenseDrawerData(r.Context(), userID, period.Format("2006-01"), propertyID, 0, returnURL, r.URL.Query().Get("error"))
+		if drawerErr != nil {
+			http.Error(w, drawerErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		data.ExpenseDrawer = expenseDrawer
+	}
 	if summary, summaryErr := a.loadPropertyPage(r.Context(), userID, period, "all"); summaryErr == nil {
 		for _, row := range summary.Rows {
 			if row.ID == propertyID {

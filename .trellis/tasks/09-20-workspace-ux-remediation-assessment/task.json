@@ -1,0 +1,29 @@
+{
+  "id": "workspace-ux-remediation-assessment",
+  "name": "workspace-ux-remediation-assessment",
+  "title": "工作台交互与一致性改造评估",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "dd",
+  "assignee": "dd",
+  "createdAt": "2026-09-20",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-20-workspace-quick-fixes",
+    "09-20-workspace-shared-controls"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

@@ -67,19 +67,13 @@ type workspaceShell struct {
     IncomeCount   int
     ExpenseCount  int
 
-    // Filled by (*app).fillWorkspaceShell, which every shell construction site
-    // wraps its literal in. All three fields are best-effort: an unset one
-    // renders nothing rather than a placeholder (see §8).
-    TopSearch          topbarSearch // topbar list search; zero on pages without a ?search= list
-    PendingReviewCount int          // topbar count button; rendered only with PendingReviewURL
-    PendingReviewURL   string
+    // Filled by (*app).fillWorkspaceShell. Empty status fields render no card.
     StatusTitle        string // sidebar data-status card; no card when empty
     StatusUpdatedAt    string
 }
 
-// fillWorkspaceShell completes the shell's real-data widgets. It is called from
-// canonicalPageShell and from every inline workspaceShell literal, so a new page
-// gets the topbar and the status card by construction.
+// fillWorkspaceShell completes the optional real-data status card. It is called
+// from canonicalPageShell and every inline workspaceShell literal.
 func (a *app) fillWorkspaceShell(r *http.Request, shell workspaceShell) workspaceShell
 
 func newWorkspacePageTemplate(name string, functs template.FuncMap, body string) *template.Template
@@ -609,10 +603,12 @@ propagates to the viewport, so `body` never becomes the scroll container and
 sticky keeps working. `TestFrozenLastColumnIsMobileOnly` allows exactly this one
 sticky rule above the 640 tier and rejects a sticky `right: 0` table cell.
 
-The shell's own widgets are real data or nothing. No status card when the bank
-authorization could not be read, no count button when the pending count could
-not be read, no search box on a page that cannot filter a list. Do not paste the
-prototype's demo copy (`测试数据已载入` / `Rosewood 收租明细` / `更新于 …`) or its
+The shell's optional status card is real data or nothing: no card when bank
+authorization could not be read. The shared top-right search and pending-review
+count/action were removed by the 2026-09 workspace remediation; search remains
+page-local, and the dashboard's manual-review queue is its own page content. Do
+not add shell widgets back for those functions. Do not paste the prototype's
+demo copy (`测试数据已载入` / `Rosewood 收租明细` / `更新于 …`) or its
 `reload the sample data` CTA into the shell: `figma/DESIGN-HANDOFF.md:9,37`
 reserves those for the prototype.
 
@@ -700,10 +696,9 @@ is registered on `DOMContentLoaded` (and called directly when
 `document.readyState !== "loading"`, so a late-injected partial still works). That
 includes the bindings that would work anyway, so the block keeps one rule instead
 of a mix. A lookup of an element emitted by the *same partial, above the script* is
-still fine at top level — `#workspace-toast` (`:41`) and `[data-mobile-search]`
-(`:5`) both precede the script at `:42` — and **that is the trap**: because those
-lookups succeed, the block looks healthy while the page-body ones silently bind
-nothing.
+still fine at top level — `#workspace-toast` precedes the toast script — and
+**that is the trap**: because that lookup succeeds, the block looks healthy while
+page-body lookups silently bind nothing.
 
 The same script owns the object-list filter's **single submit path**
 (`.object-list-filter-fields select/input` -> `change` -> `requestSubmit()`). Pages
@@ -713,8 +708,28 @@ carried inline `onchange` as a workaround; both were removed once the shared
 binding was restored.
 
 `TestWorkspaceNavBodyLookupsWaitForDOMContentLoaded` renders the partial **on its
-own** — the minimal page the failure needs — and asserts each known lookup appears
-after `initChrome()`. Note its ceiling: it pins those three lookup strings, so a
-*fourth* page-body lookup added at top level would not be caught. It proves the
-shape, not the behaviour; `probe-0920-independent.mjs` covers the behaviour in a
-real browser. Recorded 2026-09-20.
+own** — the minimal page the failure needs — and asserts the object-list lookups
+appear after `initChrome()`. It proves the shape, not the behaviour; a new lookup
+must still be included in the review. Recorded 2026-09-20.
+
+### 8.4 Shared workspace controls keep native form state
+
+`newWorkspacePageTemplate` and `newEmbeddedWorkspacePageTemplate` pass page HTML
+through `withWorkspaceControlAssets`. That helper injects the calendar and
+workspace-control styles/scripts once, before `</head>`. Do not add duplicate
+page-local includes when introducing a workspace date, month, select or search
+control.
+
+The native input/select remains the submitted form control. With JavaScript,
+`calendar.js` enhances enabled, writable `date` and `month` inputs and watches for
+controls inserted later in drawers. It preserves the form name/value in a hidden
+input and dispatches `input` and `change` on selection. The shared select enhancer
+leaves the native select as the value source, mirrors its options into a light
+listbox positioned from the trigger, and dispatches both events after selection.
+It observes option mutations so dependent selectors keep their labels and hidden
+options in sync. Without JavaScript, native controls remain usable.
+
+Search clear buttons are added to non-empty `input[type=search]` fields by the
+same shared script. The button clears the native input, dispatches `input`, and
+returns focus to the field; its target is 44px on narrow screens. Do not add an
+auto-submit unless the page already submits in response to the input event.

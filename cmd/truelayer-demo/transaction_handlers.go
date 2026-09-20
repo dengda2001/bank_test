@@ -15,10 +15,10 @@ func transactionReturnTarget(r *http.Request) string {
 	}
 	raw := strings.TrimSpace(r.FormValue("return_to"))
 	target, err := url.ParseRequestURI(raw)
-	if err != nil || target.IsAbs() || target.Host != "" || (target.Path != "/billing" && target.Path != "/transactions") {
+	if err != nil || target.IsAbs() || target.Host != "" || (target.Path != "/billing" && target.Path != "/transactions" && target.Path != "/rent-dashboard") {
 		return fallback
 	}
-	allowed := map[string]bool{"match_status": true, "scope": true, "period": true, "payer": true, "tenant_id": true, "direction": true, "rent_period": true, "allocation": true, "sort": true, "page": true, "page_size": true, "pending": true, "arrival_from": true, "arrival_to": true}
+	allowed := map[string]bool{"match_status": true, "scope": true, "period": true, "payer": true, "tenant_id": true, "direction": true, "rent_period": true, "allocation": true, "sort": true, "page": true, "page_size": true, "pending": true, "arrival_from": true, "arrival_to": true, "view": true, "property_id": true, "room_id": true, "search": true, "status": true}
 	query := url.Values{}
 	for key, values := range target.Query() {
 		if !allowed[key] || len(values) != 1 || len(values[0]) > 191 {
@@ -159,6 +159,10 @@ func (a *app) handleTransactionAction(w http.ResponseWriter, r *http.Request, ac
 		err = service.ignoreTransaction(r.Context(), userID, transactionID, reason, idempotencyKey)
 	case transactionActionRestore:
 		err = service.restoreTransaction(r.Context(), userID, transactionID, reason, idempotencyKey)
+	case transactionActionDefer:
+		err = service.deferTransaction(r.Context(), userID, transactionID, reason)
+	case transactionActionUndefer:
+		err = service.undeferTransaction(r.Context(), userID, transactionID, reason)
 	case transactionActionRevokeAllocations:
 		_, err = service.revokeTransactionAllocations(r.Context(), userID, transactionID, reason, idempotencyKey)
 	default:
@@ -177,6 +181,14 @@ func (a *app) handleTransactionIgnore(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleTransactionRestore(w http.ResponseWriter, r *http.Request) {
 	a.handleTransactionAction(w, r, transactionActionRestore)
+}
+
+func (a *app) handleTransactionDefer(w http.ResponseWriter, r *http.Request) {
+	a.handleTransactionAction(w, r, transactionActionDefer)
+}
+
+func (a *app) handleTransactionUndefer(w http.ResponseWriter, r *http.Request) {
+	a.handleTransactionAction(w, r, transactionActionUndefer)
 }
 
 func (a *app) handleTransactionRevoke(w http.ResponseWriter, r *http.Request) {
@@ -317,7 +329,16 @@ func (a *app) handlePayerConfirm(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/billing?error=invalid_payer_confirmation", http.StatusFound)
 		return
 	}
-	rememberPayer := r.Form.Get("remember_payer") != "0"
+	rememberPayer := true
+	if values, supplied := r.Form["remember_payer"]; supplied {
+		rememberPayer = false
+		for _, value := range values {
+			if strings.TrimSpace(value) != "" && strings.TrimSpace(value) != "0" {
+				rememberPayer = true
+				break
+			}
+		}
+	}
 	if err := newTransactionService(a.db).confirmHistoricalPayerMatch(r.Context(), userID, transactionID, tenantID, period, rememberPayer); err != nil {
 		http.Redirect(w, r, "/billing?error=payer_confirmation_failed", http.StatusFound)
 		return

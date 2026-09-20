@@ -250,7 +250,7 @@ func TestBillingTemplateKeepsSplitMatchOnTheRevokeFlow(t *testing.T) {
 }
 
 // Sorting by heading has to survive filtering and paging: the current column
-// rides along in the filter form and in the pager, or 应用筛选 would reorder the
+// rides along in the filter form and in the pager, or 搜索 would reorder the
 // list behind the reader's back.
 func TestBillingListCarriesTheColumnSort(t *testing.T) {
 	page := renderBillingPage(t, billingPageData{

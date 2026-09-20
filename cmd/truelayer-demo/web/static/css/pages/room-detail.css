@@ -84,6 +84,6 @@
     .room-edit-desktop-only{display:none}
     .room-detail-grid aside{grid-template-columns:1fr}
     .room-detail-grid aside .detail-section:last-child{grid-column:auto}
-    .room-detail-mobile-actions{position:fixed;left:0;right:0;bottom:calc(68px + env(safe-area-inset-bottom));z-index:35;display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px 16px;background:color-mix(in oklch,var(--surface) 96%,transparent);border-top:1px solid var(--border);backdrop-filter:blur(12px)}
+    .room-detail-mobile-actions{position:fixed;left:0;right:0;bottom:calc(68px + env(safe-area-inset-bottom));z-index:35;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:10px 16px;background:color-mix(in oklch,var(--surface) 96%,transparent);border-top:1px solid var(--border);backdrop-filter:blur(12px)}
     .room-detail-mobile-actions .btn{min-height:44px}
   }

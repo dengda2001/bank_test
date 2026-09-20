@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	dashboardDefaultPageSize = 12
+	dashboardDefaultPageSize = 10
 	dashboardMaxPageSize     = 50
 	// dashboardDefaultSort is what the list falls back to when no column heading
 	// has been clicked: outstanding bills first. The sort is chosen by clicking a

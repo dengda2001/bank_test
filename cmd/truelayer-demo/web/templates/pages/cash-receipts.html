@@ -25,7 +25,7 @@
         <label class="cash-receipt-search"><span>搜索当前列表</span><input type="search" name="search" value="{{.Search}}" placeholder="租客、收据号或备注"></label>
         <label><span>状态</span><select name="status"><option value="all"{{if eq .StatusFilter "all"}} selected{{end}}>全部状态</option><option value="confirmed"{{if eq .StatusFilter "confirmed"}} selected{{end}}>已确认</option><option value="voided"{{if eq .StatusFilter "voided"}} selected{{end}}>已作废</option></select></label>
         <label><span>月份</span><input type="month" name="period" value="{{.Period}}"></label>
-        <button class="btn subtle" type="submit">筛选</button>
+        <button class="btn subtle" type="submit">搜索</button>
       </form>
 
       <section class="panel surface cash-receipt-list" aria-label="现金补录列表">

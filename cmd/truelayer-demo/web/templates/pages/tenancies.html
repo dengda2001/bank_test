@@ -26,7 +26,7 @@
         <label class="object-search"><span>搜索当前列表</span><input type="search" name="search" value="{{.Search}}" placeholder="租约、房产、房间或租客"></label>
         <label><span>状态</span><select name="status"><option value="all"{{if eq .StatusFilter "all"}} selected{{end}}>全部状态</option><option value="active"{{if eq .StatusFilter "active"}} selected{{end}}>执行中</option><option value="upcoming"{{if eq .StatusFilter "upcoming"}} selected{{end}}>待开始</option><option value="ended"{{if eq .StatusFilter "ended"}} selected{{end}}>已结束</option></select></label>
         <label><span>查看月份</span><input type="month" name="period" value="{{.Period}}"></label>
-        <button class="btn subtle" type="submit">筛选</button>
+        <button class="btn subtle" type="submit">搜索</button>
       </form>
 
       <section class="panel surface object-list-panel tenancy-panel" aria-labelledby="tenancy-list-title">

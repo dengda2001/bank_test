@@ -156,6 +156,7 @@ type billingPageData struct {
 	PageSize             int
 	TotalTransactions    int64
 	TotalPages           int
+	Pagination           []paginationLink
 	PreviousPageURL      string
 	NextPageURL          string
 	PendingCount         int
@@ -258,11 +259,15 @@ type tenantPageData struct {
 	Message       string
 	Error         string
 	Rows          []tenantRecord
+	Search        string
+	FilteredCount int
 	RentTotal     string
 	ShowForm      bool
 	Editing       bool
 	Form          tenantRecord
 	Rooms         []tenantRoomOption
+	ReturnURL     string
+	PostReturnURL string
 }
 
 type expensePageData struct {
@@ -277,6 +282,7 @@ type expensePageData struct {
 	StatusFilter  string
 	Search        string
 	ShowForm      bool
+	ExpenseDrawer *expenseDrawerData
 	InvoiceForm   *expenseInvoiceFormView
 	ExpenseTotal  string
 	Today         string
@@ -472,6 +478,8 @@ func newAppMux(a *app) *http.ServeMux {
 	mux.HandleFunc("/transactions/rematch", a.handleTransactionRematch)
 	mux.HandleFunc("/transactions/allocate", a.handleTransactionAllocation)
 	mux.HandleFunc("/transactions/ignore", a.handleTransactionIgnore)
+	mux.HandleFunc("/transactions/defer", a.handleTransactionDefer)
+	mux.HandleFunc("/transactions/undefer", a.handleTransactionUndefer)
 	mux.HandleFunc("/transactions/restore", a.handleTransactionRestore)
 	mux.HandleFunc("/transactions/revoke", a.handleTransactionRevoke)
 	mux.HandleFunc("/transactions/payer/preview", a.handlePayerPreview)
@@ -491,6 +499,8 @@ func newAppMux(a *app) *http.ServeMux {
 	mux.HandleFunc("/billing/rematch", a.handleTransactionRematch)
 	mux.HandleFunc("/billing/allocate", a.handleTransactionAllocation)
 	mux.HandleFunc("/billing/ignore", a.handleTransactionIgnore)
+	mux.HandleFunc("/billing/defer", a.handleTransactionDefer)
+	mux.HandleFunc("/billing/undefer", a.handleTransactionUndefer)
 	mux.HandleFunc("/billing/restore", a.handleTransactionRestore)
 	mux.HandleFunc("/billing/revoke", a.handleTransactionRevoke)
 	mux.HandleFunc("/billing/payer/preview", a.handlePayerPreview)
@@ -746,7 +756,7 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 	filterError := ""
 	if err := validateTransactionFilters(filters); err != nil {
 		filterError = "invalid_filter"
-		filters = transactionFilters{Page: 1, PageSize: 50}
+		filters = transactionFilters{Page: 1, PageSize: 10}
 	}
 	var rows []transactionPageRow
 	var lastSync string
@@ -811,7 +821,7 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 	}
 	pageSize := filters.PageSize
 	if pageSize <= 0 {
-		pageSize = 50
+		pageSize = 10
 	}
 	totalPages := 0
 	if totalTransactions > 0 {
@@ -891,6 +901,7 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 		PageSize:             pageSize,
 		TotalTransactions:    totalTransactions,
 		TotalPages:           totalPages,
+		Pagination:           paginationLinks(page, totalPages, func(target int) string { return billingPageURL(r.URL.Query(), target, r.URL.Path) }),
 		PreviousPageURL:      previousPageURL,
 		NextPageURL:          nextPageURL,
 		PendingCount:         pendingCount,
@@ -1046,6 +1057,11 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	prepareTenants(tenants)
+	tenantCount := len(tenants)
+	rentTotal := sumTenantRent(tenants)
+	search := strings.TrimSpace(r.URL.Query().Get("search"))
+	tenants = filterTenantRecords(tenants, search)
 	if userID, ok := a.currentUserID(r); ok && a.db != nil {
 		history, err := newObligationService(a.db).listTenantBillingHistory(r.Context(), userID, monthStart(time.Now().UTC()), tenantHistoryMonths)
 		if err != nil {
@@ -1069,7 +1085,6 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	prepareTenants(tenants)
 	formRecord := tenantRecord{Currency: "EUR", IntervalUnit: "month", IntervalCount: 1, Status: "active", DueDay: 1}
 	editing := false
 	if editID := strings.TrimSpace(r.URL.Query().Get("edit")); editID != "" {
@@ -1084,7 +1099,25 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 	if editing {
 		formRecord = tenantEditFormRecordWithRoomDefaults(formRecord, roomOptions)
 	}
-	showForm := editing || r.URL.Query().Get("add") == "1"
+	showForm := editing || r.URL.Query().Get("add") == "1" || r.URL.Query().Get("error") != ""
+	returnQuery := url.Values{"search": []string{search}}
+	returnURL := "/tenants"
+	if search != "" {
+		returnURL += "?" + returnQuery.Encode()
+	}
+	postReturnQuery := url.Values{}
+	if search != "" {
+		postReturnQuery.Set("search", search)
+	}
+	if editing {
+		postReturnQuery.Set("edit", formRecord.ID)
+	} else if showForm {
+		postReturnQuery.Set("add", "1")
+	}
+	postReturnURL := "/tenants"
+	if encoded := postReturnQuery.Encode(); encoded != "" {
+		postReturnURL += "?" + encoded
+	}
 	data := tenantPageData{
 		workspaceShell: a.fillWorkspaceShell(r, workspaceShell{
 			ActivePage:    "tenants",
@@ -1093,7 +1126,7 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 			FootNote:      "租客资料：" + a.cfg.TenantFile,
 			CompactTitle:  "对象管理",
 			ShowNavCounts: true,
-			TenantCount:   len(tenants),
+			TenantCount:   tenantCount,
 			IncomeCount:   incomeCount,
 			ExpenseCount:  expenseCount,
 		}),
@@ -1102,11 +1135,15 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 		Message:       r.URL.Query().Get("message"),
 		Error:         r.URL.Query().Get("error"),
 		Rows:          tenants,
-		RentTotal:     formatMoney(sumTenantRent(tenants), "EUR", 2),
+		Search:        search,
+		FilteredCount: len(tenants),
+		RentTotal:     formatMoney(rentTotal, "EUR", 2),
 		ShowForm:      showForm,
 		Editing:       editing,
 		Form:          formRecord,
 		Rooms:         roomOptions,
+		ReturnURL:     returnURL,
+		PostReturnURL: postReturnURL,
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tenantTemplate.Execute(w, data); err != nil {
@@ -1116,20 +1153,28 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) createTenant(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		http.Redirect(w, r, "/tenants?error=invalid_form", http.StatusFound)
+		http.Redirect(w, r, tenantFormRedirectURL("/tenants?add=1", "", "invalid_form"), http.StatusFound)
 		return
+	}
+	returnTo := strings.TrimSpace(r.Form.Get("return_to"))
+	if returnTo == "" {
+		if tenantID := strings.TrimSpace(r.Form.Get("tenant_id")); tenantID != "" {
+			returnTo = "/tenants?edit=" + url.QueryEscape(tenantID)
+		} else {
+			returnTo = "/tenants?add=1"
+		}
 	}
 	if err := a.persistTenantRecord(r.Context(), r, r.Form); err != nil {
 		if errors.Is(err, errTenantLifecycleConflict) {
-			http.Redirect(w, r, "/tenants?error=tenant_has_payments", http.StatusFound)
+			http.Redirect(w, r, tenantFormRedirectURL(returnTo, "", "tenant_has_payments"), http.StatusFound)
 			return
 		}
 		if errors.Is(err, errArrangementHistoryLocked) {
-			http.Redirect(w, r, "/tenants?error=tenant_room_locked", http.StatusFound)
+			http.Redirect(w, r, tenantFormRedirectURL(returnTo, "", "tenant_room_locked"), http.StatusFound)
 			return
 		}
 		if errors.Is(err, errInvalidTenantInput) {
-			http.Redirect(w, r, "/tenants?error=invalid_tenant", http.StatusFound)
+			http.Redirect(w, r, tenantFormRedirectURL(returnTo, "", "invalid_tenant"), http.StatusFound)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1139,7 +1184,64 @@ func (a *app) createTenant(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(r.Form.Get("tenant_id")) != "" {
 		message = "tenant_updated"
 	}
-	http.Redirect(w, r, "/tenants?message="+message, http.StatusFound)
+	http.Redirect(w, r, tenantFormRedirectURL(returnTo, message, ""), http.StatusFound)
+}
+
+func tenantFormRedirectURL(returnTo, message, errorCode string) string {
+	target, err := url.ParseRequestURI(strings.TrimSpace(returnTo))
+	if err != nil || target.IsAbs() || target.Host != "" || strings.HasPrefix(target.Path, "//") {
+		target = &url.URL{Path: "/tenants"}
+	}
+	validPath := target.Path == "/tenants"
+	if !validPath && strings.HasPrefix(target.Path, "/tenants/") {
+		id := strings.TrimPrefix(target.Path, "/tenants/")
+		if id != "" && !strings.Contains(id, "/") {
+			_, parseErr := strconv.ParseUint(id, 10, 64)
+			validPath = parseErr == nil
+		}
+	}
+	if !validPath {
+		target = &url.URL{Path: "/tenants"}
+	}
+	query := target.Query()
+	query.Del("message")
+	query.Del("error")
+	if errorCode != "" {
+		query.Set("error", errorCode)
+		if target.Path == "/tenants" {
+			if query.Get("edit") == "" {
+				query.Set("add", "1")
+			}
+		} else {
+			query.Set("edit", "1")
+		}
+	} else {
+		query.Del("add")
+		query.Del("edit")
+		if message != "" {
+			query.Set("message", message)
+		}
+	}
+	target.RawQuery = query.Encode()
+	return target.RequestURI()
+}
+
+func filterTenantRecords(rows []tenantRecord, search string) []tenantRecord {
+	search = strings.ToLower(strings.TrimSpace(search))
+	if search == "" {
+		return rows
+	}
+	filtered := make([]tenantRecord, 0, len(rows))
+	for _, row := range rows {
+		fields := []string{row.Name, row.DisplayAlias, row.Email, row.PayerNameHint, row.PayerID, row.RoomLabel, row.RoomAddress, row.PropertyHint}
+		for _, field := range fields {
+			if strings.Contains(strings.ToLower(field), search) {
+				filtered = append(filtered, row)
+				break
+			}
+		}
+	}
+	return filtered
 }
 
 var errInvalidTenantInput = errors.New("invalid tenant input")
@@ -1362,6 +1464,24 @@ func (a *app) handleExpenses(w http.ResponseWriter, r *http.Request) {
 	}
 	totalExpenseCount := len(expenses)
 	expenses = filterExpensePageRows(expenses, period, statusFilter, search)
+	showExpenseForm := r.URL.Query().Get("add") == "1" || (r.URL.Query().Get("error") != "" && r.URL.Query().Get("error") != "invalid_invoice")
+	var expenseDrawer *expenseDrawerData
+	if showExpenseForm {
+		selectedPropertyID, _ := parseOptionalUint(r.URL.Query().Get("property_id"))
+		selectedRoomID, _ := parseOptionalUint(r.URL.Query().Get("room_id"))
+		for _, option := range expenseRooms {
+			if option.ID == selectedRoomID {
+				if selectedPropertyID == 0 || selectedPropertyID == option.PropertyID {
+					selectedPropertyID = option.PropertyID
+				} else {
+					selectedRoomID = 0
+				}
+				break
+			}
+		}
+		returnURL := expenseFormReturnURL(r)
+		expenseDrawer = &expenseDrawerData{Period: period.Format("2006-01"), Today: time.Now().UTC().Format(dateLayout), Properties: expenseProperties, Rooms: expenseRooms, SelectedPropertyID: selectedPropertyID, SelectedRoomID: selectedRoomID, ReturnURL: returnURL, PostReturnURL: returnURL, Error: r.URL.Query().Get("error")}
+	}
 	data := expensePageData{
 		workspaceShell: a.fillWorkspaceShell(r, workspaceShell{
 			ActivePage:    "expenses",
@@ -1383,7 +1503,8 @@ func (a *app) handleExpenses(w http.ResponseWriter, r *http.Request) {
 		Period:        period.Format("2006-01"),
 		StatusFilter:  statusFilter,
 		Search:        search,
-		ShowForm:      r.URL.Query().Get("add") == "1" || (r.URL.Query().Get("error") != "" && r.URL.Query().Get("error") != "invalid_invoice"),
+		ShowForm:      showExpenseForm,
+		ExpenseDrawer: expenseDrawer,
 		InvoiceForm:   invoiceForm,
 		ExpenseTotal:  formatMoney(sumExpenses(expenses), "EUR", 2),
 		Today:         time.Now().UTC().Format(dateLayout),
@@ -1397,19 +1518,24 @@ func (a *app) handleExpenses(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) createExpense(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		http.Redirect(w, r, expensePageURL(r.Form, "", "invalid_form", true), http.StatusFound)
+	parseErr := r.ParseForm()
+	returnTo := strings.TrimSpace(r.Form.Get("return_to"))
+	if returnTo == "" {
+		returnTo = expensePageURL(r.Form, "", "", false)
+	}
+	if parseErr != nil {
+		http.Redirect(w, r, expenseFormRedirectURL(returnTo, "", "invalid_form"), http.StatusFound)
 		return
 	}
 	if err := a.persistExpenseRecord(r.Context(), r, r.Form); err != nil {
 		if errors.Is(err, errInvalidExpenseInput) {
-			http.Redirect(w, r, expensePageURL(r.Form, "", "invalid_expense", true), http.StatusFound)
+			http.Redirect(w, r, expenseFormRedirectURL(returnTo, "", "invalid_expense"), http.StatusFound)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, expensePageURL(r.Form, "expense_added", "", false), http.StatusFound)
+	http.Redirect(w, r, expenseFormRedirectURL(returnTo, "expense_added", ""), http.StatusFound)
 }
 
 func expensePageURL(values url.Values, message, errorCode string, showForm bool) string {
@@ -2547,7 +2673,7 @@ var tenantTemplate = newWorkspacePageTemplate("tenants", nil, `<!doctype html>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RentOps Tenants</title>
   <link rel="stylesheet" href="/static/css/pages/object-navigation.css"><link rel="stylesheet" href="/static/css/pages/entity-drawers.css">
-  <style>`+workspacePageCSS+workspaceCalendarCSS+`
+  <style>`+workspacePageCSS+`
     .tenant-row, .tenant-month-row { cursor: pointer; }
     .tenant-row:hover, .tenant-row:focus, .tenant-month-row:hover, .tenant-month-row:focus { background: var(--surface-accent); outline: none; }
     .tenant-row td:first-child::after, .tenant-month-row td:first-child::after { content: " +"; margin-left: 6px; color: var(--foreground-muted); font: 700 12px var(--mono); }
@@ -2573,6 +2699,10 @@ var tenantTemplate = newWorkspacePageTemplate("tenants", nil, `<!doctype html>
     .tenant-month-details .payment-item { display: grid; grid-template-columns: 140px 170px minmax(180px, 1fr) minmax(160px, 1fr) 100px; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); color: var(--foreground-subtle); font-size: 12px; }
     .tenant-month-details .payment-item:last-child { border-bottom: 0; }
     .tenant-mobile-list { display: none; }
+    .tenant-search { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+    .tenant-search label { flex: 1 1 280px; max-width: 520px; margin: 0; }
+    .tenant-search input { min-height: 40px; }
+    .tenant-search .btn { min-height: 40px; margin-top: 0; }
     .tenant-mobile-card { display: grid; gap: 11px; padding: 14px; }
     .tenant-mobile-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
     .tenant-mobile-head h3 { margin: 0; font-size: 15px; }
@@ -2590,6 +2720,8 @@ var tenantTemplate = newWorkspacePageTemplate("tenants", nil, `<!doctype html>
       .tenant-table-wrap { display: none; }
       .tenant-mobile-list { display: grid; gap: 9px; }
       .row-actions .btn { min-height: 44px; }
+      .tenant-search { padding: 12px 14px; }
+      .tenant-search input, .tenant-search .btn { min-height: 44px; }
       /* P1：账单安排列实测只剩 59px，把「每月 1 日 / 2026-07-01 至 2026-09-30」
          断成 5 行。112px 够放两行。表格地板同步抬高，否则从这一列多拿的宽度
          会从别的列抠走；680px 是共享表给无表头页的地板，这里列更多。 */
@@ -2598,7 +2730,6 @@ var tenantTemplate = newWorkspacePageTemplate("tenants", nil, `<!doctype html>
       table { min-width: 740px; }
     }
   `+`</style>
-  <script>`+workspaceCalendarScript+`</script>
 </head>
 <body>
   <div class="app">
@@ -2609,71 +2740,26 @@ var tenantTemplate = newWorkspacePageTemplate("tenants", nil, `<!doctype html>
           <div class="brand-title">租客管理</div>
           <h1>租客资料</h1>
         </div>
-        <div class="actions"><a class="btn primary" href="/tenants?add=1">添加租客</a><form method="post" action="/logout"><button class="btn danger" type="submit">退出登录</button></form></div>
+		<div class="actions"><a class="btn primary" href="/tenants?add=1{{if .Search}}&amp;search={{urlquery .Search}}{{end}}">添加租客</a><form method="post" action="/logout"><button class="btn danger" type="submit">退出登录</button></form></div>
       </header>
       {{template "workspace-object-tabs" .}}
 
       {{if eq .Message "tenant_added"}}<div class="notice ok" data-toast>租客资料已保存。</div>{{end}}
       {{if eq .Message "tenant_updated"}}<div class="notice ok" data-toast>租客资料已更新。</div>{{end}}
-		{{if eq .Error "tenant_has_payments"}}<div class="notice error">无法提前结束租期：结束月之后的账单已有有效收款，请先更正或撤销相关收款。</div>{{else if eq .Error "tenant_room_locked"}}<div class="notice error">当前月或之后已有房间账单，无法更改租客的房间绑定。</div>{{else if .Error}}<div class="notice error">请检查租客姓名、邮箱格式、日期关系、月租金额和房间地址。</div>{{end}}
+		{{if and .Error (not .ShowForm)}}<div class="notice error">{{if eq .Error "tenant_has_payments"}}无法提前结束租期：结束月之后的账单已有有效收款，请先更正或撤销相关收款。{{else if eq .Error "tenant_room_locked"}}当前月或之后已有房间账单，无法更改租客的房间绑定。{{else}}请检查租客姓名、邮箱格式、日期关系、月租金额和房间地址。{{end}}</div>{{end}}
 
       <section class="summary" aria-label="Tenant summary">
         <div class="panel metric"><div class="label">租客数量</div><strong>{{.TenantCount}}</strong><span>当前保存的租客</span></div>
         <div class="panel metric"><div class="label">月租合计</div><strong>{{.RentTotal}}</strong><span>租客资料中的预期月租</span></div>
       </section>
 
-      {{if .ShowForm}}<div class="entity-drawer-backdrop"><section class="entity-drawer tenant-drawer" role="dialog" aria-modal="true" aria-labelledby="tenant-form-title">
-        <div class="panel-head"><div><h2 id="tenant-form-title">{{if .Editing}}编辑租客资料{{else}}新增租客{{end}}</h2><p class="tiny">租客、房间和租金责任分别保存。</p></div><a class="drawer-close" href="/tenants" aria-label="关闭租客表单">×</a></div>
-        <form method="post" action="/tenants">
-          {{if .Editing}}<input type="hidden" name="tenant_id" value="{{.Form.ID}}">{{end}}
-          <label for="name">租客姓名</label>
-          <input id="name" name="name" autocomplete="name" value="{{.Form.Name}}" required>
-          <label for="display_alias">显示别名</label>
-          <input id="display_alias" name="display_alias" value="{{.Form.DisplayAlias}}" placeholder="列表优先显示的称呼">
-          <label for="email">邮箱</label>
-          <input id="email" name="email" type="email" autocomplete="email" value="{{.Form.Email}}" placeholder="tenant@example.com">
-          <label for="payer_id">银行付款人编号</label>
-          <input id="payer_id" name="payer_id" value="{{.Form.PayerID}}">
-          <label for="payer_name_hint">付款人名称提示</label>
-          <input id="payer_name_hint" name="payer_name_hint" value="{{.Form.PayerNameHint}}">
-          <label for="monthly_rent">月租金额</label>
-          <input id="monthly_rent" name="monthly_rent" type="number" min="0.01" step="0.01" inputmode="decimal" value="{{.Form.MonthlyRent}}" required>
-          <label for="currency">币种</label>
-          <input id="currency" name="currency" value="{{.Form.Currency}}" maxlength="3">
-          <label for="room_id">绑定房间（可选）</label>
-          <select id="room_id" name="room_id" aria-describedby="room-binding-hint">
-            <option value="">暂不绑定房间</option>
-            {{range .Rooms}}<option value="{{.ID}}" data-room-rent="{{.MonthlyRentValue}}" data-room-currency="{{.Currency}}"{{if eq $.Form.RoomID .ID}} selected{{end}}>{{.PropertyName}} · {{.RoomLabel}}{{if .MonthlyRentValue}} · {{.MonthlyRentValue}} {{.Currency}}{{end}}</option>{{end}}
-          </select>
-          <span id="room-binding-hint" class="tiny">选择房间会带出该房间当前月租，可继续手动编辑金额。</span>
-          <input id="tenant-structured" type="hidden" name="structured" value="{{if .Form.RoomID}}1{{end}}">
-          <input type="hidden" name="arrangement_start_month" value="{{.Form.RentStartDate}}">
-          <input type="hidden" name="interval_unit" value="month">
-          <input type="hidden" name="interval_count" value="1">
-          <label for="billing_start_date">计费开始日期</label>
-          <input id="billing_start_date" name="billing_start_date" type="date" value="{{.Form.BillingStartDate}}"><span class="tiny">留空则使用租期开始日期；如需延后，请填写租期内日期。</span>
-          <label for="due_day">每月应缴日</label>
-          <input id="due_day" name="due_day" type="number" min="1" max="31" value="{{.Form.DueDay}}" required>
-          <label for="rent_start_date">租期开始日期</label>
-          <input id="rent_start_date" name="rent_start_date" type="date" value="{{.Form.RentStartDate}}" required>
-          <label for="rent_end_date">租期结束日期</label>
-          <input id="rent_end_date" name="rent_end_date" type="date" value="{{.Form.RentEndDate}}">
-          <label for="status">状态</label>
-          <select id="status" name="status"><option value="active" {{if eq .Form.Status "active"}}selected{{end}}>有效</option><option value="inactive" {{if eq .Form.Status "inactive"}}selected{{end}}>停用</option></select>
-          <label for="room_label">房间名称</label>
-          <input id="room_label" name="room_label" value="{{.Form.RoomLabel}}">
-          <label for="room_address">房间地址</label>
-          <textarea id="room_address" name="room_address" rows="4" required>{{.Form.RoomAddress}}</textarea>
-          <label for="property_hint">房产备注</label>
-          <input id="property_hint" name="property_hint" value="{{.Form.PropertyHint}}">
-          <div class="drawer-actions"><a class="btn subtle" href="/tenants">取消</a><button class="btn primary" type="submit">{{if .Editing}}保存更改{{else}}保存租客{{end}}</button></div>
-        </form>
-      </section></div>{{end}}
+	  {{if .ShowForm}}{{template "tenant-form-drawer" .}}{{end}}
       <section class="panel surface" aria-labelledby="tenant-list-title">
-        <div class="panel-head"><h2 id="tenant-list-title">租客列表</h2><span class="tiny">{{.TenantCount}} 条记录</span></div>
+        <form class="tenant-search collection-filters" method="get" action="/tenants"><label class="bills-search" for="tenant-search"><span class="sr-only">搜索</span><input id="tenant-search" type="search" name="search" value="{{.Search}}" placeholder="姓名、付款人、房间或地址" aria-label="搜索租客"></label><button class="btn" type="submit">搜索</button>{{if .Search}}<a class="btn subtle" href="/tenants">清除</a>{{end}}</form>
+        <div class="panel-head"><h2 id="tenant-list-title">租客列表</h2><span class="tiny">{{.FilteredCount}} / {{.TenantCount}} 条记录</span></div>
         {{if .Rows}}
         <div class="tenant-mobile-list" aria-label="移动端租客列表">
-          {{range .Rows}}<article class="tenant-mobile-card panel"><div class="tenant-mobile-head"><div><h3>{{if .DisplayAlias}}{{.DisplayAlias}}{{else}}{{.Name}}{{end}}</h3>{{if .DisplayAlias}}<p>{{.Name}}</p>{{end}}<p>{{if .RoomLabel}}{{.RoomLabel}} · {{end}}{{.RoomAddress}}</p></div><span class="status {{.Status}}">{{if eq .Status "active"}}有效{{else}}已停用{{end}}</span></div><div class="tenant-mobile-rent"><span>月租 · 每月 {{.DueDay}} 日</span><strong>{{.RentDisplay}}</strong></div><div class="tenant-mobile-actions"><a class="btn subtle" href="/tenants/{{.ID}}">查看详情</a><a class="btn subtle" href="/tenants?edit={{.ID}}">编辑</a></div>{{if .BillingHistory}}<details class="tenant-mobile-history"><summary>查看最近六个月缴费</summary>{{range .BillingHistory}}<div class="tenant-mobile-history-row"><span>{{.PeriodLabel}} · {{.StatusLabel}}</span><strong>{{.BalanceAmount}}</strong></div>{{end}}</details>{{end}}</article>{{end}}
+          {{range .Rows}}<article class="tenant-mobile-card panel"><div class="tenant-mobile-head"><div><h3>{{if .DisplayAlias}}{{.DisplayAlias}}{{else}}{{.Name}}{{end}}</h3>{{if .DisplayAlias}}<p>{{.Name}}</p>{{end}}<p>{{if .RoomLabel}}{{.RoomLabel}} · {{end}}{{.RoomAddress}}</p></div><span class="status {{.Status}}">{{if eq .Status "active"}}有效{{else}}已停用{{end}}</span></div><div class="tenant-mobile-rent"><span>月租 · 每月 {{.DueDay}} 日</span><strong>{{.RentDisplay}}</strong></div><div class="tenant-mobile-actions"><a class="btn subtle" href="/tenants/{{.ID}}?search={{urlquery $.Search}}">查看详情</a><a class="btn subtle" href="/tenants?edit={{.ID}}{{if $.Search}}&amp;search={{urlquery $.Search}}{{end}}">编辑</a></div>{{if .BillingHistory}}<details class="tenant-mobile-history"><summary>查看最近六个月缴费</summary>{{range .BillingHistory}}<div class="tenant-mobile-history-row"><span>{{.PeriodLabel}} · {{.StatusLabel}}</span><strong>{{.BalanceAmount}}</strong></div>{{end}}</details>{{end}}</article>{{end}}
         </div>
         <div class="tenant-table-wrap table-wrap">
           <table>
@@ -2687,7 +2773,7 @@ var tenantTemplate = newWorkspacePageTemplate("tenants", nil, `<!doctype html>
                 <td>每月 {{.DueDay}} 日<br><span class="mono">{{.RentStartDate}}{{if .RentEndDate}} 至 {{.RentEndDate}}{{end}}</span></td>
                 <td>{{if .RoomLabel}}{{.RoomLabel}}<br>{{end}}{{.RoomAddress}}{{if .PropertyHint}}<br><span class="mono">{{.PropertyHint}}</span>{{end}}</td>
                 <td class="mono">{{.CreatedAt}}</td>
-                <td><div class="row-actions"><a class="btn subtle" href="/tenants/{{.ID}}">查看详情</a><a class="btn subtle" href="/tenants?edit={{.ID}}">编辑</a></div></td>
+                <td><div class="row-actions"><a class="btn subtle" href="/tenants/{{.ID}}?search={{urlquery $.Search}}">查看详情</a><a class="btn subtle" href="/tenants?edit={{.ID}}{{if $.Search}}&amp;search={{urlquery $.Search}}{{end}}">编辑</a></div></td>
               </tr>
               <tr id="tenant-billing-{{.ID}}" class="tenant-history-row" hidden><td colspan="7"><div class="tenant-history">
                 <div class="tenant-history-head"><h3>最近六个月缴费</h3><span class="tiny">应收账单 → 已确认流水</span></div>
@@ -2705,22 +2791,11 @@ var tenantTemplate = newWorkspacePageTemplate("tenants", nil, `<!doctype html>
             </tbody>
           </table>
         </div>
-        {{else}}<div class="empty">还没有租客，请点击“添加租客”创建第一条资料。</div>{{end}}
+        {{else}}<div class="empty">{{if .Search}}没有符合“{{.Search}}”的租客。{{else}}还没有租客，请点击“添加租客”创建第一条资料。{{end}}</div>{{end}}
       </section>
     </main>
   </div>
   <script>
-    const tenantRoomSelect = document.getElementById("room_id");
-    const tenantRentInput = document.getElementById("monthly_rent");
-    const tenantCurrencyInput = document.getElementById("currency");
-    const tenantStructuredInput = document.getElementById("tenant-structured");
-    tenantRoomSelect?.addEventListener("change", () => {
-      const option = tenantRoomSelect.options[tenantRoomSelect.selectedIndex];
-      const rent = option?.dataset.roomRent || "";
-      if (rent && tenantRentInput) tenantRentInput.value = rent;
-      if (option?.dataset.roomCurrency && tenantCurrencyInput) tenantCurrencyInput.value = option.dataset.roomCurrency;
-      if (tenantStructuredInput) tenantStructuredInput.value = tenantRoomSelect.value ? "1" : "";
-    });
     const toggleDetails = (toggle, details) => {
       const expanded = toggle.getAttribute("aria-expanded") === "true";
       toggle.setAttribute("aria-expanded", String(!expanded));
@@ -2757,7 +2832,7 @@ var legacyExpenseTemplate = newWorkspacePageTemplate("expenses-legacy", nil, `<!
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RentOps Expenses</title>
-  <style>`+workspacePageCSS+workspaceCalendarCSS+`
+  <style>`+workspacePageCSS+`
     @media (max-width: 640px) {
       /* P1：类别列实测只剩 53px，减去 28px 内边距装不下两个汉字，类别名被断成
          两行。76px 够放最长的一个。表格地板同步抬高，否则从这列多拿的宽度会
@@ -2791,7 +2866,6 @@ var legacyExpenseTemplate = newWorkspacePageTemplate("expenses-legacy", nil, `<!
       .expense-table-wrap { display: none; }
       .expense-mobile-list { display: grid; gap: 9px; }
     }`+`</style>
-  <script>`+workspaceCalendarScript+`</script>
 </head>
 <body>
   <div class="app">

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -51,6 +52,146 @@ type expenseInput struct {
 	RoomHint      string
 	TenantHint    string
 	InvoiceURL    string
+}
+
+type expenseDrawerData struct {
+	Period             string
+	Today              string
+	Properties         []expensePropertyOption
+	Rooms              []expenseRoomOption
+	SelectedPropertyID uint64
+	SelectedRoomID     uint64
+	ReturnURL          string
+	PostReturnURL      string
+	Error              string
+}
+
+func (a *app) loadExpenseDrawerData(ctx context.Context, userID uint64, period string, propertyID, roomID uint64, returnURL, errorCode string) (*expenseDrawerData, error) {
+	data := &expenseDrawerData{
+		Period:             validatedPeriodValue(period),
+		Today:              time.Now().UTC().Format(dateLayout),
+		SelectedPropertyID: propertyID,
+		SelectedRoomID:     roomID,
+		ReturnURL:          returnURL,
+		PostReturnURL:      expenseFormRedirectURL(returnURL, "", ""),
+		Error:              errorCode,
+	}
+	if userID == 0 || a.db == nil {
+		return data, nil
+	}
+	repo := newLandlordRentRepository(a.db)
+	properties, err := repo.listProperties(ctx, userID, propertyQuery{})
+	if err != nil {
+		return nil, err
+	}
+	rooms, err := repo.listRooms(ctx, userID, roomQuery{})
+	if err != nil {
+		return nil, err
+	}
+	propertyByID := make(map[uint64]property, len(properties))
+	roomByID := make(map[uint64]room, len(rooms))
+	for _, row := range properties {
+		propertyByID[row.ID] = row
+	}
+	for _, row := range rooms {
+		roomByID[row.ID] = row
+	}
+	if roomID > 0 {
+		if roomRow, ok := roomByID[roomID]; ok {
+			if propertyID == 0 || propertyID == roomRow.PropertyID {
+				data.SelectedPropertyID = roomRow.PropertyID
+			} else {
+				data.SelectedRoomID = 0
+			}
+		} else {
+			data.SelectedRoomID = 0
+		}
+	}
+	for _, row := range properties {
+		if row.Status == "active" || row.ID == data.SelectedPropertyID {
+			data.Properties = append(data.Properties, expensePropertyOption{ID: row.ID, Name: row.Name})
+		}
+	}
+	for _, row := range rooms {
+		if row.Status == "active" || row.ID == data.SelectedRoomID {
+			data.Rooms = append(data.Rooms, expenseRoomOption{ID: row.ID, PropertyID: row.PropertyID, Label: row.RoomLabel})
+		}
+	}
+	if data.SelectedPropertyID > 0 {
+		if _, ok := propertyByID[data.SelectedPropertyID]; !ok {
+			data.SelectedPropertyID = 0
+			data.SelectedRoomID = 0
+		}
+	}
+	return data, nil
+}
+
+func expenseFormReturnURL(r *http.Request) string {
+	if r == nil || r.URL == nil {
+		return "/expenses"
+	}
+	query := r.URL.Query()
+	for _, key := range []string{"expense", "add", "message", "error", "edit"} {
+		query.Del(key)
+	}
+	returnURL := r.URL.Path
+	if encoded := query.Encode(); encoded != "" {
+		returnURL += "?" + encoded
+	}
+	return returnURL
+}
+
+func isExpenseFormError(code string) bool {
+	switch code {
+	case "invalid_form", "invalid_expense":
+		return true
+	default:
+		return false
+	}
+}
+
+func expenseFormRedirectURL(returnTo, message, errorCode string) string {
+	target, err := url.ParseRequestURI(strings.TrimSpace(returnTo))
+	if err != nil || target.IsAbs() || target.Host != "" || strings.HasPrefix(target.Path, "//") || !validExpenseReturnPath(target.Path) {
+		target = &url.URL{Path: "/expenses"}
+	}
+	query := target.Query()
+	query.Del("message")
+	query.Del("error")
+	if errorCode != "" {
+		query.Set("error", errorCode)
+		if target.Path == "/expenses" {
+			query.Set("add", "1")
+		} else {
+			query.Set("expense", "1")
+		}
+	} else {
+		query.Del("add")
+		query.Del("expense")
+		if message != "" {
+			query.Set("message", message)
+		}
+	}
+	target.RawQuery = query.Encode()
+	return target.RequestURI()
+}
+
+func validExpenseReturnPath(path string) bool {
+	if path == "/expenses" || path == "/transactions" {
+		return true
+	}
+	for _, prefix := range []string{"/properties/", "/rooms/"} {
+		if !strings.HasPrefix(path, prefix) {
+			continue
+		}
+		id := strings.TrimPrefix(path, prefix)
+		if id == "" || strings.Contains(id, "/") {
+			return false
+		}
+		parsed, err := strconv.ParseUint(id, 10, 64)
+		return err == nil && parsed > 0
+	}
+	return false
 }
 
 func newExpenseService(db *gorm.DB) *expenseService {

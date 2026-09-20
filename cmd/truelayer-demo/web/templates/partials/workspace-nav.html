@@ -2,7 +2,7 @@
     <input type="checkbox" id="nav-drawer" class="nav-drawer-input">
     <div class="nav-compact-bar" aria-label="RentOps 移动导航">
       <label for="nav-drawer" class="nav-compact-brand" aria-label="打开导航"><span class="mark">R</span><span class="nav-compact-copy"><span class="brand-title">RentOps</span><small>{{if .CompactTitle}}{{.CompactTitle}}{{else}}{{.FootNote}}{{end}}</small></span></label>
-      <div class="nav-compact-actions"><button class="nav-compact-action" type="button" data-mobile-search aria-label="搜索当前页面"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.5"></circle><path d="m16 16 4 4"></path></svg></button><a class="nav-compact-action" href="/more" aria-label="更多">⋯</a></div>
+      <div class="nav-compact-actions"><a class="nav-compact-action" href="/more" aria-label="更多">⋯</a></div>
     </div>
     <label for="nav-drawer" class="nav-scrim" aria-hidden="true"></label>
     <aside class="sidebar" aria-label="Main navigation">
@@ -21,15 +21,13 @@
         <a href="/tenants"{{if eq .ActivePage "tenants"}} class="active"{{end}}><span class="nav-icon">07</span><span>租客管理</span>{{if .ShowNavCounts}}<span class="nav-count">{{.TenantCount}}</span>{{end}}</a>
         <a href="/tenancies"{{if eq .ActivePage "tenancies"}} class="active"{{end}}><span class="nav-icon">08</span><span>租约管理</span></a>
       </nav>
-      <div class="nav-label">资金与系统</div>
+      <div class="nav-label">系统</div>
       <nav class="nav" aria-label="资金与系统">
-        <a href="/cash-receipts"{{if eq .ActivePage "cash-receipts"}} class="active"{{end}}><span class="nav-icon">09</span><span>现金补录</span></a>
-        <a href="/expenses"{{if eq .ActivePage "expenses"}} class="active"{{end}}><span class="nav-icon">10</span><span>费用支出</span>{{if .ShowNavCounts}}<span class="nav-count">{{.ExpenseCount}}</span>{{end}}</a>
-        <a href="/bank"{{if eq .ActivePage "bank"}} class="active"{{end}}><span class="nav-icon">11</span><span>银行设置</span></a>
+        <a href="/bank"{{if eq .ActivePage "bank"}} class="active"{{end}}><span class="nav-icon">09</span><span>银行设置</span></a>
       </nav>
       <div class="side-foot">{{if .StatusTitle}}<div class="side-status"><strong>{{.StatusTitle}}</strong>{{if .StatusUpdatedAt}}<span>更新于 {{.StatusUpdatedAt}}</span>{{end}}</div>{{end}}<div class="side-user"><span class="avatar" aria-hidden="true">业</span><span class="side-user-copy">房东工作区<small>{{.Username}}</small></span></div></div>
     </aside>
-    <div class="workspace-page-topbar" aria-label="页面路径"><span class="workspace-page-topbar-crumb"><span>RentOps</span><span class="workspace-page-topbar-separator">/</span><span>{{.FootNote}}</span></span>{{if .TopSearch.Action}}<form class="workspace-topsearch" method="get" action="{{.TopSearch.Action}}" role="search">{{range $name, $values := .TopSearch.Params}}{{range $values}}<input type="hidden" name="{{$name}}" value="{{.}}">{{end}}{{end}}<input id="workspace-topsearch-input" type="search" name="search" value="{{.TopSearch.Value}}" placeholder="搜索当前列表" aria-label="搜索当前列表"></form>{{end}}{{if .PendingReviewURL}}<a class="workspace-topbar-count" href="{{.PendingReviewURL}}" aria-label="待人工处理流水 {{.PendingReviewCount}} 条" title="待人工处理流水">{{.PendingReviewCount}}</a>{{end}}</div>
+    <div class="workspace-page-topbar" aria-label="页面路径"><span class="workspace-page-topbar-crumb"><span>RentOps</span><span class="workspace-page-topbar-separator">/</span><span>{{.FootNote}}</span></span></div>
     <nav class="mobile-bottom-nav" aria-label="移动端主要导航">
       <a class="mobile-bottom-nav-item{{if eq .ActivePage "rent-dashboard"}} active{{end}}" href="/rent-dashboard"><span class="mobile-nav-glyph">总</span><span>首页</span></a>
       <a class="mobile-bottom-nav-item{{if eq .ActivePage "bills"}} active{{end}}" href="/bills"><span class="mobile-nav-glyph">账</span><span>账单</span></a>
@@ -82,33 +80,14 @@
           show();
         }
       })();
-      // The chrome is rendered before the page body: at parse time <main> and
-      // everything in it -- the filter disclosure, its fields, the page's search box
-      // -- do not exist yet, so a top-level querySelectorAll for them comes back
-      // empty and attaches no listeners. The consequence is not a dead button: the
-      // <=640px filter panel is only opened by that listener, so the filter feature
-      // is unreachable on a narrow screen, and the fields' change->submit is dead at
-      // every width. Every lookup of a page-body element waits for
-      // DOMContentLoaded; the nav bindings move with them so the block keeps one
-      // rule instead of two.
+      // The chrome is rendered before the page body: page-level filter controls do
+      // not exist at parse time, so their listeners are attached from DOMContentLoaded
+      // in one place. This keeps the mobile disclosure and change-to-submit behavior
+      // available on the pages that use the shared object-list filters.
       (() => {
         const initChrome = () => {
           const mobileNav = document.querySelector(".mobile-bottom-nav");
           const menus = [...document.querySelectorAll(".mobile-flyout")];
-          document.querySelector("[data-mobile-search]")?.addEventListener("click", () => {
-            const input = document.querySelector("main input[type=search]");
-            if (!input) return;
-            const form = input.closest("form");
-            if (form?.classList.contains("mobile-search-open")) {
-              form.classList.remove("mobile-search-open");
-              return;
-            }
-            const disclosure = form?.closest("details");
-            if (disclosure) disclosure.open = true;
-            if (form && getComputedStyle(form).display === "none") form.classList.add("mobile-search-open");
-            input.focus({ preventScroll: true });
-            input.scrollIntoView({ block: "center", behavior: "smooth" });
-          });
           document.querySelectorAll(".object-list-filter-toggle").forEach((button) => {
             button.addEventListener("click", () => {
               const form = button.closest(".object-list-filters");

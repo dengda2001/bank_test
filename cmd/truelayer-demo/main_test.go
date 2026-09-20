@@ -758,6 +758,7 @@ func TestBillingTemplateRendersTransactionFilters(t *testing.T) {
 func TestBillingTemplateShowsMonthChoiceForRememberedTenant(t *testing.T) {
 	var body strings.Builder
 	err := billingTemplate.Execute(&body, billingPageData{
+		PageKey: "transactions", CanonicalPath: "/transactions",
 		TransactionRows: []transactionPageRow{{
 			Direction:        "income",
 			MatchStatus:      "needs_review",
@@ -771,12 +772,14 @@ func TestBillingTemplateShowsMonthChoiceForRememberedTenant(t *testing.T) {
 				Paid:      "EUR 0.00",
 				Remaining: "EUR 950.00",
 			}},
+			RematchTenantOptions: []billingTenantOption{{ID: 7, Name: "Aoife"}},
+			ManualMatchOptions:   []billingRentMatchOption{{TenantID: 7, TenantName: "Aoife", Period: "2026-08", PeriodLabel: "2026年8月", Remaining: "EUR 950.00"}},
 		}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"已识别租客，请确认租金月份", "选择月份...", "2026年8月", "应收 EUR 950.00", "确认匹配"} {
+	for _, expected := range []string{"分别选择要匹配的租客和月份", "选择租客", "选择月份", "2026年8月", "Aoife", "EUR 950.00", "确认匹配"} {
 		if !strings.Contains(body.String(), expected) {
 			t.Fatalf("billing page missing month-choice text %q: %s", expected, body.String())
 		}

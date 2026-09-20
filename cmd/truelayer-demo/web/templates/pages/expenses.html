@@ -25,7 +25,7 @@
         <label class="expense-search"><span>搜索当前列表</span><input type="search" name="search" value="{{.Search}}" placeholder="描述、房产、房间或租客"></label>
         <label><span>状态</span><select name="status"><option value="all"{{if eq .StatusFilter "all"}} selected{{end}}>全部状态</option><option value="invoice_missing"{{if eq .StatusFilter "invoice_missing"}} selected{{end}}>未绑定发票</option><option value="invoice_linked"{{if eq .StatusFilter "invoice_linked"}} selected{{end}}>已绑定发票</option></select></label>
         <label><span>月份</span><input type="month" name="period" value="{{.Period}}"></label>
-        <button class="btn subtle" type="submit">筛选</button>
+        <button class="btn subtle" type="submit">搜索</button>
       </form>
 
       <section class="panel surface expense-list-panel" aria-label="费用支出列表">
@@ -51,25 +51,7 @@
         {{else}}<div class="workspace-empty">{{if eq .Search ""}}当前月份暂无支出记录。{{else}}没有符合当前筛选条件的支出。{{end}}</div>{{end}}
       </section>
 
-      {{if .ShowForm}}
-      <div class="entity-drawer-backdrop">
-        <section class="entity-drawer expense-drawer" role="dialog" aria-modal="true" aria-labelledby="expense-create-title">
-          <div class="panel-head"><div><h2 id="expense-create-title">新增支出</h2><p class="tiny">支出按房产归集，房间为可选关联对象。</p></div><a class="drawer-close" href="/expenses?period={{.Period}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}" aria-label="关闭新增支出">×</a></div>
-          {{if not .Properties}}<div class="notice error">请先建立房产，再新增房产支出。</div>{{end}}
-          <form method="post" action="/expenses">
-            <input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="status" value="{{.StatusFilter}}"><input type="hidden" name="search" value="{{.Search}}">
-            <div class="form-field"><label for="expense-description">支出描述</label><input id="expense-description" name="description" maxlength="191" required autofocus></div>
-            <div class="expense-form-grid"><div class="form-field"><label for="expense-amount">金额</label><input id="expense-amount" name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required></div><div class="form-field"><label for="expense-category">类别</label><select id="expense-category" name="category"><option>维修</option><option>水电</option><option>清洁</option><option>保险</option><option>其他</option></select></div></div>
-            <div class="form-field"><label for="expense-property">所属房产</label><select id="expense-property" name="property_id" required{{if not .Properties}} disabled{{end}}><option value="">请选择房产</option>{{range .Properties}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></div>
-            {{if .Rooms}}<div class="form-field"><label for="expense-room">关联房间（可选）</label><select id="expense-room" name="room_id"><option value="">房产级支出</option>{{range .Rooms}}<option value="{{.ID}}" data-property="{{.PropertyID}}">{{.Label}}</option>{{end}}</select></div>{{end}}
-            <div class="expense-form-grid"><div class="form-field"><label for="expense-date">日期</label><input id="expense-date" name="expense_date" type="date" value="{{.Today}}" required></div><div class="form-field"><label for="expense-payment">付款方式</label><input id="expense-payment" name="payment_method" value="手动"></div></div>
-            <input type="hidden" name="currency" value="EUR">
-            <details class="expense-extra-fields"><summary>添加备注</summary><div class="expense-form-grid"><div class="form-field"><label for="expense-room-note">房间备注</label><input id="expense-room-note" name="room_hint"></div><div class="form-field"><label for="expense-tenant-note">租客备注</label><input id="expense-tenant-note" name="tenant_hint"></div></div></details>
-            <div class="drawer-actions"><a class="btn subtle" href="/expenses?period={{.Period}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}">取消</a><button class="btn primary" type="submit"{{if not .Properties}} disabled{{end}}>保存支出</button></div>
-          </form>
-        </section>
-      </div>
-      {{end}}
+      {{if .ExpenseDrawer}}{{template "expense-form-drawer" .ExpenseDrawer}}{{end}}
 
       {{if .InvoiceForm}}
       {{with .InvoiceForm}}
@@ -94,7 +76,7 @@
       {{end}}
     </main>
   </div>
-  {{if or .ShowForm .InvoiceForm}}<script>
+  {{if .InvoiceForm}}<script>
     (() => {
       const backdrop = document.querySelector(".expense-drawer, .expense-invoice-drawer")?.parentElement;
       if (!backdrop) return;

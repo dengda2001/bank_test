@@ -50,7 +50,7 @@
   };
 
   function initCalendar(input) {
-    if (input.dataset.calendarReady) return;
+    if (input.dataset.calendarReady || input.disabled || input.readOnly) return;
     const kind = input.type === 'month' ? 'month' : 'date';
     const originalValue = input.value;
     const originalName = input.name;
@@ -293,7 +293,19 @@
     });
   }
 
-  const initCalendars = () => document.querySelectorAll('input[type="date"], input[type="month"]').forEach(initCalendar);
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initCalendars);
-  else initCalendars();
+  const initCalendars = (root) => {
+    if (root instanceof Element && root.matches('input[type="date"], input[type="month"]')) initCalendar(root);
+    if (root.querySelectorAll) root.querySelectorAll('input[type="date"], input[type="month"]').forEach(initCalendar);
+  };
+  const start = () => {
+    initCalendars(document.documentElement);
+    const observer = new MutationObserver((records) => {
+      records.forEach((record) => record.addedNodes.forEach((node) => {
+        if (node instanceof Element) initCalendars(node);
+      }));
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
+  else start();
 })();

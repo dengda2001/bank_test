@@ -249,7 +249,7 @@ func filtersFromQuery(q url.Values) transactionFilters {
 	if raw := strings.TrimSpace(q.Get("page")); raw != "" {
 		page, _ = strconv.Atoi(raw)
 	}
-	pageSize := 50
+	pageSize := 10
 	if raw := strings.TrimSpace(q.Get("page_size")); raw != "" {
 		pageSize, _ = strconv.Atoi(raw)
 	}
@@ -404,15 +404,18 @@ type transactionPageRow struct {
 	MatchStatusLabel          string
 	MatchReason               string
 	ManualAdjustmentReason    string
+	Deferred                  bool
 	CandidateTenantID         uint64
 	CandidateTenantName       string
 	CandidateRentObligationID uint64
 	CandidatePeriod           string
+	MatchedTenantName         string
 	CanConfirm                bool
 	TenantID                  uint64
 	NeedsMonthChoice          bool
 	MonthOptions              []billingMonthOption
 	ManualMatchOptions        []billingRentMatchOption
+	ManualMatchTenantOptions  []billingTenantOption
 	CanRematch                bool
 	CanEditRentMatch          bool
 	RematchOptions            []billingRentMatchOption
@@ -591,7 +594,7 @@ func (s *transactionService) listTransactionsPage(ctx context.Context, userID ui
 	}
 	pageSize := filters.PageSize
 	if pageSize <= 0 {
-		pageSize = 50
+		pageSize = 10
 	}
 	var rows []paymentTransaction
 	if err := q.Order(order).Limit(pageSize).Offset((page - 1) * pageSize).Find(&rows).Error; err != nil {

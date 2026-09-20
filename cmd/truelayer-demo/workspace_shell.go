@@ -3,7 +3,6 @@ package main
 import (
 	"html/template"
 	"net/http"
-	"net/url"
 	"strings"
 )
 
@@ -39,19 +38,6 @@ type workspaceShell struct {
 	IncomeCount   int
 	ExpenseCount  int
 
-	// TopSearch is the topbar's list search. It stays zero on a page that has no
-	// ?search= list, and the template then renders no box at all: prd.md rejects
-	// a search input that cannot filter anything (A1), so a page that cannot
-	// honour the box must not show one.
-	TopSearch topbarSearch
-
-	// PendingReviewCount and PendingReviewURL drive the topbar's count button:
-	// the number of transactions waiting for manual review and the dashboard
-	// panel they live in. The template renders no button while URL is empty, so a
-	// page whose count could not be read shows nothing rather than a fabricated 0.
-	PendingReviewCount int
-	PendingReviewURL   string
-
 	// StatusTitle / StatusUpdatedAt are the sidebar's data-status card. The
 	// prototype shows one there (figma/rentops-desktop-suite.html:49) reading
 	// "测试数据已载入 / Rosewood 收租明细 / 更新于 2026-09-16", but that describes
@@ -63,91 +49,20 @@ type workspaceShell struct {
 	StatusUpdatedAt string
 }
 
-// topbarSearch is the topbar's list-search form. Action is the page's own path,
-// so the box submits to the list it sits above rather than to a global search
-// that does not exist yet (prd.md defers cross-entity search to a later task).
-type topbarSearch struct {
-	Action string
-	Value  string
-	// Params carries the page's other query values as hidden fields, so
-	// submitting the topbar search keeps the period and status the user had
-	// already chosen instead of silently resetting the list.
-	Params url.Values
-}
-
-// topbarSearchRoutes are the routes whose handler parses ?search= and renders a
-// list. The topbar box is rendered on exactly these. A detail route such as
-// /properties/7 is deliberately absent even though its ActivePage is a list
-// page, and /transactions is absent because its list filter is ?payer=, not
-// ?search=, so the box there would not filter what the page shows.
-var topbarSearchRoutes = map[string]bool{
-	"/rent-dashboard": true,
-	"/bills":          true,
-	"/dunning":        true,
-	"/properties":     true,
-	"/rooms":          true,
-	"/tenancies":      true,
-	"/cash-receipts":  true,
-	"/expenses":       true,
-}
-
-// topbarSearchTransient are query keys the search form must not replay. Most
-// describe a transient overlay or a one-shot notice — replaying them would
-// reopen a drawer the user had closed or re-show a message already read. "page"
-// is different: it is real list state, but a new search restarts the list at
-// page 1, which is also what the pages' own search boxes do (their forms omit
-// the parameter), so the topbar box must not silently keep the old offset.
-var topbarSearchTransient = map[string]bool{
-	"search": true, "message": true, "error": true, "add": true,
-	"edit": true, "detail": true, "reconnect": true, "page": true,
-}
-
-// fillWorkspaceShell completes the shell's real-data widgets — the topbar's list
-// search and pending-review button, and the sidebar's data-status card.
+// fillWorkspaceShell completes the shell's real-data sidebar status card.
 //
-// It is deliberately best-effort. The sidebar and the topbar are rendered by
-// every workspace page, so a widget that cannot read its value must disappear
-// rather than fail the page or invent a placeholder.
+// It is deliberately best-effort. The sidebar is rendered by every workspace
+// page, so a status card that cannot read its value must disappear rather than
+// fail the page or invent a placeholder.
 func (a *app) fillWorkspaceShell(r *http.Request, shell workspaceShell) workspaceShell {
 	if r == nil {
 		return shell
-	}
-	if topbarSearchRoutes[r.URL.Path] {
-		shell.TopSearch = topbarSearch{
-			Action: r.URL.Path,
-			Value:  strings.TrimSpace(r.URL.Query().Get("search")),
-		}
-		params := url.Values{}
-		for key, values := range r.URL.Query() {
-			if topbarSearchTransient[key] {
-				continue
-			}
-			params[key] = values
-		}
-		if len(params) > 0 {
-			shell.TopSearch.Params = params
-		}
 	}
 	userID, ok := a.currentUserID(r)
 	if !ok || a.db == nil {
 		return shell
 	}
 	ctx := r.Context()
-	// The button opens the dashboard's "待人工处理流水" panel, so it counts what
-	// that panel counts for the month on screen: pending income transactions.
-	// An absent or invalid ?period= falls back to the current month, which is
-	// also the dashboard's own default.
-	if period, err := parsePeriodMonth(strings.TrimSpace(r.URL.Query().Get("period"))); err == nil {
-		var pending int64
-		err := a.db.WithContext(ctx).Model(&paymentTransaction{}).
-			Where("user_id = ? AND direction = ? AND match_status IN ?", userID, "income", pendingMatchStatuses).
-			Where("transaction_time >= ? AND transaction_time < ?", period, period.AddDate(0, 1, 0)).
-			Count(&pending).Error
-		if err == nil {
-			shell.PendingReviewCount = int(pending)
-			shell.PendingReviewURL = "/rent-dashboard?period=" + period.Format("2006-01") + "#pending-review"
-		}
-	}
 	if a.bankConnections != nil {
 		if connected, lastSync, err := a.bankConnections.status(ctx, userID); err == nil {
 			if connected {
@@ -175,12 +90,15 @@ var workspaceNav = embeddedWebText("web/templates/partials/workspace-nav.html")
 var workspaceBase = template.Must(template.New("workspace").ParseFS(webFiles,
 	"web/templates/partials/workspace-nav.html",
 	"web/templates/partials/collection-settle-form.html",
+	"web/templates/partials/tenant-form-drawer.html",
+	"web/templates/partials/expense-form-drawer.html",
 ))
 
 // newWorkspacePageTemplate parses a page body into a clone of workspaceBase, so
 // the page can call {{template "workspace-nav" .}}. Each page gets its own clone,
 // which keeps one page's definitions from leaking into another's.
 func newWorkspacePageTemplate(name string, functs template.FuncMap, body string) *template.Template {
+	body = withWorkspaceControlAssets(body)
 	page := template.Must(workspaceBase.Clone()).New(name)
 	if len(functs) > 0 {
 		page = page.Funcs(functs)
@@ -189,9 +107,22 @@ func newWorkspacePageTemplate(name string, functs template.FuncMap, body string)
 }
 
 func newEmbeddedWorkspacePageTemplate(name string, funcs template.FuncMap, path string) *template.Template {
+	body := withWorkspaceControlAssets(embeddedWebText(path))
 	page := template.Must(workspaceBase.Clone()).New(name)
 	if len(funcs) > 0 {
 		page = page.Funcs(funcs)
 	}
-	return template.Must(page.Parse(embeddedWebText(path)))
+	return template.Must(page.Parse(body))
+}
+
+func withWorkspaceControlAssets(body string) string {
+	if strings.Contains(body, `href="/static/css/workspace-controls.css"`) {
+		return body
+	}
+	headEnd := strings.Index(body, "</head>")
+	if headEnd < 0 {
+		return body
+	}
+	assets := `<link rel="stylesheet" href="/static/css/calendar.css"><link rel="stylesheet" href="/static/css/workspace-controls.css"><script src="/static/js/calendar.js" defer></script><script src="/static/js/workspace-controls.js" defer></script>`
+	return body[:headEnd] + assets + body[headEnd:]
 }

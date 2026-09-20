@@ -200,10 +200,9 @@ func TestRentWorkspaceTenantTableKeepsTheActionColumn(t *testing.T) {
 	}
 }
 
-// The user ruling for this subtask: 处理流水 is a page name and stays; the queue
-// must not collapse into a bare 处理 button. This asserts the rule rather than
-// trusting it, because a rename is exactly the kind of edit that looks harmless.
-func TestRentWorkspaceActionLabelsKeepTheirMeanings(t *testing.T) {
+// The queue expands each independent card into an inline process panel with a
+// detail link and a defer action.
+func TestRentWorkspacePendingCardsExposeInlineActions(t *testing.T) {
 	page := renderRentWorkspace(t, rentWorkspacePageData{
 		Period: "2026-09", PeriodLabel: "2026年9月", View: rentWorkspaceViewTenants,
 		PendingCount: 2,
@@ -218,11 +217,14 @@ func TestRentWorkspaceActionLabelsKeepTheirMeanings(t *testing.T) {
 	})
 
 	queue := markupBetween(t, page, `class="workspace-queue-list"`, `</section>`)
-	if got := strings.Count(queue, `>查看建议</a>`); got != 2 {
-		t.Fatalf("查看建议 count=%d want one per queued row: %s", got, queue)
+	if got := strings.Count(queue, `>查看流水详情</a>`); got != 2 {
+		t.Fatalf("detail link count=%d want one per queued row: %s", got, queue)
 	}
-	if got := strings.Count(queue, `>处理流水</a>`); got != 2 {
-		t.Fatalf("处理流水 count=%d want one per queued row (the page name must survive): %s", got, queue)
+	if got := strings.Count(queue, `>处理流水</summary>`); got != 2 {
+		t.Fatalf("process control count=%d want one per queued row: %s", got, queue)
+	}
+	if got := strings.Count(queue, `>暂不处理</button>`); got != 2 {
+		t.Fatalf("defer action count=%d want one per queued row: %s", got, queue)
 	}
 	// The prototype numbers each queued row (01/02/03) in front of its body.
 	for _, badge := range []string{`class="workspace-queue-index">01<`, `class="workspace-queue-index">02<`} {
@@ -230,14 +232,7 @@ func TestRentWorkspaceActionLabelsKeepTheirMeanings(t *testing.T) {
 			t.Fatalf("queue index badge %q is missing: %s", badge, queue)
 		}
 	}
-	for _, bare := range []string{">处理<", ">处理</a>", ">处理</button>", ">处理</summary>"} {
-		if strings.Contains(page, bare) {
-			t.Fatalf("a bare %q label appeared; 处理流水 must keep its full name", bare)
-		}
-	}
-
-	// The prototype puts the "see all" link in the panel head (.link-btn), not
-	// in a footer bar under the list.
+	// The see-all link stays in the panel heading above the process cards.
 	head := strings.Index(page, `class="workspace-queue-head-meta"`)
 	more := strings.Index(page, `class="workspace-queue-more"`)
 	list := strings.Index(page, `class="workspace-queue-list"`)

@@ -42,8 +42,6 @@ var morePageTemplate = newWorkspacePageTemplate("more-page", nil, `<!doctype htm
       <nav class="more-page-grid" aria-label="更多功能">
         <a class="more-page-card" href="/tenancies"><span class="more-page-icon">L</span><strong>租约管理</strong><span>到期、续约与责任周期</span></a>
         <a class="more-page-card" href="/dunning"><span class="more-page-icon">D</span><strong>催收任务</strong><span>跟进未结清的租金责任</span></a>
-        <a class="more-page-card" href="/cash-receipts?add=1"><span class="more-page-icon">C</span><strong>现金补录</strong><span>登记线下收款</span></a>
-        <a class="more-page-card" href="/expenses"><span class="more-page-icon">E</span><strong>费用支出</strong><span>发票与房产费用</span></a>
         <a class="more-page-card" href="/bank"><span class="more-page-icon">B</span><strong>银行设置</strong><span>同步与授权状态</span></a>
       </nav>
     </main>

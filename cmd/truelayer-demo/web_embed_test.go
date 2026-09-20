@@ -19,6 +19,7 @@ func TestEmbeddedWorkspaceResourcesArePresentAndReferenceSameOrigin(t *testing.T
 		"web/templates/pages/rooms.html",
 		"web/static/css/workspace.css",
 		"web/static/css/calendar.css",
+		"web/static/css/workspace-controls.css",
 		"web/static/css/pages/rent-workspace.css",
 		"web/static/css/pages/room-detail.css",
 		"web/static/css/pages/property-detail.css",
@@ -26,16 +27,20 @@ func TestEmbeddedWorkspaceResourcesArePresentAndReferenceSameOrigin(t *testing.T
 		"web/static/css/pages/entity-drawers.css",
 		"web/static/css/pages/object-lists.css",
 		"web/static/js/calendar.js",
+		"web/static/js/workspace-controls.js",
 	} {
 		if contents := embeddedWebText(path); strings.TrimSpace(contents) == "" {
 			t.Fatalf("embedded resource %q is empty", path)
 		}
 	}
 
-	page := embeddedWebText("web/templates/pages/rent-workspace.html")
+	page := withWorkspaceControlAssets(embeddedWebText("web/templates/pages/rent-workspace.html"))
 	for _, href := range []string{
 		`/static/css/workspace.css`,
 		`/static/css/calendar.css`,
+		`/static/css/workspace-controls.css`,
+		`/static/js/calendar.js`,
+		`/static/js/workspace-controls.js`,
 		`/static/css/pages/rent-workspace.css`,
 	} {
 		if !strings.Contains(page, href) {

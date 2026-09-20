@@ -25,7 +25,7 @@
         </div>
         <div class="actions">
           <a class="btn" href="/rooms/{{.RoomID}}?period={{.Period}}{{if .FromList}}&amp;from=rooms&amp;return_property_id={{.ReturnPropertyID}}&amp;return_status={{.ReturnStatus}}&amp;return_search={{.ReturnSearch}}&amp;return_collection={{.ReturnCollection}}{{end}}&amp;edit=1">编辑房间</a>
-          <a class="btn" href="/expenses?period={{.Period}}&amp;property_id={{.Summary.PropertyID}}&amp;room_id={{.RoomID}}&amp;add=1">新增房间支出</a>
+          <a class="btn" href="/rooms/{{.RoomID}}?period={{.Period}}{{if .FromList}}&amp;from=rooms&amp;return_property_id={{.ReturnPropertyID}}&amp;return_status={{.ReturnStatus}}&amp;return_search={{.ReturnSearch}}&amp;return_collection={{.ReturnCollection}}{{end}}&amp;expense=1">新增房间支出</a>
           <a class="btn primary" href="/dunning?period={{.Period}}">提醒未付款租客</a>
         </div>
       </header>
@@ -57,6 +57,7 @@
         </section>
       </div>
       {{end}}
+	  {{if .ExpenseDrawer}}{{template "expense-form-drawer" .ExpenseDrawer}}{{end}}
 
       <section class="detail-summary" aria-label="房间月度汇总">
         <article class="panel metric metric-primary"><div class="label">本月房间应收</div><strong>{{.Summary.ExpectedAmount}}</strong><span>{{.PeriodLabel}} · {{.Summary.TenantCount}} 位责任人</span></article>
@@ -109,7 +110,7 @@
           </section>
         </aside>
       </div>
-      <div class="room-detail-mobile-actions"><a class="btn subtle" href="{{.ReturnURL}}">返回列表</a><a class="btn primary" href="/rooms/{{.RoomID}}?period={{.Period}}{{if .FromList}}&amp;from=rooms&amp;return_property_id={{.ReturnPropertyID}}&amp;return_status={{.ReturnStatus}}&amp;return_search={{.ReturnSearch}}&amp;return_collection={{.ReturnCollection}}{{end}}&amp;edit=1">编辑资料</a></div>
+      <div class="room-detail-mobile-actions"><a class="btn subtle" href="{{.ReturnURL}}">返回列表</a><a class="btn primary" href="/rooms/{{.RoomID}}?period={{.Period}}{{if .FromList}}&amp;from=rooms&amp;return_property_id={{.ReturnPropertyID}}&amp;return_status={{.ReturnStatus}}&amp;return_search={{.ReturnSearch}}&amp;return_collection={{.ReturnCollection}}{{end}}&amp;edit=1">编辑资料</a><a class="btn" href="/rooms/{{.RoomID}}?period={{.Period}}{{if .FromList}}&amp;from=rooms&amp;return_property_id={{.ReturnPropertyID}}&amp;return_status={{.ReturnStatus}}&amp;return_search={{.ReturnSearch}}&amp;return_collection={{.ReturnCollection}}{{end}}&amp;expense=1">新增支出</a></div>
     </main>
   </div>
 </body>

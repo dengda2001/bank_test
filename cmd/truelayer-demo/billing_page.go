@@ -6,7 +6,7 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RentOps Transactions</title>
-  <style>`+workspacePageCSS+workspaceCalendarCSS+`
+  <style>`+workspacePageCSS+`
     .filterbar { display: grid; grid-template-columns: repeat(4, minmax(130px, 1fr)); align-items: end; gap: 10px; margin-bottom: 18px; }
     .filterbar label { margin: 0; }
     .filterbar input[type="month"] { min-height: 40px; border-radius: 10px; }
@@ -76,6 +76,8 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
     .transaction-route-heading .eyebrow { margin: 0 0 5px; color: var(--accent-bright); font: 700 11px var(--mono); letter-spacing: .08em; }
     .transaction-route-heading h1 { margin: 0; font-size: 28px; }
     .transaction-route-heading .sub { margin-top: 5px; }
+    .transaction-route-tools { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 7px; }
+    .transaction-route-tools .btn { min-height: 38px; padding: 0 11px; white-space: nowrap; }
     .transaction-mobile-copy { display: none; }
     .transaction-route-page .transaction-route-tabs { display: none; }
     .transaction-route-tabs { display: flex; width: max-content; max-width: 100%; gap: 3px; margin: 0 0 14px; padding: 3px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
@@ -95,7 +97,7 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
     .transaction-route-quickfilter input[type="month"] { flex: 0 0 180px; width: 180px; }
     .transaction-route-quickfilter .btn { min-height: 36px; }
     .transaction-route-page > .panel.surface > .panel-head { display: none; }
-    .transaction-route-desktop-table { min-width: 960px; }
+    .transaction-route-desktop-table { min-width: 1120px; }
     .transaction-route-desktop-table th, .transaction-route-desktop-table td { padding: 9px 12px; }
     .transaction-route-desktop-table td { vertical-align: middle; }
     .transaction-route-desktop-table .route-txn-payer strong { display: block; }
@@ -180,10 +182,11 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
       .billing-table-wrap .transaction-table tbody td.txn-col-action > .txn-action > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; }
       .billing-table-wrap .transaction-table tbody td.txn-col-action > .txn-action > .txn-body { width: 100%; }
 
-      .transaction-route-heading { align-items: center; margin: 0 0 14px; gap: 10px; }
+      .transaction-route-heading { align-items: stretch; flex-direction: column; margin: 0 0 14px; gap: 10px; }
       .transaction-route-heading h1 { font-size: 27px; }
       .transaction-route-heading .sub { max-width: 240px; font-size: 12px; }
-      .transaction-route-heading > .btn { min-height: 40px; padding: 0 12px; font-size: 12px; }
+      .transaction-route-tools { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
+      .transaction-route-tools .btn { min-height: 44px; padding: 0 7px; font-size: 11px; }
       .transaction-desktop-copy { display: none; }
       .transaction-mobile-copy { display: inline; }
       .transaction-route-tabs { display: grid; width: 100%; grid-template-columns: repeat(3,minmax(0,1fr)); margin-bottom: 12px; }
@@ -219,10 +222,12 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
       .transaction-review-actions .btn, .transaction-review-actions form { width: 100%; min-width: 0; }
       .transaction-review-actions .btn { min-height: 44px; padding: 0 8px; font-size: 12px; }
       .transaction-review-actions form { display: grid; gap: 7px; }
+      .transaction-review-actions form[data-tenant-period-match] { grid-column: 1/-1; grid-template-columns: repeat(2,minmax(0,1fr)); }
+      .transaction-review-actions form[data-tenant-period-match] select { min-width: 0; min-height: 44px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 11px; }
+      .transaction-review-actions form[data-tenant-period-match] .btn { grid-column: 1/-1; }
       .transaction-review-actions select { min-width: 0; min-height: 44px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 11px; }
     }
   </style>
-  <script>`+workspaceCalendarScript+`</script>
 </head>
 <body>
   <div class="app">
@@ -231,7 +236,7 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
       {{if eq .PageKey "transactions"}}
       <header class="transaction-route-heading">
         <div><p class="eyebrow"><span class="transaction-desktop-copy">RentOps · 流水匹配</span><span class="transaction-mobile-copy">银行与收款</span></p><h1><span class="transaction-desktop-copy">流水匹配</span><span class="transaction-mobile-copy">流水处理</span></h1><p class="sub"><span class="transaction-desktop-copy">核对付款人与租金责任，确认一笔收款的最终分配。</span><span class="transaction-mobile-copy">只展示需要决定的关键信息。</span></p></div>
-        {{if .Connected}}<a class="btn primary" href="/bank/sync">同步</a>{{else}}<a class="btn primary" href="/login">连接银行</a>{{end}}
+        <div class="transaction-route-tools"><a class="btn subtle" href="/cash-receipts?add=1">现金补录</a><a class="btn subtle" href="/expenses?add=1">新增支出</a>{{if .Connected}}<a class="btn primary" href="/bank/sync">同步</a>{{else}}<a class="btn primary" href="/login">连接银行</a>{{end}}</div>
       </header>
       <nav class="transaction-route-tabs" aria-label="流水状态">
         <a{{if eq .TransactionScope "pending"}} class="active"{{end}} href="{{.CanonicalPath}}?match_status=pending{{if .PeriodFilter}}&amp;period={{.PeriodFilter}}{{end}}">待处理 <span>{{.PendingCount}}</span></a>
@@ -269,14 +274,14 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
       {{if eq .Message "legacy_imported"}}<div class="notice ok" data-toast>旧版 JSON 和 JSONL 数据已导入。</div>{{end}}
       {{if eq .Error "legacy_import_failed"}}<div class="notice error">旧数据导入失败，请检查源文件。</div>{{end}}
       {{if eq .PageKey "transactions"}}
-      <form class="transaction-route-quickfilter" method="get" action="/transactions" aria-label="快速筛选流水">
+      <form class="transaction-route-quickfilter" method="get" action="/transactions" aria-label="搜索流水">
         <input type="hidden" name="scope" value="{{.TransactionScope}}">
         <input type="search" name="payer" value="{{.PayerFilter}}" placeholder="搜索当前列表" aria-label="搜索付款人">
         <select name="match_status" aria-label="流水状态"><option value="pending"{{if eq .MatchStatusSelection "pending"}} selected{{end}}>待处理</option><option value="matched"{{if eq .MatchStatusSelection "matched"}} selected{{end}}>已匹配</option><option value=""{{if and (eq .TransactionScope "all") (eq .MatchStatusSelection "")}} selected{{end}}>全部状态</option><option value="partial"{{if eq .MatchStatusSelection "partial"}} selected{{end}}>部分匹配</option><option value="candidate"{{if eq .MatchStatusSelection "candidate"}} selected{{end}}>待确认</option><option value="unmatched"{{if eq .MatchStatusSelection "unmatched"}} selected{{end}}>未匹配</option><option value="needs_review"{{if eq .MatchStatusSelection "needs_review"}} selected{{end}}>需处理</option></select>
         <input type="month" name="period" value="{{.PeriodFilter}}" aria-label="到账月份">
-        <button class="btn" type="submit">筛选</button>
+        <button class="btn" type="submit">搜索</button>
       </form>
-      <details class="transaction-route-filters"><summary>更多筛选</summary>{{end}}
+      <details class="transaction-route-filters"><summary>搜索</summary>{{end}}
       <form class="filterbar" method="get" action="{{.CanonicalPath}}" aria-label="Transaction filters">
         <label for="payer">付款人<input id="payer" name="payer" type="search" value="{{.PayerFilter}}" placeholder="付款人姓名"></label>
         <label for="tenant_id">租客<select id="tenant_id" name="tenant_id"><option value="">全部租客</option>{{range .TenantOptions}}<option value="{{.ID}}" {{if eq $.TenantFilter .ID}}selected{{end}}>{{.Name}}</option>{{end}}</select></label>
@@ -288,33 +293,34 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
         {{if .ArrivalFromFilter}}<input type="hidden" name="arrival_from" value="{{.ArrivalFromFilter}}">{{end}}
         {{if .ArrivalToFilter}}<input type="hidden" name="arrival_to" value="{{.ArrivalToFilter}}">{{end}}
         {{if .SortFilter}}<input type="hidden" name="sort" value="{{.SortFilter}}">{{end}}
-        <div class="filter-actions"><button class="btn" type="submit">应用筛选</button><a class="btn subtle" href="{{.CanonicalPath}}">清除筛选</a></div>
+        <div class="filter-actions"><button class="btn" type="submit">搜索</button><a class="btn subtle" href="{{.CanonicalPath}}">清除筛选</a></div>
       </form>
       {{if eq .PageKey "transactions"}}</details>{{end}}
       <section class="panel surface" aria-labelledby="statement-title">
         <div class="panel-head"><h2 id="statement-title">流水明细</h2><span class="tiny">{{.LastSync}}</span></div>
         {{if .TransactionRows}}
-        {{if eq .PageKey "transactions"}}<div class="transaction-route-desktop-list table-wrap"><table class="transaction-route-desktop-table"><thead><tr><th>日期</th><th>付款记录</th><th>房产 / 房间</th><th>金额</th><th>建议分配</th><th>匹配依据</th><th>状态 / 操作</th></tr></thead><tbody>{{range .TransactionRows}}<tr><td class="mono">{{if .DateShort}}{{.DateShort}}{{else}}{{.DateDisplay}}{{end}}</td><td class="route-txn-payer"><strong>{{.PayerName}}</strong></td><td class="route-txn-context">{{if .ObjectLabel}}{{.ObjectLabel}}{{else}}{{.AccountName}}{{end}}</td><td class="route-txn-amount">{{.AmountDisplay}}</td><td>{{if .AllocationUseDisplay}}{{.AllocationUseDisplay}}{{else}}{{.MatchStatusLabel}}{{end}}</td><td class="route-txn-context">{{if .MatchReason}}{{.MatchReason}}{{else}}—{{end}}</td><td class="route-txn-action"><span class="status {{.MatchStatus}}">{{.MatchStatusLabel}}</span> <a class="btn subtle" href="{{.DetailURL}}">查看详情</a></td></tr>{{end}}</tbody></table></div>{{end}}
+        {{if eq .PageKey "transactions"}}<div class="transaction-route-desktop-list table-wrap"><table class="transaction-route-desktop-table"><thead><tr><th>日期</th><th>付款人</th><th>租客姓名</th><th>房产 / 房间</th><th>金额</th><th>建议分配</th><th>匹配依据</th><th>状态 / 操作</th></tr></thead><tbody>{{range .TransactionRows}}<tr><td class="mono">{{if .DateShort}}{{.DateShort}}{{else}}{{.DateDisplay}}{{end}}</td><td class="route-txn-payer"><strong>{{.PayerName}}</strong></td><td>{{if .MatchedTenantName}}{{.MatchedTenantName}}{{else}}—{{end}}</td><td class="route-txn-context">{{if .ObjectLabel}}{{.ObjectLabel}}{{else}}{{.AccountName}}{{end}}</td><td class="route-txn-amount">{{.AmountDisplay}}</td><td>{{if .AllocationUseDisplay}}{{.AllocationUseDisplay}}{{else}}{{.MatchStatusLabel}}{{end}}</td><td class="route-txn-context">{{if .MatchReason}}{{.MatchReason}}{{else}}—{{end}}</td><td class="route-txn-action"><span class="status {{.MatchStatus}}">{{.MatchStatusLabel}}</span> <a class="btn subtle" href="{{.DetailURL}}">查看详情</a></td></tr>{{end}}</tbody></table></div>{{end}}
         <div class="billing-table-wrap table-wrap"><table class="transaction-table">
-          <thead><tr><th class="txn-col-type">类型</th><th class="txn-col-payer"><a class="sort-link{{if .PayerSort.Active}} active{{end}}" href="{{.PayerSort.URL}}">付款人{{if .PayerSort.Arrow}}<span class="sort-arrow">{{.PayerSort.Arrow}}</span>{{end}}</a></th><th class="txn-col-amount"><a class="sort-link{{if .AmountSort.Active}} active{{end}}" href="{{.AmountSort.URL}}">金额／余额{{if .AmountSort.Arrow}}<span class="sort-arrow">{{.AmountSort.Arrow}}</span>{{end}}</a></th><th class="txn-col-date"><a class="sort-link{{if .ArrivalSort.Active}} active{{end}}" href="{{.ArrivalSort.URL}}">到账／租金月{{if .ArrivalSort.Arrow}}<span class="sort-arrow">{{.ArrivalSort.Arrow}}</span>{{end}}</a></th><th class="txn-col-desc">描述</th><th class="txn-col-account">账户</th><th class="txn-col-action">用途／处理</th></tr></thead>
+          <thead><tr><th class="txn-col-type">类型</th><th class="txn-col-payer"><a class="sort-link{{if .PayerSort.Active}} active{{end}}" href="{{.PayerSort.URL}}">付款人{{if .PayerSort.Arrow}}<span class="sort-arrow">{{.PayerSort.Arrow}}</span>{{end}}</a></th><th class="txn-col-tenant">租客姓名</th><th class="txn-col-amount"><a class="sort-link{{if .AmountSort.Active}} active{{end}}" href="{{.AmountSort.URL}}">金额／余额{{if .AmountSort.Arrow}}<span class="sort-arrow">{{.AmountSort.Arrow}}</span>{{end}}</a></th><th class="txn-col-date"><a class="sort-link{{if .ArrivalSort.Active}} active{{end}}" href="{{.ArrivalSort.URL}}">到账／租金月{{if .ArrivalSort.Arrow}}<span class="sort-arrow">{{.ArrivalSort.Arrow}}</span>{{end}}</a></th><th class="txn-col-desc">描述</th><th class="txn-col-account">账户</th><th class="txn-col-action">用途／处理</th></tr></thead>
           <tbody>{{range .TransactionRows}}
             <tr id="transaction-row-{{.DetailKey}}" class="{{.Direction}}">
               <td class="txn-col-type"><span class="direction {{.Direction}}">{{.DirectionLabel}}</span></td>
               <td class="txn-col-payer"><div class="match-metadata"><strong>{{.PayerName}}</strong><a class="transaction-detail-link" href="{{.DetailURL}}">查看流水详情</a></div></td>
+              <td class="txn-col-tenant">{{if .MatchedTenantName}}{{.MatchedTenantName}}{{else}}—{{end}}</td>
               <td class="txn-col-amount"><span class="{{if eq .Direction "expense"}}amount expense{{else}}amount{{end}}">{{.AmountDisplay}}</span><div class="tiny">已分配 {{.AllocatedAmountDisplay}}</div><div class="tiny">余款 {{.RemainingAmountDisplay}}</div></td>
               <td class="mono txn-col-date">{{.DateDisplay}}<div class="tiny">租金月：{{if .FinalPeriodDisplay}}{{.FinalPeriodDisplay}}{{else}}未确认{{end}}</div></td>
               <td class="txn-col-desc"><div class="description">{{.Description}}</div></td>
               <td class="txn-col-account">{{.AccountName}}</td>
-<td class="txn-col-action"><details class="txn-action" open><summary class="txn-summary"><span class="status {{.MatchStatus}}">{{.MatchStatusLabel}}</span><span class="txn-amount-mobile{{if eq .Direction "expense"}} expense{{end}}">{{.AmountDisplay}}</span></summary><div class="txn-body"><div class="tiny">{{.AllocationUseDisplay}}</div><a class="status status-link {{.MatchStatus}}" href="{{$.CanonicalPath}}?match_status={{.MatchStatus}}" title="筛选：{{.MatchStatusLabel}}">{{.MatchStatusLabel}}</a>{{if .MatchReason}}<div class="tiny">原因：{{.MatchReason}}</div>{{end}}{{if .CanConfirm}}<div class="tiny">建议：{{.CandidateTenantName}} · 租金月 {{.CandidatePeriod}}</div><form class="confirm-form" method="post" action="{{$.CanonicalPath}}/confirm"><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="rent_obligation_id" value="{{.CandidateRentObligationID}}"><label class="tiny"><input type="checkbox" name="remember_payer" value="1" checked> 记住此付款人</label><button class="btn" type="submit">一键匹配</button></form>{{else if .NeedsMonthChoice}}<div class="tiny">已识别租客，请确认租金月份</div><form class="month-choice-form" method="post" action="{{$.CanonicalPath}}/confirm"><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="tenant_id" value="{{.TenantID}}"><select name="period" aria-label="选择租金月份" required><option value="">选择月份...</option>{{range .MonthOptions}}<option value="{{.Period}}">{{.Label}} · 应收 {{.Expected}} · 已收 {{.Paid}} · 未收 {{.Remaining}}</option>{{end}}</select><label class="tiny"><input type="checkbox" name="remember_payer" value="1" checked> 记住此付款人</label><button class="btn" type="submit">确认匹配</button></form>{{else if and (eq .Direction "income") (ne .MatchStatus "matched") (ne .MatchStatus "ignored")}}{{if .ManualMatchOptions}}<form class="bind-form" method="post" action="{{$.CanonicalPath}}/confirm"><input type="hidden" name="transaction_id" value="{{.ID}}"><select name="rent_obligation_id" aria-label="选择匹配租客和租金月份" required><option value="">选择租客和租金月...</option>{{range .ManualMatchOptions}}<option value="{{.RentObligationID}}">{{.Label}}</option>{{end}}</select><label class="tiny"><input type="checkbox" name="remember_payer" value="1" checked> 记住付款人</label><button class="btn" type="submit">确认匹配</button></form>{{else}}<div class="tiny bind-empty">没有可直接匹配的租金月，可使用归类／拆分处理。</div>{{end}}{{end}}{{if and (eq .Direction "income") (ne .MatchStatus "matched") (ne .MatchStatus "ignored")}}<details class="allocation-details"><summary>归类／拆分</summary><form class="allocation-form" method="post" action="{{$.CanonicalPath}}/allocate"><input type="hidden" name="transaction_id" value="{{.ID}}"><select name="allocation_kind" aria-label="入账用途"><option value="rent">房租</option><option value="deposit">押金</option><option value="other_income">其他收入</option></select><select name="tenant_id" aria-label="归类租客"><option value="">不指定租客</option>{{range $.TenantOptions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select><select name="period" aria-label="归类租金月份"><option value="">选择租金月份...</option>{{range .MonthOptions}}<option value="{{.Period}}">{{.Label}} · 余款 {{.Remaining}}</option>{{end}}</select><input name="amount" inputmode="decimal" value="{{.RemainingAmountInput}}" aria-label="归类金额" required><input name="note" placeholder="其他收入备注（其他收入必填）" aria-label="归类备注"><button class="btn" type="submit">保存归类</button></form></details>{{end}}{{if eq .MatchStatus "ignored"}}<form class="action-form" method="post" action="{{$.CanonicalPath}}/restore"><input type="hidden" name="transaction_id" value="{{.ID}}"><input name="reason" aria-label="恢复原因" placeholder="恢复原因" required><button class="btn" type="submit">恢复处理</button></form>{{else if or (eq .MatchStatus "matched") (eq .MatchStatus "partial")}}{{if .CanEditRentMatch}}<details class="rematch-details"><summary class="btn">修改匹配</summary><form class="rematch-form" method="post" action="{{$.CanonicalPath}}/rematch"><input type="hidden" name="transaction_id" value="{{.ID}}"><select name="tenant_id" aria-label="修改匹配租客" required><option value="">选择租客...</option>{{range .RematchTenantOptions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select><select name="period" aria-label="修改租金月份" required><option value="">选择租金月份...</option>{{range .RematchMonthOptions}}<option value="{{.Period}}">{{.Label}} · 未收 {{.Remaining}}</option>{{end}}</select><button class="btn" type="submit">确认修改</button></form></details>{{else if .CanRematch}}<div class="tiny">当前没有可替换的租金目标；如需调整，请撤销后重新归类。</div>{{else}}<div class="tiny">该流水已拆分或含其他用途；请撤销后重新归类。</div>{{end}}<form class="action-form" method="post" action="{{$.CanonicalPath}}/revoke"><input type="hidden" name="transaction_id" value="{{.ID}}"><input name="reason" aria-label="撤销原因" placeholder="撤销原因" required><button class="btn danger" type="submit">撤销匹配</button></form>{{else if eq .Direction "income"}}<form class="action-form" method="post" action="{{$.CanonicalPath}}/ignore"><input type="hidden" name="transaction_id" value="{{.ID}}"><input name="reason" aria-label="忽略原因" placeholder="忽略原因" required><button class="btn" type="submit">无需匹配</button></form>{{end}}</div></details></td>
             </tr>
           {{end}}</tbody>
         </table></div>
         {{if eq .PageKey "transactions"}}
         <div class="transaction-route-mobile-list">
           {{range .TransactionRows}}
+          {{$row := .}}
           <article class="transaction-review-card" id="mobile-transaction-{{.DetailKey}}">
             <div class="transaction-review-head">
-              <div><h3>{{.PayerName}}</h3><p>{{if .DateShort}}{{.DateShort}}{{else}}{{.DateDisplay}}{{end}} · {{if .ObjectLabel}}{{.ObjectLabel}}{{else}}{{.AccountName}}{{end}}</p><p class="transaction-review-description">{{.Description}}</p></div>
+              <div><h3>{{.PayerName}}</h3><p>{{if .DateShort}}{{.DateShort}}{{else}}{{.DateDisplay}}{{end}} · {{if .ObjectLabel}}{{.ObjectLabel}}{{else}}{{.AccountName}}{{end}}</p><p class="transaction-review-description">{{.Description}}</p>{{if .MatchedTenantName}}<p class="tiny">租客姓名：{{.MatchedTenantName}}</p>{{end}}</div>
               <strong class="transaction-review-amount{{if eq .Direction "expense"}} expense{{end}}">{{if eq .Direction "income"}}+{{end}}{{.AmountDisplay}}</strong>
             </div>
             <div class="transaction-review-facts">
@@ -332,10 +338,8 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
             {{if and .MatchReason (not .NeedsMonthChoice)}}<p class="transaction-review-note">{{.MatchReason}}</p>{{end}}
             <div class="transaction-review-actions">
               <a class="btn" href="{{.DetailURL}}">{{if .CanConfirm}}查看分配{{else}}查看{{end}}</a>
-              {{if .CanConfirm}}
-              <form method="post" action="{{$.CanonicalPath}}/confirm"><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="rent_obligation_id" value="{{.CandidateRentObligationID}}"><input type="hidden" name="remember_payer" value="0"><input type="hidden" name="return_to" value="/transactions"><button class="btn primary" type="submit">确认</button></form>
-              {{else if .NeedsMonthChoice}}
-              <form method="post" action="{{$.CanonicalPath}}/confirm"><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="tenant_id" value="{{.TenantID}}"><input type="hidden" name="remember_payer" value="0"><input type="hidden" name="return_to" value="/transactions"><select name="period" aria-label="选择租金月份" required><option value="">选择月份</option>{{range .MonthOptions}}<option value="{{.Period}}">{{.Label}}</option>{{end}}</select><button class="btn primary" type="submit">确认匹配</button></form>
+              {{if .ManualMatchOptions}}
+              <form method="post" action="{{$.CanonicalPath}}/confirm" data-tenant-period-match><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="remember_payer" value="0"><input type="hidden" name="return_to" value="/transactions"><select name="tenant_id" aria-label="选择匹配租客" required><option value="">选择租客</option>{{range .ManualMatchTenantOptions}}<option value="{{.ID}}"{{if eq .ID $row.CandidateTenantID}} selected{{end}}>{{.Name}}</option>{{end}}</select><select name="period" aria-label="选择租金月份" required><option value="">选择月份</option>{{range .ManualMatchOptions}}<option value="{{.Period}}" data-tenant="{{.TenantID}}"{{if and (eq .TenantID $row.CandidateTenantID) (eq .Period $row.CandidatePeriod)}} selected{{end}}>{{.PeriodLabel}} · {{.TenantName}} · 未收 {{.Remaining}}</option>{{end}}</select><label class="tiny"><input type="checkbox" name="remember_payer" value="1" checked> 记住付款人</label><button class="btn primary" type="submit">确认匹配</button></form>
               {{else}}
               <a class="btn primary" href="{{.DetailURL}}">处理流水</a>
               {{end}}
@@ -357,14 +361,14 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
             {{if .DirectionFilter}}<input type="hidden" name="direction" value="{{.DirectionFilter}}">{{end}}
             {{if .MatchStatusSelection}}<input type="hidden" name="match_status" value="{{.MatchStatusSelection}}">{{end}}
             {{if .SortFilter}}<input type="hidden" name="sort" value="{{.SortFilter}}">{{end}}
-            <label for="page_size">每页<select id="page_size" name="page_size" onchange="this.form.submit()"><option value="25" {{if eq .PageSize 25}}selected{{end}}>25</option><option value="50" {{if eq .PageSize 50}}selected{{end}}>50</option><option value="100" {{if eq .PageSize 100}}selected{{end}}>100</option></select></label>
+            <label for="page_size">每页<select id="page_size" name="page_size" onchange="this.form.submit()"><option value="10" {{if eq .PageSize 10}}selected{{end}}>10</option><option value="25" {{if eq .PageSize 25}}selected{{end}}>25</option><option value="50" {{if eq .PageSize 50}}selected{{end}}>50</option><option value="100" {{if eq .PageSize 100}}selected{{end}}>100</option></select></label>
           </form>
-          <div class="pagination-nav"><span class="tiny">第 {{.Page}} / {{.TotalPages}} 页，共 {{.TotalTransactions}} 笔</span>{{if .PreviousPageURL}}<a href="{{.PreviousPageURL}}">上一页</a>{{end}}{{if .NextPageURL}}<a href="{{.NextPageURL}}">下一页</a>{{end}}</div>
+          <div class="pagination-nav"><span class="tiny">第 {{.Page}} / {{.TotalPages}} 页，共 {{.TotalTransactions}} 笔</span>{{if .PreviousPageURL}}<a href="{{.PreviousPageURL}}">上一页</a>{{end}}<span class="pagination-numbers" aria-label="选择页码">{{range .Pagination}}{{if .Ellipsis}}<span class="pagination-ellipsis" aria-hidden="true">…</span>{{else if .Current}}<span class="pagination-number is-current" aria-current="page">{{.Number}}</span>{{else}}<a class="pagination-number" href="{{.URL}}">{{.Number}}</a>{{end}}{{end}}</span>{{if .NextPageURL}}<a href="{{.NextPageURL}}">下一页</a>{{end}}</div>
         </div>{{end}}
       </section>
     </main>
 </div>
-<script>(function(){document.querySelectorAll('form[action$="/allocate"]').forEach(function(form){var names=['allocation_kind','tenant_id','period','amount','note'];var controls=Array.from(form.children).filter(function(el){return el.name && names.indexOf(el.name)>=0;});if(!controls.length)return;var line=document.createElement('div');line.className='allocation-line';controls.forEach(function(el){el.name=el.name+'[]';line.appendChild(el);});var submit=form.querySelector('button[type="submit"]');var add=document.createElement('button');add.type='button';add.className='btn allocation-add';add.textContent='添加拆分项';add.addEventListener('click',function(){var clone=line.cloneNode(true);clone.querySelectorAll('input,select').forEach(function(el){if(el.name==='allocation_kind[]')el.value='rent';else if(el.tagName==='SELECT')el.value='';else el.value='';});form.insertBefore(clone,add);});form.insertBefore(line,submit);form.insertBefore(add,submit);});document.querySelectorAll('form[action^="/transactions/"],form[action^="/billing/"]').forEach(function(form){if(form.method.toLowerCase()!=='post'||form.querySelector('input[name="return_to"]'))return;var target=document.createElement('input');target.type='hidden';target.name='return_to';target.value=window.location.pathname+window.location.search;form.appendChild(target);});document.querySelectorAll('form[action$="/revoke"]').forEach(function(form){form.method='get';var reason=form.querySelector('input[name="reason"]');if(reason)reason.remove();});if(window.matchMedia('(max-width: 640px)').matches){document.querySelectorAll('details.txn-action[open]').forEach(function(node){node.removeAttribute('open');});document.querySelector('.transaction-route-filters[open]')?.removeAttribute('open');}})();</script>
+<script>(function(){document.querySelectorAll('form[action$="/allocate"]').forEach(function(form){var names=['allocation_kind','tenant_id','period','amount','note'];var controls=Array.from(form.children).filter(function(el){return el.name && names.indexOf(el.name)>=0;});if(!controls.length)return;var line=document.createElement('div');line.className='allocation-line';controls.forEach(function(el){el.name=el.name+'[]';line.appendChild(el);});var submit=form.querySelector('button[type="submit"]');var add=document.createElement('button');add.type='button';add.className='btn allocation-add';add.textContent='添加拆分项';add.addEventListener('click',function(){var clone=line.cloneNode(true);clone.querySelectorAll('input,select').forEach(function(el){if(el.name==='allocation_kind[]')el.value='rent';else if(el.tagName==='SELECT')el.value='';else el.value='';});form.insertBefore(clone,add);});form.insertBefore(line,submit);form.insertBefore(add,submit);});document.querySelectorAll('form[action^="/transactions/"],form[action^="/billing/"]').forEach(function(form){if(form.method.toLowerCase()!=='post'||form.querySelector('input[name="return_to"]'))return;var target=document.createElement('input');target.type='hidden';target.name='return_to';target.value=window.location.pathname+window.location.search;form.appendChild(target);});document.querySelectorAll('[data-tenant-period-match]').forEach(function(form){var tenant=form.querySelector('select[name="tenant_id"]');var period=form.querySelector('select[name="period"]');if(!tenant||!period)return;var filter=function(){var selected=tenant.value;var stillAvailable=false;Array.from(period.options).forEach(function(option){if(!option.value)return;var visible=!selected||option.dataset.tenant===selected;option.hidden=!visible;option.disabled=!visible;if(visible&&option.selected)stillAvailable=true;});if(!stillAvailable)period.value='';period.dispatchEvent(new Event('change',{bubbles:true}));};tenant.addEventListener('change',filter);filter();});document.querySelectorAll('form[action$="/revoke"]').forEach(function(form){form.method='get';var reason=form.querySelector('input[name="reason"]');if(reason)reason.remove();});if(window.matchMedia('(max-width: 640px)').matches){document.querySelectorAll('details.txn-action[open]').forEach(function(node){node.removeAttribute('open');});document.querySelector('.transaction-route-filters[open]')?.removeAttribute('open');}})();</script>
 </body>
 </html>
 `)

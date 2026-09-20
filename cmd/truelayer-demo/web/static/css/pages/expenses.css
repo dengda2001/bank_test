@@ -51,8 +51,7 @@
   .expense-filters label:not(.expense-search) { min-width: 0; }
   .expense-filters input, .expense-filters select { min-width: 0; padding: 8px; font-size: 12px; }
   .expense-filters button { grid-column: 1 / -1; width: 100%; }
-  .expense-filters { display: none; }
-  .expense-filters.mobile-search-open { display: grid; }
+  .expense-filters { display: grid; }
   .expense-table-wrap { display: none; }
   .expense-mobile-list { display: grid; gap: 9px; }
   .expense-mobile-card { display: grid; gap: 9px; padding: 14px; border-bottom: 1px solid var(--border); background: var(--surface); }

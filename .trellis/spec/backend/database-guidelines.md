@@ -1595,3 +1595,93 @@ db.Where("user_id = ? AND period_month = ? AND record_status = ?",
   groups among lazy obligations.
 - Run `go test ./... -count=1` and `go vet ./...` before committing loader or
   fixture changes.
+
+## Scenario: Dashboard Transaction Deferral and Match Lifecycle
+
+### 1. Scope / Trigger
+
+- Trigger: changing the home-page manual-review queue, transaction defer/undefer
+  actions, or allocation behavior that changes a deferred transaction's state.
+- The dashboard queue is a projection over bank transactions and the append-only
+  action log; it must not rewrite the bank transaction to make an item disappear.
+
+### 2. Signatures
+
+- `POST /transactions/defer` and `POST /transactions/undefer`; legacy aliases
+  are `POST /billing/defer` and `POST /billing/undefer`.
+- Forms submit `transaction_id`, a non-empty `reason`, and an optional local
+  `return_to` URL. Return paths are allowlisted by `transactionReturnTarget`.
+- `transactionService.deferTransaction` / `undeferTransaction` append
+  `payment_transaction_actions` rows with action kinds `defer` / `undefer`.
+- `rentWorkspacePendingTransactions(db, ctx, userID, period)` is the shared
+  query for both the dashboard count and its three displayed records.
+
+### 3. Contracts
+
+- Action writes and source lookups are scoped by both `user_id` and transaction
+  ID. A manual defer is valid only for a pending income transaction.
+- Deferring appends an action row. It does not change `match_status`, allocations,
+  or rent-obligation balances; the transaction remains visible and matchable from
+  the transaction list.
+- The queue selects income transactions in the requested transaction month whose
+  match status is pending, then excludes a transaction when its latest defer is
+  newer than its latest undefer. The count and the `ORDER BY ... LIMIT 3` read use
+  this same query.
+- A successful allocation appends an undefer action in the same DB transaction
+  when the source was deferred. A resulting `partial` transaction can therefore
+  return to the manual-review queue; a fully matched transaction is naturally
+  excluded by its match status.
+- `reason` is trimmed, required, and limited to 512 runes through
+  `normalizeTransactionActionReason`.
+
+### 4. Validation & Error Matrix
+
+| Input/state | Result |
+|---|---|
+| Missing session, transaction ID, or database | Reject before a scoped write |
+| Non-POST action request | HTTP 405 |
+| Missing/invalid transaction ID or empty reason | Redirect with an action error; write no action |
+| Cross-user or missing transaction | Scoped lookup fails; write no action |
+| Expense or non-pending income is manually deferred | Reject; preserve source and allocations |
+| Latest action is `defer` / `undefer` | Hide / restore the pending transaction in the dashboard query |
+| Allocation fails validation | Roll back allocation, projections, and deferral clearing together |
+
+### 5. Good/Base/Bad Cases
+
+- Good: a landlord defers a pending income row; the dashboard count and list both
+  stop showing it, while `/transactions` still shows it. A later match appends an
+  undefer event in the allocation transaction and projects `matched` or `partial`
+  from the effective allocations.
+- Base: a matched transaction has an old defer event, but it is absent from the
+  queue because its projected match status is no longer pending.
+- Bad: changing the source to `ignored` for a temporary skip, deleting a defer
+  action to restore the item, or hiding only the displayed list while leaving the
+  dashboard count query unchanged.
+
+### 6. Tests Required
+
+- On a disposable database, assert defer preserves `payment_transactions` and
+  allocation rows while removing the pending row from both queue count and list.
+- Assert undefer makes a still-pending transaction eligible again and that a
+  later allocation clears deferral in the same transaction.
+- Cover partial and full allocation projections, required reasons, cross-user
+  IDs, and the `/billing` aliases. Do not infer DB verification from a skipped
+  MySQL test group.
+
+### 7. Wrong vs Correct
+
+Wrong:
+
+```go
+// Reuses "ignored" and loses the distinction between a temporary skip and a
+// confirmed decision that the bank row is not rent.
+source.MatchStatus = "ignored"
+```
+
+Correct:
+
+```go
+// Preserve source status and ledger facts; the action log controls queue
+// visibility, and allocation clears a prior defer in its own DB transaction.
+writeTransactionAction(txdb, userID, transactionID, transactionActionDefer, reason, "", "", now)
+```

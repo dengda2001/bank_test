@@ -1,0 +1,67 @@
+{{define "tenant-form-drawer"}}
+<div class="entity-drawer-backdrop"><section class="entity-drawer tenant-drawer" role="dialog" aria-modal="true" aria-labelledby="tenant-form-title">
+  <div class="panel-head"><div><h2 id="tenant-form-title">{{if .Editing}}编辑租客资料{{else}}新增租客{{end}}</h2><p class="tiny">租客、房间和租金责任分别保存。</p></div><a class="drawer-close" href="{{.ReturnURL}}" aria-label="关闭租客表单">×</a></div>
+  {{if .Error}}<div class="notice error" role="alert">{{if eq .Error "tenant_has_payments"}}无法提前结束租期：结束月之后的账单已有有效收款，请先更正或撤销相关收款。{{else if eq .Error "tenant_room_locked"}}当前月或之后已有房间账单，无法更改租客的房间绑定。{{else}}请检查租客姓名、邮箱格式、日期关系、月租金额和房间地址。{{end}}</div>{{end}}
+  <form method="post" action="/tenants">
+    <input type="hidden" name="return_to" value="{{.PostReturnURL}}">
+    {{if .Editing}}<input type="hidden" name="tenant_id" value="{{.Form.ID}}">{{end}}
+    <label for="name">租客姓名</label>
+    <input id="name" name="name" autocomplete="name" value="{{.Form.Name}}" required>
+    <label for="display_alias">显示别名</label>
+    <input id="display_alias" name="display_alias" value="{{.Form.DisplayAlias}}" placeholder="列表优先显示的称呼">
+    <label for="email">邮箱</label>
+    <input id="email" name="email" type="email" autocomplete="email" value="{{.Form.Email}}" placeholder="tenant@example.com">
+    <label for="payer_id">银行付款人编号</label>
+    <input id="payer_id" name="payer_id" value="{{.Form.PayerID}}">
+    <label for="payer_name_hint">付款人名称提示</label>
+    <input id="payer_name_hint" name="payer_name_hint" value="{{.Form.PayerNameHint}}">
+    <label for="monthly_rent">月租金额</label>
+    <input id="monthly_rent" name="monthly_rent" type="number" min="0.01" step="0.01" inputmode="decimal" value="{{.Form.MonthlyRent}}" required>
+    <label for="currency">币种</label>
+    <input id="currency" name="currency" value="{{.Form.Currency}}" maxlength="3">
+    <label for="room_id">绑定房间（可选）</label>
+    <select id="room_id" name="room_id" aria-describedby="room-binding-hint">
+      <option value="">暂不绑定房间</option>
+      {{range .Rooms}}<option value="{{.ID}}" data-room-rent="{{.MonthlyRentValue}}" data-room-currency="{{.Currency}}"{{if eq $.Form.RoomID .ID}} selected{{end}}>{{.PropertyName}} · {{.RoomLabel}}{{if .MonthlyRentValue}} · {{.MonthlyRentValue}} {{.Currency}}{{end}}</option>{{end}}
+    </select>
+    <span id="room-binding-hint" class="tiny">选择房间会带出该房间当前月租，可继续手动编辑金额。</span>
+    <input id="tenant-structured" type="hidden" name="structured" value="{{if .Form.RoomID}}1{{end}}">
+    <input type="hidden" name="arrangement_start_month" value="{{.Form.RentStartDate}}">
+    <input type="hidden" name="interval_unit" value="month">
+    <input type="hidden" name="interval_count" value="1">
+    <label for="billing_start_date">计费开始日期</label>
+    <input id="billing_start_date" name="billing_start_date" type="date" value="{{.Form.BillingStartDate}}"><span class="tiny">留空则使用租期开始日期；如需延后，请填写租期内日期。</span>
+    <label for="due_day">每月应缴日</label>
+    <input id="due_day" name="due_day" type="number" min="1" max="31" value="{{.Form.DueDay}}" required>
+    <label for="rent_start_date">租期开始日期</label>
+    <input id="rent_start_date" name="rent_start_date" type="date" value="{{.Form.RentStartDate}}" required>
+    <label for="rent_end_date">租期结束日期</label>
+    <input id="rent_end_date" name="rent_end_date" type="date" value="{{.Form.RentEndDate}}">
+    <label for="status">状态</label>
+    <select id="status" name="status"><option value="active" {{if eq .Form.Status "active"}}selected{{end}}>有效</option><option value="inactive" {{if eq .Form.Status "inactive"}}selected{{end}}>停用</option></select>
+    <label for="room_label">房间名称</label>
+    <input id="room_label" name="room_label" value="{{.Form.RoomLabel}}">
+    <label for="room_address">房间地址</label>
+    <textarea id="room_address" name="room_address" rows="4" required>{{.Form.RoomAddress}}</textarea>
+    <label for="property_hint">房产备注</label>
+    <input id="property_hint" name="property_hint" value="{{.Form.PropertyHint}}">
+    <div class="drawer-actions"><a class="btn subtle" href="{{.ReturnURL}}">取消</a><button class="btn primary" type="submit">{{if .Editing}}保存更改{{else}}保存租客{{end}}</button></div>
+  </form>
+</section></div>
+{{end}}
+<script>
+(() => {
+  const roomSelect = document.getElementById("room_id");
+  const rentInput = document.getElementById("monthly_rent");
+  const currencyInput = document.getElementById("currency");
+  const structuredInput = document.getElementById("tenant-structured");
+  roomSelect?.addEventListener("change", () => {
+    const option = roomSelect.options[roomSelect.selectedIndex];
+    const rent = option?.dataset.roomRent || "";
+    if (rent && rentInput) rentInput.value = rent;
+    if (option?.dataset.roomCurrency && currencyInput) currencyInput.value = option.dataset.roomCurrency;
+    if (structuredInput) structuredInput.value = roomSelect.value ? "1" : "";
+  });
+})();
+</script>
+{{end}}

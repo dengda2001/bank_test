@@ -154,10 +154,15 @@ func TestTransactionDetailHeaderActionsReuseListRowEndpoints(t *testing.T) {
 		CandidateTenantName:       "C. CHEN",
 		CandidatePeriod:           "2026-09",
 		CandidateRentObligationID: 77,
+		RematchTenantOptions:      []billingTenantOption{{ID: 9, Name: "C. CHEN"}},
+		ManualMatchOptions:        []billingRentMatchOption{{TenantID: 9, TenantName: "C. CHEN", Period: "2026-09", PeriodLabel: "2026年9月", Remaining: "EUR 640.00"}},
 	})
 	for _, marker := range []string{
 		`action="/transactions/confirm"`,
-		`name="rent_obligation_id" value="77"`,
+		`name="tenant_id"`,
+		`name="period"`,
+		`data-tenant="9"`,
+		"C. CHEN",
 		`action="/transactions/ignore"`,
 		`name="return_to" value="/transactions?page=2"`,
 	} {

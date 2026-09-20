@@ -124,7 +124,7 @@ func cloneQueryValues(query url.Values) url.Values {
 func (a *app) renderTransactionDetail(w http.ResponseWriter, r *http.Request, key string) {
 	filters := filtersFromQuery(r.URL.Query())
 	if err := validateTransactionFilters(filters); err != nil {
-		filters = transactionFilters{Page: 1, PageSize: 50}
+		filters = transactionFilters{Page: 1, PageSize: 10}
 	}
 
 	var data transactionDetailPageData
@@ -210,6 +210,10 @@ func (a *app) transactionDetailPageData(ctx context.Context, r *http.Request, us
 		tenantByID[tenantRow.ID] = tenantRow
 	}
 	decorateTransactionPageRow(&row, source, allocations, obligations, tenants, tenantByID, nameByTenant, payers)
+	row.Deferred, err = transactionDeferredState(ctx, a.db, userID, source.ID)
+	if err != nil {
+		return transactionDetailPageData{}, err
+	}
 	obligationByID := make(map[uint64]rentObligation, len(obligations))
 	for _, obligation := range obligations {
 		obligationByID[obligation.ID] = obligation
@@ -468,6 +472,8 @@ func transactionActionLabel(action string) string {
 	return firstNonEmpty(map[string]string{
 		transactionActionIgnore:            "标记为非租金流水",
 		transactionActionRestore:           "恢复流水处理",
+		transactionActionDefer:             "从首页待处理队列暂缓",
+		transactionActionUndefer:           "重新加入首页待处理队列",
 		transactionActionRevokeAllocations: "撤销原有分配",
 	}[action], "记录流水操作")
 }

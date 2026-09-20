@@ -22,10 +22,10 @@
             <div class="identity-meta"><span>{{.Property.CityRegion}}</span><span>{{.Property.RoomCount}} 个房间</span><span>{{.Property.ResponsibilityCount}} 条责任记录</span><span class="detail-status {{.Property.CollectionStatus}}">{{if .Property.CollectionStatusLabel}}{{.Property.CollectionStatusLabel}}{{else}}{{.Property.StatusLabel}}{{end}}</span></div>
           </div>
         </div>
-        <div class="actions"><a class="btn" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}&amp;edit=1">编辑房产</a><a class="btn" href="/expenses?period={{.Period}}&amp;property_id={{.Property.ID}}&amp;add=1">新增支出</a><a class="btn primary" href="/dunning?period={{.Period}}">提醒未收租客</a></div>
+        <div class="actions"><a class="btn" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}&amp;edit=1">编辑房产</a><a class="btn" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}&amp;expense=1">新增支出</a><a class="btn primary" href="/dunning?period={{.Period}}">提醒未收租客</a></div>
       </header>
 
-      {{if .Message}}<div class="notice ok" data-toast>资料已保存。</div>{{end}}
+      {{if eq .Message "expense_added"}}<div class="notice ok" data-toast>支出记录已保存。</div>{{else if .Message}}<div class="notice ok" data-toast>资料已保存。</div>{{end}}
       {{if .Error}}<div class="notice error">{{.Error}}</div>{{end}}
       {{if .Editing}}
       <div class="entity-drawer-backdrop">
@@ -44,6 +44,7 @@
         </section>
       </div>
       {{end}}
+      {{if .ExpenseDrawer}}{{template "expense-form-drawer" .ExpenseDrawer}}{{end}}
 
       <section class="property-metrics" aria-label="房产月度汇总">
         <article class="panel metric metric-primary"><div class="label">本月应收</div><strong>{{.Property.ExpectedAmount}}</strong><span>{{.Property.RoomCount}} 间房 · {{.Property.ActiveRoomCount}} 间有效</span></article>
@@ -93,7 +94,7 @@
           <section class="panel surface property-mobile-recent"><div class="panel-head"><h2>最近记录</h2></div>{{if .Expenses}}<div class="attention-list">{{range .Expenses}}<div class="property-room-prototype-row"><span><strong>{{.Description}}</strong><small>{{.DateDisplay}} · {{.Category}}</small></span><strong class="amount">{{.AmountDisplay}}</strong></div>{{end}}</div>{{else}}<div class="workspace-empty">暂无近期记录。</div>{{end}}</section>
         </aside>
       </div>
-      <div class="property-detail-mobile-actions"><a class="btn subtle" href="/properties?period={{.Period}}&amp;status={{.ListStatus}}&amp;search={{.ListSearch}}&amp;collection={{.ListCollection}}">返回列表</a><a class="btn primary" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}&amp;edit=1">编辑资料</a></div>
+      <div class="property-detail-mobile-actions"><a class="btn subtle" href="/properties?period={{.Period}}&amp;status={{.ListStatus}}&amp;search={{.ListSearch}}&amp;collection={{.ListCollection}}">返回列表</a><a class="btn primary" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}&amp;edit=1">编辑资料</a><a class="btn" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}&amp;expense=1">新增支出</a></div>
     </main>
   </div>
 </body>

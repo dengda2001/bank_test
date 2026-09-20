@@ -35,6 +35,7 @@
                 <p class="tiny">修改这笔流水关联的租客与租金月份。</p>
                 <form method="post" action="{{.ActionBase}}/rematch">
                   <input type="hidden" name="transaction_id" value="{{.Transaction.ID}}">
+                  <input type="hidden" name="remember_payer" value="0">
                   <input type="hidden" name="return_to" value="{{.BackURL}}">
                   <select name="tenant_id" aria-label="修改匹配租客" required><option value="">选择租客...</option>{{range .Transaction.RematchTenantOptions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
                   <select name="period" aria-label="修改租金月份" required><option value="">选择租金月份...</option>{{range .Transaction.RematchMonthOptions}}<option value="{{.Period}}">{{.Label}} · 未收 {{.Remaining}}</option>{{end}}</select>
@@ -51,7 +52,13 @@
             <summary class="btn">标记非租金</summary>
             <div class="transaction-head-action-body">
               {{if eq .Transaction.MatchStatus "ignored"}}
-                <p class="tiny">该流水已标记为非租金，可在流水列表恢复处理。</p>
+                <p class="tiny">该流水暂不进入待处理队列；恢复后可以继续匹配。</p>
+                <form method="post" action="{{.ActionBase}}/restore">
+                  <input type="hidden" name="transaction_id" value="{{.Transaction.ID}}">
+                  <input type="hidden" name="reason" value="恢复处理">
+                  <input type="hidden" name="return_to" value="{{.BackURL}}">
+                  <button class="btn primary" type="submit">恢复处理</button>
+                </form>
               {{else if and (eq .Transaction.Direction "income") (not (or (eq .Transaction.MatchStatus "matched") (eq .Transaction.MatchStatus "partial")))}}
                 <p class="tiny">标记后不再进入匹配建议，原始流水保持不变。</p>
                 <form method="post" action="{{.ActionBase}}/ignore">
@@ -68,31 +75,13 @@
           <details class="transaction-head-action">
             <summary class="btn primary">确认匹配</summary>
             <div class="transaction-head-action-body">
-              {{if .Transaction.CanConfirm}}
-                <p class="tiny">建议：{{.Transaction.CandidateTenantName}} · 租金月 {{.Transaction.CandidatePeriod}}</p>
-                <form method="post" action="{{.ActionBase}}/confirm">
-                  <input type="hidden" name="transaction_id" value="{{.Transaction.ID}}">
-                  <input type="hidden" name="rent_obligation_id" value="{{.Transaction.CandidateRentObligationID}}">
-                  <input type="hidden" name="return_to" value="{{.BackURL}}">
-                  <label class="tiny"><input type="checkbox" name="remember_payer" value="1" checked> 记住此付款人</label>
-                  <button class="btn primary" type="submit">确认匹配</button>
-                </form>
-              {{else if .Transaction.NeedsMonthChoice}}
-                <p class="tiny">已识别租客，请确认租金月份。</p>
-                <form method="post" action="{{.ActionBase}}/confirm">
-                  <input type="hidden" name="transaction_id" value="{{.Transaction.ID}}">
-                  <input type="hidden" name="tenant_id" value="{{.Transaction.TenantID}}">
-                  <input type="hidden" name="return_to" value="{{.BackURL}}">
-                  <select name="period" aria-label="选择租金月份" required><option value="">选择月份...</option>{{range .Transaction.MonthOptions}}<option value="{{.Period}}">{{.Label}} · 应收 {{.Expected}} · 已收 {{.Paid}} · 未收 {{.Remaining}}</option>{{end}}</select>
-                  <label class="tiny"><input type="checkbox" name="remember_payer" value="1" checked> 记住此付款人</label>
-                  <button class="btn primary" type="submit">确认匹配</button>
-                </form>
-              {{else if .Transaction.ManualMatchOptions}}
-                <p class="tiny">选择要核销的租客与租金月份。</p>
-                <form method="post" action="{{.ActionBase}}/confirm">
+              {{if or .Transaction.CanConfirm .Transaction.NeedsMonthChoice .Transaction.ManualMatchOptions}}
+                <p class="tiny">{{if .Transaction.CandidateTenantName}}建议：{{.Transaction.CandidateTenantName}} · {{.Transaction.CandidatePeriod}}{{else}}分别选择要匹配的租客和月份。{{end}}</p>
+                <form method="post" action="{{.ActionBase}}/confirm" data-tenant-period-match>
                   <input type="hidden" name="transaction_id" value="{{.Transaction.ID}}">
                   <input type="hidden" name="return_to" value="{{.BackURL}}">
-                  <select name="rent_obligation_id" aria-label="选择匹配租客和租金月份" required><option value="">选择租客和租金月...</option>{{range .Transaction.ManualMatchOptions}}<option value="{{.RentObligationID}}">{{.Label}}</option>{{end}}</select>
+                  <select name="tenant_id" aria-label="选择匹配租客" required><option value="">选择租客...</option>{{range .Transaction.ManualMatchTenantOptions}}<option value="{{.ID}}"{{if eq .ID $.Transaction.CandidateTenantID}} selected{{end}}>{{.Name}}</option>{{end}}</select>
+                  <select name="period" aria-label="选择租金月份" required><option value="">选择租金月份...</option>{{range .Transaction.ManualMatchOptions}}<option value="{{.Period}}" data-tenant="{{.TenantID}}"{{if and (eq .TenantID $.Transaction.CandidateTenantID) (eq .Period $.Transaction.CandidatePeriod)}} selected{{end}}>{{.PeriodLabel}} · {{.TenantName}} · 未收 {{.Remaining}}</option>{{end}}</select>
                   <label class="tiny"><input type="checkbox" name="remember_payer" value="1" checked> 记住付款人</label>
                   <button class="btn primary" type="submit">确认匹配</button>
                 </form>
@@ -133,7 +122,7 @@
             <div class="panel-head">
               <div>
                 <h2 id="transaction-suggestion-title">匹配建议</h2>
-                <p class="tiny">核对付款人与对应的租金责任后，再从流水列表确认。</p>
+                <p class="tiny">核对付款人与对应的租金责任后，可在右侧直接匹配。</p>
               </div>
               {{if .Suggestion.Status}}<span class="status {{if .Suggestion.Available}}candidate{{else}}needs_review{{end}}">{{.Suggestion.Status}}</span>{{end}}
             </div>
@@ -220,6 +209,31 @@
         </div>
 
         <aside class="transaction-detail-stack">
+          {{if .Transaction.Deferred}}
+          <section class="panel transaction-quick-match" aria-label="首页队列状态">
+            <div class="panel-head"><div><h2>已暂不处理</h2><p class="tiny">这笔流水已从首页队列移出，仍可在此匹配。</p></div></div>
+            <form method="post" action="{{.ActionBase}}/undefer">
+              <input type="hidden" name="transaction_id" value="{{.Transaction.ID}}">
+              <input type="hidden" name="reason" value="重新加入首页队列">
+              <input type="hidden" name="return_to" value="{{.BackURL}}">
+              <button class="btn subtle" type="submit">重新加入首页队列</button>
+            </form>
+          </section>
+          {{end}}
+          {{if or .Transaction.CanConfirm .Transaction.NeedsMonthChoice .Transaction.ManualMatchOptions}}
+          <section class="panel transaction-quick-match" aria-label="快速匹配">
+            <div class="panel-head"><div><h2>匹配流水</h2><p class="tiny">付款人：{{.Transaction.PayerName}}</p></div></div>
+            <form method="post" action="{{.ActionBase}}/confirm" data-tenant-period-match>
+              <input type="hidden" name="transaction_id" value="{{.Transaction.ID}}">
+              <input type="hidden" name="remember_payer" value="0">
+              <input type="hidden" name="return_to" value="{{.BackURL}}">
+              <select name="tenant_id" aria-label="选择匹配租客" required><option value="">选择租客...</option>{{range .Transaction.ManualMatchTenantOptions}}<option value="{{.ID}}"{{if eq .ID $.Transaction.CandidateTenantID}} selected{{end}}>{{.Name}}</option>{{end}}</select>
+              <select name="period" aria-label="选择租金月份" required><option value="">选择租金月份...</option>{{range .Transaction.ManualMatchOptions}}<option value="{{.Period}}" data-tenant="{{.TenantID}}"{{if and (eq .TenantID $.Transaction.CandidateTenantID) (eq .Period $.Transaction.CandidatePeriod)}} selected{{end}}>{{.PeriodLabel}} · {{.TenantName}} · 未收 {{.Remaining}}</option>{{end}}</select>
+              <label class="tiny"><input type="checkbox" name="remember_payer" value="1" checked> 记住付款人</label>
+              <button class="btn primary" type="submit">确认匹配</button>
+            </form>
+          </section>
+          {{end}}
           <section class="panel" aria-labelledby="transaction-source-title">
             <div class="panel-head"><h2 id="transaction-source-title">原始流水</h2></div>
             <dl class="transaction-facts">
@@ -249,5 +263,29 @@
       </div>
     </main>
   </div>
+  <script>
+    (() => {
+      document.querySelectorAll("[data-tenant-period-match]").forEach((form) => {
+        const tenant = form.querySelector('select[name="tenant_id"]');
+        const period = form.querySelector('select[name="period"]');
+        if (!tenant || !period) return;
+        const filterPeriods = () => {
+          const selectedTenant = tenant.value;
+          let selectedStillAvailable = false;
+          Array.from(period.options).forEach((option) => {
+            if (!option.value) return;
+            const visible = !selectedTenant || option.dataset.tenant === selectedTenant;
+            option.hidden = !visible;
+            option.disabled = !visible;
+            if (visible && option.selected) selectedStillAvailable = true;
+          });
+          if (!selectedStillAvailable) period.value = "";
+          period.dispatchEvent(new Event("change", {bubbles: true}));
+        };
+        tenant.addEventListener("change", filterPeriods);
+        filterPeriods();
+      });
+    })();
+  </script>
 </body>
 </html>

@@ -14,6 +14,8 @@ import (
 const (
 	transactionActionIgnore            = "ignore"
 	transactionActionRestore           = "restore"
+	transactionActionDefer             = "defer"
+	transactionActionUndefer           = "undefer"
 	transactionActionRevokeAllocations = "revoke_allocations"
 )
 
@@ -160,6 +162,73 @@ func (s *transactionService) ignoreTransaction(ctx context.Context, userID, tran
 		}
 		projection := projectTransactionMatch(source, allocations, transactionActionIgnore, reason)
 		return updateTransactionProjection(txdb, userID, transactionID, projection)
+	})
+}
+
+func (s *transactionService) deferTransaction(ctx context.Context, userID, transactionID uint64, reason string) error {
+	return s.setTransactionDeferred(ctx, userID, transactionID, reason, true)
+}
+
+func (s *transactionService) undeferTransaction(ctx context.Context, userID, transactionID uint64, reason string) error {
+	return s.setTransactionDeferred(ctx, userID, transactionID, reason, false)
+}
+
+func transactionDeferredState(ctx context.Context, db *gorm.DB, userID, transactionID uint64) (bool, error) {
+	var latest paymentTransactionAction
+	err := db.WithContext(ctx).
+		Where("user_id = ? AND payment_transaction_id = ? AND action_kind IN ?", userID, transactionID, []string{transactionActionDefer, transactionActionUndefer}).
+		Order("id DESC").First(&latest).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return latest.ActionKind == transactionActionDefer, nil
+}
+
+func (s *transactionService) clearTransactionDeferral(txdb *gorm.DB, userID, transactionID uint64, now time.Time) error {
+	var latest paymentTransactionAction
+	err := txdb.Where("user_id = ? AND payment_transaction_id = ? AND action_kind IN ?", userID, transactionID, []string{transactionActionDefer, transactionActionUndefer}).Order("id DESC").First(&latest).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) || (err == nil && latest.ActionKind == transactionActionUndefer) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return s.writeTransactionAction(txdb, userID, transactionID, transactionActionUndefer, "已匹配，恢复待处理状态", "", "", now)
+}
+
+func (s *transactionService) setTransactionDeferred(ctx context.Context, userID, transactionID uint64, reason string, deferred bool) error {
+	if userID == 0 || transactionID == 0 {
+		return errors.New("userID and transactionID are required")
+	}
+	reason, err := normalizeTransactionActionReason(reason)
+	if err != nil {
+		return err
+	}
+	actionKind := transactionActionUndefer
+	if deferred {
+		actionKind = transactionActionDefer
+	}
+	return s.db.WithContext(ctx).Transaction(func(txdb *gorm.DB) error {
+		var source paymentTransaction
+		if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", transactionID, userID).First(&source).Error; err != nil {
+			return err
+		}
+		if source.Direction != "income" || !isPendingMatchStatus(source.MatchStatus) {
+			return errors.New("only pending income transactions can be deferred")
+		}
+		var latest paymentTransactionAction
+		err := txdb.Where("user_id = ? AND payment_transaction_id = ? AND action_kind IN ?", userID, transactionID, []string{transactionActionDefer, transactionActionUndefer}).Order("id DESC").First(&latest).Error
+		currentlyDeferred := err == nil && latest.ActionKind == transactionActionDefer
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		if currentlyDeferred == deferred {
+			return nil
+		}
+		return s.writeTransactionAction(txdb, userID, transactionID, actionKind, reason, "", "", time.Now().UTC())
 	})
 }
 

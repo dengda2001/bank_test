@@ -263,6 +263,9 @@ func (s *transactionService) allocateTransactionInTx(txdb *gorm.DB, userID, tran
 	if err := updateTransactionProjection(txdb, userID, transactionID, projection); err != nil {
 		return transactionAllocationSummary{}, err
 	}
+	if err := s.clearTransactionDeferral(txdb, userID, transactionID, now); err != nil {
+		return transactionAllocationSummary{}, err
+	}
 	return summary, nil
 }
 
