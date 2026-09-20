@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 28
-- **Last Active**: 2026-09-20
+- **Total Sessions**: 29
+- **Last Active**: 2026-09-21
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1051 | Active |
+| `journal-1.md` | ~1084 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 29 | 2026-09-21 | 精简流水与主页的状态控件与用词 | `6a9b9a9` | `main` |
 | 28 | 2026-09-20 | 工作台交互与控件改造 | `24d218f` | `fix/workspace-quick-fixes` |
 | 27 | 2026-09-20 | 09-20 移动端筛选开关与重复错误提示修复 | `cb15952`, `0ccf7bf`, `ce1dfeb`, `33758ef`, `ef3924d` | `main` |
 | 26 | 2026-09-19 | 删除无库降级 dashboard 模板（死代码收敛） | `c3c6ecb`, `95ba6e7` | `main` |

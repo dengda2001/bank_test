@@ -1049,3 +1049,36 @@ Seeded the local rentops database from the Rosewood rent ledger (4 properties / 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 29: 精简流水与主页的状态控件与用词
+
+**Date**: 2026-09-21
+**Task**: 精简流水与主页的状态控件与用词
+**Branch**: `main`
+
+### Summary
+
+流水页删掉重复的状态筛选下拉（快捷筛选那份从来没有「已忽略」，漂移成筛不出已忽略的流水），页签「已匹配」改「已关联」，下拉标签「匹配状态」改「关联状态」。主页状态下拉三处文案对齐行内徽章（逾期→已逾期、已交满→已缴清、未到期未缴→未缴），成功提示「流水已匹配」改「流水已关联」。动词「匹配」不动。测试：原断言要求「两个下拉都存在」，正是它默许了漂移，改写为「不再有重复控件」；新增两条防回潮断言，期望文案取自 workspaceStatusLabel 而非抄字面量，并各做反向对照验证。新增 .trellis/spec/frontend/status-vocabulary.md 记录「一个存储值一个词一个控件」与已知残留。验证：失败 9 条与 git stash 后基线逐条相同，0 回归。纠正：先前报的「基线 3 条」是错的，真值 9 条——go test 接管道既截断输出又让退出码恒为 0。未做视觉走查。两处发现未改并记入 Out of scope：transactionMatchStatusLabel 第三套词、transaction_actions.go 把状态散文写进数据库审计留痕。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6a9b9a9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
