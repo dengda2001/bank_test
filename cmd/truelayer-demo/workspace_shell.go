@@ -92,6 +92,8 @@ var workspaceBase = template.Must(template.New("workspace").ParseFS(webFiles,
 	"web/templates/partials/collection-settle-form.html",
 	"web/templates/partials/tenant-form-drawer.html",
 	"web/templates/partials/expense-form-drawer.html",
+	"web/templates/partials/cash-receipt-drawer.html",
+	"web/templates/partials/room-create-drawer.html",
 ))
 
 // newWorkspacePageTemplate parses a page body into a clone of workspaceBase, so
@@ -123,6 +125,13 @@ func withWorkspaceControlAssets(body string) string {
 	if headEnd < 0 {
 		return body
 	}
-	assets := `<link rel="stylesheet" href="/static/css/calendar.css"><link rel="stylesheet" href="/static/css/workspace-controls.css"><script src="/static/js/calendar.js" defer></script><script src="/static/js/workspace-controls.js" defer></script>`
+	assets := `<link rel="stylesheet" href="/static/css/calendar.css"><link rel="stylesheet" href="/static/css/workspace-controls.css">`
+	if !strings.Contains(body, `href="/static/css/pages/entity-drawers.css"`) {
+		assets += `<link rel="stylesheet" href="/static/css/pages/entity-drawers.css">`
+	}
+	if !strings.Contains(body, `href="/static/css/pages/cash-receipts.css"`) {
+		assets += `<link rel="stylesheet" href="/static/css/pages/cash-receipts.css">`
+	}
+	assets += `<script src="/static/js/calendar.js" defer></script><script src="/static/js/workspace-controls.js" defer></script>`
 	return body[:headEnd] + assets + body[headEnd:]
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"html/template"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -91,6 +92,8 @@ type propertyDetailPageData struct {
 	Rooms          []roomPageRow
 	Expenses       []expenseRecord
 	ExpenseDrawer  *expenseDrawerData
+	RoomDrawer     *roomCreateDrawerData
+	RoomOpenURL    string
 	Editing        bool
 	Error          string
 	Message        string
@@ -140,6 +143,25 @@ type roomPageData struct {
 	StatusFilter     string
 	CollectionFilter string
 	Search           string
+	Drawer           *roomCreateDrawerData
+}
+
+type roomCreateDrawerData struct {
+	Period               string
+	StatusFilter         string
+	CollectionFilter     string
+	Search               string
+	PropertyID           uint64
+	Properties           []propertyPageRow
+	Form                 roomPageForm
+	ReturnURL            string
+	ReturnContext        string
+	ReturnPropertyID     uint64
+	ReturnPeriod         string
+	ReturnListStatus     string
+	ReturnListSearch     string
+	ReturnListCollection string
+	ErrorMessage         string
 }
 
 type pagePeriodOption struct {
@@ -249,6 +271,7 @@ type cashReceiptPageData struct {
 	Search       string
 	ShowForm     bool
 	Form         cashReceiptFormData
+	Drawer       *cashReceiptDrawerData
 	Message      string
 	Error        string
 }
@@ -804,6 +827,18 @@ func (a *app) handlePropertyDetail(w http.ResponseWriter, r *http.Request, prope
 		listCollection = "all"
 	}
 	data := propertyDetailPageData{workspaceShell: canonicalPageShell(a, r, "properties", "房产详情"), Period: period.Format("2006-01"), PeriodLabel: formatMonthLabel(period), ListStatus: listStatus, ListSearch: strings.TrimSpace(r.URL.Query().Get("list_search")), ListCollection: listCollection, Property: propertyPageRow{ID: propertyRow.ID, Mark: propertyMark(propertyRow.Name), Name: propertyRow.Name, CityRegion: propertyRow.CityRegion, Address: propertyAddress(propertyRow), Timezone: propertyRow.Timezone, Notes: stringValue(propertyRow.Notes), Status: propertyRow.Status, StatusLabel: pageStatusLabel(propertyRow.Status), Actions: propertyActions(propertyRow.ID, propertyRow.Status == "active")}, Rooms: rooms, Expenses: filteredExpenses, Editing: r.URL.Query().Get("edit") == "1", Message: r.URL.Query().Get("message"), Error: r.URL.Query().Get("error")}
+	data.RoomOpenURL = propertyRoomOpenURL(r)
+	if r.URL.Query().Get("room") == "1" || r.URL.Query().Get("room_error") != "" {
+		returnURL := propertyDetailReturnURL(r)
+		form := roomPageForm{PropertyID: propertyID, Capacity: 1, DueDay: 1, ActiveFrom: period.Format("2006-01")}
+		data.RoomDrawer = &roomCreateDrawerData{
+			Period: period.Format("2006-01"), StatusFilter: "all", CollectionFilter: "all", PropertyID: propertyID,
+			Properties: []propertyPageRow{{ID: propertyRow.ID, Name: propertyRow.Name}}, Form: form, ReturnURL: returnURL,
+			ReturnContext: "property", ReturnPropertyID: propertyID, ReturnPeriod: period.Format("2006-01"),
+			ReturnListStatus: listStatus, ReturnListSearch: strings.TrimSpace(r.URL.Query().Get("list_search")), ReturnListCollection: listCollection,
+			ErrorMessage: roomMutationErrorMessage(r.URL.Query().Get("room_error")),
+		}
+	}
 	if r.URL.Query().Get("expense") == "1" || isExpenseFormError(r.URL.Query().Get("error")) {
 		returnURL := expenseFormReturnURL(r)
 		expenseDrawer, drawerErr := a.loadExpenseDrawerData(r.Context(), userID, period.Format("2006-01"), propertyID, 0, returnURL, r.URL.Query().Get("error"))
@@ -832,6 +867,26 @@ func (a *app) handlePropertyDetail(w http.ResponseWriter, r *http.Request, prope
 	if err := propertyDetailPageTemplate.Execute(w, data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func propertyDetailReturnURL(r *http.Request) string {
+	query := cloneQueryValues(r.URL.Query())
+	for _, key := range []string{"edit", "expense", "room", "room_error", "message", "error", "cash"} {
+		query.Del(key)
+	}
+	return r.URL.Path + cashReceiptEncodedQuery(query)
+}
+
+func propertyRoomOpenURL(r *http.Request) string {
+	base := propertyDetailReturnURL(r)
+	target, err := url.ParseRequestURI(base)
+	if err != nil {
+		return base
+	}
+	query := target.Query()
+	query.Set("room", "1")
+	target.RawQuery = query.Encode()
+	return target.RequestURI()
 }
 
 func (a *app) handlePropertyMutation(w http.ResponseWriter, r *http.Request, propertyID uint64) {
@@ -1155,6 +1210,10 @@ func (a *app) handleRooms(w http.ResponseWriter, r *http.Request) {
 		propertyOptions = append(propertyOptions, propertyPageRow{ID: row.ID, Name: row.Name, CityRegion: row.CityRegion, Address: propertyAddress(row), Timezone: row.Timezone, Notes: stringValue(row.Notes), Status: row.Status, StatusLabel: pageStatusLabel(row.Status)})
 	}
 	data := roomPageData{workspaceShell: canonicalPageShell(a, r, "rooms", "房间与房产绑定"), Period: period.Format("2006-01"), PeriodLabel: formatMonthLabel(period), PeriodOptions: pagePeriodOptions(period), Rows: rows, Properties: propertyRows, PropertyOptions: propertyOptions, PropertyID: propertyID, StatusFilter: statusFilter, CollectionFilter: collectionFilter, Search: search, ShowForm: r.URL.Query().Get("add") == "1", Form: roomPageForm{PropertyID: propertyID, Capacity: 1, DueDay: 1, ActiveFrom: period.Format("2006-01")}, Message: r.URL.Query().Get("message"), Error: r.URL.Query().Get("error")}
+	if data.ShowForm {
+		returnURL := roomListURL(data.Period, propertyID, statusFilter, search, collectionFilter)
+		data.Drawer = &roomCreateDrawerData{Period: data.Period, StatusFilter: statusFilter, CollectionFilter: collectionFilter, Search: search, PropertyID: propertyID, Properties: propertyRows, Form: data.Form, ReturnURL: returnURL, ErrorMessage: roomMutationErrorMessage(data.Error)}
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := roomPageTemplate.Execute(w, data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1178,6 +1237,33 @@ func (a *app) handleRoomMutation(w http.ResponseWriter, r *http.Request, pathID 
 		http.Redirect(w, r, "/rooms?error=invalid_form", http.StatusFound)
 		return
 	}
+	returnPropertyID := uint64(0)
+	if r.Form.Get("return_context") == "property" {
+		var parseReturnErr error
+		returnPropertyID, parseReturnErr = parsePositiveUint(r.Form.Get("return_property_id"))
+		if parseReturnErr != nil {
+			http.Error(w, "room return property is invalid", http.StatusBadRequest)
+			return
+		}
+		if _, err := newLandlordRentRepository(a.db).findProperty(r.Context(), userID, returnPropertyID); errors.Is(err, gorm.ErrRecordNotFound) {
+			http.NotFound(w, r)
+			return
+		} else if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	redirectPropertyRoom := func(message, errorCode string, open bool) bool {
+		if returnPropertyID == 0 {
+			return false
+		}
+		target, valid := roomPropertyReturnURL(r.Form, message, errorCode, open)
+		if !valid {
+			return false
+		}
+		http.Redirect(w, r, target, http.StatusFound)
+		return true
+	}
 	roomID := uint64(0)
 	if pathID != "" {
 		parsedRoomID, err := parsePositiveUint(pathID)
@@ -1199,6 +1285,8 @@ func (a *app) handleRoomMutation(w http.ResponseWriter, r *http.Request, pathID 
 	if parseErr != nil && action != "deactivate" {
 		if roomID != 0 {
 			redirectRoomEdit(w, r, roomID, "room_action_failed")
+		} else if redirectPropertyRoom("", "room_action_failed", true) {
+			return
 		} else {
 			redirectRoomList(w, r, "", "room_action_failed", true)
 		}
@@ -1257,6 +1345,8 @@ func (a *app) handleRoomMutation(w http.ResponseWriter, r *http.Request, pathID 
 		}
 		if roomID != 0 {
 			redirectRoomEdit(w, r, roomID, errorCode)
+		} else if redirectPropertyRoom("", errorCode, true) {
+			return
 		} else {
 			redirectRoomList(w, r, "", errorCode, true)
 		}
@@ -1271,7 +1361,41 @@ func (a *app) handleRoomMutation(w http.ResponseWriter, r *http.Request, pathID 
 		http.Redirect(w, r, "/rooms/"+strconv.FormatUint(roomID, 10)+"?"+query.Encode(), http.StatusFound)
 		return
 	}
+	if redirectPropertyRoom("room_saved", "", false) {
+		return
+	}
 	redirectRoomList(w, r, "room_saved", "", false)
+}
+
+func roomPropertyReturnURL(values url.Values, message, errorCode string, open bool) (string, bool) {
+	propertyID, err := parsePositiveUint(values.Get("return_property_id"))
+	if err != nil || propertyID == 0 {
+		return "", false
+	}
+	period := validatedPeriodValue(values.Get("return_period"))
+	query := url.Values{"period": []string{period}}
+	status := strings.TrimSpace(values.Get("return_list_status"))
+	if status != "active" && status != "inactive" {
+		status = "all"
+	}
+	query.Set("list_status", status)
+	if search := strings.TrimSpace(values.Get("return_list_search")); search != "" {
+		query.Set("list_search", search)
+	}
+	collection := strings.TrimSpace(values.Get("return_list_collection"))
+	if collection == "unpaid" || collection == "paid" {
+		query.Set("list_collection", collection)
+	}
+	if open {
+		query.Set("room", "1")
+	}
+	if errorCode != "" {
+		query.Set("room_error", errorCode)
+	}
+	if message != "" {
+		query.Set("message", message)
+	}
+	return "/properties/" + strconv.FormatUint(propertyID, 10) + "?" + query.Encode(), true
 }
 
 func parseOptionalRoomRentCents(raw string) (int64, error) {
@@ -1512,7 +1636,15 @@ var propertyPageTemplate = newEmbeddedWorkspacePageTemplate("properties-page", n
 
 var propertyDetailPageTemplate = newEmbeddedWorkspacePageTemplate("property-detail-page", nil, "web/templates/pages/property-detail.html")
 
-var roomPageTemplate = newEmbeddedWorkspacePageTemplate("rooms-page", nil, "web/templates/pages/rooms.html")
+var roomPageTemplate = newEmbeddedWorkspacePageTemplate("rooms-page", template.FuncMap{"roomPageDrawer": roomPageDrawer}, "web/templates/pages/rooms.html")
+
+func roomPageDrawer(data roomPageData) *roomCreateDrawerData {
+	if data.Drawer != nil {
+		return data.Drawer
+	}
+	returnURL := roomListURL(data.Period, data.PropertyID, data.StatusFilter, data.Search, data.CollectionFilter)
+	return &roomCreateDrawerData{Period: data.Period, StatusFilter: data.StatusFilter, CollectionFilter: data.CollectionFilter, Search: data.Search, PropertyID: data.PropertyID, Properties: data.Properties, Form: data.Form, ReturnURL: returnURL, ErrorMessage: roomMutationErrorMessage(data.Error)}
+}
 
 var roomEditPageTemplate = newWorkspacePageTemplate("room-edit-page", nil, `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RentOps Room Edit</title><style>`+workspacePageCSS+`</style></head><body><div class="app">{{template "workspace-nav" .}}<main class="content"><header class="topbar"><div><div class="brand-title">资产管理</div><h1>编辑房间</h1><div class="tiny">更新房产绑定与生效月份</div></div><a class="btn" href="/rooms">返回房间</a></header>{{if .Error}}<div class="notice error">{{.Error}}</div>{{end}}<section class="panel surface entity-form" aria-labelledby="room-form-title"><div class="panel-head"><div><h2 id="room-form-title">房间资料</h2><p class="tiny">房间必须绑定一个有效房产。</p></div></div><form method="post" action="/rooms/{{.Form.ID}}"><input type="hidden" name="action" value="save"><div class="form-grid"><div class="form-field"><label for="room-label">房间名称</label><input id="room-label" name="room_label" value="{{.Form.RoomLabel}}" maxlength="191" required></div><div class="form-field"><label for="room-property">所属房产</label><select id="room-property" name="property_id" required><option value="">请选择房产</option>{{range .Properties}}<option value="{{.ID}}"{{if eq $.Form.PropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></div><div class="form-field"><label for="room-active-from">生效月份</label><input id="room-active-from" name="active_from" type="month" value="{{.Form.ActiveFrom}}" required></div></div><div class="drawer-actions"><button class="btn primary" type="submit">保存房间</button></div></form></section></main></div></body></html>`)
 

@@ -15,7 +15,7 @@
       <div><div class="eyebrow workspace-title-eyebrow">RENTOPS · MONTHLY WORKSPACE</div><h1><span class="workspace-title-desktop">月度收租工作台</span><span class="workspace-title-mobile">本月收租</span></h1><div class="tiny workspace-title-subtitle">{{.PeriodLabel}} · 所有金额来自同一套月度账务事实</div><div class="tiny workspace-title-mobile-subtitle">先处理异常，再查看收缴进度。</div></div>
       <div class="workspace-month-controls" aria-label="选择收租月份">
         <a class="btn subtle workspace-month-step" href="{{workspacePeriodURL .Filters .PreviousPeriod}}" aria-label="上个月">‹</a>
-        <form class="workspace-period" method="get" action="/rent-dashboard"><label for="workspace-period">月份</label><input id="workspace-period" name="period" type="month" value="{{.Period}}" aria-label="月份"><input type="hidden" name="view" value="{{.View}}"><input type="hidden" name="property_id" value="{{if .Filters.PropertyID}}{{.Filters.PropertyID}}{{end}}"><input type="hidden" name="room_id" value="{{if .Filters.RoomID}}{{.Filters.RoomID}}{{end}}"><input type="hidden" name="search" value="{{.Filters.Search}}"><input type="hidden" name="status" value="{{.Filters.Status}}"><input type="hidden" name="sort" value="{{.Filters.Sort}}"><input type="hidden" name="page_size" value="{{.PageSize}}"><button class="btn" type="submit">搜索</button></form>
+        <form class="workspace-period" method="get" action="/rent-dashboard"><label for="workspace-period">月份</label><input id="workspace-period" name="period" type="month" value="{{.Period}}" aria-label="月份" onchange="this.form.requestSubmit()"><input type="hidden" name="view" value="{{.View}}"><input type="hidden" name="property_id" value="{{if .Filters.PropertyID}}{{.Filters.PropertyID}}{{end}}"><input type="hidden" name="room_id" value="{{if .Filters.RoomID}}{{.Filters.RoomID}}{{end}}"><input type="hidden" name="search" value="{{.Filters.Search}}"><input type="hidden" name="status" value="{{.Filters.Status}}"><input type="hidden" name="sort" value="{{.Filters.Sort}}"><input type="hidden" name="page_size" value="{{.PageSize}}"></form>
         <a class="btn subtle workspace-month-step" href="{{workspacePeriodURL .Filters .NextPeriod}}" aria-label="下个月">›</a>
       </div>
     </div>
@@ -33,7 +33,7 @@
     </section>
     <section class="panel surface workspace-action-queue" id="pending-review" aria-label="待人工处理流水">
       <div class="panel-head"><div><h2>待人工处理流水</h2><p class="tiny">核对付款人与租金责任，处理后同步更新收缴结果。</p></div><div class="workspace-queue-head-meta"><span class="workspace-queue-count">{{.PendingCount}}</span><a class="workspace-queue-more" href="/transactions?period={{.Period}}&amp;match_status=pending">查看全部流水</a></div></div>
-      {{if .PendingItems}}<div class="workspace-queue-list">{{range .PendingItems}}<article class="workspace-queue-item"><span class="workspace-queue-index">{{printf "%02d" .Index}}</span><div class="workspace-queue-body"><strong>{{.Title}}</strong><small>{{.Subtitle}}</small></div><strong class="workspace-queue-amount">{{.Amount}}</strong><details class="workspace-queue-process"><summary class="btn primary">处理流水</summary><div class="workspace-queue-process-body"><dl><div><dt>付款人</dt><dd>{{.Title}}</dd></div><div><dt>付款时间</dt><dd>{{.DateTime}}</dd></div><div><dt>备注</dt><dd>{{.Description}}{{if and .Reference (ne .Reference "—")}} · {{.Reference}}{{end}}</dd></div><div><dt>金额</dt><dd>{{.Amount}}</dd></div>{{if ne .Amount .RemainingAmount}}<div><dt>待匹配余额</dt><dd>{{.RemainingAmount}}</dd></div>{{end}}</dl>{{if .MatchOptions}}<form method="post" action="/transactions/confirm" data-tenant-period-match><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="remember_payer" value="0"><input type="hidden" name="return_to" value="{{.ReturnURL}}"><label>租客<select name="tenant_id" required><option value="">选择租客</option>{{range .TenantOptions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label><label>月份<select name="period" required><option value="">选择月份</option>{{range .MatchOptions}}<option value="{{.Period}}" data-tenant="{{.TenantID}}">{{.PeriodLabel}} · 未收 {{.Remaining}}</option>{{end}}</select></label><label class="tiny"><input type="checkbox" name="remember_payer" value="1" checked> 记住付款人</label><button class="btn primary" type="submit">匹配流水</button></form>{{else}}<p class="tiny">当前没有可直接匹配的未收账单，可以打开流水详情继续处理。</p>{{end}}<div class="workspace-queue-process-actions"><a class="btn subtle" href="{{.DetailURL}}">查看流水详情</a><form method="post" action="/transactions/defer"><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="reason" value="首页暂不处理"><input type="hidden" name="return_to" value="{{.ReturnURL}}"><button class="btn subtle" type="submit">暂不处理</button></form></div></div></details></article>{{end}}</div>{{else}}<div class="workspace-empty workspace-queue-empty">当前没有待处理流水。</div>{{end}}
+      {{if .PendingItems}}<div class="workspace-queue-list">{{range .PendingItems}}<article class="workspace-queue-item"><span class="workspace-queue-index">{{printf "%02d" .Index}}</span><div class="workspace-queue-body"><strong>{{.Title}}</strong><small>{{.Subtitle}}</small></div><strong class="workspace-queue-amount">{{.Amount}}</strong><div class="workspace-queue-process"><button class="btn primary workspace-queue-process-trigger" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="workspace-queue-process-{{.ID}}">处理流水</button><div class="workspace-queue-process-body" id="workspace-queue-process-{{.ID}}" role="dialog" aria-label="处理流水" hidden><dl><div><dt>付款人</dt><dd>{{.Title}}</dd></div><div><dt>付款时间</dt><dd>{{.DateTime}}</dd></div><div><dt>备注</dt><dd>{{.Description}}{{if and .Reference (ne .Reference "—")}} · {{.Reference}}{{end}}</dd></div><div><dt>金额</dt><dd>{{.Amount}}</dd></div>{{if ne .Amount .RemainingAmount}}<div><dt>待匹配余额</dt><dd>{{.RemainingAmount}}</dd></div>{{end}}</dl>{{if .MatchOptions}}<form method="post" action="/transactions/confirm" data-tenant-period-match><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="remember_payer" value="0"><input type="hidden" name="return_to" value="{{.ReturnURL}}"><label>租客<select name="tenant_id" required><option value="">选择租客</option>{{range .TenantOptions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label><label>月份<select name="period" required><option value="">选择月份</option>{{range .MatchOptions}}<option value="{{.Period}}" data-tenant="{{.TenantID}}">{{.PeriodLabel}} · 未收 {{.Remaining}}</option>{{end}}</select></label><div class="workspace-queue-match-actions"><label class="tiny"><input type="checkbox" name="remember_payer" value="1" checked> 记住付款人</label><button class="btn primary" type="submit">匹配流水</button></div></form>{{else}}<p class="tiny">当前没有可直接匹配的未收账单，可以打开流水详情继续处理。</p>{{end}}<div class="workspace-queue-process-actions"><a class="btn subtle" href="{{.DetailURL}}">查看流水详情</a><form method="post" action="/transactions/defer"><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="reason" value="首页暂不处理"><input type="hidden" name="return_to" value="{{.ReturnURL}}"><button class="btn subtle" type="submit">暂不处理</button></form></div></div></div></article>{{end}}</div>{{else}}<div class="workspace-empty workspace-queue-empty">当前没有待处理流水。</div>{{end}}
     </section>
     <div class="workspace-mobile-view-heading"><strong>收缴视图</strong><span>点击房产展开房间，再点房间查看租客责任</span></div>
     <section class="panel surface workspace-list-panel" aria-label="工作台列表">
@@ -163,6 +163,39 @@
   </div>
   <script>
     (() => {
+      let activeQueueProcess = null;
+      const closeQueueProcess = (restoreFocus) => {
+        if (!activeQueueProcess) return;
+        activeQueueProcess.body.hidden = true;
+        activeQueueProcess.trigger.setAttribute("aria-expanded", "false");
+        activeQueueProcess.wrapper.classList.remove("is-open");
+        const trigger = activeQueueProcess.trigger;
+        activeQueueProcess = null;
+        if (restoreFocus) trigger.focus();
+      };
+      document.querySelectorAll(".workspace-queue-process").forEach((wrapper) => {
+        const trigger = wrapper.querySelector(".workspace-queue-process-trigger");
+        const body = wrapper.querySelector(".workspace-queue-process-body");
+        if (!trigger || !body) return;
+        trigger.addEventListener("click", () => {
+          if (activeQueueProcess?.wrapper === wrapper) {
+            closeQueueProcess(false);
+            return;
+          }
+          closeQueueProcess(false);
+          body.hidden = false;
+          trigger.setAttribute("aria-expanded", "true");
+          wrapper.classList.add("is-open");
+          activeQueueProcess = {wrapper, trigger, body};
+          body.querySelector("select, a, button")?.focus();
+        });
+      });
+      document.addEventListener("pointerdown", (event) => {
+        if (activeQueueProcess && !activeQueueProcess.wrapper.contains(event.target)) closeQueueProcess(false);
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") closeQueueProcess(true);
+      });
       document.querySelectorAll("[data-tenant-period-match]").forEach((form) => {
         const tenant = form.querySelector('select[name="tenant_id"]');
         const period = form.querySelector('select[name="period"]');

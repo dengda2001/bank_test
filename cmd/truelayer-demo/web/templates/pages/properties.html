@@ -43,7 +43,7 @@
         <input type="hidden" name="status" value="{{.StatusFilter}}">
         <div class="object-list-filter-fields">
           <label><span class="visually-hidden">收缴状态</span><select name="collection" aria-label="收缴状态"><option value="all"{{if eq .CollectionFilter "all"}} selected{{end}}>全部状态</option><option value="unpaid"{{if eq .CollectionFilter "unpaid"}} selected{{end}}>未收齐</option><option value="paid"{{if eq .CollectionFilter "paid"}} selected{{end}}>已收齐</option></select></label>
-          <label><span class="visually-hidden">月份</span><select name="period" aria-label="月份">{{range .PeriodOptions}}<option value="{{.Value}}"{{if eq $.Period .Value}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+          <label class="object-list-period-filter"><span class="visually-hidden">月份</span><input type="month" name="period" value="{{.Period}}" aria-label="月份"></label>
         </div>
         <button class="btn subtle object-list-filter-toggle" type="button" aria-expanded="false">搜索</button>
         <span class="object-list-demo-note">演示数据 · EUR</span>

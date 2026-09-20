@@ -12,7 +12,7 @@
 .object-list-filter-fields label { min-width: 0; }
 .object-list-filter-fields select[name="collection"] { width: 100px; }
 .object-list-filter-fields select[name="property_id"] { width: 180px; }
-.object-list-filter-fields select[name="period"] { width: 126px; }
+.object-list-filter-fields .object-list-period-filter { flex: 0 0 126px; width: 126px; }
 .object-list-filters input, .object-list-filters select { min-width: 0; min-height: 36px; }
 .object-list-filters input, .object-list-filters select { background: var(--surface); border-radius: 7px; }
 .object-list-filter-fields { display: flex; align-items: center; gap: 8px; }
@@ -63,6 +63,7 @@
   .object-list-filters input, .object-list-filters select { min-height: 44px; padding: 8px 12px; font-size: 13px; }
   .object-list-filter-fields { display: none; grid-column: 1 / -1; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
   .object-list-filter-fields label { min-width: 0; }
+  .object-list-filter-fields .object-list-period-filter { width: 100%; }
   .object-list-filter-fields label:last-child { grid-column: 1 / -1; }
   .object-list-filters.filters-open .object-list-filter-fields { display: grid; }
   .object-list-filter-toggle { display: block; min-height: 44px; }

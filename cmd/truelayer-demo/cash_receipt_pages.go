@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -17,7 +18,207 @@ import (
 var cashReceiptPageTemplate = newEmbeddedWorkspacePageTemplate("cash-receipts-page", template.FuncMap{
 	"cashOverbalanceNotice":   cashOverbalanceNotice,
 	"cashReceiptFailedNotice": cashReceiptFailedNotice,
+	"cashReceiptPageDrawer":   cashReceiptPageDrawer,
 }, "web/templates/pages/cash-receipts.html")
+
+type cashReceiptDrawerData struct {
+	Form         cashReceiptFormData
+	Period       string
+	StatusFilter string
+	Search       string
+	ReturnURL    string
+	ReturnTo     string
+	OpenURL      string
+	ListContext  bool
+	LockTenant   bool
+	ErrorMessage string
+}
+
+type cashReceiptDrawerContextKey struct{}
+
+func cashReceiptPageDrawer(data cashReceiptPageData) *cashReceiptDrawerData {
+	if data.Drawer != nil {
+		return data.Drawer
+	}
+	form := data.Form
+	if form.Error == "" {
+		form.Error = data.Error
+	}
+	closeURL := cashReceiptListURL(data.Period, data.StatusFilter, data.Search, false, "", "", "")
+	openURL := cashReceiptListURL(data.Period, data.StatusFilter, data.Search, true, form.TenantID, "", "")
+	return &cashReceiptDrawerData{Form: form, Period: data.Period, StatusFilter: data.StatusFilter, Search: data.Search, ReturnURL: closeURL, ReturnTo: "cash-receipts", OpenURL: openURL, ListContext: true, ErrorMessage: cashReceiptErrorMessage(form.Error)}
+}
+
+func cashReceiptDrawerFromRequest(r *http.Request) *cashReceiptDrawerData {
+	if r == nil {
+		return nil
+	}
+	drawer, _ := r.Context().Value(cashReceiptDrawerContextKey{}).(*cashReceiptDrawerData)
+	return drawer
+}
+
+func cashReceiptHostReturnURL(raw string) (string, string, uint64, bool) {
+	target, err := url.ParseRequestURI(strings.TrimSpace(raw))
+	if err != nil || target.IsAbs() || target.Host != "" || strings.HasPrefix(target.Path, "//") {
+		return "", "", 0, false
+	}
+	query := target.Query()
+	clean := url.Values{}
+	if target.Path == "/transactions" {
+		allowed := map[string]bool{"scope": true, "payer": true, "tenant_id": true, "period": true, "rent_period": true, "allocation": true, "direction": true, "match_status": true, "arrival_from": true, "arrival_to": true, "sort": true, "page": true, "page_size": true}
+		for key, values := range query {
+			if allowed[key] {
+				clean[key] = append([]string(nil), values...)
+			}
+		}
+		if scope := clean.Get("scope"); scope != "" && scope != "all" {
+			return "", "", 0, false
+		}
+		if err := validateTransactionFilters(filtersFromQuery(clean)); err != nil {
+			return "", "", 0, false
+		}
+		return target.Path + cashReceiptEncodedQuery(clean), target.Path, 0, true
+	}
+	parts := strings.Split(strings.Trim(target.Path, "/"), "/")
+	if len(parts) != 2 || parts[0] != "tenants" {
+		return "", "", 0, false
+	}
+	tenantID, err := parsePositiveUint(parts[1])
+	if err != nil {
+		return "", "", 0, false
+	}
+	allowed := map[string]bool{"range": true, "from_month": true, "to_month": true, "page": true, "page_size": true, "search": true}
+	for key, values := range query {
+		if allowed[key] {
+			clean[key] = append([]string(nil), values...)
+		}
+	}
+	if _, _, _, _, err := parseTenantHistoryRange(clean, time.Now().UTC()); err != nil {
+		return "", "", 0, false
+	}
+	return target.Path + cashReceiptEncodedQuery(clean), target.Path, tenantID, true
+}
+
+func cashReceiptEncodedQuery(query url.Values) string {
+	if encoded := query.Encode(); encoded != "" {
+		return "?" + encoded
+	}
+	return ""
+}
+
+func cashReceiptHostOpenURL(returnURL string) string {
+	target, err := url.ParseRequestURI(returnURL)
+	if err != nil {
+		return "/transactions?cash=1"
+	}
+	query := target.Query()
+	query.Set("cash", "1")
+	target.RawQuery = query.Encode()
+	return target.RequestURI()
+}
+
+func cashReceiptHostMessageURL(returnURL, message string) string {
+	target, err := url.ParseRequestURI(returnURL)
+	if err != nil {
+		return "/transactions?message=" + url.QueryEscape(message)
+	}
+	query := target.Query()
+	query.Del("cash")
+	query.Del("cash_error")
+	query.Set("message", message)
+	target.RawQuery = query.Encode()
+	return target.RequestURI()
+}
+
+func (a *app) loadCashReceiptHostDrawer(ctx context.Context, r *http.Request, userID, tenantID uint64, period time.Time, returnURL string, form *cashReceiptFormData) (*cashReceiptDrawerData, error) {
+	cleanReturn, _, _, ok := cashReceiptHostReturnURL(returnURL)
+	if !ok {
+		return nil, errors.New("cash receipt return context is invalid")
+	}
+	if period.IsZero() {
+		period = monthStart(time.Now().UTC())
+	}
+	base, err := a.loadCashReceiptFormData(ctx, r, userID, 0, period)
+	if err != nil {
+		return nil, err
+	}
+	if form == nil {
+		form = &base
+	}
+	if tenantID > 0 {
+		form.TenantID = strconv.FormatUint(tenantID, 10)
+		for _, candidate := range form.Tenants {
+			if candidate.ID == tenantID {
+				form.Tenant, form.TenantID, form.TenantSelected = candidate, strconv.FormatUint(tenantID, 10), true
+				break
+			}
+		}
+	}
+	return &cashReceiptDrawerData{Form: *form, Period: form.Period, ReturnURL: cleanReturn, ReturnTo: cleanReturn, OpenURL: cashReceiptHostOpenURL(cleanReturn), LockTenant: tenantID > 0, ErrorMessage: cashReceiptErrorMessage(form.Error)}, nil
+}
+
+func (a *app) cashReceiptDraftFormData(ctx context.Context, r *http.Request, userID uint64, values url.Values, errorCode string) (cashReceiptFormData, error) {
+	period := monthStart(time.Now().UTC())
+	if raw := strings.TrimSpace(values.Get("period")); raw != "" {
+		if parsed, err := parsePeriodMonth(raw); err == nil {
+			period = parsed
+		}
+	}
+	data, err := a.loadCashReceiptFormData(ctx, r, userID, 0, period)
+	if err != nil {
+		return cashReceiptFormData{}, err
+	}
+	data.Period = period.Format("2006-01")
+	data.Amount = strings.TrimSpace(values.Get("amount"))
+	data.ReceivedAt = firstNonEmpty(strings.TrimSpace(values.Get("received_at")), data.ReceivedAt)
+	data.Note = strings.TrimSpace(values.Get("note"))
+	data.Currency = ledgerCurrencyEUR
+	data.IdempotencyKey = firstNonEmpty(strings.TrimSpace(values.Get("idempotency_key")), data.IdempotencyKey)
+	data.Error = errorCode
+	if raw := strings.TrimSpace(values.Get("tenant_id")); raw != "" {
+		if id, err := parsePositiveUint(raw); err == nil {
+			for _, candidate := range data.Tenants {
+				if candidate.ID == id {
+					data.Tenant, data.TenantSelected = candidate, true
+					break
+				}
+			}
+		}
+		data.TenantID = raw
+	}
+	return data, nil
+}
+
+func (a *app) renderCashReceiptHostPage(w http.ResponseWriter, r *http.Request, userID uint64, returnTo string, form cashReceiptFormData) bool {
+	cleanReturn, path, tenantID, ok := cashReceiptHostReturnURL(returnTo)
+	if !ok {
+		return false
+	}
+	drawer, err := a.loadCashReceiptHostDrawer(r.Context(), r, userID, tenantID, time.Time{}, cleanReturn, &form)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return true
+	}
+	pageURL, err := url.ParseRequestURI(drawer.OpenURL)
+	if err != nil {
+		http.Error(w, "cash receipt return context is invalid", http.StatusBadRequest)
+		return true
+	}
+	ctx := context.WithValue(r.Context(), cashReceiptDrawerContextKey{}, drawer)
+	pageRequest := r.Clone(ctx)
+	pageRequest.Method = http.MethodGet
+	pageRequest.URL = pageURL
+	pageRequest.RequestURI = pageURL.RequestURI()
+	if path == "/transactions" {
+		a.handleBilling(w, pageRequest)
+		return true
+	}
+	if tenantID > 0 {
+		a.handleTenantDetail(w, pageRequest)
+		return true
+	}
+	return false
+}
 
 func cashReceiptListURL(period, status, search string, add bool, tenantID string, errorCode, message string) string {
 	query := url.Values{}
@@ -142,12 +343,19 @@ func (a *app) loadCashReceiptListPage(ctx context.Context, r *http.Request, user
 			}
 		}
 	}
-	return cashReceiptPageData{
+	data := cashReceiptPageData{
 		workspaceShell: canonicalPageShell(a, r, "cash-receipts", "现金补录"),
 		Rows:           rows, Period: periodValue, StatusFilter: statusFilter, Search: search,
 		ShowForm: cashReceiptDrawerIsOpen(r.URL.Query()),
 		Form:     form, Message: r.URL.Query().Get("message"), Error: r.URL.Query().Get("error"),
-	}, nil
+	}
+	if data.ShowForm {
+		closeURL := cashReceiptListURL(periodValue, statusFilter, search, false, "", "", "")
+		openURL := cashReceiptListURL(periodValue, statusFilter, search, true, r.URL.Query().Get("tenant_id"), "", "")
+		form.Error = r.URL.Query().Get("error")
+		data.Drawer = &cashReceiptDrawerData{Form: form, Period: periodValue, StatusFilter: statusFilter, Search: search, ReturnURL: closeURL, ReturnTo: "cash-receipts", OpenURL: openURL, ListContext: true, ErrorMessage: cashReceiptErrorMessage(form.Error)}
+	}
+	return data, nil
 }
 
 func (a *app) handleCashReceiptList(w http.ResponseWriter, r *http.Request) {
@@ -194,6 +402,11 @@ func (a *app) renderCashReceiptDrawerPreview(w http.ResponseWriter, r *http.Requ
 	}
 	data.ShowForm = true
 	data.Form = form
+	if data.Drawer != nil {
+		data.Drawer.Form = form
+		data.Drawer.ErrorMessage = cashReceiptErrorMessage(form.Error)
+		data.Drawer.OpenURL = cashReceiptListURL(data.Period, data.StatusFilter, data.Search, true, form.TenantID, "", "")
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := cashReceiptPageTemplate.Execute(w, data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

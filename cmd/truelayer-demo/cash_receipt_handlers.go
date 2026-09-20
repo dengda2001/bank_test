@@ -180,6 +180,17 @@ const cashReceiptFailedText = "现金补录失败，请检查租客、月份、�
 // templates, so the sentence cannot drift between them.
 var cashReceiptFailedNotice = func() string { return cashReceiptFailedText }
 
+func cashReceiptErrorMessage(code string) string {
+	switch code {
+	case "cash_receipt_failed":
+		return cashReceiptFailedText
+	case "cash_overbalance":
+		return cashOverbalanceText
+	default:
+		return ""
+	}
+}
+
 func (a *app) loadCashReceiptFormData(ctx context.Context, r *http.Request, userID, tenantID uint64, period time.Time) (cashReceiptFormData, error) {
 	period = monthStart(period)
 	data := cashReceiptFormData{
@@ -306,6 +317,19 @@ func (a *app) handleCashReceiptNew(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (a *app) renderCashReceiptHostError(w http.ResponseWriter, r *http.Request, userID uint64, values url.Values, errorCode string) bool {
+	returnTo := values.Get("return_to")
+	if _, _, _, valid := cashReceiptHostReturnURL(returnTo); !valid {
+		return false
+	}
+	form, err := a.cashReceiptDraftFormData(r.Context(), r, userID, values, errorCode)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return true
+	}
+	return a.renderCashReceiptHostPage(w, r, userID, returnTo, form)
+}
+
 func (a *app) handleCashReceiptPreview(w http.ResponseWriter, r *http.Request) {
 	if !a.requireAuth(w, r) {
 		return
@@ -327,13 +351,50 @@ func (a *app) handleCashReceiptPreview(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	if r.Form.Get("edit") == "1" {
+		if _, _, _, valid := cashReceiptHostReturnURL(r.Form.Get("return_to")); valid {
+			form, formErr := a.cashReceiptDraftFormData(r.Context(), r, userID, r.Form, "")
+			if formErr != nil {
+				http.Error(w, formErr.Error(), http.StatusInternalServerError)
+				return
+			}
+			if a.renderCashReceiptHostPage(w, r, userID, r.Form.Get("return_to"), form) {
+				return
+			}
+		}
+	}
+	if _, _, hostTenantID, valid := cashReceiptHostReturnURL(r.Form.Get("return_to")); valid && hostTenantID > 0 && strings.TrimSpace(r.Form.Get("tenant_id")) != strconv.FormatUint(hostTenantID, 10) {
+		if a.renderCashReceiptHostError(w, r, userID, r.Form, "cash_receipt_failed") {
+			return
+		}
+	}
 	input, draft, err := a.cashReceiptInputForPeriod(r.Context(), userID, r.Form)
 	if err != nil {
+		if _, _, _, valid := cashReceiptHostReturnURL(r.Form.Get("return_to")); valid {
+			form, formErr := a.cashReceiptDraftFormData(r.Context(), r, userID, r.Form, "cash_receipt_failed")
+			if formErr != nil {
+				http.Error(w, formErr.Error(), http.StatusInternalServerError)
+				return
+			}
+			if a.renderCashReceiptHostPage(w, r, userID, r.Form.Get("return_to"), form) {
+				return
+			}
+		}
 		http.Redirect(w, r, cashReceiptFormErrorURL(r.Form, draft, "cash_receipt_failed"), http.StatusFound)
 		return
 	}
 	preview, err := newCashReceiptService(a.db).previewCashReceipt(r.Context(), input)
 	if err != nil {
+		if _, _, _, valid := cashReceiptHostReturnURL(r.Form.Get("return_to")); valid {
+			form, formErr := a.cashReceiptDraftFormData(r.Context(), r, userID, r.Form, cashReceiptErrorCode(err))
+			if formErr != nil {
+				http.Error(w, formErr.Error(), http.StatusInternalServerError)
+				return
+			}
+			if a.renderCashReceiptHostPage(w, r, userID, r.Form.Get("return_to"), form) {
+				return
+			}
+		}
 		http.Redirect(w, r, cashReceiptFormErrorURL(r.Form, draft, cashReceiptErrorCode(err)), http.StatusFound)
 		return
 	}
@@ -345,6 +406,11 @@ func (a *app) handleCashReceiptPreview(w http.ResponseWriter, r *http.Request) {
 	if r.Form.Get("return_to") == "cash-receipts" {
 		a.renderCashReceiptDrawerPreview(w, r, userID, data)
 		return
+	}
+	if _, _, _, valid := cashReceiptHostReturnURL(r.Form.Get("return_to")); valid {
+		if a.renderCashReceiptHostPage(w, r, userID, r.Form.Get("return_to"), data) {
+			return
+		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := cashReceiptTemplate.Execute(w, data); err != nil {
@@ -369,17 +435,46 @@ func (a *app) handleCashReceiptCreate(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/cash-receipts/new?error=cash_receipt_failed", http.StatusFound)
 		return
 	}
+	if _, _, hostTenantID, valid := cashReceiptHostReturnURL(r.Form.Get("return_to")); valid && hostTenantID > 0 && strings.TrimSpace(r.Form.Get("tenant_id")) != strconv.FormatUint(hostTenantID, 10) {
+		if a.renderCashReceiptHostError(w, r, userID, r.Form, "cash_receipt_failed") {
+			return
+		}
+	}
 	input, draft, err := a.cashReceiptInputForPeriod(r.Context(), userID, r.Form)
 	if err != nil {
+		if _, _, _, valid := cashReceiptHostReturnURL(r.Form.Get("return_to")); valid {
+			form, formErr := a.cashReceiptDraftFormData(r.Context(), r, userID, r.Form, "cash_receipt_failed")
+			if formErr != nil {
+				http.Error(w, formErr.Error(), http.StatusInternalServerError)
+				return
+			}
+			if a.renderCashReceiptHostPage(w, r, userID, r.Form.Get("return_to"), form) {
+				return
+			}
+		}
 		http.Redirect(w, r, cashReceiptFormErrorURL(r.Form, draft, "cash_receipt_failed"), http.StatusFound)
 		return
 	}
 	if _, err := newCashReceiptService(a.db).recordCashReceipt(r.Context(), input); err != nil {
+		if _, _, _, valid := cashReceiptHostReturnURL(r.Form.Get("return_to")); valid {
+			form, formErr := a.cashReceiptDraftFormData(r.Context(), r, userID, r.Form, cashReceiptErrorCode(err))
+			if formErr != nil {
+				http.Error(w, formErr.Error(), http.StatusInternalServerError)
+				return
+			}
+			if a.renderCashReceiptHostPage(w, r, userID, r.Form.Get("return_to"), form) {
+				return
+			}
+		}
 		http.Redirect(w, r, cashReceiptFormErrorURL(r.Form, draft, cashReceiptErrorCode(err)), http.StatusFound)
 		return
 	}
 	if r.Form.Get("return_to") == "cash-receipts" {
 		http.Redirect(w, r, cashReceiptListReturnURL(r.Form, "", "cash_receipt_saved", false, ""), http.StatusFound)
+		return
+	}
+	if returnURL, _, _, valid := cashReceiptHostReturnURL(r.Form.Get("return_to")); valid {
+		http.Redirect(w, r, cashReceiptHostMessageURL(returnURL, "cash_receipt_saved"), http.StatusFound)
 		return
 	}
 	http.Redirect(w, r, fmt.Sprintf("/tenants/%d?message=cash_receipt_saved&from_month=%s&to_month=%s", draft.TenantID, draft.Period.Format("2006-01"), draft.Period.Format("2006-01")), http.StatusFound)

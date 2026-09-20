@@ -126,28 +126,32 @@ type incomeTransaction struct {
 
 type billingPageData struct {
 	workspaceShell
-	PageKey           string
-	CanonicalPath     string
-	Connected         bool
-	NeedsReconnect    bool
-	LastSync          string
-	Message           string
-	Error             string
-	TransactionRows   []transactionPageRow
-	TenantOptions     []billingTenantOption
-	ArrivalFromFilter string
-	ArrivalToFilter   string
-	PayerFilter       string
-	TenantFilter      uint64
-	DirectionFilter   string
-	MatchStatusFilter string
-	PeriodFilter      string
-	RentPeriodFilter  string
-	AllocationFilter  string
-	SortFilter        string
-	ArrivalSort       tableSortLink
-	PayerSort         tableSortLink
-	AmountSort        tableSortLink
+	PageKey            string
+	CanonicalPath      string
+	Connected          bool
+	NeedsReconnect     bool
+	LastSync           string
+	Message            string
+	Error              string
+	TransactionRows    []transactionPageRow
+	ExpenseDrawer      *expenseDrawerData
+	CashReceiptDrawer  *cashReceiptDrawerData
+	ExpenseOpenURL     string
+	CashReceiptOpenURL string
+	TenantOptions      []billingTenantOption
+	ArrivalFromFilter  string
+	ArrivalToFilter    string
+	PayerFilter        string
+	TenantFilter       uint64
+	DirectionFilter    string
+	MatchStatusFilter  string
+	PeriodFilter       string
+	RentPeriodFilter   string
+	AllocationFilter   string
+	SortFilter         string
+	ArrivalSort        tableSortLink
+	PayerSort          tableSortLink
+	AmountSort         tableSortLink
 	// MatchStatusSelection is what the 匹配状态 dropdown shows; it can be the
 	// synthetic "pending" option even though MatchStatusFilter itself is empty.
 	MatchStatusSelection string
@@ -815,6 +819,10 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 		expenseCount = len(expenses)
 	}
 	setTransactionDetailLinks(r.URL.Path, r.URL.Query(), rows)
+	transactionReturnURL := transactionListURL(r.URL.Path, r.URL.Query())
+	for index := range rows {
+		rows[index].ReturnURL = transactionReturnURL
+	}
 	page := filters.Page
 	if page <= 0 {
 		page = 1
@@ -907,6 +915,35 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 		PendingCount:         pendingCount,
 		TokenFile:            a.cfg.TokenFile,
 	}
+	if data.PageKey == "transactions" {
+		data.ExpenseOpenURL = transactionDrawerURL(r, "expense")
+		data.CashReceiptOpenURL = transactionDrawerURL(r, "cash")
+		if r.URL.Query().Get("expense") == "1" || isExpenseFormError(r.URL.Query().Get("error")) {
+			if userID, ok := a.currentUserID(r); ok {
+				drawer, drawerErr := a.loadExpenseDrawerData(r.Context(), userID, monthStart(time.Now().UTC()).Format("2006-01"), 0, 0, expenseFormReturnURL(r), r.URL.Query().Get("error"))
+				if drawerErr != nil {
+					http.Error(w, drawerErr.Error(), http.StatusInternalServerError)
+					return
+				}
+				data.ExpenseDrawer = drawer
+			}
+		}
+		if drawer := cashReceiptDrawerFromRequest(r); drawer != nil {
+			data.CashReceiptDrawer = drawer
+		} else if r.URL.Query().Get("cash") == "1" {
+			if userID, ok := a.currentUserID(r); ok {
+				returnURL, _, _, valid := cashReceiptHostReturnURL("/transactions?" + r.URL.Query().Encode())
+				if valid {
+					drawer, drawerErr := a.loadCashReceiptHostDrawer(r.Context(), r, userID, 0, time.Time{}, returnURL, nil)
+					if drawerErr != nil {
+						http.Error(w, drawerErr.Error(), http.StatusInternalServerError)
+						return
+					}
+					data.CashReceiptDrawer = drawer
+				}
+			}
+		}
+	}
 	if data.LastSync == "" {
 		data.LastSync = "尚未同步"
 	}
@@ -914,6 +951,31 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 	if err := billingTemplate.Execute(w, data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func rememberPayerPreference(values url.Values) bool {
+	choices, provided := values["remember_payer"]
+	if !provided {
+		return true
+	}
+	for _, choice := range choices {
+		if choice == "1" {
+			return true
+		}
+	}
+	return false
+}
+
+func transactionDrawerURL(r *http.Request, drawer string) string {
+	values := url.Values{}
+	for key, items := range r.URL.Query() {
+		if key == "cash" || key == "expense" || key == "error" || key == "message" || key == "detail" {
+			continue
+		}
+		values[key] = append([]string(nil), items...)
+	}
+	values.Set(drawer, "1")
+	return "/transactions?" + values.Encode()
 }
 
 func billingPageURL(query url.Values, page int, paths ...string) string {
@@ -971,7 +1033,7 @@ func (a *app) handleRentMatchConfirmation(w http.ResponseWriter, r *http.Request
 		redirectTransactionResult(w, r, "error", "invalid_confirmation")
 		return
 	}
-	rememberPayer := r.Form.Get("remember_payer") != "0"
+	rememberPayer := rememberPayerPreference(r.Form)
 	service := newTransactionService(a.db)
 	if value := strings.TrimSpace(r.Form.Get("rent_obligation_id")); value != "" {
 		rentObligationID, parseErr := parsePositiveUint(value)

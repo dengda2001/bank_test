@@ -25,7 +25,7 @@
         <div class="actions"><a class="btn" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}&amp;edit=1">编辑房产</a><a class="btn" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}&amp;expense=1">新增支出</a><a class="btn primary" href="/dunning?period={{.Period}}">提醒未收租客</a></div>
       </header>
 
-      {{if eq .Message "expense_added"}}<div class="notice ok" data-toast>支出记录已保存。</div>{{else if .Message}}<div class="notice ok" data-toast>资料已保存。</div>{{end}}
+      {{if eq .Message "expense_added"}}<div class="notice ok" data-toast>支出记录已保存。</div>{{else if eq .Message "room_saved"}}<div class="notice ok" data-toast>房间资料已保存。</div>{{else if .Message}}<div class="notice ok" data-toast>资料已保存。</div>{{end}}
       {{if .Error}}<div class="notice error">{{.Error}}</div>{{end}}
       {{if .Editing}}
       <div class="entity-drawer-backdrop">
@@ -45,6 +45,7 @@
       </div>
       {{end}}
       {{if .ExpenseDrawer}}{{template "expense-form-drawer" .ExpenseDrawer}}{{end}}
+      {{if .RoomDrawer}}{{template "room-create-drawer" .RoomDrawer}}{{end}}
 
       <section class="property-metrics" aria-label="房产月度汇总">
         <article class="panel metric metric-primary"><div class="label">本月应收</div><strong>{{.Property.ExpectedAmount}}</strong><span>{{.Property.RoomCount}} 间房 · {{.Property.ActiveRoomCount}} 间有效</span></article>
@@ -57,10 +58,10 @@
       <div class="property-detail-grid">
         <div class="property-detail-stack">
           <section class="panel surface property-room-overview">
-            <div class="panel-head"><div><h2><span class="property-room-title-desktop">房间收款概览</span><span class="property-room-title-mobile">房间收缴</span></h2><p class="tiny">查看房间入住、租金和当月未收情况。</p></div><div class="actions"><a class="btn subtle" href="/rooms?property_id={{.Property.ID}}&amp;period={{.Period}}&amp;add=1">新增房间</a><a class="btn subtle" href="/rooms?property_id={{.Property.ID}}&amp;period={{.Period}}">查看全部房间</a></div></div>
+            <div class="panel-head"><div><h2><span class="property-room-title-desktop">房间收款概览</span><span class="property-room-title-mobile">房间收缴</span></h2><p class="tiny">查看房间入住、租金和当月未收情况。</p></div><div class="actions"><a class="btn subtle" href="{{.RoomOpenURL}}">新增房间</a><a class="btn subtle" href="/rooms?property_id={{.Property.ID}}&amp;period={{.Period}}">查看全部房间</a></div></div>
             {{if .Rooms}}<div class="table-wrap property-room-table-wrap"><table class="property-room-table"><thead><tr><th>房间</th><th>入住人</th><th>月租</th><th>应收</th><th>已收</th><th>未收</th><th>状态</th><th>操作</th></tr></thead><tbody>
               {{range .Rooms}}<tr><td><a href="/rooms/{{.ID}}?period={{$.Period}}"><strong>{{.RoomLabel}}</strong></a><br><span class="tiny">{{.PropertyName}}</span></td><td>{{range $index, $name := .TenantNames}}{{if $index}}, {{end}}{{$name}}{{else}}空置{{end}}</td><td class="amount">{{.MonthlyRent}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span></td><td><div class="property-room-actions"><a class="btn subtle" href="/rooms/{{.ID}}?period={{$.Period}}">查看详情</a><a class="btn subtle" href="/rooms/{{.ID}}?period={{$.Period}}&amp;edit=1">编辑</a></div></td></tr>{{end}}
-            </tbody></table></div><div class="property-room-mobile-list">{{range .Rooms}}<article class="property-room-card"><div class="property-room-card-head"><span><a href="/rooms/{{.ID}}?period={{$.Period}}"><strong>{{.RoomLabel}}</strong></a><small>{{range $index, $name := .TenantNames}}{{if $index}}, {{end}}{{$name}}{{else}}空置{{end}}</small></span><span class="status {{.Status}}">{{.StatusLabel}}</span></div><dl><div><dt>月租</dt><dd>{{.MonthlyRent}}</dd></div><div><dt>应收</dt><dd>{{.ExpectedAmount}}</dd></div><div><dt>已收</dt><dd>{{.PaidAmount}}</dd></div><div><dt>未收</dt><dd>{{.BalanceAmount}}</dd></div></dl><div class="property-room-actions"><a class="btn subtle" href="/rooms/{{.ID}}?period={{$.Period}}">查看详情</a><a class="btn subtle" href="/rooms/{{.ID}}?period={{$.Period}}&amp;edit=1">编辑</a></div></article>{{end}}</div>{{else}}<div class="workspace-empty">该房产还没有房间。<a href="/rooms?property_id={{.Property.ID}}&amp;period={{.Period}}&amp;add=1">现在新增房间</a></div>{{end}}
+            </tbody></table></div><div class="property-room-mobile-list">{{range .Rooms}}<article class="property-room-card"><div class="property-room-card-head"><span><a href="/rooms/{{.ID}}?period={{$.Period}}"><strong>{{.RoomLabel}}</strong></a><small>{{range $index, $name := .TenantNames}}{{if $index}}, {{end}}{{$name}}{{else}}空置{{end}}</small></span><span class="status {{.Status}}">{{.StatusLabel}}</span></div><dl><div><dt>月租</dt><dd>{{.MonthlyRent}}</dd></div><div><dt>应收</dt><dd>{{.ExpectedAmount}}</dd></div><div><dt>已收</dt><dd>{{.PaidAmount}}</dd></div><div><dt>未收</dt><dd>{{.BalanceAmount}}</dd></div></dl><div class="property-room-actions"><a class="btn subtle" href="/rooms/{{.ID}}?period={{$.Period}}">查看详情</a><a class="btn subtle" href="/rooms/{{.ID}}?period={{$.Period}}&amp;edit=1">编辑</a></div></article>{{end}}</div>{{else}}<div class="workspace-empty">该房产还没有房间。<a href="{{.RoomOpenURL}}">现在新增房间</a></div>{{end}}
             <div class="property-room-prototype-list">{{range .Rooms}}<a class="property-room-prototype-row" href="/rooms/{{.ID}}?period={{$.Period}}"><span><strong>房间 {{.RoomLabel}}{{range $index, $name := .TenantNames}}{{if eq $index 0}} · {{end}}{{if $index}}, {{end}}{{$name}}{{end}}</strong><small>{{.StatusLabel}}</small></span><strong class="amount">{{.ExpectedAmount}}</strong></a>{{end}}</div>
           </section>
 

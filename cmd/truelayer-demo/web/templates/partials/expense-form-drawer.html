@@ -10,7 +10,7 @@
       <div class="form-field"><label for="expense-description">支出描述</label><input id="expense-description" name="description" maxlength="191" required autofocus></div>
       <div class="expense-form-grid"><div class="form-field"><label for="expense-amount">金额</label><input id="expense-amount" name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required></div><div class="form-field"><label for="expense-category">类别</label><select id="expense-category" name="category"><option>维修</option><option>水电</option><option>清洁</option><option>保险</option><option>其他</option></select></div></div>
       <div class="form-field"><label for="expense-property">所属房产</label><select id="expense-property" name="property_id" required{{if not .Properties}} disabled{{end}}><option value="">请选择房产</option>{{range .Properties}}<option value="{{.ID}}"{{if eq $.SelectedPropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></div>
-      {{if .Rooms}}<div class="form-field"><label for="expense-room">关联房间（可选）</label><select id="expense-room" name="room_id"><option value="">房产级支出</option>{{range .Rooms}}<option value="{{.ID}}" data-property="{{.PropertyID}}"{{if eq $.SelectedRoomID .ID}} selected{{end}}>{{.Label}}</option>{{end}}</select></div>{{end}}
+      {{if .Rooms}}<div class="form-field"><label for="expense-room">关联房间（可选）</label><select id="expense-room" name="room_id" data-clearable><option value="">房产级支出</option>{{range .Rooms}}<option value="{{.ID}}" data-property="{{.PropertyID}}"{{if eq $.SelectedRoomID .ID}} selected{{end}}>{{.Label}}</option>{{end}}</select></div>{{end}}
       <div class="expense-form-grid"><div class="form-field"><label for="expense-date">日期</label><input id="expense-date" name="expense_date" type="date" value="{{.Today}}" required></div><div class="form-field"><label for="expense-payment">付款方式</label><input id="expense-payment" name="payment_method" value="手动"></div></div>
       <input type="hidden" name="currency" value="EUR">
       <details class="expense-extra-fields"><summary>添加备注</summary><div class="expense-form-grid"><div class="form-field"><label for="expense-room-note">房间备注</label><input id="expense-room-note" name="room_hint"></div><div class="form-field"><label for="expense-tenant-note">租客备注</label><input id="expense-tenant-note" name="tenant_hint"></div></div></details>
@@ -40,7 +40,11 @@
       option.disabled = property.value !== "" && option.dataset.property !== property.value;
     });
     const selected = room.options[room.selectedIndex];
-    if (selected?.hidden) room.value = "";
+    if (selected?.disabled) {
+      room.selectedIndex = 0;
+      room.dispatchEvent(new Event("input", {bubbles: true}));
+      room.dispatchEvent(new Event("change", {bubbles: true}));
+    }
   };
   property?.addEventListener("change", syncRooms);
   syncRooms();

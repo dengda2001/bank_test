@@ -376,6 +376,7 @@ type transactionPageRow struct {
 	InternalID                string
 	DetailKey                 string
 	DetailURL                 string
+	ReturnURL                 string
 	Direction                 string
 	DirectionLabel            string
 	PayerName                 string

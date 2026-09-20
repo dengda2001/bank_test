@@ -131,7 +131,7 @@ func expenseFormReturnURL(r *http.Request) string {
 		return "/expenses"
 	}
 	query := r.URL.Query()
-	for _, key := range []string{"expense", "add", "message", "error", "edit"} {
+	for _, key := range []string{"expense", "add", "cash", "message", "error", "edit"} {
 		query.Del(key)
 	}
 	returnURL := r.URL.Path

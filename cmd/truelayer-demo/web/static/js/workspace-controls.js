@@ -80,10 +80,22 @@
     popup.hidden = true;
     trigger.setAttribute("aria-controls", popup.id);
 
+    let clearButton = null;
+    if (select.hasAttribute("data-clearable")) {
+      wrapper.classList.add("is-clearable");
+      clearButton = document.createElement("button");
+      clearButton.type = "button";
+      clearButton.className = "workspace-select-clear";
+      clearButton.setAttribute("aria-label", "清除选择");
+      clearButton.title = "清除选择";
+      clearButton.textContent = "×";
+    }
+
     copySelectLayout(select, wrapper, trigger);
     parent.insertBefore(wrapper, select);
     wrapper.appendChild(select);
     wrapper.appendChild(trigger);
+    if (clearButton) wrapper.appendChild(clearButton);
     wrapper.appendChild(popup);
     select.classList.add("workspace-select-native");
     select.tabIndex = -1;
@@ -100,6 +112,10 @@
       else trigger.removeAttribute("aria-disabled");
       if (select.getAttribute("aria-invalid") === "true") trigger.setAttribute("aria-invalid", "true");
       else trigger.removeAttribute("aria-invalid");
+      if (clearButton) {
+        clearButton.hidden = !select.value;
+        clearButton.disabled = select.disabled;
+      }
     };
 
     const renderOptions = () => {
@@ -209,6 +225,16 @@
     trigger.addEventListener("click", () => {
       if (popup.hidden) open(true);
       else close(false);
+    });
+    clearButton?.addEventListener("click", () => {
+      const blankIndex = Array.from(select.options).findIndex((option) => option.value === "" && !option.disabled);
+      if (blankIndex < 0 || select.disabled) return;
+      select.selectedIndex = blankIndex;
+      select.removeAttribute("aria-invalid");
+      updateSelectedValue();
+      select.dispatchEvent(new Event("input", { bubbles: true }));
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      trigger.focus();
     });
     trigger.addEventListener("keydown", (event) => {
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
