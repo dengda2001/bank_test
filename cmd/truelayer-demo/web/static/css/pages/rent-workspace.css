@@ -4,7 +4,16 @@
     .workspace-period { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; min-width: 320px; }
     .workspace-period label { flex: 0 0 auto; white-space: nowrap; }
     .workspace-period input { flex: 0 0 160px; width: 160px; min-width: 160px; min-height: 42px; }
-    .workspace-period .calendar-control { flex: 0 0 160px; width: 160px; min-width: 160px; }
+    /* 日历由 calendar.js 包进 .calendar-control，控件本身的宽度才是这一格的实际宽度。
+       .workspace-period 固定 320px（min-width），标签和控件加起来远不到，所以控件必须
+       撑满剩余空间：早先写死 160px 时，右边会空出一百多像素才够到「下个月」按钮，
+       日历看着和它两边都不挨着。窄屏块里本来就是撑满的，桌面档漏了。 */
+    .workspace-period .calendar-control { flex: 1 1 160px; width: auto; min-width: 160px; }
+    /* 撑满的是外层的 .calendar-control；里面的 <input> 仍被上面那条按类型选中的规则
+       钉在 160px，不覆盖的话输入框不会跟着变宽，空白只是从控件外面挪到控件里面。
+       这里必须用 width:100% 而不是 auto —— <input> 是替换元素，auto 会退回它自己
+       的固有宽度（约 20 个字符），并不会撑满父容器。 */
+    .workspace-period .calendar-input { flex: 1 1 auto; width: 100%; min-width: 0; }
     .workspace-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
     .workspace-summary .metric { min-height: 102px; }
     /* 原型首卡强调（figma/rentops-desktop-suite.html `.metric.main{border-top:3px solid
