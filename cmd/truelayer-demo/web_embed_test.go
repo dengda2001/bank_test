@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -206,6 +207,48 @@ func TestEmbeddedRoomDetailUsesTypedDisplayFields(t *testing.T) {
 	}
 	if strings.Contains(page, "参考号") || strings.Contains(page, "rent-2026-09") {
 		t.Fatal("room detail must not display payment reference numbers")
+	}
+}
+
+// Every page template under web/templates/pages renders a full document, so each
+// one has to pull in the shared stylesheet itself. workspace.css owns both the
+// design tokens (--border, --surface, --accent, ...) and the chrome/layout
+// classes (.app, .content, .sidebar, .panel, .btn, .status, .table-wrap), and
+// none of them are defined anywhere else. A page that forgets the link does not
+// degrade gracefully — it renders as unstyled HTML, which is exactly what
+// transaction-detail.html did from the commit that introduced it (c3c992c) until
+// this test existed.
+//
+// The Go-string page templates are not covered here: the ones in main.go inline
+// workspacePageCSS inside a <style> block instead of linking it, which works just
+// as well. This test only needs to hold for the file-based pages.
+func TestEveryPageTemplateLinksTheSharedStylesheet(t *testing.T) {
+	entries, err := fs.ReadDir(webFiles, "web/templates/pages")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Guard the guard: a renamed directory or an emptied embed must fail loudly
+	// rather than scanning zero files and passing.
+	scanned := 0
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".html") {
+			continue
+		}
+		scanned++
+		path := "web/templates/pages/" + entry.Name()
+		body := embeddedWebText(path)
+		if !strings.Contains(body, `href="/static/css/workspace.css"`) {
+			t.Errorf("%s does not link /static/css/workspace.css", path)
+		}
+		// The page also has to load whatever page-specific stylesheet carries its
+		// own layout, otherwise the tokens resolve but the page is still bare.
+		if !strings.Contains(body, `href="/static/css/pages/`) {
+			t.Errorf("%s does not link a page stylesheet under /static/css/pages/", path)
+		}
+	}
+	if scanned < 9 {
+		t.Fatalf("scanned %d page templates, want at least 9", scanned)
 	}
 }
 
