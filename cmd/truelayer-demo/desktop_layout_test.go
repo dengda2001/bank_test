@@ -46,10 +46,11 @@ func TestWorkspaceNavExposesDesktopSections(t *testing.T) {
 		`<nav class="nav" aria-label="收租决策">`,
 		`<div class="nav-label">资产与关系</div>`,
 		`<nav class="nav" aria-label="资产与关系">`,
-		`<div class="nav-label">资金与系统</div>`,
+		`<div class="nav-label">系统</div>`,
 		`<nav class="nav" aria-label="资金与系统">`,
-		`href="/bills"`,
+		`href="/rent-dashboard"`,
 		`href="/transactions"`,
+		`href="/dunning"`,
 		`href="/properties"`,
 		`href="/bank"`,
 	} {
@@ -57,9 +58,13 @@ func TestWorkspaceNavExposesDesktopSections(t *testing.T) {
 			t.Fatalf("workspace nav missing %q", marker)
 		}
 	}
-	// The prototype numbers all eleven items 01..11. Asserting the whole run, not
-	// a sample, is what catches a renumbering later.
-	for index := 1; index <= 11; index++ {
+	for _, retired := range []string{`href="/bills"`, `href="/tenancies"`, "应收账单", "租约管理"} {
+		if strings.Contains(workspaceNav, retired) {
+			t.Fatalf("workspace nav still exposes retired module %q", retired)
+		}
+	}
+	// The simplified navigation numbers its seven remaining destinations 01..07.
+	for index := 1; index <= 7; index++ {
 		marker := `<span class="nav-icon">` + fmt.Sprintf("%02d", index) + `</span>`
 		if !strings.Contains(workspaceNav, marker) {
 			t.Fatalf("workspace nav missing the prototype's two-digit icon %q", marker)
@@ -173,7 +178,7 @@ func TestTenantCreateFormCanBindAnExistingRoom(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("render tenant form: %v", err)
 	}
-	for _, marker := range []string{`name="room_id"`, `data-room-rent="1200.00"`, `name="structured"`, `name="arrangement_start_month"`, `tenantRoomSelect`} {
+	for _, marker := range []string{`name="room_id"`, `data-room-rent="1200.00"`, `name="structured"`, `name="arrangement_start_month"`, `data-room-occupants=`, `name="room_plan"`} {
 		if !strings.Contains(page.String(), marker) {
 			t.Fatalf("tenant room binding form missing %q", marker)
 		}

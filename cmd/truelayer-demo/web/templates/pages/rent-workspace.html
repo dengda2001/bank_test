@@ -12,7 +12,7 @@
   {{template "workspace-nav" .}}
   <main class="content workspace">
     <div class="workspace-toolbar">
-      <div><div class="eyebrow workspace-title-eyebrow">RENTOPS · MONTHLY WORKSPACE</div><h1><span class="workspace-title-desktop">月度收租工作台</span><span class="workspace-title-mobile">本月收租</span></h1><div class="tiny workspace-title-subtitle">{{.PeriodLabel}} · 所有金额来自同一套月度账务事实</div><div class="tiny workspace-title-mobile-subtitle">先处理异常，再查看收缴进度。</div></div>
+      <div><div class="eyebrow workspace-title-eyebrow">RENTOPS · MONTHLY WORKSPACE</div><h1><span class="workspace-title-desktop">月度收租工作台</span><span class="workspace-title-mobile">本月收租</span></h1><div class="tiny workspace-title-subtitle">{{.PeriodLabel}} · {{if .IsFuturePeriod}}按当前入住分担预览，不会锁定未来责任{{else}}所有金额来自同一套月度账务事实{{end}}</div><div class="tiny workspace-title-mobile-subtitle">先处理异常，再查看收缴进度。</div></div>
       <div class="workspace-month-controls" aria-label="选择收租月份">
         <a class="btn subtle workspace-month-step" href="{{workspacePeriodURL .Filters .PreviousPeriod}}" aria-label="上个月">‹</a>
         <form class="workspace-period" method="get" action="/rent-dashboard"><label for="workspace-period">月份</label><input id="workspace-period" name="period" type="month" value="{{.Period}}" aria-label="月份" onchange="this.form.requestSubmit()"><input type="hidden" name="view" value="{{.View}}"><input type="hidden" name="property_id" value="{{if .Filters.PropertyID}}{{.Filters.PropertyID}}{{end}}"><input type="hidden" name="room_id" value="{{if .Filters.RoomID}}{{.Filters.RoomID}}{{end}}"><input type="hidden" name="search" value="{{.Filters.Search}}"><input type="hidden" name="status" value="{{.Filters.Status}}"><input type="hidden" name="sort" value="{{.Filters.Sort}}"><input type="hidden" name="page_size" value="{{.PageSize}}"></form>
@@ -22,13 +22,19 @@
     {{if eq .Error "invalid_workspace_filter"}}<div class="notice error">筛选条件无效，已恢复安全默认值。</div>{{end}}
     {{if eq .Error "confirmation_failed"}}<div class="notice error">匹配失败，请检查所选租客、月份和未收金额。</div>{{end}}
     {{if eq .Error "transaction_action_failed"}}<div class="notice error">暂不处理失败，请检查这笔流水当前是否已有分配。</div>{{end}}
+    {{if eq .Error "manual_balance_reason_required"}}<div class="notice error">请填写平账原因。</div>{{end}}
+    {{if eq .Error "manual_balance_disposition_unimplemented"}}<div class="notice error">当前仅支持「匹配现有收款」；本次未产生账务变更。</div>{{end}}
+    {{if eq .Error "manual_balance_failed"}}<div class="notice error">平账未完成，请核对责任状态后重试。</div>{{end}}
+    {{if eq .Error "invalid_manual_balance"}}<div class="notice error">平账请求无效，请刷新页面后重试。</div>{{end}}
+    {{if eq .Message "manual_balance_saved"}}<div class="notice ok" data-toast>平账已完成，剩余金额已关联到该租客责任。</div>{{end}}
+    {{if eq .Message "manual_balance_not_needed"}}<div class="notice ok" data-toast>该责任已无未付金额，无需平账。</div>{{end}}
     {{if eq .Message "rent_confirmed"}}<div class="notice ok" data-toast>流水已关联，待处理队列已更新。</div>{{end}}
     {{if eq .Message "transaction_action_saved"}}<div class="notice ok" data-toast>流水已暂不处理，待处理队列已更新。</div>{{end}}
-    {{if not .PropertyOptions}}<div class="notice workspace-empty-notice">尚未建立有效房产。旧版租金账单不会自动迁移；你可以先<a href="/properties?add=1">新建房产</a>，或前往<a href="/bills">应收账单</a>查看现有账单。</div>{{end}}
+    {{if not .PropertyOptions}}<div class="notice workspace-empty-notice">尚未建立有效房产。未绑定房间的历史租客责任仍可在租客视角查看；你可以先<a href="/properties?add=1">新建房产</a>。</div>{{end}}
     <section class="workspace-summary" aria-label="月度汇总">
-      <div class="panel metric metric-main"><div class="label">本月应收</div><strong>{{.Summary.ExpectedAmount}}</strong><span>{{.Summary.ResponsibilityCount}} 条租客责任</span></div>
+      <div class="panel metric metric-main"><div class="label">{{if .IsFuturePeriod}}预计应收{{else}}本月应收{{end}}</div><strong>{{if .IsFuturePeriod}}{{.Summary.ForecastExpectedAmount}}{{else}}{{.Summary.ExpectedAmount}}{{end}}</strong><span>{{if .IsFuturePeriod}}{{.Summary.ForecastCount}} 条预计分摊{{else}}{{.Summary.ResponsibilityCount}} 条租客责任{{end}}</span></div>
       <div class="panel metric metric-success"><div class="label">已收租金</div><strong>{{.Summary.PaidAmount}}</strong><span>收缴率 {{.Summary.CollectionPercent}}%</span></div>
-      <div class="panel metric metric-warning"><div class="label">剩余未收</div><strong>{{.Summary.BalanceAmount}}</strong><span>{{.Summary.FollowupCount}} 条需继续跟进</span></div>
+      <div class="panel metric metric-warning"><div class="label">{{if .IsFuturePeriod}}预计未覆盖{{else}}剩余未收{{end}}</div><strong>{{if .IsFuturePeriod}}{{.Summary.ProjectedBalanceAmount}}{{else}}{{.Summary.BalanceAmount}}{{end}}</strong><span>{{if .IsFuturePeriod}}未到期，不计入催收{{else}}{{.Summary.FollowupCount}} 条需继续跟进{{end}}</span></div>
       <div class="panel metric"><div class="label">本月支出</div><strong>{{.Summary.ExpenseAmount}}</strong><span>{{len .PropertyOptions}} 套房产均摊</span></div>
     </section>
     <section class="panel surface workspace-action-queue{{if eq .PendingCount 0}} is-empty{{end}}" id="pending-review" aria-label="待人工处理流水">
@@ -47,12 +53,13 @@
           <input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="view" value="{{.View}}">
           <label class="search" for="workspace-search">搜索<input id="workspace-search" name="search" type="search" value="{{.Filters.Search}}" placeholder="房产、房间、租客"></label>
           <label class="property" for="workspace-property">房产<select id="workspace-property" name="property_id" onchange="this.form.requestSubmit()"><option value="">全部房产</option>{{range .PropertyOptions}}<option value="{{.ID}}"{{if eq $.Filters.PropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
-          <label for="workspace-status">状态<select id="workspace-status" name="status" onchange="this.form.requestSubmit()"><option value="all"{{if eq .Filters.Status "all"}} selected{{end}}>全部</option><option value="unpaid"{{if eq .Filters.Status "unpaid"}} selected{{end}}>未交满</option><option value="needs_review"{{if eq .Filters.Status "needs_review"}} selected{{end}}>待处理</option><option value="overdue"{{if eq .Filters.Status "overdue"}} selected{{end}}>已逾期</option><option value="partial"{{if eq .Filters.Status "partial"}} selected{{end}}>部分缴纳</option><option value="open"{{if eq .Filters.Status "open"}} selected{{end}}>未缴</option><option value="paid"{{if eq .Filters.Status "paid"}} selected{{end}}>已缴清</option><option value="vacant"{{if eq .Filters.Status "vacant"}} selected{{end}}>空置</option></select></label>
+          <label for="workspace-status">状态<select id="workspace-status" name="status" onchange="this.form.requestSubmit()"><option value="all"{{if eq .Filters.Status "all"}} selected{{end}}>全部</option><option value="unpaid"{{if eq .Filters.Status "unpaid"}} selected{{end}}>未交满</option><option value="needs_review"{{if eq .Filters.Status "needs_review"}} selected{{end}}>待处理</option><option value="overdue"{{if eq .Filters.Status "overdue"}} selected{{end}}>已逾期</option><option value="partial"{{if eq .Filters.Status "partial"}} selected{{end}}>部分缴纳</option><option value="open"{{if eq .Filters.Status "open"}} selected{{end}}>未缴</option><option value="paid"{{if eq .Filters.Status "paid"}} selected{{end}}>已缴清</option><option value="forecast"{{if eq .Filters.Status "forecast"}} selected{{end}}>预计</option><option value="vacant"{{if eq .Filters.Status "vacant"}} selected{{end}}>空置</option></select></label>
           <input type="hidden" name="room_id" value="{{if .Filters.RoomID}}{{.Filters.RoomID}}{{end}}"><input type="hidden" name="sort" value="{{.Filters.Sort}}"><input type="hidden" name="page_size" value="{{.PageSize}}"><button class="btn" type="submit">搜索</button><a class="btn subtle" href="{{workspaceViewURL .Filters .View .Filters.PropertyID .Filters.RoomID}}">清除筛选</a>
         </form>
       </div>
       <div class="workspace-dimension-summary" aria-live="polite">
-        <span class="workspace-chip total">本月共 <strong>{{.DimensionSummary.Total}}</strong> {{if eq .View "properties"}}套房产{{else if eq .View "rooms"}}间房{{else}}条租客责任{{end}}</span>
+        <span class="workspace-chip total">{{if .IsFuturePeriod}}预计{{else}}本月共{{end}} <strong>{{.DimensionSummary.Total}}</strong> {{if eq .View "properties"}}套房产{{else if eq .View "rooms"}}间房{{else if .IsFuturePeriod}}条租客分摊{{else}}条租客责任{{end}}</span>
+        {{if .IsFuturePeriod}}<span class="workspace-chip forecast">预计分摊 <strong>{{.DimensionSummary.Forecast}}</strong></span>{{end}}
         <span class="workspace-chip danger">逾期未缴 <strong>{{.DimensionSummary.Overdue}}</strong></span>
         <span class="workspace-chip warn">部分缴纳 <strong>{{.DimensionSummary.Partial}}</strong></span>
         <span class="workspace-chip ok">已缴满 <strong>{{.DimensionSummary.Paid}}</strong></span>

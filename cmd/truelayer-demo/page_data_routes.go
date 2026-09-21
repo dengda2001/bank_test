@@ -470,7 +470,31 @@ func (a *app) handleBills(w http.ResponseWriter, r *http.Request) {
 	if _, ok := a.scopedPageUser(w, r); !ok {
 		return
 	}
-	a.renderRentDashboard(w, r, nil)
+	http.Redirect(w, r, legacyBillsWorkspaceURL(r.URL.Query()), http.StatusFound)
+}
+
+func legacyBillsWorkspaceURL(query url.Values) string {
+	period, err := parsePeriodMonth(strings.TrimSpace(query.Get("period")))
+	if err != nil {
+		period = monthStart(time.Now().UTC())
+	}
+	filters := defaultRentWorkspaceFilters(period)
+	if parsed, parseErr := rentWorkspaceFiltersFromQuery(query); parseErr == nil {
+		filters = parsed
+	}
+	filters.View = rentWorkspaceViewTenants
+	target, err := url.Parse(rentWorkspaceURL(filters, filters.Page))
+	if err != nil {
+		return "/rent-dashboard?view=tenants"
+	}
+	values := target.Query()
+	for _, key := range []string{"message", "error"} {
+		if value := strings.TrimSpace(query.Get(key)); value != "" {
+			values.Set(key, value)
+		}
+	}
+	target.RawQuery = values.Encode()
+	return target.String()
 }
 
 func (a *app) handleTransactions(w http.ResponseWriter, r *http.Request) {
@@ -1488,7 +1512,42 @@ func copyRoomReturnContext(target, source url.Values) {
 }
 
 func (a *app) handleTenancies(w http.ResponseWriter, r *http.Request) {
-	a.serveTenanciesPage(w, r)
+	if r.Method == http.MethodPost {
+		a.serveTenanciesPage(w, r)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := a.scopedPageUser(w, r); !ok {
+		return
+	}
+	http.Redirect(w, r, legacyTenanciesRoomURL(r.URL.Query()), http.StatusFound)
+}
+
+func legacyTenanciesRoomURL(query url.Values) string {
+	values := url.Values{}
+	if period, err := parsePeriodMonth(strings.TrimSpace(query.Get("period"))); err == nil {
+		values.Set("period", period.Format("2006-01"))
+	}
+	if search := strings.TrimSpace(query.Get("search")); len([]rune(search)) <= 191 && search != "" {
+		values.Set("search", search)
+	}
+	if query.Get("message") == "lease_saved" {
+		values.Set("message", "room_saved")
+	}
+	if errorCode := query.Get("error"); errorCode != "" {
+		if errorCode == "lease_locked" {
+			values.Set("error", "room_arrangement_locked")
+		} else {
+			values.Set("error", "room_action_failed")
+		}
+	}
+	if encoded := values.Encode(); encoded != "" {
+		return "/rooms?" + encoded
+	}
+	return "/rooms"
 }
 
 func (a *app) handleMore(w http.ResponseWriter, r *http.Request) {

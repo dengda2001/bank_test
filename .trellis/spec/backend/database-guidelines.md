@@ -1255,44 +1255,124 @@ The service reloads every fact with `user_id`, locks the source and
 obligations, validates the complete batch, inserts effective allocations
 atomically, and recomputes the ledger projection from those rows.
 
+## Scenario: Monthly Rent Fact Materialization
+
+### 1. Scope / Trigger
+
+- Trigger: Any operation that needs persistent rent responsibilities for one
+  account and month, including workspace/history reads, matching, cash receipt,
+  explicit future-month allocation, and dunning.
+- Applies to structured room arrangements and the controlled legacy tenant
+  fallback; it does not replace rent obligations with view-only calculations.
+
+### 2. Signatures
+
+- `newMonthlyRentFactsService(db *gorm.DB) *monthlyRentFactsService` creates the
+  shared materialization service.
+- `(*monthlyRentFactsService).ensureMonthlyRentFacts(ctx, userID, periodMonth,
+  intent) error` is the sole business entry point for generating monthly rent
+  responsibilities. `intent` is `rentFactsIntentRead` or
+  `rentFactsIntentExplicitPayment`.
+- `rentLedgerService.ensureRentCharge(ctx, userID, propertyID, roomID,
+  periodMonth)` creates or loads one room charge and its tenant obligations.
+- `obligationService.ensureMonthlyObligations(ctx, userID, periodMonth)` is the
+  legacy fallback and must not be called as an independent business entry
+  point.
+
+### 3. Contracts
+
+- Normalize `periodMonth` with `monthStart`. All database reads and writes are
+  scoped by the authenticated `userID`.
+- Read intent materializes only the current or a historical month. A future
+  month is preview-only; explicit payment intent may materialize that future
+  month before allocation so allocations always reference stable obligation IDs.
+- For each active structured room/month, create or load one `rent_charge` and
+  its persisted `rent_obligations` from the effective agreement and parties.
+  Room total and individual responsibilities are integer cents and party
+  responsibilities must reconcile to the charge total.
+- Empty rooms do not get a new charge. Existing charge rows remain targets so
+  retries can load their persisted obligations.
+- After structured rooms, run the legacy generator. A tenant with a structured
+  party or charge-backed obligation for that month is skipped by legacy lazy
+  generation. A legacy-only tenant continues to receive one lazy obligation.
+- Existing legacy obligation versus new structured responsibility for the same
+  tenant/month is a conflict. Never duplicate, delete, or silently reassign
+  historical obligations, allocations, cash receipts, or dunning attempts.
+- A future preview must not write a charge or obligation; all financial views
+  consume persisted obligation facts rather than recomputing amounts from
+  template display values.
+
+### 4. Validation & Error Matrix
+
+- `userID == 0`, zero month, nil service/database, or unsupported intent ->
+  return a validation error before materialization.
+- Read intent with a future month -> return success without writes.
+- Explicit payment intent with a future month -> materialize before allocation.
+- Active structured room with invalid relationship, multiple active
+  agreements, invalid responsibility totals, or a legacy/structured month
+  collision -> return an error without writing inconsistent facts for that
+  room/tenant. Earlier room transactions in the same month may already have
+  committed; retry remains idempotent.
+- Database failure -> propagate the error; do not fall back to a second
+  generator.
+
+### 5. Good/Base/Bad Cases
+
+- Good: workspace and payment paths call `ensureMonthlyRentFacts` with their
+  intent, then read/allocate against the persisted obligation IDs it ensures.
+- Base: an empty structured room creates no charge; a legacy tenant still gets
+  one lazy obligation; a future workspace read creates neither.
+- Bad: calling `ensureMonthlyObligations` directly from a second feature path,
+  generating structured obligations from `tenants.monthly_rent_cents`, or
+  inserting both legacy and charge-backed rows for one tenant/month.
+
+### 6. Tests Required
+
+- Unit tests for intent/month boundaries, including future preview and explicit
+  future payment materialization.
+- Database tests for structured charge/party generation, empty rooms, legacy
+  fallback, conflict rejection, idempotent retries, and concurrent calls.
+- Call-site tests must assert that matching, cash, workspace, and history use
+  the shared service and retain stable obligation IDs.
+- Run `go test ./... -count=1`, `go vet ./...`, and `git diff --check`; run
+  MySQL-backed locking/migration tests when `RENTOPS_MYSQL_TEST_DSN` is set.
+
+### 7. Wrong vs Correct
+
+Wrong:
+
+```go
+newObligationService(db).ensureMonthlyObligations(ctx, userID, month)
+```
+
+Correct:
+
+```go
+newMonthlyRentFactsService(db).ensureMonthlyRentFacts(
+	ctx, userID, month, rentFactsIntentRead,
+)
+```
+
+The shared entry point decides between preview, structured facts, and the
+guarded legacy fallback so consumers cannot independently double-generate.
+
 ## Scenario: Monthly Rent Dashboard Read Model
 
 ### 1. Scope / Trigger
 
-- Trigger: Any authenticated `/rent-dashboard` monthly summary, bill-list
-  filter, pending-income entry point, other-income entry point, or sync-state
-  display.
+- Trigger: The monthly rent/dunning read model and its bank-arrival metrics.
+  `/rent-dashboard` is the canonical room-centric workspace; `/bills` GET is
+  only a compatibility redirect to its tenant view.
 - Applies to the database-backed monthly obligations, effective rent/cash
   payment projection, bank arrival transactions, allocations, and sync runs.
 
-> **Surface note (updated 2026-09-19 by
-> `09-19-legacy-dashboard-template-removal`).** `renderRentDashboard` serves
-> **`/bills`** (`page_data_routes.go:439`) and the **`/dunning*`** routes
-> (`page_data_routes.go`, `dunning_handlers.go`), and nothing else. **It is live
-> code, not dead code**: the function body and its `switch` must stay, because
-> that switch is what selects `billsPageTemplate` and `dunningPageTemplate`.
-> The legacy no-database fallback template (`rentDashboardTemplate`) and its
-> `db == nil` entry point were **deleted**. An unknown request path and a
-> session with no database now each return an explicit error (`503`) instead of
-> silently degrading to demo data. The template's distinctive markup —
-> `tr.rent-row`, `a.tenant-link`, `[data-dunning-open]` — no longer exists
-> anywhere in the repository. `/rent-dashboard` renders the room-centric
-> workspace for every database-backed session, whose read model is **not** the
-> one described in this scenario. See "Scenario: Room-Centric Rent Workspace
-> Read Model" below. Anything that used to read the legacy markup should read
-> `/bills` instead, passing `status=all`, because the page's own "未结清" filter
-> is `open ∪ overdue ∪ partial` (`dashboard_filters.go:81-90`) and hides `paid`.
->
-> **Known gap handed to the dashboard-alignment subtask
-> (`09-19-pc-ui-fidelity-alignment`, item ③).** The prototype's "launch dunning
-> from the workspace" drawer — `[data-dunning-open]`, `#dunning-drawer`, its
-> safe-area bottom sheet, and the per-attempt "重试此人" retry button — existed
-> **only** in the deleted template. Neither `/dunning` (`dunningPageTemplate`)
-> nor the room workspace (`rent-workspace.html`) renders a drawer or a retry
-> button, although the server-side preview/send/retry handlers all still work.
-> The `db == nil` branch of `renderRentDashboard` that loaded the JSON demo data
-> (`loadTenants` / `loadExpenses` / `loadLatestDemoResult`) is now unreachable
-> but was left in place deliberately; its removal is a separate follow-up.
+> **Surface note (updated 2026-09-21 by `09-21-simplify-billing-tenancy`).**
+> `GET /bills` and `GET /tenancies` no longer render standalone product pages;
+> they redirect to `/rent-dashboard?view=tenants` and `/rooms` respectively.
+> The old bill/dunning template helpers may remain for compatibility tests and
+> server-side dunning reads, but they are not navigation destinations. Do not
+> use them as the canonical rent UI; see the frontend
+> "Rent Workspace Navigation and Legacy Routes" contract.
 
 ### 2. Signatures
 
@@ -1325,9 +1405,9 @@ atomically, and recomputes the ledger projection from those rows.
 - Sync text comes from the current user's latest `bank_sync_runs` and account
   coverage. Partial/failed latest runs remain visible, with the latest
   successful coverage shown separately when available; no-run state is explicit.
-  **After `09-19-legacy-dashboard-template-removal` this bullet has no rendered
-  carrier on `/bills` or `/dunning`:** `renderRentDashboard` still fills
-  `rentDashboardPageData.SyncCoverage` / `.SyncStatus` /
+  **The former bill template is no longer a live page:**
+  `renderRentDashboard` still fills `rentDashboardPageData.SyncCoverage` /
+  `.SyncStatus` /
   `.LastSuccessfulSyncCoverage` (`dashboard.go`), but no template reads those
   three fields any more — the inline sync notice lived only in the deleted
   legacy template. `/bank` (`bankPageTemplate`) renders sync separately from its
@@ -1390,8 +1470,8 @@ filtered := filterAndSortRentDashboardRows(allRows, filters)
 summary.Rows, summary.TotalPages = paginateRentDashboardRows(filtered, filters.Page, filters.PageSize)
 ```
 
-The monthly bill remains the source of rent-period truth; bank arrival month is
-used only for pending and other-income navigation.
+The persisted monthly obligation remains the source of rent-period truth; bank
+arrival month is used only for pending and other-income navigation.
 
 ## Scenario: Room-Centric Rent Workspace Read Model
 
@@ -1411,24 +1491,24 @@ used only for pending and other-income navigation.
 - `rentWorkspaceData` / `rentWorkspaceRoomAggregate` — the loader's typed input
   and the per-room aggregate.
 - `rentWorkspaceService.load(ctx, userID, filters)` calls
-  `obligationService.ensureMonthlyObligations` before its reads
-  (`rent_workspace.go:1133`), exactly like `summarizeRentDashboardWithFilters`.
+  `monthlyRentFactsService.ensureMonthlyRentFacts` with read intent before its
+  reads; see "Monthly Rent Fact Materialization" above.
 - `roomIDByTenant` / `ambiguousTenant` / `ambiguousRoom`
   (`rent_workspace.go:399-417`) — the tenant-to-room attribution built from
   active agreement parties, plus the tenants that map to more than one room and
   the rooms they touch.
 - `rentLedgerService.ensureRentCharge(ctx, userID, propertyID, roomID, period)`
-  — `landlord_rent_ledger.go:244`; still has **no production caller**, and
-  nothing in this read path depends on it.
+  — `landlord_rent_ledger.go:244`; the shared materializer uses it for
+  structured room facts.
 
 ### 3. Contracts
 
-- **Room amounts come from obligations, not charges.** The workspace reads the
-  same rows as `/bills` — active, user-owned obligations for the requested
-  `period_month`, with no `rent_charge_id` predicate
-  (`rent_workspace.go:1152`) — and it materializes them first through the
-  idempotent `OnConflict{DoNothing: true}` upsert, so a GET never rewrites an
-  existing obligation.
+- **Room totals sum persisted obligations.** The workspace reads active,
+  user-owned obligations for the requested `period_month`
+  (`rent_workspace.go`) after the shared materializer has created structured
+  room charges/obligations and legacy lazy obligations as appropriate. A
+  structured tenant is never independently lazy-generated from
+  `tenants.monthly_rent_cents`.
 - **Room attribution is tenant → active party → agreement room.** A tenant is
   attributed to a room when an active `agreement_parties` row joins an active
   agreement whose dates cover the month (`rent_workspace.go:399-417`). A tenant
@@ -1441,18 +1521,16 @@ used only for pending and other-income navigation.
   would happen to look wrong. A tenant with no mapping is not counted at all.
   Room money is the sum of its tenants' `expected_amount_cents`, never room rent
   × headcount.
-- **A charge is no longer required.** `chargeByRoom` is still loaded
-  (`rent_workspace.go:489`) because a future charge's `currency` is a valid
-  fallback, but a room with attributed obligations reports its totals with or
-  without one. Occupancy remains the independent `activePartyCountByRoom`
-  computation, so the tenant count and the money share no source.
+- Occupancy remains the independent `activePartyCountByRoom` computation, so
+  tenant count and money share no source. Structured room obligations carry a
+  `rent_charge_id`; legacy fallback obligations do not.
 - A room with an active agreement and active party but **no attributable
   obligation** (including a row skipped for a non-EUR currency) is reported as
   `needs_review` (`rent_workspace.go:537-542`), never as `vacant` and never as
   settled. The room-level due date is the earliest attributed obligation's due
   date (`rent_workspace.go:533`).
-- `rent_charges` still has no production writer. Its removal is a separate
-  task; this read path just no longer waits for it.
+- `rent_charges` is a production fact written by
+  `rentLedgerService.ensureRentCharge`; it is not a user-maintained document.
 
 ### 4. Validation & Error Matrix
 
@@ -1473,20 +1551,19 @@ used only for pending and other-income navigation.
 
 ### 5. Good/Base/Bad Cases
 
-- Good: let the loader materialize the month's lazy obligations, attribute each
+- Good: let the loader call the shared materializer, attribute each persisted
   obligation to its tenant's room through the active party relationship, and
   sum the obligations per room.
 - Base: a shared room with three tenants each on €500 reports €1,500 expected,
   not the room rent multiplied by three.
 - Bad: reading an all-zero room total as "no rent is due this month", or
-  closing the gap by seeding `rent_charges` while leaving
-  `tenants.monthly_rent_cents > 0` (see the warning below).
+  calling the legacy generator directly for a structured tenant.
 
 ### 6. Tests Required
 
-- Database tests must assert that room totals come from attributed lazy
-  obligations without any `rent_charges` row, and that `load` materializes the
-  month's obligations itself.
+- Database tests must assert that structured room totals come from
+  charge-backed responsibilities and legacy-only totals from lazy
+  responsibilities, and that `load` invokes the shared materializer.
 - Unit tests must pin a shared room's total as the sum of its tenants'
   obligations, a vacant room's empty state, and an ambiguous tenant counting in
   neither room. The ambiguous case must use a **mixed** room — an ambiguous
@@ -1502,29 +1579,20 @@ used only for pending and other-income navigation.
 Wrong:
 
 ```go
-// Room money is read only from charge-backed rows, so lazy obligations —
-// every row the seed actually produces — stay invisible.
-db.Where("user_id = ? AND period_month = ? AND record_status = ? AND rent_charge_id IS NOT NULL",
-    userID, periodMonth, obligationRecordActive).Find(&input.Obligations)
+// Bypass structured room facts and independently lazy-generate every tenant.
+newObligationService(db).ensureMonthlyObligations(ctx, userID, periodMonth)
 ```
 
 Correct:
 
 ```go
-// Materialize and read the same obligation rows as /bills, then attribute each
-// one to its tenant's room through the active agreement party.
-db.Where("user_id = ? AND period_month = ? AND record_status = ?",
-    userID, periodMonth, obligationRecordActive).Find(&input.Obligations)
+newMonthlyRentFactsService(db).ensureMonthlyRentFacts(
+	ctx, userID, periodMonth, rentFactsIntentRead,
+)
 ```
 
-> **Do not close the amount gap by seeding `rent_charges` alone.** With
-> `tenants.monthly_rent_cents > 0`, `ensureMonthlyObligations` still inserts a
-> lazy row for the same `(tenant_id, period_month)`. A charge-backed row's
-> generated `lazy_period_month` is NULL, and NULLs are distinct in a MySQL
-> unique index, so neither unique key collides and the pair becomes two rows —
-> breaking the lazy uniqueness invariant established by migration 013. This
-> read now counts both rows, so a seeded charge is not just useless, it inflates
-> the room total. Verified by direct SQL experiment on 2026-09-19.
+This prevents structured/legacy double-generation while preserving the
+legacy-only fallback.
 
 ## Scenario: Local Test Data Seeding
 
@@ -1566,7 +1634,7 @@ db.Where("user_id = ? AND period_month = ? AND record_status = ?",
   obligation path. `/rent-dashboard` now aggregates those lazy obligations per
   room, so on a freshly seeded database the room tree stays empty until the
   first load of a page materializes the month's obligations, after which room
-  amounts match `/bills` for the same month — see "Scenario: Room-Centric Rent
+  amounts match the workspace tenant view for the same month — see "Scenario: Room-Centric Rent
   Workspace Read Model".
 - `tenants.room_label` / `room_address` / `property_hint` are denormalized
   copies and must agree with `properties` + `rooms`; the page list and the room

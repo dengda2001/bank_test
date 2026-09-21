@@ -36,7 +36,7 @@
         <div class="cash-receipt-mobile-list">{{range .Rows}}<article class="cash-receipt-mobile-card" data-page="cash-receipts" data-receipt-id="{{.ID}}">
           <div class="cash-receipt-mobile-head"><div><h3>{{.TenantName}}</h3><p>{{.ReceivedAt}} · {{.ReceiptNumber}}</p></div><strong class="amount">{{.Amount}}</strong></div>
           <div class="cash-receipt-mobile-meta"><div><span>对应月份</span><strong>{{.Period}}</strong></div><div><span>房间</span><strong>{{if .RoomLabel}}{{.RoomLabel}}{{else}}—{{end}}</strong></div></div>
-          <p class="cash-receipt-mobile-note">{{if .Note}}{{.Note}}{{else}}现金收款已关联至租客账单。{{end}}</p>
+          <p class="cash-receipt-mobile-note">{{if .Note}}{{.Note}}{{else}}现金收款已关联至租客个人责任。{{end}}</p>
           <div class="cash-receipt-mobile-actions"><span class="status {{.Status}}">{{.StatusLabel}}</span>{{if eq .Status "confirmed"}}<a class="btn subtle" href="{{.VoidURL}}">撤销</a>{{else if .VoidReason}}<span class="tiny">{{.VoidReason}}</span>{{end}}</div>
         </article>{{end}}</div>
         {{else}}<div class="workspace-empty">当前月份暂无现金收款记录。{{if ne .Search ""}}请调整搜索条件。{{end}}</div>{{end}}

@@ -99,7 +99,7 @@ func TestRentWorkspaceStatusFilterUsesTheBadgeVocabulary(t *testing.T) {
 	}
 	status := markupBetween(t, page, `<select id="workspace-status"`, `</select>`)
 
-	for _, value := range []string{"all", "unpaid", "needs_review", "overdue", "partial", "open", "paid", "vacant"} {
+	for _, value := range []string{"all", "unpaid", "needs_review", "overdue", "partial", "open", "paid", "forecast", "vacant"} {
 		if !strings.Contains(status, `value="`+value+`"`) {
 			t.Errorf("status filter lost the value %q: %s", value, status)
 		}
@@ -109,7 +109,7 @@ func TestRentWorkspaceStatusFilterUsesTheBadgeVocabulary(t *testing.T) {
 	// two cannot drift apart again without turning this red.
 	for statusValue := range map[string]bool{
 		"needs_review": true, "overdue": true, "partial": true,
-		"open": true, "paid": true, "vacant": true,
+		"open": true, "paid": true, "forecast": true, "vacant": true,
 	} {
 		label := workspaceStatusLabel(statusValue)
 		start := strings.Index(status, `value="`+statusValue+`"`)
@@ -176,7 +176,7 @@ func TestRentWorkspaceShowsDimensionsBeforePropertySetup(t *testing.T) {
 		"租客视角",
 		"尚未建立有效房产",
 		`href="/properties?add=1"`,
-		`href="/bills"`,
+		"未绑定房间的历史租客责任仍可在租客视角查看",
 	} {
 		if !strings.Contains(page, expected) {
 			t.Fatalf("uninitialized workspace is missing %q", expected)
@@ -210,6 +210,101 @@ func TestRentWorkspaceTenantViewExplainsCompleteThirdPartyPayment(t *testing.T) 
 	}
 	if strings.Contains(page, "/dunning/") {
 		t.Fatal("a fully covered tenant must not expose a dunning action")
+	}
+}
+
+func TestBuildRentWorkspacePreviewsFutureRoomResponsibilitiesWithoutMarkingThemUnpaid(t *testing.T) {
+	period := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2026, 9, 21, 0, 0, 0, 0, time.UTC)
+	propertyRow := property{ID: 1, UserID: 7, Name: "Canal House", Status: "active"}
+	roomRow := room{ID: 11, UserID: 7, PropertyID: propertyRow.ID, RoomLabel: "A-01", Status: "active", ActiveFrom: period.AddDate(0, -3, 0)}
+	tenantOne := tenant{ID: 101, UserID: 7, Name: "Aoife Murphy", Status: "active"}
+	tenantTwo := tenant{ID: 102, UserID: 7, Name: "Zoe Byrne", Status: "active"}
+	agreement := tenancyAgreement{ID: 301, UserID: 7, RoomID: roomRow.ID, Status: "active", StartDate: period.AddDate(0, -3, 0), MonthlyRentCents: 100001, Currency: "EUR", DueDay: 5}
+	parties := []agreementParty{
+		{UserID: 7, AgreementID: agreement.ID, TenantID: tenantOne.ID, ResponsibilityCents: 60001, Status: "active"},
+		{UserID: 7, AgreementID: agreement.ID, TenantID: tenantTwo.ID, ResponsibilityCents: 40000, Status: "active"},
+	}
+	data, err := buildRentWorkspace(rentWorkspaceInput{
+		UserID: 7, PeriodMonth: period, Now: now,
+		Properties: []property{propertyRow}, Rooms: []room{roomRow},
+		Agreements: []tenancyAgreement{agreement}, Parties: parties,
+		Tenants: []tenant{tenantOne, tenantTwo},
+	}, defaultRentWorkspaceFilters(period))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(data.TenantRows) != 2 {
+		t.Fatalf("future tenant previews=%+v", data.TenantRows)
+	}
+	if data.Summary.ExpectedCents != 0 || data.Summary.PaidCents != 0 || data.Summary.BalanceCents != 0 || data.Summary.FollowupCount != 0 {
+		t.Fatalf("future previews entered persisted rent totals: %+v", data.Summary)
+	}
+	if data.Summary.ForecastCents != agreement.MonthlyRentCents || data.Summary.ForecastCount != 2 {
+		t.Fatalf("future preview totals=%+v", data.Summary)
+	}
+	for index, expected := range []int64{60001, 40000} {
+		row := data.TenantRows[index]
+		if !row.IsForecast || row.ObligationID != 0 || row.Status != "forecast" || row.ExpectedCents != expected || row.PaidCents != 0 || row.BalanceCents != 0 {
+			t.Fatalf("tenant preview[%d]=%+v", index, row)
+		}
+	}
+	if len(data.RoomRows) != 1 || data.RoomRows[0].ForecastCents != agreement.MonthlyRentCents || data.RoomRows[0].Status != "forecast" {
+		t.Fatalf("room preview=%+v", data.RoomRows)
+	}
+	if len(data.PropertyRows) != 1 || data.PropertyRows[0].ForecastCents != agreement.MonthlyRentCents || data.PropertyRows[0].UnpaidRooms != 0 {
+		t.Fatalf("property preview=%+v", data.PropertyRows)
+	}
+}
+
+func TestBuildRentWorkspaceKeepsLegacyUnassignedObligationsInTenantView(t *testing.T) {
+	period := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	legacyTenant := tenant{ID: 91, UserID: 7, Name: "Legacy tenant", RoomLabel: "Old room text", RoomAddress: "Old address", Status: "active"}
+	obligation := rentObligation{
+		ID: 501, UserID: 7, TenantID: legacyTenant.ID, PeriodMonth: period, DueDate: dueDateForMonth(period, 5),
+		ExpectedAmountCents: 80000, Currency: "EUR", RecordStatus: obligationRecordActive,
+	}
+	data, err := buildRentWorkspace(rentWorkspaceInput{
+		UserID: 7, PeriodMonth: period, Now: time.Date(2026, 9, 20, 0, 0, 0, 0, time.UTC),
+		Tenants: []tenant{legacyTenant}, Obligations: []rentObligation{obligation},
+	}, defaultRentWorkspaceFilters(period))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(data.TenantRows) != 1 {
+		t.Fatalf("legacy tenant rows=%+v", data.TenantRows)
+	}
+	row := data.TenantRows[0]
+	if row.ObligationID != obligation.ID || row.TenantName != legacyTenant.Name || row.RoomLabel != legacyTenant.RoomLabel || row.RoomAddress != legacyTenant.RoomAddress {
+		t.Fatalf("legacy responsibility row=%+v", row)
+	}
+	if data.Summary.ExpectedCents != obligation.ExpectedAmountCents || data.Summary.BalanceCents != obligation.ExpectedAmountCents || data.Summary.FollowupCount != 1 {
+		t.Fatalf("legacy obligation was dropped from totals: %+v", data.Summary)
+	}
+}
+
+func TestRentWorkspaceFuturePreviewDoesNotRenderSettlementAction(t *testing.T) {
+	filters := defaultRentWorkspaceFilters(time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC))
+	page, err := executeTemplate(rentWorkspaceTemplate, rentWorkspacePageData{
+		Filters: filters, Period: "2026-11", PeriodLabel: "2026年11月", View: rentWorkspaceViewTenants,
+		IsFuturePeriod: true,
+		TenantRows: []rentWorkspaceTenantRow{{
+			TenantID: 7, TenantName: "Preview tenant", Period: "2026-11", IsForecast: true,
+			ExpectedCents: 50000, ExpectedAmount: "EUR 500.00", PaidAmount: "—", BalanceAmount: "—",
+			Status: "forecast", StatusLabel: "预计",
+		}},
+		Summary: rentWorkspaceSummary{ForecastCents: 50000, ForecastExpectedAmount: "EUR 500.00", ProjectedBalanceAmount: "EUR 500.00"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(page, `action="/bills/settle"`) {
+		t.Fatal("an unmaterialized future preview rendered a settlement action")
+	}
+	for _, expected := range []string{"预计应收", "预计", "未到期，不计入催收"} {
+		if !strings.Contains(page, expected) {
+			t.Errorf("future preview page is missing %q", expected)
+		}
 	}
 }
 

@@ -145,15 +145,15 @@
           <section class="panel" aria-labelledby="transaction-allocations-title">
             <div class="panel-head">
               <div>
-                <h2 id="transaction-allocations-title">关联账单与对象</h2>
-                <p class="tiny">按分配记录回溯到租客责任、房间与账单月份。</p>
+                <h2 id="transaction-allocations-title">关联责任与对象</h2>
+                <p class="tiny">按分配记录回溯到租客责任、房间与月份。</p>
               </div>
               <span class="tiny">{{len .Allocations}} 条记录</span>
             </div>
             {{if .Allocations}}
               <div class="transaction-allocation-table-wrap table-wrap">
                 <table class="transaction-allocation-table">
-                  <thead><tr><th>责任对象</th><th>对应账单</th><th>分类</th><th>分配金额</th><th>状态</th></tr></thead>
+                  <thead><tr><th>责任对象</th><th>对应责任</th><th>分类</th><th>分配金额</th><th>状态</th></tr></thead>
                   <tbody>{{range .Allocations}}
                     <tr class="{{if not .Effective}}allocation-inactive{{end}}">
                       <td>
@@ -162,7 +162,7 @@
                       </td>
                       <td>{{if .BillURL}}<a href="{{.BillURL}}">{{.BillLabel}}</a>{{else}}{{.BillLabel}}{{end}}{{if .Period}}<small>{{.Period}}{{if .DueDate}} · 到期 {{.DueDate}}{{end}}</small>{{end}}</td>
                       <td>{{.KindLabel}}{{if .Note}}<small>{{.Note}}</small>{{end}}</td>
-                      <td class="amount">{{.Amount}}{{if .ExpectedAmount}}<small>账单应收 {{.ExpectedAmount}}</small>{{end}}</td>
+                      <td class="amount">{{.Amount}}{{if .ExpectedAmount}}<small>责任应收 {{.ExpectedAmount}}</small>{{end}}</td>
                       <td><span class="status {{.StatusClass}}">{{.StatusLabel}}</span></td>
                     </tr>
                   {{end}}</tbody>
@@ -176,7 +176,7 @@
                       <span class="status {{.StatusClass}}">{{.StatusLabel}}</span>
                     </div>
                     <dl>
-                      <div><dt>对应账单</dt><dd>{{if .BillURL}}<a href="{{.BillURL}}">{{.BillLabel}}</a>{{else}}{{.BillLabel}}{{end}}{{if .DueDate}}<small>到期 {{.DueDate}}</small>{{end}}</dd></div>
+                      <div><dt>对应责任</dt><dd>{{if .BillURL}}<a href="{{.BillURL}}">{{.BillLabel}}</a>{{else}}{{.BillLabel}}{{end}}{{if .DueDate}}<small>到期 {{.DueDate}}</small>{{end}}</dd></div>
                       <div><dt>分类</dt><dd>{{.KindLabel}}</dd></div>
                       <div><dt>本次分配</dt><dd class="amount">{{.Amount}}</dd></div>
                     </dl>

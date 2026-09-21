@@ -118,6 +118,7 @@
     .workspace-status.partial { color: #92400e; background: #fef3c7; }
     .workspace-status.open { color: #1e40af; background: #dbeafe; }
     .workspace-status.paid { color: #065f46; background: #d1fae5; }
+    .workspace-status.forecast { color: #1e40af; background: #dbeafe; border: 1px dashed currentColor; }
     .workspace-status.vacant { color: var(--foreground-muted); background: #e5e7eb; }
 .workspace-muted { color: var(--foreground-muted); }
 

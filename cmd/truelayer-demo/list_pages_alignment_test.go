@@ -81,7 +81,7 @@ func TestListManualBalanceRedirectRetargetsTheSubmittingList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if parsed.Path != "/bills" {
+	if parsed.Path != "/rent-dashboard" || parsed.Query().Get("view") != "tenants" {
 		t.Fatalf("bills redirect path=%q", parsed.Path)
 	}
 	for key, want := range map[string]string{
@@ -150,7 +150,8 @@ func TestSettleFormPartialIsAvailableToEveryPageTemplate(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, marker := range []string{
-		`action="/bills/settle"`,
+		`action="/rent-dashboard/settle"`,
+		`name="return_to"`,
 		`name="obligation_id" value="42"`,
 		`待平账责任`,
 		`陈先生 · 2026年9月 租金责任`,

@@ -1,7 +1,8 @@
 {{define "collection-settle-form"}}
+{{if gt .ObligationID 0}}
 <details class="collection-settle">
   <summary class="btn primary">一键平账</summary>
-  <form method="post" action="/bills/settle" class="collection-balance-form">
+  <form method="post" action="/rent-dashboard/settle" class="collection-balance-form">
     <input type="hidden" name="obligation_id" value="{{.ObligationID}}">
     <input type="hidden" name="period" value="{{.ReturnPeriod}}">
     <input type="hidden" name="search" value="{{.ReturnSearch}}">
@@ -9,6 +10,7 @@
     <input type="hidden" name="sort" value="{{.ReturnSort}}">
     <input type="hidden" name="page" value="{{.ReturnPage}}">
     <input type="hidden" name="page_size" value="{{.ReturnPageSize}}">
+    <input type="hidden" name="return_to" value="{{.ReturnTo}}">
     <div class="collection-balance-fact"><span>待平账责任</span><strong>{{.DutyLabel}}</strong></div>
     <label class="collection-balance-field"><span>处理方式</span><select name="disposition">{{range .Dispositions}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
     <label class="collection-balance-field"><span>平账金额</span><input name="amount" value="{{.OutstandingAmount}}" readonly aria-label="平账金额"></label>
@@ -17,4 +19,5 @@
     <button class="btn" type="submit" data-confirm="true">确认平账</button>
   </form>
 </details>
+{{end}}
 {{end}}

@@ -60,8 +60,11 @@ func TestTenantLifecycleVoidsUnpaidFutureBillsButRejectsPaidOnMySQL(t *testing.T
 		t.Fatal(err)
 	}
 	obligations := newObligationService(db)
-	if err := obligations.generateMonthlyObligations(ctx, owner.ID, time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)); err != nil {
-		t.Fatal(err)
+	futureMonths := []time.Time{time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)}
+	for _, month := range futureMonths {
+		if err := newMonthlyRentFactsService(db).ensureMonthlyRentFacts(ctx, owner.ID, month, rentFactsIntentExplicitPayment); err != nil {
+			t.Fatal(err)
+		}
 	}
 	input.RentEndDate = "2026-10-02"
 	if _, err := service.updateTenant(ctx, owner.ID, created.ID, input); err != nil {
@@ -163,8 +166,21 @@ func TestTenantRoomBindingUpdatesOnMySQL(t *testing.T) {
 	bindInput := unboundInput
 	bindInput.RoomID = firstRoom.ID
 	bindInput.MonthlyRent = 1200
+	bindInput.RoomPlanProvided = true
+	bindInput.RoomTenantIDs = []uint64{target.ID, sibling.ID}
+	bindInput.Responsibilities = []rentResponsibilityInput{
+		{TenantID: target.ID, AmountCents: 50000},
+		{TenantID: sibling.ID, AmountCents: 70000},
+	}
 	if _, err := service.updateTenant(ctx, owner.ID, target.ID, bindInput); err != nil {
 		t.Fatalf("bind tenant to room: %v", err)
+	}
+	var boundTenant tenant
+	if err := db.Where("user_id = ? AND id = ?", owner.ID, target.ID).First(&boundTenant).Error; err != nil {
+		t.Fatal(err)
+	}
+	if boundTenant.MonthlyRentCents != 0 {
+		t.Fatalf("structured tenant monthly rent=%d; want room arrangement to remain the only rent source", boundTenant.MonthlyRentCents)
 	}
 	var current tenancyAgreement
 	if err := db.Where("user_id = ? AND room_id = ? AND status = ?", owner.ID, firstRoom.ID, "active").First(&current).Error; err != nil {
@@ -176,6 +192,13 @@ func TestTenantRoomBindingUpdatesOnMySQL(t *testing.T) {
 	}
 	if len(parties) != 2 || parties[0].TenantID != target.ID && parties[1].TenantID != target.ID || parties[0].TenantID != sibling.ID && parties[1].TenantID != sibling.ID {
 		t.Fatalf("bound room parties=%+v, want target and existing tenant", parties)
+	}
+	responsibilityByTenant := map[uint64]int64{}
+	for _, party := range parties {
+		responsibilityByTenant[party.TenantID] = party.ResponsibilityCents
+	}
+	if responsibilityByTenant[target.ID] != 50000 || responsibilityByTenant[sibling.ID] != 70000 {
+		t.Fatalf("bound room responsibilities=%v, want target=50000 and sibling=70000", responsibilityByTenant)
 	}
 	records, err := service.listTenants(ctx, owner.ID)
 	if err != nil {
@@ -189,6 +212,9 @@ func TestTenantRoomBindingUpdatesOnMySQL(t *testing.T) {
 	moveInput.RoomID = secondRoom.ID
 	moveInput.MonthlyRent = 800
 	moveInput.Name = "Edited while moving"
+	moveInput.RoomPlanProvided = false
+	moveInput.RoomTenantIDs = nil
+	moveInput.Responsibilities = nil
 	lockedCharge := rentCharge{
 		UserID: owner.ID, PropertyID: propertyRow.ID, RoomID: firstRoom.ID,
 		TenancyAgreementID: current.ID, PeriodMonth: period,

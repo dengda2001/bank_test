@@ -36,7 +36,7 @@ func TestRoomDetailMobileFactsOwnTheirWrapper(t *testing.T) {
 		// narrow-screen subset.
 		`<dt>房间生效月份</dt>`,
 		`<dt>在住人数</dt>`,
-		`<dt>账单日</dt>`,
+		`<dt>缴租日</dt>`,
 	} {
 		if !strings.Contains(page, expected) {
 			t.Fatalf("room detail is missing %q", expected)

@@ -10,28 +10,26 @@
       <div class="nav-label">收租决策</div>
       <nav class="nav" aria-label="收租决策">
         <a href="/rent-dashboard"{{if eq .ActivePage "rent-dashboard"}} class="active"{{end}}><span class="nav-icon">01</span><span>月度总览</span>{{if .ShowNavCounts}}<span class="nav-count">{{.TenantCount}}</span>{{end}}</a>
-        <a href="/bills"{{if eq .ActivePage "bills"}} class="active"{{end}}><span class="nav-icon">02</span><span>应收账单</span></a>
-        <a href="/transactions" aria-label="银行流水"{{if eq .ActivePage "transactions"}} class="active"{{end}}><span class="nav-icon">03</span><span>流水匹配</span>{{if .ShowNavCounts}}<span class="nav-count">{{.IncomeCount}}</span>{{end}}</a>
-        <a href="/dunning"{{if eq .ActivePage "dunning"}} class="active"{{end}}><span class="nav-icon">04</span><span>催收任务</span></a>
+        <a href="/transactions" aria-label="银行流水"{{if eq .ActivePage "transactions"}} class="active"{{end}}><span class="nav-icon">02</span><span>流水匹配</span>{{if .ShowNavCounts}}<span class="nav-count">{{.IncomeCount}}</span>{{end}}</a>
+        <a href="/dunning"{{if eq .ActivePage "dunning"}} class="active"{{end}}><span class="nav-icon">03</span><span>催收任务</span></a>
       </nav>
       <div class="nav-label">资产与关系</div>
       <nav class="nav" aria-label="资产与关系">
-        <a href="/properties"{{if eq .ActivePage "properties"}} class="active"{{end}}><span class="nav-icon">05</span><span>房产管理</span></a>
-        <a href="/rooms"{{if eq .ActivePage "rooms"}} class="active"{{end}}><span class="nav-icon">06</span><span>房间管理</span></a>
-        <a href="/tenants"{{if eq .ActivePage "tenants"}} class="active"{{end}}><span class="nav-icon">07</span><span>租客管理</span>{{if .ShowNavCounts}}<span class="nav-count">{{.TenantCount}}</span>{{end}}</a>
-        <a href="/tenancies"{{if eq .ActivePage "tenancies"}} class="active"{{end}}><span class="nav-icon">08</span><span>租约管理</span></a>
+        <a href="/properties"{{if eq .ActivePage "properties"}} class="active"{{end}}><span class="nav-icon">04</span><span>房产管理</span></a>
+        <a href="/rooms"{{if eq .ActivePage "rooms"}} class="active"{{end}}><span class="nav-icon">05</span><span>房间管理</span></a>
+        <a href="/tenants"{{if eq .ActivePage "tenants"}} class="active"{{end}}><span class="nav-icon">06</span><span>租客管理</span>{{if .ShowNavCounts}}<span class="nav-count">{{.TenantCount}}</span>{{end}}</a>
       </nav>
       <div class="nav-label">系统</div>
       <nav class="nav" aria-label="资金与系统">
-        <a href="/bank"{{if eq .ActivePage "bank"}} class="active"{{end}}><span class="nav-icon">09</span><span>银行设置</span></a>
+        <a href="/bank"{{if eq .ActivePage "bank"}} class="active"{{end}}><span class="nav-icon">07</span><span>银行设置</span></a>
       </nav>
       <div class="side-foot">{{if .StatusTitle}}<div class="side-status"><strong>{{.StatusTitle}}</strong>{{if .StatusUpdatedAt}}<span>更新于 {{.StatusUpdatedAt}}</span>{{end}}</div>{{end}}<div class="side-user"><span class="avatar" aria-hidden="true">业</span><span class="side-user-copy">房东工作区<small>{{.Username}}</small></span></div></div>
     </aside>
     <div class="workspace-page-topbar" aria-label="页面路径"><span class="workspace-page-topbar-crumb"><span>RentOps</span><span class="workspace-page-topbar-separator">/</span><span>{{.FootNote}}</span></span></div>
     <nav class="mobile-bottom-nav" aria-label="移动端主要导航">
       <a class="mobile-bottom-nav-item{{if eq .ActivePage "rent-dashboard"}} active{{end}}" href="/rent-dashboard"><span class="mobile-nav-glyph">总</span><span>首页</span></a>
-      <a class="mobile-bottom-nav-item{{if eq .ActivePage "bills"}} active{{end}}" href="/bills"><span class="mobile-nav-glyph">账</span><span>账单</span></a>
       <a class="mobile-bottom-nav-item{{if eq .ActivePage "transactions"}} active{{end}}" href="/transactions"><span class="mobile-nav-glyph">流</span><span>流水</span></a>
+      <a class="mobile-bottom-nav-item{{if eq .ActivePage "dunning"}} active{{end}}" href="/dunning"><span class="mobile-nav-glyph">催</span><span>催收</span></a>
       <button class="mobile-bottom-nav-item mobile-bottom-nav-menu{{if or (eq .ActivePage "properties") (eq .ActivePage "rooms") (eq .ActivePage "tenants")}} active{{end}}" type="button" data-mobile-menu="objects" aria-expanded="false"><span class="mobile-nav-glyph">物</span><span>对象</span></button>
       <a class="mobile-bottom-nav-item{{if eq .ActivePage "more"}} active{{end}}" href="/more"><span class="mobile-nav-glyph">更</span><span>更多</span></a>
     </nav>

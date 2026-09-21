@@ -259,7 +259,7 @@ func (s *rentLedgerService) ensureRentCharge(ctx context.Context, userID, proper
 			return errors.New("property is not active for target month")
 		}
 		var roomRow room
-		if err := txdb.Where("id = ? AND user_id = ? AND property_id = ?", roomID, userID, propertyID).First(&roomRow).Error; err != nil {
+		if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ? AND property_id = ?", roomID, userID, propertyID).First(&roomRow).Error; err != nil {
 			return err
 		}
 		if !roomActiveInMonth(roomRow, periodMonth) {
@@ -269,7 +269,14 @@ func (s *rentLedgerService) ensureRentCharge(ctx context.Context, userID, proper
 		var existingCharge rentCharge
 		lookupErr := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND room_id = ? AND period_month = ?", userID, roomID, periodMonth).First(&existingCharge).Error
 		if lookupErr == nil {
-			return loadRentChargeLedger(txdb, userID, existingCharge, &result)
+			if err := loadRentChargeLedger(txdb, userID, existingCharge, &result); err != nil {
+				return err
+			}
+			tenantIDs := make([]uint64, 0, len(result.Obligations))
+			for _, obligation := range result.Obligations {
+				tenantIDs = append(tenantIDs, obligation.TenantID)
+			}
+			return rejectLegacyObligationConflict(txdb, userID, periodMonth, tenantIDs)
 		}
 		if !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
 			return lookupErr
@@ -299,6 +306,9 @@ func (s *rentLedgerService) ensureRentCharge(ctx context.Context, userID, proper
 		tenantIDs := make([]uint64, 0, len(plan.Responsibilities))
 		for _, responsibility := range plan.Responsibilities {
 			tenantIDs = append(tenantIDs, responsibility.TenantID)
+		}
+		if err := rejectLegacyObligationConflict(txdb, userID, periodMonth, tenantIDs); err != nil {
+			return err
 		}
 		var tenants []tenant
 		if err := txdb.Where("user_id = ? AND id IN ?", userID, tenantIDs).Find(&tenants).Error; err != nil {
@@ -370,6 +380,23 @@ func (s *rentLedgerService) ensureRentCharge(ctx context.Context, userID, proper
 		return loadRentChargeLedger(txdb, userID, charge, &result)
 	})
 	return result, err
+}
+
+func rejectLegacyObligationConflict(db *gorm.DB, userID uint64, periodMonth time.Time, tenantIDs []uint64) error {
+	if len(tenantIDs) == 0 {
+		return nil
+	}
+	var legacy rentObligation
+	err := db.Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("user_id = ? AND tenant_id IN ? AND period_month = ? AND rent_charge_id IS NULL", userID, tenantIDs, monthStart(periodMonth)).
+		Order("tenant_id ASC, id ASC").First(&legacy).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return fmt.Errorf("%w: tenant %d already has a legacy obligation for %s", errRentFactsConflict, legacy.TenantID, monthStart(periodMonth).Format("2006-01"))
 }
 
 func loadRentChargeLedger(db *gorm.DB, userID uint64, charge rentCharge, result *rentChargeLedger) error {

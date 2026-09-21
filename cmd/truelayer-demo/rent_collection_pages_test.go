@@ -14,7 +14,7 @@ func TestBillsPageRendersMonthlyResponsibilityList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"应收账单", "账单列表", "Aoife Murphy", "EUR 600.00", `action="/bills/settle"`} {
+	for _, expected := range []string{"应收账单", "账单列表", "Aoife Murphy", "EUR 600.00", `action="/rent-dashboard/settle"`} {
 		if !strings.Contains(page, expected) {
 			t.Fatalf("bills page missing %q", expected)
 		}

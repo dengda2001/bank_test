@@ -16,6 +16,7 @@ import (
 type rentWorkspacePageData struct {
 	workspaceShell
 	Filters          rentWorkspaceFilters
+	IsFuturePeriod   bool
 	Period           string
 	PeriodLabel      string
 	PreviousPeriod   string
@@ -137,6 +138,7 @@ func rentWorkspacePageFromData(a *app, r *http.Request, data rentWorkspaceData, 
 			TenantCount:   len(data.TenantRows),
 		}),
 		Filters:          data.Filters,
+		IsFuturePeriod:   data.IsFuturePeriod,
 		Period:           period.Format("2006-01"),
 		PeriodLabel:      formatMonthLabel(period),
 		PreviousPeriod:   period.AddDate(0, -1, 0).Format("2006-01"),

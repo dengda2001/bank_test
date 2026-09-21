@@ -31,6 +31,34 @@ func TestTenantInputDefaultsBillingStartToRentStart(t *testing.T) {
 	}
 }
 
+func TestTenantInputParsesRoomResponsibilityPlanAndEffectiveMonth(t *testing.T) {
+	input, err := tenantInputFromForm(testFormValues{
+		"name": "Aoife Murphy", "monthly_rent": "1200.00", "currency": "EUR", "room_id": "7",
+		"structured": "1", "arrangement_start_month": "2026-10",
+		"room_plan": `[{"tenant_id":12,"amount_cents":70000},{"tenant_id":0,"amount_cents":50000}]`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !input.RoomPlanProvided || input.ArrangementStartMonth != "2026-10" || len(input.RoomTenantIDs) != 1 || input.RoomTenantIDs[0] != 12 {
+		t.Fatalf("room plan metadata = %+v", input)
+	}
+	if len(input.Responsibilities) != 2 || input.Responsibilities[0].AmountCents != 70000 || input.Responsibilities[1].TenantID != 0 || input.Responsibilities[1].AmountCents != 50000 {
+		t.Fatalf("room responsibilities = %+v", input.Responsibilities)
+	}
+}
+
+func TestTenantInputRejectsUnbalancedRoomResponsibilityPlan(t *testing.T) {
+	_, err := tenantInputFromForm(testFormValues{
+		"name": "Aoife Murphy", "monthly_rent": "1200.00", "room_id": "7", "structured": "1",
+		"arrangement_start_month": "2026-10",
+		"room_plan":               `[{"tenant_id":12,"amount_cents":70000},{"tenant_id":0,"amount_cents":40000}]`,
+	})
+	if err == nil || !strings.Contains(err.Error(), "sum") {
+		t.Fatalf("unbalanced plan error = %v, want sum validation", err)
+	}
+}
+
 func TestTenantEditFormDefaultsRentFromBoundRoomWhenProfileRentIsEmpty(t *testing.T) {
 	record := tenantRecord{RoomID: 11, Currency: "EUR"}
 	got := tenantEditFormRecordWithRoomDefaults(record, []tenantRoomOption{{

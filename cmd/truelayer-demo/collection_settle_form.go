@@ -51,6 +51,7 @@ type collectionSettleFormView struct {
 	ReturnSort        string
 	ReturnPage        int
 	ReturnPageSize    int
+	ReturnTo          string
 }
 
 func collectionSettleDispositions(selected string) []collectionSettleOption {
@@ -86,6 +87,16 @@ func (data rentDashboardPageData) SettleForm(row rentDashboardRow) collectionSet
 	if amount == "" {
 		amount = row.ExpectedAmount
 	}
+	returnFilters := defaultRentWorkspaceFilters(monthStart(time.Now().UTC()))
+	if period, err := parsePeriodMonth(data.Period); err == nil {
+		returnFilters.PeriodMonth = period
+	}
+	returnFilters.View = rentWorkspaceViewTenants
+	returnFilters.Search = data.SearchFilter
+	returnFilters.Status = firstNonEmpty(data.StatusFilter, "all")
+	returnFilters.Sort = firstNonEmpty(data.SortFilter, dashboardDefaultSort)
+	returnFilters.PageSize = data.PageSize
+	returnTo := rentWorkspaceURL(returnFilters, maxInt(data.Page, 1))
 	return collectionSettleFormView{
 		ObligationID:      row.ObligationID,
 		DutyLabel:         duty,
@@ -98,6 +109,7 @@ func (data rentDashboardPageData) SettleForm(row rentDashboardRow) collectionSet
 		ReturnSort:        data.SortFilter,
 		ReturnPage:        data.Page,
 		ReturnPageSize:    data.PageSize,
+		ReturnTo:          returnTo,
 	}
 }
 
@@ -130,6 +142,7 @@ func (data rentWorkspacePageData) TenantSettleForm(row rentWorkspaceTenantRow) c
 		ReturnSort:        data.Filters.Sort,
 		ReturnPage:        data.Page,
 		ReturnPageSize:    data.PageSize,
+		ReturnTo:          rentWorkspaceURL(data.Filters, maxInt(data.Page, 1)),
 	}
 }
 
@@ -178,15 +191,12 @@ func billsErrorText(code string) string {
 	}
 }
 
-// listManualBalanceRedirect retargets the dashboard redirect helper at the list
-// the form was actually submitted from. The /rent-dashboard contract (and the
-// test that pins it) is untouched; /bills swaps only the path, so the period,
-// search, status, sort and pagination values keep round-tripping exactly as the
-// detail-return contract in responsive-conventions.md §3.10 requires.
+// listManualBalanceRedirect keeps old action handlers on the canonical tenant
+// responsibility workspace while preserving their filter context.
 func listManualBalanceRedirect(listPath string, values url.Values, message, actionError string) string {
-	target := dashboardManualBalanceRedirect(values, message, actionError)
-	if strings.HasPrefix(target, "/rent-dashboard") {
-		return listPath + strings.TrimPrefix(target, "/rent-dashboard")
+	requestPath := "/rent-dashboard"
+	if strings.HasPrefix(listPath, "/bills") {
+		requestPath = "/bills/settle"
 	}
-	return target
+	return manualBalanceRedirectURL(values, requestPath, message, actionError)
 }

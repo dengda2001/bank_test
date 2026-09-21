@@ -37,10 +37,35 @@ func TestCanonicalRoutesKeepLegacyRefreshTargetAndBankTarget(t *testing.T) {
 	}
 }
 
-// The manual-balance form must carry a required reason. That contract now lives
-// on /bills: the legacy /rent-dashboard/settle form was removed with its template.
-// The confirmation prompt also moved from an inline onsubmit to the delegated
-// data-confirm guard in the bills page script.
+func TestLegacyBillsURLRedirectPreservesTenantFilters(t *testing.T) {
+	target, err := url.Parse(legacyBillsWorkspaceURL(url.Values{
+		"period": {"2026-08"}, "search": {"Aoife Murphy"}, "status": {"partial"},
+		"sort": {"due_asc"}, "page": {"2"}, "page_size": {"24"},
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := target.Query()
+	if target.Path != "/rent-dashboard" || query.Get("view") != "tenants" || query.Get("period") != "2026-08" || query.Get("search") != "Aoife Murphy" || query.Get("status") != "partial" || query.Get("sort") != "due_asc" || query.Get("page") != "2" || query.Get("page_size") != "24" {
+		t.Fatalf("legacy bills target=%q", target.String())
+	}
+}
+
+func TestLegacyTenanciesURLMapsToRoomWorkspace(t *testing.T) {
+	target, err := url.Parse(legacyTenanciesRoomURL(url.Values{
+		"period": {"2026-08"}, "search": {"Canal House"}, "message": {"lease_saved"}, "error": {"lease_locked"},
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := target.Query()
+	if target.Path != "/rooms" || query.Get("period") != "2026-08" || query.Get("search") != "Canal House" || query.Get("message") != "room_saved" || query.Get("error") != "room_arrangement_locked" {
+		t.Fatalf("legacy tenancies target=%q", target.String())
+	}
+}
+
+// The manual-balance form lives on the tenant responsibility workspace and
+// carries a required reason plus the canonical return context.
 func TestBillsManualBalanceRequiresReasonField(t *testing.T) {
 	page, err := executeTemplate(billsPageTemplate, rentDashboardPageData{
 		Period:      "2026-09",
@@ -53,8 +78,8 @@ func TestBillsManualBalanceRequiresReasonField(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	form := markupBetween(t, page, `action="/bills/settle"`, `</form>`)
-	for _, marker := range []string{`name="reason"`, `required`, `placeholder="平账原因"`, `data-confirm="true"`} {
+	form := markupBetween(t, page, `action="/rent-dashboard/settle"`, `</form>`)
+	for _, marker := range []string{`name="reason"`, `required`, `placeholder="平账原因"`, `data-confirm="true"`, `name="return_to"`} {
 		if !strings.Contains(form, marker) {
 			t.Fatalf("bills settle form missing manual-balance marker %q: %s", marker, form)
 		}

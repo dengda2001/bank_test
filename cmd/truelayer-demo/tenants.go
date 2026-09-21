@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -93,6 +94,29 @@ type tenantInput struct {
 	Structured            bool
 	RoomID                uint64
 	ArrangementStartMonth string
+	RoomTenantIDs         []uint64
+	Responsibilities      []rentResponsibilityInput
+	RoomPlanProvided      bool
+}
+
+type tenantRoomOccupantOption struct {
+	TenantID            uint64 `json:"tenant_id"`
+	Name                string `json:"name"`
+	ResponsibilityCents int64  `json:"responsibility_cents"`
+}
+
+type tenantRoomArrangementOption struct {
+	StartMonth       string                     `json:"start_month"`
+	EndMonth         string                     `json:"end_month,omitempty"`
+	MonthlyRentValue string                     `json:"monthly_rent"`
+	Currency         string                     `json:"currency"`
+	DueDay           int                        `json:"due_day"`
+	Occupants        []tenantRoomOccupantOption `json:"occupants"`
+}
+
+type tenantRoomPlanEntry struct {
+	TenantID    uint64 `json:"tenant_id"`
+	AmountCents int64  `json:"amount_cents"`
 }
 
 func newTenantService(db *gorm.DB) *tenantService {
@@ -188,7 +212,7 @@ func tenantInputFromForm(values formValues) (tenantInput, error) {
 	if billingStartDate == "" {
 		billingStartDate = rentStartDate
 	}
-	return tenantInput{
+	input := tenantInput{
 		Name:                  strings.TrimSpace(values.Get("name")),
 		DisplayAlias:          strings.TrimSpace(values.Get("display_alias")),
 		Email:                 strings.TrimSpace(values.Get("email")),
@@ -209,7 +233,65 @@ func tenantInputFromForm(values formValues) (tenantInput, error) {
 		Structured:            strings.TrimSpace(values.Get("structured")) == "1" || roomID != 0 || strings.TrimSpace(values.Get("arrangement_start_month")) != "",
 		RoomID:                roomID,
 		ArrangementStartMonth: strings.TrimSpace(values.Get("arrangement_start_month")),
-	}, nil
+	}
+	if input.Structured && input.ArrangementStartMonth != "" {
+		if _, err := parsePeriodMonth(input.ArrangementStartMonth); err != nil {
+			return tenantInput{}, errors.New("arrangement effective month is invalid")
+		}
+	}
+	if rawPlan := strings.TrimSpace(values.Get("room_plan")); rawPlan != "" {
+		if len(rawPlan) > 64*1024 {
+			return tenantInput{}, errors.New("room responsibility plan is too large")
+		}
+		var entries []tenantRoomPlanEntry
+		if err := json.Unmarshal([]byte(rawPlan), &entries); err != nil || len(entries) == 0 {
+			return tenantInput{}, errors.New("room responsibility plan is invalid")
+		}
+		input.RoomPlanProvided = true
+		seen := make(map[uint64]struct{}, len(entries))
+		const maxCents = int64(^uint64(0) >> 1)
+		var total int64
+		newTenantCount := 0
+		for _, entry := range entries {
+			if entry.AmountCents <= 0 || total > maxCents-entry.AmountCents {
+				return tenantInput{}, errors.New("room responsibility amount must be positive")
+			}
+			if entry.TenantID == 0 {
+				newTenantCount++
+				if newTenantCount > 1 {
+					return tenantInput{}, errors.New("room responsibility plan has duplicate new tenant")
+				}
+			} else {
+				if _, exists := seen[entry.TenantID]; exists {
+					return tenantInput{}, errors.New("room responsibility plan has duplicate tenant")
+				}
+				seen[entry.TenantID] = struct{}{}
+				input.RoomTenantIDs = append(input.RoomTenantIDs, entry.TenantID)
+			}
+			input.Responsibilities = append(input.Responsibilities, rentResponsibilityInput{TenantID: entry.TenantID, AmountCents: entry.AmountCents})
+			total += entry.AmountCents
+		}
+		if input.RoomID == 0 || !input.Structured || moneyToCents(input.MonthlyRent) <= 0 {
+			return tenantInput{}, errors.New("room and positive rent are required for a responsibility plan")
+		}
+		if total != moneyToCents(input.MonthlyRent) {
+			return tenantInput{}, fmt.Errorf("room responsibility sum %d does not equal room rent %d", total, moneyToCents(input.MonthlyRent))
+		}
+		currentTenantRaw := strings.TrimSpace(values.Get("tenant_id"))
+		if currentTenantRaw == "" && newTenantCount != 1 {
+			return tenantInput{}, errors.New("new tenant must be included in room responsibilities")
+		}
+		if currentTenantRaw != "" {
+			currentTenantID, parseErr := strconv.ParseUint(currentTenantRaw, 10, 64)
+			if parseErr != nil || currentTenantID == 0 {
+				return tenantInput{}, errors.New("current tenant id is invalid")
+			}
+			if _, exists := seen[currentTenantID]; !exists {
+				return tenantInput{}, errors.New("current tenant must remain in room responsibilities")
+			}
+		}
+	}
+	return input, nil
 }
 
 type formValues interface {
@@ -340,7 +422,11 @@ func (s *tenantService) createTenant(ctx context.Context, userID uint64, input t
 	effectiveMonth := monthStart(time.Now().UTC())
 	if input.Structured {
 		if input.ArrangementStartMonth != "" {
-			effectiveMonth, _ = parsePeriodMonth(input.ArrangementStartMonth)
+			parsedMonth, parseErr := parsePeriodMonth(input.ArrangementStartMonth)
+			if parseErr != nil {
+				return tenant{}, errors.New("arrangement effective month is invalid")
+			}
+			effectiveMonth = parsedMonth
 		} else if !rentStart.IsZero() {
 			effectiveMonth = monthStart(rentStart)
 		}
@@ -351,21 +437,20 @@ func (s *tenantService) createTenant(ctx context.Context, userID uint64, input t
 		d, _ := parseDate(input.RentEndDate)
 		rentEnd = &d
 	}
+	monthlyRentCents := moneyToCents(input.MonthlyRent)
+	if input.Structured {
+		monthlyRentCents = 0
+	}
 	var row tenant
 	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		row = tenant{
-			UserID:        userID,
-			Name:          input.Name,
-			DisplayAlias:  input.DisplayAlias,
-			Email:         input.Email,
-			PayerID:       nullableString(input.PayerID),
-			PayerNameHint: nullableString(input.PayerNameHint),
-			MonthlyRentCents: func() int64 {
-				if input.Structured {
-					return 0
-				}
-				return moneyToCents(input.MonthlyRent)
-			}(),
+			UserID:           userID,
+			Name:             input.Name,
+			DisplayAlias:     input.DisplayAlias,
+			Email:            input.Email,
+			PayerID:          nullableString(input.PayerID),
+			PayerNameHint:    nullableString(input.PayerNameHint),
+			MonthlyRentCents: monthlyRentCents,
 			Currency:         currency,
 			IntervalUnit:     intervalUnit,
 			IntervalCount:    intervalCount,
@@ -398,25 +483,35 @@ func (s *tenantService) createTenant(ctx context.Context, userID uint64, input t
 			if input.Status != "active" {
 				return errors.New("inactive tenant cannot be bound to a room")
 			}
-			tenantIDs := make([]uint64, 0, 1)
-			var existing tenancyAgreement
-			lookupErr := tx.Where("user_id = ? AND room_id = ? AND status = ? AND start_date <= ? AND (end_date IS NULL OR end_date >= ?)", userID, input.RoomID, "active", effectiveMonth.AddDate(0, 1, -1), effectiveMonth).Order("start_date DESC, id DESC").First(&existing).Error
-			if lookupErr == nil {
-				var parties []agreementParty
-				if err := tx.Where("user_id = ? AND agreement_id = ? AND status = ?", userID, existing.ID, "active").Find(&parties).Error; err != nil {
-					return err
+			tenantIDs := make([]uint64, 0, len(input.RoomTenantIDs)+1)
+			responsibilities := append([]rentResponsibilityInput(nil), input.Responsibilities...)
+			if input.RoomPlanProvided {
+				tenantIDs = append(tenantIDs, input.RoomTenantIDs...)
+				for index := range responsibilities {
+					if responsibilities[index].TenantID == 0 {
+						responsibilities[index].TenantID = row.ID
+					}
 				}
-				for _, party := range parties {
-					tenantIDs = append(tenantIDs, party.TenantID)
+			} else {
+				var existing tenancyAgreement
+				lookupErr := tx.Where("user_id = ? AND room_id = ? AND status = ? AND start_date <= ? AND (end_date IS NULL OR end_date >= ?)", userID, input.RoomID, "active", effectiveMonth.AddDate(0, 1, -1), effectiveMonth).Order("start_date DESC, id DESC").First(&existing).Error
+				if lookupErr == nil {
+					var parties []agreementParty
+					if err := tx.Where("user_id = ? AND agreement_id = ? AND status = ?", userID, existing.ID, "active").Find(&parties).Error; err != nil {
+						return err
+					}
+					for _, party := range parties {
+						tenantIDs = append(tenantIDs, party.TenantID)
+					}
+				} else if !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
+					return lookupErr
 				}
-			} else if !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
-				return lookupErr
 			}
 			tenantIDs = append(tenantIDs, row.ID)
 			_, err := saveRentArrangementInTx(tx, userID, rentArrangementInput{
 				RoomID: input.RoomID, EffectiveMonth: effectiveMonth,
 				MonthlyRentCents: moneyToCents(input.MonthlyRent), Currency: currency,
-				DueDay: dueDay, TenantIDs: tenantIDs,
+				DueDay: dueDay, TenantIDs: tenantIDs, Responsibilities: responsibilities,
 			})
 			if err != nil {
 				return err
@@ -444,6 +539,18 @@ func (s *tenantService) updateTenant(ctx context.Context, userID, tenantID uint6
 		d, _ := parseDate(input.RentEndDate)
 		rentEnd = &d
 	}
+	monthlyRentCents := moneyToCents(input.MonthlyRent)
+	if input.Structured {
+		monthlyRentCents = 0
+	}
+	effectiveMonth := monthStart(time.Now().UTC())
+	if input.Structured && input.ArrangementStartMonth != "" {
+		parsedMonth, parseErr := parsePeriodMonth(input.ArrangementStartMonth)
+		if parseErr != nil {
+			return tenant{}, errors.New("arrangement effective month is invalid")
+		}
+		effectiveMonth = parsedMonth
+	}
 	var row tenant
 	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", tenantID, userID).First(&row).Error; err != nil {
@@ -459,7 +566,8 @@ func (s *tenantService) updateTenant(ctx context.Context, userID, tenantID uint6
 			}
 			if err := syncTenantRoomBindingInTx(
 				tx.WithContext(ctx), userID, tenantID, input.RoomID,
-				monthStart(time.Now().UTC()), moneyToCents(input.MonthlyRent), currency, dueDay, input.Status,
+				effectiveMonth, moneyToCents(input.MonthlyRent), currency, dueDay, input.Status,
+				input.RoomTenantIDs, input.Responsibilities,
 			); err != nil {
 				return err
 			}
@@ -470,7 +578,7 @@ func (s *tenantService) updateTenant(ctx context.Context, userID, tenantID uint6
 			"email":              input.Email,
 			"payer_id":           nullableString(input.PayerID),
 			"payer_name_hint":    nullableString(input.PayerNameHint),
-			"monthly_rent_cents": moneyToCents(input.MonthlyRent),
+			"monthly_rent_cents": monthlyRentCents,
 			"currency":           currency,
 			"interval_unit":      input.IntervalUnit,
 			"interval_count":     input.IntervalCount,

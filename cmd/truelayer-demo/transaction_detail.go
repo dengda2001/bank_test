@@ -398,7 +398,8 @@ func transactionDetailAllocationRows(allocations []paymentAllocation, currency s
 				}
 				row.ExpectedAmount = formatMoney(centsToMoney(obligation.ExpectedAmountCents), obligation.Currency, 2)
 				row.BillLabel = fmt.Sprintf("责任 #%d", obligation.ID)
-				row.BillURL = "/bills?period=" + monthStart(obligation.PeriodMonth).Format("2006-01")
+				period := monthStart(obligation.PeriodMonth).Format("2006-01")
+				row.BillURL = fmt.Sprintf("/tenants/%d?from_month=%s&to_month=%s", obligation.TenantID, period, period)
 				if obligation.RentChargeID != nil {
 					if charge, ok := charges[*obligation.RentChargeID]; ok {
 						row.PropertyName = firstNonEmpty(stringValue(charge.PropertyNameSnapshot), "")
@@ -415,7 +416,7 @@ func transactionDetailAllocationRows(allocations []paymentAllocation, currency s
 			}
 		}
 		if row.BillLabel == "" {
-			row.BillLabel = "无租金账单"
+			row.BillLabel = "无租金责任"
 		}
 		if row.CreatedAt == "" {
 			row.CreatedAt = "—"

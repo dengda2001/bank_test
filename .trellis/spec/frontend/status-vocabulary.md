@@ -147,7 +147,7 @@ Recorded, deliberately not fixed — do not treat these as regressions:
 |---|---|
 | `transactionMatchStatusLabel` (`transaction_previews.go:183`) | A third label map over the same stored values: 已匹配候选 / 部分匹配候选 / 未找到候选. Rendered on the payer-preview page and as the detail page's suggestion status (`transaction_detail.go:311`), so one screen shows 已关联 in the list badge and 已匹配候选 in the detail. The 候选 suffix is meaningful here (it labels a *proposed* rent month, not the transaction's own state), which is why it was left alone. |
 | `rent-workspace.html:67`, `:115` | Column headers and card labels say 已交满 / 未交满 while the status badges say 已缴清 / 未缴. Headers count rooms (`已交满 N 间`), so they are not the same question as the status filter. |
-| `/bills` | A third vocabulary: 未结清 / 全部账单 / 已结清 / 逾期 / 部分缴纳 / 未到期未缴. |
+| `/bills` | Legacy GET now redirects to `/rent-dashboard?view=tenants`; the retained template vocabulary is not an active product surface. |
 | `needs_review` | `rentStatusLabel` (`obligations.go`) says 需处理; `workspaceStatusLabel` overrides it to 待处理 for the workspace. Three call sites, two words. |
 | 超额付款 | The prototype has an overpaid filter; `grep '超额\|overpaid'` finds nothing, and `ledger.go`'s `paid >= expected` folds overpayment into `paid`. |
 | `transaction_actions.go:199` | The undefer audit reason is written to the database as 已匹配，恢复待处理状态. Stored data, not a rendered string — rewording it would split historical rows from new ones. |

@@ -130,7 +130,8 @@ func TestBillsManualBalanceActionOnlyAppearsForOutstandingRent(t *testing.T) {
 		}
 	}
 	for _, expected := range []string{
-		`action="/bills/settle"`,
+		`action="/rent-dashboard/settle"`,
+		`name="return_to"`,
 		`name="obligation_id" value="71"`,
 		`name="period" value="2026-09"`,
 		`data-confirm="true"`,

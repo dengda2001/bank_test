@@ -75,12 +75,15 @@ func (s *transactionService) confirmRentMatch(ctx context.Context, userID, trans
 	if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", tenantID, userID).First(&tenantRow).Error; err != nil {
 		return err
 	}
+	if period == nil {
+		return errors.New("rent period is required for manual confirmation")
+	}
+	if err := newMonthlyRentFactsService(s.db).ensureMonthlyRentFacts(ctx, userID, *period, rentFactsIntentExplicitPayment); err != nil {
+		return err
+	}
 	var obligations []rentObligation
 	if err := s.db.WithContext(ctx).Where("user_id = ? AND tenant_id = ?", userID, tenantID).Order("period_month ASC").Find(&obligations).Error; err != nil {
 		return err
-	}
-	if period == nil {
-		return errors.New("rent period is required for manual confirmation")
 	}
 	matchInput := paymentTransactionInputFromModel(transaction)
 	matchInput.AmountCents = remaining

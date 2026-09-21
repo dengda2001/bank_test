@@ -3,7 +3,7 @@
   "name": "simplify-billing-tenancy",
   "title": "简化账单与租约的自动收租方案",
   "description": "",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,
@@ -18,9 +18,12 @@
   "commit": null,
   "pr_url": null,
   "subtasks": [],
-  "children": [],
+  "children": [
+    "09-21-rent-domain-auto-facts",
+    "09-21-simplify-rent-ui-routes"
+  ],
   "parent": null,
   "relatedFiles": [],
-  "notes": "",
+  "notes": "主要领域与 UI/路由代码已落地；针对性测试、全仓编译、go vet 和 diff check 通过。完整验收待 MySQL DSN 与真实浏览器环境；整包测试仍有已记录的既有页面断言失败。",
   "meta": {}
 }

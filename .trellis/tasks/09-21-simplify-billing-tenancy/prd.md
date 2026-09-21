@@ -108,5 +108,6 @@
 
 ## Planning Status
 
-- 已创建复杂规划任务，尚未获得实施授权。
-- `design.md` 和 `implement.md` 已给出技术方案和执行顺序；Q1、Q2 均已确认，等待用户最终审阅并明确批准实施。
+- 已创建复杂规划任务；用户已审阅方案并于 2026-09-21 明确要求开始实施。
+- `design.md` 和 `implement.md` 给出整体技术方案与执行顺序；Q1、Q2 均已确认。
+- 已拆分领域子任务 `.trellis/tasks/09-21-rent-domain-auto-facts` 与 UI 子任务 `.trellis/tasks/09-21-simplify-rent-ui-routes`；后者依赖前者完成。当前父任务负责最终集成验收。

@@ -108,6 +108,13 @@ func (a *app) cashReceiptInputForPeriod(ctx context.Context, userID uint64, valu
 	if err != nil {
 		return cashReceiptInput{}, cashReceiptFormInput{}, err
 	}
+	var tenantRow tenant
+	if err := a.db.WithContext(ctx).Where("id = ? AND user_id = ?", draft.TenantID, userID).First(&tenantRow).Error; err != nil {
+		return cashReceiptInput{}, draft, err
+	}
+	if err := newMonthlyRentFactsService(a.db).ensureMonthlyRentFacts(ctx, userID, draft.Period, rentFactsIntentExplicitPayment); err != nil {
+		return cashReceiptInput{}, draft, err
+	}
 	var obligation rentObligation
 	if err := a.db.WithContext(ctx).Where("user_id = ? AND tenant_id = ? AND period_month = ?", userID, draft.TenantID, draft.Period).First(&obligation).Error; err != nil {
 		return cashReceiptInput{}, draft, err
@@ -193,6 +200,9 @@ func cashReceiptErrorMessage(code string) string {
 
 func (a *app) loadCashReceiptFormData(ctx context.Context, r *http.Request, userID, tenantID uint64, period time.Time) (cashReceiptFormData, error) {
 	period = monthStart(period)
+	if err := newMonthlyRentFactsService(a.db).ensureMonthlyRentFacts(ctx, userID, period, rentFactsIntentRead); err != nil {
+		return cashReceiptFormData{}, err
+	}
 	data := cashReceiptFormData{
 		workspaceShell: a.fillWorkspaceShell(r, workspaceShell{
 			ActivePage:  "tenants",

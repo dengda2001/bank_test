@@ -175,33 +175,46 @@ func (s *obligationService) ensureMonthlyObligations(ctx context.Context, userID
 	}
 	periodMonth = monthStart(periodMonth)
 	var tenants []tenant
-	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Find(&tenants).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Order("id ASC").Find(&tenants).Error; err != nil {
 		return err
 	}
-	for _, row := range tenants {
-		if !tenantActiveInMonth(row, periodMonth) {
-			continue
-		}
-		currency, err := normalizeLedgerCurrency(row.Currency)
-		if err != nil {
-			return fmt.Errorf("tenant %d: %w", row.ID, err)
-		}
-		obligation := rentObligation{
-			UserID:              userID,
-			TenantID:            row.ID,
-			PeriodMonth:         periodMonth,
-			DueDate:             dueDateForMonth(periodMonth, row.DueDay),
-			ExpectedAmountCents: row.MonthlyRentCents,
-			PaidAmountCents:     0,
-			Currency:            currency,
-			Status:              "open",
-			RecordStatus:        obligationRecordActive,
-			GeneratedBy:         "lazy",
-		}
-		if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "user_id"}, {Name: "tenant_id"}, {Name: "period_month"}},
-			DoNothing: true,
-		}).Create(&obligation).Error; err != nil {
+	for _, candidate := range tenants {
+		if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			var row tenant
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", candidate.ID, userID).First(&row).Error; err != nil {
+				return err
+			}
+			if !tenantActiveInMonth(row, periodMonth) {
+				return nil
+			}
+			structured, err := tenantHasStructuredRentFacts(tx, userID, row.ID, periodMonth)
+			if err != nil {
+				return err
+			}
+			if structured {
+				return nil
+			}
+			currency, err := normalizeLedgerCurrency(row.Currency)
+			if err != nil {
+				return fmt.Errorf("tenant %d: %w", row.ID, err)
+			}
+			obligation := rentObligation{
+				UserID:              userID,
+				TenantID:            row.ID,
+				PeriodMonth:         periodMonth,
+				DueDate:             dueDateForMonth(periodMonth, row.DueDay),
+				ExpectedAmountCents: row.MonthlyRentCents,
+				PaidAmountCents:     0,
+				Currency:            currency,
+				Status:              "open",
+				RecordStatus:        obligationRecordActive,
+				GeneratedBy:         "lazy",
+			}
+			return tx.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "user_id"}, {Name: "tenant_id"}, {Name: "period_month"}},
+				DoNothing: true,
+			}).Create(&obligation).Error
+		}); err != nil {
 			return err
 		}
 	}
@@ -212,7 +225,7 @@ func (s *obligationService) generateMonthlyObligations(ctx context.Context, user
 	fromMonth = monthStart(fromMonth)
 	toMonth = monthStart(toMonth)
 	for current := fromMonth; !current.After(toMonth); current = current.AddDate(0, 1, 0) {
-		if err := s.ensureMonthlyObligations(ctx, userID, current); err != nil {
+		if err := newMonthlyRentFactsService(s.db).ensureMonthlyRentFacts(ctx, userID, current, rentFactsIntentRead); err != nil {
 			return err
 		}
 	}
@@ -350,7 +363,7 @@ func (s *obligationService) summarizeRentDashboardWithFilters(ctx context.Contex
 		return rentDashboardSummary{}, err
 	}
 	periodMonth = monthStart(periodMonth)
-	if err := s.ensureMonthlyObligations(ctx, userID, periodMonth); err != nil {
+	if err := newMonthlyRentFactsService(s.db).ensureMonthlyRentFacts(ctx, userID, periodMonth, rentFactsIntentRead); err != nil {
 		return rentDashboardSummary{}, err
 	}
 	var obligations []rentObligation

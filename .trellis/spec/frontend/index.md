@@ -27,6 +27,7 @@ that parse the rendered markup. Those are the things that bite.
 |-------|-------------|--------|
 | [Responsive Conventions](./responsive-conventions.md) | Breakpoints, touch targets, the drawer, frozen columns, CSS ordering | Filled |
 | [Status Vocabulary](./status-vocabulary.md) | One word and one control per stored status value; pseudo-filters; known vocabulary splits | Filled |
+| [Rent Workspace Navigation](./rent-workspace-navigation.md) | Canonical rent workspace routes, hidden legacy pages, safe redirects | Filled |
 
 ---
 

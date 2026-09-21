@@ -375,6 +375,13 @@ func (s *transactionService) rematchRentAllocation(ctx context.Context, userID, 
 		return errors.New("userID, transactionID, target tenant, and target rent month are required")
 	}
 	targetPeriod = monthStart(targetPeriod)
+	var targetTenant tenant
+	if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", targetTenantID, userID).First(&targetTenant).Error; err != nil {
+		return err
+	}
+	if err := newMonthlyRentFactsService(s.db).ensureMonthlyRentFacts(ctx, userID, targetPeriod, rentFactsIntentExplicitPayment); err != nil {
+		return err
+	}
 	return s.db.WithContext(ctx).Transaction(func(txdb *gorm.DB) error {
 		var source paymentTransaction
 		if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", transactionID, userID).First(&source).Error; err != nil {

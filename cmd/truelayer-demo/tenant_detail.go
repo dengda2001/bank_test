@@ -415,7 +415,7 @@ var tenantDetailTemplate = newWorkspacePageTemplate("tenant-detail", nil, `<!doc
   {{template "workspace-nav" .}}
   <main class="content">
 	<div class="tenant-detail-page">
-<header class="tenant-detail-head"><a class="tenant-detail-back" href="/tenants{{if .ReturnSearch}}?search={{urlquery .ReturnSearch}}{{end}}">← 返回租客管理</a><div class="tenant-identity-row"><div class="tenant-identity"><div class="identity-mark">TN</div><div><div class="brand-title">租客详情</div><h1>{{if .Tenant.DisplayAlias}}{{.Tenant.DisplayAlias}}{{else}}{{.Tenant.Name}}{{end}}</h1><div class="tenant-identity-meta"><span>正式姓名：{{.Tenant.Name}}</span><span>{{if .Tenant.RoomLabel}}{{.Tenant.RoomLabel}}{{else}}{{.Tenant.RoomAddress}}{{end}}</span><span class="detail-status {{.Tenant.Status}}">{{if eq .Tenant.Status "active"}}有效租约{{else}}已停用{{end}}</span></div></div></div><div class="actions"><a class="btn" href="{{.EditURL}}">编辑资料</a><a class="btn primary" href="{{.CashReceiptOpenURL}}">录入现金收款</a></div></div></header>
+<header class="tenant-detail-head"><a class="tenant-detail-back" href="/tenants{{if .ReturnSearch}}?search={{urlquery .ReturnSearch}}{{end}}">← 返回租客管理</a><div class="tenant-identity-row"><div class="tenant-identity"><div class="identity-mark">TN</div><div><div class="brand-title">租客详情</div><h1>{{if .Tenant.DisplayAlias}}{{.Tenant.DisplayAlias}}{{else}}{{.Tenant.Name}}{{end}}</h1><div class="tenant-identity-meta"><span>正式姓名：{{.Tenant.Name}}</span><span>{{if .Tenant.RoomLabel}}{{.Tenant.RoomLabel}}{{else}}{{.Tenant.RoomAddress}}{{end}}</span><span class="detail-status {{.Tenant.Status}}">{{if eq .Tenant.Status "active"}}在住{{else}}已停用{{end}}</span></div></div></div><div class="actions"><a class="btn" href="{{.EditURL}}">编辑资料</a><a class="btn primary" href="{{.CashReceiptOpenURL}}">录入现金收款</a></div></div></header>
 	{{if eq .Message "cash_receipt_saved"}}<div class="notice ok" data-toast>现金收款已入账，并计入对应租金月份。</div>{{end}}
 	{{if eq .Message "cash_receipt_voided"}}<div class="notice ok" data-toast>现金收款已撤销，原始记录与撤销原因已保留。</div>{{end}}
     {{if eq .Message "payer_added"}}<div class="notice ok" data-toast>付款人关系已保存。</div>{{end}}
@@ -424,7 +424,7 @@ var tenantDetailTemplate = newWorkspacePageTemplate("tenant-detail", nil, `<!doc
 	{{if eq .Message "tenant_updated"}}<div class="notice ok" data-toast>租客资料已更新。</div>{{end}}
 	{{if .ShowForm}}{{template "tenant-form-drawer" .}}{{end}}
 	{{if .CashReceiptDrawer}}{{template "cash-receipt-drawer" .CashReceiptDrawer}}{{end}}
-	<div class="tenant-metrics" aria-label="本月租金摘要"><div class="panel metric"><div class="label">本月个人责任</div><strong>{{.Tenant.RentDisplay}}</strong><span>{{if .Tenant.RoomLabel}}{{.Tenant.RoomLabel}}{{else}}月度租金责任{{end}}</span></div><div class="panel metric"><div class="label">个人责任已覆盖</div><strong>{{if .HasCurrentBilling}}{{.CurrentBilling.PaidAmount}}{{else}}—{{end}}</strong><span>银行收款与现金收款</span></div><div class="panel metric"><div class="label">本月未收</div><strong>{{if .HasCurrentBilling}}{{.CurrentBilling.BalanceAmount}}{{else}}—{{end}}</strong><span>按个人租金责任计算</span></div><div class="panel metric"><div class="label">本月状态</div><strong class="tenant-metric-state">{{if .HasCurrentBilling}}{{.CurrentBilling.StatusLabel}}{{else}}暂无账单{{end}}</strong><span>{{.CurrentPeriod}}</span></div></div>
+	<div class="tenant-metrics" aria-label="本月租金摘要"><div class="panel metric"><div class="label">本月个人责任</div><strong>{{.Tenant.RentDisplay}}</strong><span>{{if .Tenant.RoomLabel}}{{.Tenant.RoomLabel}}{{else}}月度租金责任{{end}}</span></div><div class="panel metric"><div class="label">个人责任已覆盖</div><strong>{{if .HasCurrentBilling}}{{.CurrentBilling.PaidAmount}}{{else}}—{{end}}</strong><span>银行收款与现金收款</span></div><div class="panel metric"><div class="label">本月未收</div><strong>{{if .HasCurrentBilling}}{{.CurrentBilling.BalanceAmount}}{{else}}—{{end}}</strong><span>按个人责任计算</span></div><div class="panel metric"><div class="label">本月状态</div><strong class="tenant-metric-state">{{if .HasCurrentBilling}}{{.CurrentBilling.StatusLabel}}{{else}}暂无个人责任{{end}}</strong><span>{{.CurrentPeriod}}</span></div></div>
 	<div class="detail-grid"><section class="panel surface tenant-history-panel" aria-labelledby="history-title"><div class="panel-head"><h2 id="history-title">缴费历史</h2><span class="tiny">{{.History.TotalRows}} 个适用月份</span></div>
 	  <form class="history-filter" method="get" action="/tenants/{{.Tenant.ID}}"><label for="range">历史范围<select id="range" name="range"><option value="12"{{if eq .HistoryRange "12"}} selected{{end}}>近 12 个月</option><option value="24"{{if eq .HistoryRange "24"}} selected{{end}}>近 24 个月</option></select></label><input type="hidden" name="page_size" value="{{.History.PageSize}}"><button class="btn" type="submit">搜索</button></form>
 	  {{if .History.Rows}}<div class="table-wrap"><table class="history-table"><thead><tr><th>月份</th><th>应缴日</th><th>应收</th><th>实收</th><th>未收</th><th>状态／来源</th></tr></thead><tbody>{{range .History.Rows}}<tr><td><strong>{{.PeriodLabel}}</strong></td><td class="mono">{{.DueDate}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span>{{if .Payments}}<div class="payment-list">{{range .Payments}}<div class="payment-item"><span class="amount">{{.AmountDisplay}}</span><span class="mono">{{.DateDisplay}}</span><span>{{.Source}}</span>{{if eq .Source "现金"}}<a class="void-link" href="/cash-receipts/void?receipt_id={{.PaymentID}}">撤销</a>{{end}}</div>{{end}}</div>{{else}}<div class="tiny">暂无有效收款</div>{{end}}</td></tr>{{end}}</tbody></table></div>{{else}}<div class="empty">所选期间没有适用账单。</div>{{end}}
@@ -483,7 +483,23 @@ func (a *app) handleTenantDetail(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		formRecord = tenantEditFormRecordWithRoomDefaults(tenantRecordFromModel(tenantRow), roomOptions)
+		formRecord = tenantRecordFromModel(tenantRow)
+		currentTenants, listErr := newTenantService(a.db).listTenants(r.Context(), userID)
+		if listErr != nil {
+			http.Error(w, listErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		for _, currentTenant := range currentTenants {
+			if currentTenant.ID == formRecord.ID {
+				formRecord.RoomID = currentTenant.RoomID
+				break
+			}
+		}
+		formRecord = tenantEditFormRecordWithRoomDefaults(formRecord, roomOptions)
+		formRecord.Structured = formRecord.RoomID != 0 || formRecord.MonthlyRent <= 0
+		if formRecord.Structured {
+			formRecord.ArrangementStartMonth = monthStart(time.Now().UTC()).Format("2006-01")
+		}
 		formRows := []tenantRecord{formRecord}
 		prepareTenants(formRows)
 		formRecord = formRows[0]
@@ -552,10 +568,12 @@ func (a *app) handleTenantDetail(w http.ResponseWriter, r *http.Request) {
 		}
 		data.CashReceiptDrawer = drawer
 	}
+	data.Tenant.RentDisplay = "—"
 	for _, billing := range history.Rows {
 		if billing.Period == data.CurrentPeriod {
 			data.HasCurrentBilling = true
 			data.CurrentBilling = billing
+			data.Tenant.RentDisplay = billing.ExpectedAmount
 			break
 		}
 	}

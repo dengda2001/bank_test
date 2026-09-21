@@ -77,7 +77,7 @@ func TestTransactionDetailTemplateRendersPrototypeSectionsAndEscapesSourceData(t
 	for _, marker := range []string{
 		"银行流水详情",
 		"匹配建议",
-		"关联账单与对象",
+		"关联责任与对象",
 		"处理记录",
 		"原始流水",
 		"原始描述",

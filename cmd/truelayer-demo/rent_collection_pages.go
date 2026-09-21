@@ -34,7 +34,7 @@ func (a *app) handleBillsGenerate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		periodMonth = monthStart(time.Now().UTC())
 	}
-	if err := newObligationService(a.db).ensureMonthlyObligations(r.Context(), userID, periodMonth); err != nil {
+	if err := newMonthlyRentFactsService(a.db).ensureMonthlyRentFacts(r.Context(), userID, periodMonth, rentFactsIntentRead); err != nil {
 		http.Redirect(w, r, listManualBalanceRedirect("/bills", r.Form, "", "bills_generate_failed"), http.StatusFound)
 		return
 	}

@@ -5,6 +5,19 @@
 .entity-drawer .drawer-eyebrow { color: var(--accent-bright); font: 11px var(--mono); letter-spacing: .08em; }
 .entity-drawer .form-field label { color: var(--foreground-muted); font-size: 12px; font-weight: 400; }
 .entity-drawer input, .entity-drawer select, .entity-drawer textarea { background: var(--surface); }
+.tenant-form-section { display: grid; gap: 10px; min-width: 0; margin: 0; padding: 14px; border: 1px solid var(--border); border-radius: 8px; }
+.tenant-form-section legend { padding: 0 6px; color: var(--foreground); font-size: 13px; font-weight: 650; }
+.tenant-room-rent-preview { display: grid; grid-template-columns: 1fr auto; gap: 3px 12px; padding: 12px; border-radius: 8px; background: var(--surface-muted); }
+.tenant-room-rent-preview > span, .tenant-room-rent-preview small { color: var(--foreground-muted); font-size: 12px; }
+.tenant-room-rent-preview strong { grid-column: 2; grid-row: 1 / span 2; align-self: center; font: 700 14px var(--mono); }
+.tenant-responsibility-plan { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; }
+.tenant-responsibility-plan > div:first-child { display: grid; gap: 3px; }
+.tenant-responsibility-rows { display: grid; gap: 8px; }
+.tenant-responsibility-person { display: grid; grid-template-columns: minmax(0,1fr) 130px; align-items: center; gap: 10px; }
+.tenant-responsibility-member { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tenant-responsibility-member.current { min-height: 42px; font-weight: 600; }
+.tenant-responsibility-amount { display: grid; gap: 3px; color: var(--foreground-muted); font-size: 11px; }
+.tenant-responsibility-amount input { width: 100%; min-width: 0; padding: 8px; font: 12px var(--mono); }
 .property-edit-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px 14px; }
 .property-edit-grid .full { grid-column: 1 / -1; }
 .property-edit-grid textarea { min-height: 88px; }

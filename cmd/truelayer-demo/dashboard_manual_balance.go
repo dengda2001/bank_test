@@ -127,24 +127,21 @@ func (a *app) handleDashboardManualBalance(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "database session required", http.StatusBadRequest)
 		return
 	}
-	// The form is submitted from /bills, so the redirect has to come back to
-	// /bills with the same filters rather than to /rent-dashboard.
-	listPath := "/rent-dashboard"
-	if strings.HasPrefix(r.URL.Path, "/bills") {
-		listPath = "/bills"
+	redirect := func(message, actionError string) {
+		http.Redirect(w, r, manualBalanceRedirectURL(r.Form, r.URL.Path, message, actionError), http.StatusFound)
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Redirect(w, r, listManualBalanceRedirect(listPath, r.Form, "", "invalid_manual_balance"), http.StatusFound)
+		redirect("", "invalid_manual_balance")
 		return
 	}
 	obligationID, err := parsePositiveUint(r.Form.Get("obligation_id"))
 	if err != nil {
-		http.Redirect(w, r, listManualBalanceRedirect(listPath, r.Form, "", "invalid_manual_balance"), http.StatusFound)
+		redirect("", "invalid_manual_balance")
 		return
 	}
 	reason := strings.TrimSpace(firstNonEmpty(r.Form.Get("reason"), r.Form.Get("manual_balance_reason")))
 	if reason == "" {
-		http.Redirect(w, r, listManualBalanceRedirect(listPath, r.Form, "", "manual_balance_reason_required"), http.StatusFound)
+		redirect("", "manual_balance_reason_required")
 		return
 	}
 	// "处理方式" defaults to 匹配现有收款, which is exactly what
@@ -153,18 +150,59 @@ func (a *app) handleDashboardManualBalance(w http.ResponseWriter, r *http.Reques
 	// they must stop here -- before any write -- and say so.
 	disposition := strings.TrimSpace(r.Form.Get("disposition"))
 	if !settleDispositionImplemented(disposition) {
-		http.Redirect(w, r, listManualBalanceRedirect(listPath, r.Form, "", "manual_balance_disposition_unimplemented"), http.StatusFound)
+		redirect("", "manual_balance_disposition_unimplemented")
 		return
 	}
 	_, err = newTransactionService(a.db).settleRentObligation(r.Context(), userID, obligationID, reason)
 	switch {
 	case err == nil:
-		http.Redirect(w, r, listManualBalanceRedirect(listPath, r.Form, "manual_balance_saved", ""), http.StatusFound)
+		redirect("manual_balance_saved", "")
 	case errors.Is(err, errManualBalanceNotNeeded):
-		http.Redirect(w, r, listManualBalanceRedirect(listPath, r.Form, "manual_balance_not_needed", ""), http.StatusFound)
+		redirect("manual_balance_not_needed", "")
 	default:
-		http.Redirect(w, r, listManualBalanceRedirect(listPath, r.Form, "", "manual_balance_failed"), http.StatusFound)
+		redirect("", "manual_balance_failed")
 	}
+}
+
+func manualBalanceRedirectURL(values url.Values, requestPath, message, actionError string) string {
+	returnValues := values
+	legacyBillsRequest := strings.HasPrefix(requestPath, "/bills")
+	if raw := strings.TrimSpace(values.Get("return_to")); raw != "" {
+		if target, err := url.ParseRequestURI(raw); err == nil && !target.IsAbs() && target.Host == "" && target.User == nil && target.Fragment == "" && target.Path == "/rent-dashboard" {
+			returnValues = target.Query()
+			legacyBillsRequest = false
+		}
+	}
+	filters, err := rentWorkspaceFiltersFromQuery(returnValues)
+	if err != nil {
+		period, periodErr := parsePeriodMonth(strings.TrimSpace(returnValues.Get("period")))
+		if periodErr != nil {
+			period = monthStart(time.Now().UTC())
+		}
+		filters = defaultRentWorkspaceFilters(period)
+		filters.Search = strings.TrimSpace(returnValues.Get("search"))
+		if len([]rune(filters.Search)) > 191 {
+			filters.Search = ""
+		}
+	}
+	if legacyBillsRequest {
+		filters.View = rentWorkspaceViewTenants
+	}
+	filters.PropertyID = 0
+	filters.RoomID = 0
+	target, err := url.Parse(rentWorkspaceURL(filters, filters.Page))
+	if err != nil {
+		return "/rent-dashboard?view=tenants"
+	}
+	query := target.Query()
+	if message != "" {
+		query.Set("message", message)
+	}
+	if actionError != "" {
+		query.Set("error", actionError)
+	}
+	target.RawQuery = query.Encode()
+	return target.String()
 }
 
 func dashboardManualBalanceRedirect(values url.Values, message, actionError string) string {

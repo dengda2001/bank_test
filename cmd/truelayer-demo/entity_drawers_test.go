@@ -65,6 +65,26 @@ func TestTenantFormUsesSharedObjectTabsAndDrawer(t *testing.T) {
 	}
 }
 
+func TestTenantFormShowsRoomOccupantsAndEditableResponsibilityPlan(t *testing.T) {
+	page, err := executeTemplate(tenantTemplate, tenantPageData{
+		workspaceShell: workspaceShell{ActivePage: "tenants"},
+		ShowForm:       true,
+		Rooms: []tenantRoomOption{{
+			ID: 7, PropertyName: "Canal House", RoomLabel: "A-01", MonthlyRentValue: "1200.00", Currency: "EUR", DueDay: 5,
+			OccupantsJSON: `[{"tenant_id":12,"name":"Aoife","responsibility_cents":120000}]`,
+		}},
+		Form: tenantRecord{Name: "Mia", Status: "active", Currency: "EUR", DueDay: 5, Structured: true, ArrangementStartMonth: "2026-09"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{`data-room-occupants=`, `name="room_plan"`, "同住人分担", "个人责任", "默认均分"} {
+		if !strings.Contains(page, expected) {
+			t.Fatalf("tenant form is missing %q", expected)
+		}
+	}
+}
+
 func TestRoomDetailEditStateRendersTheDetailsAndDrawerTogether(t *testing.T) {
 	filters := defaultRentWorkspaceFilters(time.Now())
 	page, err := executeTemplate(rentRoomDetailTemplate, rentRoomDetailPageData{
@@ -84,7 +104,7 @@ func TestRoomDetailEditStateRendersTheDetailsAndDrawerTogether(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{`class="room-detail-grid"`, `class="entity-drawer-backdrop"`, "租客责任", "房间与租约"} {
+	for _, expected := range []string{`class="room-detail-grid"`, `class="entity-drawer-backdrop"`, "租客责任", "房间信息"} {
 		if !strings.Contains(page, expected) {
 			t.Fatalf("room detail edit state is missing %q", expected)
 		}

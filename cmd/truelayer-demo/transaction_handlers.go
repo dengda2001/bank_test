@@ -107,6 +107,15 @@ func (a *app) handleTransactionAllocation(w http.ResponseWriter, r *http.Request
 				redirectTransactionResult(w, r, "error", "invalid_allocation")
 				return
 			}
+			var tenantRow tenant
+			if err := a.db.WithContext(r.Context()).Where("id = ? AND user_id = ?", tenantID, userID).First(&tenantRow).Error; err != nil {
+				redirectTransactionResult(w, r, "error", "allocation_failed")
+				return
+			}
+			if err := newMonthlyRentFactsService(a.db).ensureMonthlyRentFacts(r.Context(), userID, period, rentFactsIntentExplicitPayment); err != nil {
+				redirectTransactionResult(w, r, "error", "allocation_failed")
+				return
+			}
 			var obligation rentObligation
 			if err := a.db.WithContext(r.Context()).Where("id > 0 AND user_id = ? AND tenant_id = ? AND period_month = ?", userID, tenantID, period).First(&obligation).Error; err != nil {
 				redirectTransactionResult(w, r, "error", "allocation_failed")

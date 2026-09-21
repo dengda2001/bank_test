@@ -467,12 +467,23 @@ func saveRentArrangementInTx(tx *gorm.DB, userID uint64, input rentArrangementIn
 		tenantIDs = append(tenantIDs, responsibility.TenantID)
 	}
 	if len(tenantIDs) > 0 {
-		var tenants []tenant
-		if err := tx.Where("user_id = ? AND id IN ?", userID, tenantIDs).Find(&tenants).Error; err != nil {
-			return tenancyAgreement{}, err
+		lockedTenantIDs := append([]uint64(nil), tenantIDs...)
+		sort.Slice(lockedTenantIDs, func(i, j int) bool { return lockedTenantIDs[i] < lockedTenantIDs[j] })
+		for _, tenantID := range lockedTenantIDs {
+			var tenantRow tenant
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND id = ?", userID, tenantID).First(&tenantRow).Error; err != nil {
+				return tenancyAgreement{}, err
+			}
 		}
-		if len(tenants) != len(tenantIDs) {
-			return tenancyAgreement{}, gorm.ErrRecordNotFound
+		var legacy rentObligation
+		legacyErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("user_id = ? AND tenant_id IN ? AND period_month >= ? AND rent_charge_id IS NULL", userID, tenantIDs, effectiveMonth).
+			Order("period_month ASC, tenant_id ASC, id ASC").First(&legacy).Error
+		if legacyErr == nil {
+			return tenancyAgreement{}, fmt.Errorf("%w: tenant %d already has a legacy obligation for %s", errRentFactsConflict, legacy.TenantID, monthStart(legacy.PeriodMonth).Format("2006-01"))
+		}
+		if !errors.Is(legacyErr, gorm.ErrRecordNotFound) {
+			return tenancyAgreement{}, legacyErr
 		}
 		var conflictCount int64
 		if err := tx.Table("agreement_parties AS ap").Joins("JOIN tenancy_agreements AS ta ON ta.id = ap.agreement_id AND ta.user_id = ap.user_id").Where("ap.user_id = ? AND ap.tenant_id IN ? AND ap.status = ? AND ta.status = ? AND ta.room_id <> ? AND ta.start_date <= ? AND (ta.end_date IS NULL OR ta.end_date >= ?) AND (ap.joined_at IS NULL OR ap.joined_at <= ?) AND (ap.left_at IS NULL OR ap.left_at >= ?)", userID, tenantIDs, "active", "active", input.RoomID, effectiveMonth.AddDate(0, 1, -1), effectiveMonth, effectiveMonth.AddDate(0, 1, -1), effectiveMonth).Count(&conflictCount).Error; err != nil {
@@ -589,7 +600,7 @@ func (s *landlordDomainService) moveTenant(ctx context.Context, userID, tenantID
 // tenant while keeping each room's versioned rent arrangement intact. All
 // arrangement writes go through saveRentArrangementInTx so generated charges
 // continue to lock the affected month and every change rolls back together.
-func syncTenantRoomBindingInTx(tx *gorm.DB, userID, tenantID, roomID uint64, effectiveMonth time.Time, monthlyRentCents int64, currency string, dueDay int, tenantStatus string) error {
+func syncTenantRoomBindingInTx(tx *gorm.DB, userID, tenantID, roomID uint64, effectiveMonth time.Time, monthlyRentCents int64, currency string, dueDay int, tenantStatus string, roomTenantIDs []uint64, responsibilities []rentResponsibilityInput) error {
 	if userID == 0 || tenantID == 0 {
 		return errors.New("userID and tenantID are required")
 	}
@@ -623,10 +634,6 @@ func syncTenantRoomBindingInTx(tx *gorm.DB, userID, tenantID, roomID uint64, eff
 		seenRooms[row.RoomID] = struct{}{}
 		roomIDs = append(roomIDs, row.RoomID)
 	}
-	if alreadyBound && len(roomIDs) == 1 {
-		return nil
-	}
-
 	loadCurrentArrangement := func(targetRoomID uint64) (tenancyAgreement, []agreementParty, error) {
 		var arrangement tenancyAgreement
 		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
@@ -642,6 +649,34 @@ func syncTenantRoomBindingInTx(tx *gorm.DB, userID, tenantID, roomID uint64, eff
 			return tenancyAgreement{}, nil, err
 		}
 		return arrangement, parties, nil
+	}
+
+	if alreadyBound && len(roomIDs) == 1 {
+		if roomTenantIDs == nil {
+			return nil
+		}
+		currentArrangement, currentParties, err := loadCurrentArrangement(roomID)
+		if err != nil {
+			return err
+		}
+		currentPlan := make(map[uint64]int64, len(currentParties))
+		for _, party := range currentParties {
+			currentPlan[party.TenantID] = party.ResponsibilityCents
+		}
+		requestedPlan := make(map[uint64]int64, len(responsibilities))
+		for _, responsibility := range responsibilities {
+			requestedPlan[responsibility.TenantID] = responsibility.AmountCents
+		}
+		plansEqual := len(currentPlan) == len(requestedPlan) && len(requestedPlan) == len(roomTenantIDs)
+		for id, amount := range currentPlan {
+			if requestedPlan[id] != amount {
+				plansEqual = false
+				break
+			}
+		}
+		if plansEqual && currentArrangement.MonthlyRentCents == monthlyRentCents {
+			return nil
+		}
 	}
 
 	for _, sourceRoomID := range roomIDs {
@@ -670,7 +705,7 @@ func syncTenantRoomBindingInTx(tx *gorm.DB, userID, tenantID, roomID uint64, eff
 		}
 	}
 
-	if roomID == 0 || alreadyBound {
+	if roomID == 0 {
 		return nil
 	}
 	destinationTenantIDs := []uint64{tenantID}
@@ -685,6 +720,19 @@ func syncTenantRoomBindingInTx(tx *gorm.DB, userID, tenantID, roomID uint64, eff
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
 	}
+	if roomTenantIDs != nil {
+		destinationTenantIDs = append([]uint64(nil), roomTenantIDs...)
+		containsTenant := false
+		for _, candidate := range destinationTenantIDs {
+			if candidate == tenantID {
+				containsTenant = true
+				break
+			}
+		}
+		if !containsTenant {
+			return errors.New("current tenant must remain in room responsibilities")
+		}
+	}
 	destinationCurrency, destinationDueDay := currency, dueDay
 	if destinationHasArrangement {
 		// The room owns its currency and due date. The tenant form can adjust
@@ -694,7 +742,7 @@ func syncTenantRoomBindingInTx(tx *gorm.DB, userID, tenantID, roomID uint64, eff
 	_, err := saveRentArrangementInTx(tx, userID, rentArrangementInput{
 		RoomID: roomID, EffectiveMonth: effectiveMonth,
 		MonthlyRentCents: monthlyRentCents, Currency: destinationCurrency,
-		DueDay: destinationDueDay, TenantIDs: destinationTenantIDs,
+		DueDay: destinationDueDay, TenantIDs: destinationTenantIDs, Responsibilities: responsibilities,
 	})
 	return err
 }

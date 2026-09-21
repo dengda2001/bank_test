@@ -216,7 +216,9 @@ type tenantRecord struct {
 	BillingHistory []tenantBillingMonth `json:"-"`
 	// RoomID is only used by the structured tenant form. Existing tenant rows
 	// remain compatible with the legacy denormalized room fields.
-	RoomID uint64 `json:"-"`
+	RoomID                uint64 `json:"-"`
+	Structured            bool   `json:"-"`
+	ArrangementStartMonth string `json:"-"`
 }
 
 type tenantRoomOption struct {
@@ -225,6 +227,9 @@ type tenantRoomOption struct {
 	RoomLabel        string
 	MonthlyRentValue string
 	Currency         string
+	DueDay           int
+	OccupantsJSON    string
+	PlansJSON        string
 }
 
 type expenseRecord struct {
@@ -770,6 +775,16 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 	var totalTransactions int64
 	var tenantOptions []billingTenantOption
 	if userID, ok := a.currentUserID(r); ok && a.db != nil {
+		rentPeriod := monthStart(time.Now().UTC())
+		if filters.RentPeriod != "" {
+			if parsed, parseErr := parsePeriodMonth(filters.RentPeriod); parseErr == nil {
+				rentPeriod = parsed
+			}
+		}
+		if err := newMonthlyRentFactsService(a.db).ensureMonthlyRentFacts(r.Context(), userID, rentPeriod, rentFactsIntentRead); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		var err error
 		rows, totalTransactions, err = newTransactionService(a.db).listTransactionPageRowsWithTotal(r.Context(), userID, filters)
 		if err != nil {
@@ -1148,7 +1163,7 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	formRecord := tenantRecord{Currency: "EUR", IntervalUnit: "month", IntervalCount: 1, Status: "active", DueDay: 1}
+	formRecord := tenantRecord{Currency: "EUR", IntervalUnit: "month", IntervalCount: 1, Status: "active", DueDay: 1, Structured: true, ArrangementStartMonth: monthStart(time.Now().UTC()).Format("2006-01")}
 	editing := false
 	if editID := strings.TrimSpace(r.URL.Query().Get("edit")); editID != "" {
 		for _, record := range tenants {
@@ -1161,6 +1176,10 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 	}
 	if editing {
 		formRecord = tenantEditFormRecordWithRoomDefaults(formRecord, roomOptions)
+		formRecord.Structured = formRecord.RoomID != 0 || formRecord.MonthlyRent <= 0
+		if formRecord.Structured {
+			formRecord.ArrangementStartMonth = monthStart(time.Now().UTC()).Format("2006-01")
+		}
 	}
 	showForm := editing || r.URL.Query().Get("add") == "1" || r.URL.Query().Get("error") != ""
 	returnQuery := url.Values{"search": []string{search}}
@@ -1234,6 +1253,10 @@ func (a *app) createTenant(w http.ResponseWriter, r *http.Request) {
 		}
 		if errors.Is(err, errArrangementHistoryLocked) {
 			http.Redirect(w, r, tenantFormRedirectURL(returnTo, "", "tenant_room_locked"), http.StatusFound)
+			return
+		}
+		if errors.Is(err, errRentFactsConflict) || errors.Is(err, errTenantRoomConflict) {
+			http.Redirect(w, r, tenantFormRedirectURL(returnTo, "", "tenant_room_conflict"), http.StatusFound)
 			return
 		}
 		if errors.Is(err, errInvalidTenantInput) {
@@ -1325,6 +1348,35 @@ func (a *app) listTenantRoomOptions(ctx context.Context, r *http.Request) ([]ten
 	if err != nil {
 		return nil, err
 	}
+	period := monthStart(time.Now().UTC())
+	repo := newLandlordRentRepository(a.db)
+	agreements, err := repo.listTenancyAgreements(ctx, userID, agreementQuery{Status: "active"})
+	if err != nil {
+		return nil, err
+	}
+	agreementsByRoom := make(map[uint64][]tenancyAgreement, len(agreements))
+	for _, agreement := range agreements {
+		agreementsByRoom[agreement.RoomID] = append(agreementsByRoom[agreement.RoomID], agreement)
+	}
+	partiesByAgreement := make(map[uint64][]agreementParty, len(agreements))
+	tenantNames := make(map[uint64]string)
+	for _, agreement := range agreements {
+		parties, listErr := repo.listAgreementParties(ctx, userID, agreementPartyQuery{AgreementID: agreement.ID, Status: "active"})
+		if listErr != nil {
+			return nil, listErr
+		}
+		partiesByAgreement[agreement.ID] = parties
+		for _, party := range parties {
+			if _, loaded := tenantNames[party.TenantID]; loaded {
+				continue
+			}
+			var tenantRow tenant
+			if findErr := a.db.WithContext(ctx).Where("id = ? AND user_id = ?", party.TenantID, userID).First(&tenantRow).Error; findErr != nil {
+				return nil, findErr
+			}
+			tenantNames[party.TenantID] = firstNonEmpty(tenantRow.DisplayAlias, tenantRow.Name)
+		}
+	}
 	options := make([]tenantRoomOption, 0, len(rows))
 	for _, row := range rows {
 		if row.Status != "active" {
@@ -1334,7 +1386,39 @@ func (a *app) listTenantRoomOptions(ctx context.Context, r *http.Request) ([]ten
 		if row.MonthlyRentCents > 0 {
 			value = strconv.FormatFloat(float64(row.MonthlyRentCents)/100, 'f', 2, 64)
 		}
-		options = append(options, tenantRoomOption{ID: row.ID, PropertyName: row.PropertyName, RoomLabel: row.RoomLabel, MonthlyRentValue: value, Currency: firstNonEmpty(row.Currency, ledgerCurrencyEUR)})
+		plans := make([]tenantRoomArrangementOption, 0, len(agreementsByRoom[row.ID]))
+		currentOccupants := make([]tenantRoomOccupantOption, 0)
+		for _, agreement := range agreementsByRoom[row.ID] {
+			arrangementMonth := monthStart(agreement.StartDate)
+			arrangementMonthEnd := arrangementMonth.AddDate(0, 1, 0).Add(-time.Nanosecond)
+			occupants := make([]tenantRoomOccupantOption, 0)
+			for _, party := range partiesByAgreement[agreement.ID] {
+				if party.JoinedAt != nil && party.JoinedAt.After(arrangementMonthEnd) || party.LeftAt != nil && party.LeftAt.Before(arrangementMonth) {
+					continue
+				}
+				occupants = append(occupants, tenantRoomOccupantOption{TenantID: party.TenantID, Name: tenantNames[party.TenantID], ResponsibilityCents: party.ResponsibilityCents})
+			}
+			plan := tenantRoomArrangementOption{
+				StartMonth: arrangementMonth.Format("2006-01"), MonthlyRentValue: strconv.FormatFloat(float64(agreement.MonthlyRentCents)/100, 'f', 2, 64),
+				Currency: firstNonEmpty(agreement.Currency, ledgerCurrencyEUR), DueDay: agreement.DueDay, Occupants: occupants,
+			}
+			if agreement.EndDate != nil {
+				plan.EndMonth = monthStart(*agreement.EndDate).Format("2006-01")
+			}
+			plans = append(plans, plan)
+			if !period.Before(arrangementMonth) && (agreement.EndDate == nil || !period.After(monthStart(*agreement.EndDate))) {
+				currentOccupants = occupants
+			}
+		}
+		occupantsJSON, marshalErr := json.Marshal(currentOccupants)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		plansJSON, marshalErr := json.Marshal(plans)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		options = append(options, tenantRoomOption{ID: row.ID, PropertyName: row.PropertyName, RoomLabel: row.RoomLabel, MonthlyRentValue: value, Currency: firstNonEmpty(row.Currency, ledgerCurrencyEUR), DueDay: row.DueDay, OccupantsJSON: string(occupantsJSON), PlansJSON: string(plansJSON)})
 	}
 	return options, nil
 }
@@ -1366,8 +1450,12 @@ func (a *app) persistTenantRecord(ctx context.Context, r *http.Request, values f
 	}
 	name := strings.TrimSpace(values.Get("name"))
 	roomAddress := strings.TrimSpace(values.Get("room_address"))
-	monthlyRent, err := parsePositiveAmount(values.Get("monthly_rent"))
-	if name == "" || roomAddress == "" || err != nil {
+	monthlyRent := float64(0)
+	var err error
+	if strings.TrimSpace(values.Get("monthly_rent")) != "" {
+		monthlyRent, err = parsePositiveAmount(values.Get("monthly_rent"))
+	}
+	if name == "" || err != nil {
 		return errInvalidTenantInput
 	}
 	tenants, err := a.loadTenants()
@@ -1380,21 +1468,33 @@ func (a *app) persistTenantRecord(ctx context.Context, r *http.Request, values f
 		for i := range tenants {
 			if tenants[i].ID == updatedID {
 				tenants[i].Name = name
-				tenants[i].MonthlyRent = monthlyRent
+				if strings.TrimSpace(values.Get("monthly_rent")) != "" {
+					tenants[i].MonthlyRent = monthlyRent
+				}
+				tenants[i].DisplayAlias = strings.TrimSpace(values.Get("display_alias"))
+				tenants[i].Email = strings.TrimSpace(values.Get("email"))
+				tenants[i].PayerID = strings.TrimSpace(values.Get("payer_id"))
+				tenants[i].PayerNameHint = strings.TrimSpace(values.Get("payer_name_hint"))
 				tenants[i].Currency = firstNonEmpty(strings.ToUpper(strings.TrimSpace(values.Get("currency"))), "EUR")
-				tenants[i].RoomAddress = roomAddress
+				if roomAddress != "" {
+					tenants[i].RoomAddress = roomAddress
+				}
 				return a.saveTenants(tenants)
 			}
 		}
 		return errInvalidTenantInput
 	}
 	tenants = append(tenants, tenantRecord{
-		ID:          recordID("tenant", now),
-		Name:        name,
-		MonthlyRent: monthlyRent,
-		Currency:    firstNonEmpty(strings.ToUpper(strings.TrimSpace(values.Get("currency"))), "EUR"),
-		RoomAddress: roomAddress,
-		CreatedAt:   now.Format(time.RFC3339),
+		ID:            recordID("tenant", now),
+		Name:          name,
+		DisplayAlias:  strings.TrimSpace(values.Get("display_alias")),
+		Email:         strings.TrimSpace(values.Get("email")),
+		PayerID:       strings.TrimSpace(values.Get("payer_id")),
+		PayerNameHint: strings.TrimSpace(values.Get("payer_name_hint")),
+		MonthlyRent:   monthlyRent,
+		Currency:      firstNonEmpty(strings.ToUpper(strings.TrimSpace(values.Get("currency"))), "EUR"),
+		RoomAddress:   roomAddress,
+		CreatedAt:     now.Format(time.RFC3339),
 	})
 	return a.saveTenants(tenants)
 }
@@ -2442,17 +2542,22 @@ func prepareTenants(rows []tenantRecord) {
 }
 
 func tenantEditFormRecordWithRoomDefaults(record tenantRecord, rooms []tenantRoomOption) tenantRecord {
-	if record.RoomID == 0 || record.MonthlyRent > 0 {
+	if record.RoomID == 0 {
 		return record
 	}
 	for _, option := range rooms {
 		if option.ID != record.RoomID {
 			continue
 		}
-		if rent, err := strconv.ParseFloat(option.MonthlyRentValue, 64); err == nil {
-			record.MonthlyRent = rent
+		if record.MonthlyRent <= 0 {
+			if rent, err := strconv.ParseFloat(option.MonthlyRentValue, 64); err == nil {
+				record.MonthlyRent = rent
+			}
 		}
 		record.Currency = firstNonEmpty(option.Currency, record.Currency, "EUR")
+		if option.DueDay > 0 {
+			record.DueDay = option.DueDay
+		}
 		break
 	}
 	return record
