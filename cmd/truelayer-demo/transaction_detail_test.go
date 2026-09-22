@@ -63,20 +63,17 @@ func TestTransactionDetailTemplateRendersPrototypeSectionsAndEscapesSourceData(t
 		Subtitle:        "AIB Current Account · 12 Sep 2026 09:18",
 		StatusClass:     "candidate",
 		BackURL:         "/transactions?page=2",
-		BackRowURL:      "/transactions?page=2#transaction-row-42",
 		AllocatedAmount: "EUR 0.00",
 		RemainingAmount: "EUR 640.00",
 		AllocationCount: 0,
 		SourceLabel:     "TrueLayer 银行同步",
 		Reference:       `<script>alert("x")</script>`,
-		Suggestion:      transactionDetailSuggestion{Status: "待确认", Reason: "请核对付款人与租金责任。"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, marker := range []string{
 		"银行流水详情",
-		"匹配建议",
 		"关联责任与对象",
 		"处理记录",
 		"原始流水",
@@ -85,8 +82,6 @@ func TestTransactionDetailTemplateRendersPrototypeSectionsAndEscapesSourceData(t
 		"交易时间",
 		"编辑分配",
 		"标记非租金",
-		"确认匹配",
-		`href="/transactions?page=2#transaction-row-42"`,
 		"&lt;script&gt;alert(&#34;x&#34;)&lt;/script&gt;",
 	} {
 		if !strings.Contains(page, marker) {
@@ -96,13 +91,32 @@ func TestTransactionDetailTemplateRendersPrototypeSectionsAndEscapesSourceData(t
 	if strings.Contains(page, `<script>alert("x")</script>`) {
 		t.Fatal("source reference rendered as executable markup")
 	}
+
+	// 原始流水是正文第一块：房东先看银行记了什么，再决定怎么匹配。位置是这次
+	// 改造的要点，所以钉住它排在其他正文板块之前，而不是只钉"页面上有这块"。
+	sourceIndex := strings.Index(page, "原始流水")
+	allocationsIndex := strings.Index(page, "关联责任与对象")
+	if sourceIndex < 0 || sourceIndex > allocationsIndex {
+		t.Fatalf("原始流水 is not the first block of the main column (source@%d, allocations@%d)", sourceIndex, allocationsIndex)
+	}
+
+	// 摘掉的两块不能悄悄回来：匹配建议是系统的猜测，猜错了要先推翻才能动手；
+	// 「返回此笔处理」和「返回流水」是同一份列表的两个入口。
+	for _, removed := range []string{"匹配建议", "返回此笔处理", "前往流水列表查看可用操作", "#transaction-row-"} {
+		if strings.Contains(page, removed) {
+			t.Fatalf("transaction detail page still renders removed block %q", removed)
+		}
+	}
 }
 
-// The detail header's three entries must reuse the list-row actions: the same
+// The detail header's two entries must reuse the list-row actions: the same
 // endpoints and parameters, plus the detail page's return target so acting from
-// the detail page lands back on the list it came from. The three entries always
+// the detail page lands back on the list it came from. Both entries always
 // render; which one carries a live form depends on the row state, exactly as it
 // does in the list row (修改匹配 needs an existing rent match, 标记非租金 does not).
+//
+// 确认匹配不再是页头第三格：它和右栏的「匹配流水」是同一个 action 的重复入口，
+// 页头那份已摘掉，所以下面确认相关的断言落在页面里唯一的那张匹配表单上。
 func TestTransactionDetailHeaderActionsReuseListRowEndpoints(t *testing.T) {
 	render := func(t *testing.T, row transactionPageRow) string {
 		t.Helper()
@@ -116,10 +130,13 @@ func TestTransactionDetailHeaderActionsReuseListRowEndpoints(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, entry := range []string{"编辑分配", "标记非租金", "确认匹配"} {
+		for _, entry := range []string{"编辑分配", "标记非租金"} {
 			if !strings.Contains(page, entry) {
 				t.Fatalf("transaction detail header is missing the %q entry", entry)
 			}
+		}
+		if got := strings.Count(page, `class="transaction-head-action"`); got != 2 {
+			t.Fatalf("transaction detail header renders %d entries, want 2", got)
 		}
 		return page
 	}
@@ -156,7 +173,10 @@ func TestTransactionDetailHeaderActionsReuseListRowEndpoints(t *testing.T) {
 		CandidatePeriod:           "2026-09",
 		CandidateRentObligationID: 77,
 		RematchTenantOptions:      []billingTenantOption{{ID: 9, Name: "C. CHEN"}},
-		ManualMatchOptions:        []billingRentMatchOption{{TenantID: 9, TenantName: "C. CHEN", Period: "2026-09", PeriodLabel: "2026年9月", Remaining: "EUR 640.00"}},
+		// 生产路径里这两个是配对的：租客下拉由 ManualMatchOptions 推出来
+		//（matching_service.go 的 rematchFilterOptions），所以 fixture 也照这个形状给。
+		ManualMatchTenantOptions: []billingTenantOption{{ID: 9, Name: "C. CHEN"}},
+		ManualMatchOptions:       []billingRentMatchOption{{TenantID: 9, TenantName: "C. CHEN", Period: "2026-09", PeriodLabel: "2026年9月", Remaining: "EUR 640.00"}},
 	})
 	for _, marker := range []string{
 		`action="/transactions/confirm"`,
@@ -168,8 +188,11 @@ func TestTransactionDetailHeaderActionsReuseListRowEndpoints(t *testing.T) {
 		`name="return_to" value="/transactions?page=2"`,
 	} {
 		if !strings.Contains(confirmable, marker) {
-			t.Fatalf("confirmable header missing %q", marker)
+			t.Fatalf("confirmable page missing %q", marker)
 		}
+	}
+	if got := strings.Count(confirmable, `action="/transactions/confirm"`); got != 1 {
+		t.Fatalf("transaction detail renders %d confirm forms, want the single one in the right rail", got)
 	}
 }
 

@@ -18,7 +18,6 @@ type transactionDetailPageData struct {
 	Subtitle         string
 	StatusClass      string
 	BackURL          string
-	BackRowURL       string
 	ActionBase       string
 	TransactionTime  string
 	AllocatedAmount  string
@@ -31,7 +30,6 @@ type transactionDetailPageData struct {
 	ParsedPeriodNote string
 	RawRecord        string
 	HasRawRecord     bool
-	Suggestion       transactionDetailSuggestion
 	Allocations      []transactionDetailAllocationRow
 	Events           []transactionDetailEvent
 }
@@ -44,14 +42,6 @@ func formatTransactionTimestamp(value *time.Time) string {
 		return "—"
 	}
 	return value.UTC().Format("2006-01-02 15:04")
-}
-
-type transactionDetailSuggestion struct {
-	Available bool
-	Title     string
-	Subtitle  string
-	Status    string
-	Reason    string
 }
 
 type transactionDetailAllocationRow struct {
@@ -143,7 +133,7 @@ func (a *app) renderTransactionDetail(w http.ResponseWriter, r *http.Request, ke
 		http.NotFound(w, r)
 		return
 	}
-	detailData, err := a.transactionDetailPageData(r.Context(), r, userID, source, key, filters)
+	detailData, err := a.transactionDetailPageData(r.Context(), r, userID, source, filters)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -156,7 +146,7 @@ func (a *app) renderTransactionDetail(w http.ResponseWriter, r *http.Request, ke
 	}
 }
 
-func (a *app) transactionDetailPageData(ctx context.Context, r *http.Request, userID uint64, source paymentTransaction, key string, filters transactionFilters) (transactionDetailPageData, error) {
+func (a *app) transactionDetailPageData(ctx context.Context, r *http.Request, userID uint64, source paymentTransaction, filters transactionFilters) (transactionDetailPageData, error) {
 	repository := newLandlordRentRepository(a.db)
 	allocations, err := repository.listPaymentAllocations(ctx, userID, paymentAllocationQuery{PaymentTransactionID: source.ID})
 	if err != nil {
@@ -176,7 +166,6 @@ func (a *app) transactionDetailPageData(ctx context.Context, r *http.Request, us
 	}
 
 	row := enrichTransactionPageRow(transactionPageRowFromModel(source), source, allocations, obligations)
-	summary := summarizeTransactionAllocations(source, allocations)
 	nameByTenant := make(map[uint64]string, len(tenants))
 	tenantByID := make(map[uint64]tenant, len(tenants))
 	for _, tenantRow := range tenants {
@@ -245,11 +234,6 @@ func (a *app) transactionDetailPageData(ctx context.Context, r *http.Request, us
 		return transactionDetailPageData{}, err
 	}
 	backURL := transactionListURL(r.URL.Path, r.URL.Query())
-	pageKey := key
-	if pageKey == "" {
-		pageKey = strconv.FormatUint(source.ID, 10)
-	}
-	backRowURL := backURL + "#transaction-row-" + url.PathEscape(pageKey)
 	data := transactionDetailPageData{
 		workspaceShell:   a.transactionDetailShell(r, userID, filters),
 		Transaction:      row,
@@ -257,7 +241,6 @@ func (a *app) transactionDetailPageData(ctx context.Context, r *http.Request, us
 		Subtitle:         row.AccountName + " · " + row.DateDisplay,
 		StatusClass:      row.MatchStatus,
 		BackURL:          backURL,
-		BackRowURL:       backRowURL,
 		ActionBase:       transactionListPath(r.URL.Path),
 		TransactionTime:  formatTransactionTimestamp(source.TransactionTime),
 		AllocatedAmount:  row.AllocatedAmountDisplay,
@@ -273,18 +256,6 @@ func (a *app) transactionDetailPageData(ctx context.Context, r *http.Request, us
 		Events:           events,
 	}
 	data.HasRawRecord = data.RawRecord != ""
-	if source.Direction == "income" && summary.AllocatedCents == 0 && source.MatchStatus != "ignored" {
-		decision := decideStrictRentMatch(paymentTransactionInputFromModel(source), payers, tenants, obligations)
-		if decision.TenantID != 0 {
-			data.Suggestion.Available = decision.Status != "needs_review"
-			data.Suggestion.Title = firstNonEmpty(nameByTenant[decision.TenantID], "已识别租客")
-			if !decision.PeriodMonth.IsZero() {
-				data.Suggestion.Subtitle = monthStart(decision.PeriodMonth).Format("2006年1月") + "租金责任"
-			}
-		}
-		data.Suggestion.Status = firstNonEmpty(transactionMatchStatusLabel(decision.Status), "暂无匹配建议")
-		data.Suggestion.Reason = firstNonEmpty(decision.Reason, source.MatchReason, "系统没有足够信息生成匹配建议。")
-	}
 	return data, nil
 }
 

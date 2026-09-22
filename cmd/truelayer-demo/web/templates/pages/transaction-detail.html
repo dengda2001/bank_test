@@ -11,9 +11,10 @@
   <div class="app">
     {{template "workspace-nav" .}}
     <main class="content transaction-detail-page">
+      {{/* 返回到列表就够了。之前并排的「返回此笔处理」是同一份列表的另一个入口，
+          只是多带一个行锚点，两个按钮做同一件事反而要先想清楚点哪个。 */}}
       <div class="transaction-detail-toolbar">
         <a class="btn subtle" href="{{.BackURL}}">← 返回流水</a>
-        <a class="btn primary" href="{{.BackRowURL}}">返回此笔处理</a>
       </div>
       <header class="transaction-detail-head">
         <div class="transaction-detail-identity">
@@ -72,24 +73,6 @@
               {{end}}
             </div>
           </details>
-          <details class="transaction-head-action">
-            <summary class="btn primary">确认匹配</summary>
-            <div class="transaction-head-action-body">
-              {{if or .Transaction.CanConfirm .Transaction.NeedsMonthChoice .Transaction.ManualMatchOptions}}
-                <p class="tiny">{{if .Transaction.CandidateTenantName}}建议：{{.Transaction.CandidateTenantName}} · {{.Transaction.CandidatePeriod}}{{else}}分别选择要匹配的租客和月份。{{end}}</p>
-                <form method="post" action="{{.ActionBase}}/confirm" data-tenant-period-match>
-                  <input type="hidden" name="transaction_id" value="{{.Transaction.ID}}">
-                  <input type="hidden" name="return_to" value="{{.BackURL}}">
-                  <select name="tenant_id" aria-label="选择匹配租客" data-searchable required><option value="">选择租客...</option>{{range .Transaction.ManualMatchTenantOptions}}<option value="{{.ID}}"{{if eq .ID $.Transaction.CandidateTenantID}} selected{{end}}>{{.Name}}</option>{{end}}</select>
-                  {{template "tenant-period-calendar" (tenantPeriodMatchCalendar .Transaction.ManualMatchOptions .Transaction.CandidateTenantID .Transaction.CandidatePeriod)}}
-                  <label class="tiny"><input type="checkbox" name="remember_payer" value="1" checked> 记住付款人</label>
-                  <button class="btn primary" type="submit">确认匹配</button>
-                </form>
-              {{else}}
-                <p class="tiny">没有可直接确认的租金匹配；可在流水列表使用归类／拆分处理。</p>
-              {{end}}
-            </div>
-          </details>
         </div>
       </header>
 
@@ -118,28 +101,39 @@
 
       <div class="transaction-detail-grid">
         <div class="transaction-detail-stack">
-          <section class="panel" aria-labelledby="transaction-suggestion-title">
+          {{/* 原始流水放在正文第一块：房东打开一笔流水，第一件要做的事是看银行
+              到底记了什么（谁付的、什么时候、备注写了什么），再决定怎么匹配。
+              系统给的匹配建议原先是这一格，但那只是系统的猜测，猜错了反而要先
+              推翻它才能动手。描述与银行原始 JSON 同属"银行侧的记录"，一并收进这
+              一块，页面就没有三处各说一半的原始数据了。 */}}
+          <section class="panel" aria-labelledby="transaction-source-title">
             <div class="panel-head">
               <div>
-                <h2 id="transaction-suggestion-title">匹配建议</h2>
-                <p class="tiny">核对付款人与对应的租金责任后，可在右侧直接匹配。</p>
+                <h2 id="transaction-source-title">原始流水</h2>
+                <p class="tiny">银行同步进来的原始记录，匹配与分配都不会改动它。</p>
               </div>
-              {{if .Suggestion.Status}}<span class="status {{if .Suggestion.Available}}candidate{{else}}needs_review{{end}}">{{.Suggestion.Status}}</span>{{end}}
             </div>
-            <div class="transaction-suggestion-body">
-              {{if .Suggestion.Available}}
-                <div class="transaction-suggestion-target">
-                  <strong>{{.Suggestion.Title}}</strong>
-                  {{if .Suggestion.Subtitle}}<span>{{.Suggestion.Subtitle}}</span>{{end}}
-                </div>
-                <p>{{.Suggestion.Reason}}</p>
-              {{else if .Allocations}}
-                <p>这笔流水已有分配记录，当前记录列在下方。</p>
-              {{else}}
-                <p>{{if .Suggestion.Reason}}{{.Suggestion.Reason}}{{else}}当前没有可直接确认的租金匹配建议。{{end}}</p>
-              {{end}}
-              <a class="transaction-inline-link" href="{{.BackRowURL}}">前往流水列表查看可用操作</a>
+            <dl class="transaction-facts">
+              <div><dt>银行姓名</dt><dd>{{.Transaction.PayerName}}</dd></div>
+              <div><dt>交易时间</dt><dd class="mono">{{.TransactionTime}}</dd></div>
+              <div><dt>摘要 / 参考</dt><dd>{{.Reference}}</dd></div>
+              <div><dt>入账账户</dt><dd>{{.Transaction.AccountName}}</dd></div>
+              <div><dt>识别租金月份</dt><dd>{{if .ParsedPeriod}}{{.ParsedPeriod}}{{else}}未识别{{end}}{{if .ParsedPeriodNote}}<small>{{.ParsedPeriodNote}}</small>{{end}}</dd></div>
+              <div><dt>数据来源</dt><dd>{{.SourceLabel}}</dd></div>
+              <div><dt>外部流水号</dt><dd>{{.ProviderID}}</dd></div>
+              <div><dt>付款人编号</dt><dd>{{.Transaction.PayerID}}</dd></div>
+              <div><dt>账户标识</dt><dd>{{if .Transaction.AccountID}}{{.Transaction.AccountID}}{{else}}—{{end}}</dd></div>
+            </dl>
+            <div class="transaction-raw-description">
+              <h3>原始描述</h3>
+              <div class="code-block">{{.Transaction.Description}}</div>
             </div>
+            {{if .HasRawRecord}}
+              <details class="transaction-raw-record">
+                <summary>查看银行原始记录</summary>
+                <pre>{{.RawRecord}}</pre>
+              </details>
+            {{end}}
           </section>
 
           <section class="panel" aria-labelledby="transaction-allocations-title">
@@ -221,7 +215,7 @@
           </section>
           {{end}}
           {{if or .Transaction.CanConfirm .Transaction.NeedsMonthChoice .Transaction.ManualMatchOptions}}
-          <section class="panel transaction-quick-match" aria-label="快速匹配">
+          <section class="panel transaction-quick-match" aria-label="匹配流水">
             <div class="panel-head"><div><h2>匹配流水</h2><p class="tiny">付款人：{{.Transaction.PayerName}}</p></div></div>
             <form method="post" action="{{.ActionBase}}/confirm" data-tenant-period-match>
               <input type="hidden" name="transaction_id" value="{{.Transaction.ID}}">
@@ -233,30 +227,6 @@
               <button class="btn primary" type="submit">确认匹配</button>
             </form>
           </section>
-          {{end}}
-          <section class="panel" aria-labelledby="transaction-source-title">
-            <div class="panel-head"><h2 id="transaction-source-title">原始流水</h2></div>
-            <dl class="transaction-facts">
-              <div><dt>银行姓名</dt><dd>{{.Transaction.PayerName}}</dd></div>
-              <div><dt>摘要 / 参考</dt><dd>{{.Reference}}</dd></div>
-              <div><dt>交易时间</dt><dd class="mono">{{.TransactionTime}}</dd></div>
-              <div><dt>入账账户</dt><dd>{{.Transaction.AccountName}}</dd></div>
-              <div><dt>数据来源</dt><dd>{{.SourceLabel}}</dd></div>
-              <div><dt>外部流水号</dt><dd>{{.ProviderID}}</dd></div>
-              <div><dt>付款人编号</dt><dd>{{.Transaction.PayerID}}</dd></div>
-              <div><dt>账户标识</dt><dd>{{if .Transaction.AccountID}}{{.Transaction.AccountID}}{{else}}—{{end}}</dd></div>
-              <div><dt>识别租金月份</dt><dd>{{if .ParsedPeriod}}{{.ParsedPeriod}}{{else}}未识别{{end}}{{if .ParsedPeriodNote}}<small>{{.ParsedPeriodNote}}</small>{{end}}</dd></div>
-            </dl>
-          </section>
-          <section class="panel" aria-labelledby="transaction-description-title">
-            <div class="panel-head"><h2 id="transaction-description-title">原始描述</h2></div>
-            <div class="transaction-code-body"><div class="code-block">{{.Transaction.Description}}</div></div>
-          </section>
-          {{if .HasRawRecord}}
-            <details class="panel transaction-raw-record">
-              <summary>查看银行原始记录</summary>
-              <pre>{{.RawRecord}}</pre>
-            </details>
           {{end}}
           <div class="transaction-risk-note">确认匹配会产生付款分配记录，但不会修改原始银行流水。撤销时同样保留审计记录。</div>
         </aside>
