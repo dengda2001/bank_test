@@ -805,6 +805,7 @@ func TestRevokePreviewTemplateShowsSourceAndEffectiveAllocations(t *testing.T) {
 		AllocatedAmountDisplay:        "EUR 1,000.00",
 		CurrentRemainingAmountDisplay: "EUR 1,000.00",
 		RemainingAmountDisplay:        "EUR 2,000.00",
+		ReturnTo:                      "/transactions?match_status=pending",
 		Allocations: []transactionRevokePreviewAllocation{{
 			Kind:          "房租",
 			AmountDisplay: "EUR 1,000.00",
@@ -815,7 +816,13 @@ func TestRevokePreviewTemplateShowsSourceAndEffectiveAllocations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"September rent", "EUR 2,000.00", "EUR 1,000.00", "Aoife Murphy", "/billing/revoke"} {
+	// 确认页必须把"从哪来"原样带回去。少了这个 hidden，从 /transactions 点撤销的人
+	// 确认完会落到兜底的 /billing —— 那是另一张表，等于让他重新找一遍这笔流水。
+	for _, expected := range []string{
+		"September rent", "EUR 2,000.00", "EUR 1,000.00", "Aoife Murphy", "/billing/revoke",
+		`<input type="hidden" name="return_to" value="/transactions?match_status=pending">`,
+		`<a class="back" href="/transactions?match_status=pending">返回流水</a>`,
+	} {
 		if !strings.Contains(body.String(), expected) {
 			t.Fatalf("revoke preview missing %q: %s", expected, body.String())
 		}
@@ -830,7 +837,7 @@ func TestRevokePreviewDataShowsFullBalanceAfterRevoke(t *testing.T) {
 		TenantNames: map[uint64]string{tenantID: "Aoife Murphy"},
 		Obligations: map[uint64]rentObligation{},
 	}
-	data := transactionRevokePreviewDataFromModel(preview)
+	data := transactionRevokePreviewDataFromModel(preview, "")
 	if data.CurrentRemainingAmountDisplay != "EUR 1000.00" || data.RemainingAmountDisplay != "EUR 2000.00" {
 		t.Fatalf("preview balances current=%q after=%q", data.CurrentRemainingAmountDisplay, data.RemainingAmountDisplay)
 	}

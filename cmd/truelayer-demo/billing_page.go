@@ -97,7 +97,11 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
     .transaction-route-quickfilter .btn { min-height: 36px; }
     .transaction-route-page > .panel.surface > .panel-head { display: none; }
     .transaction-route-desktop-table { min-width: 1120px; }
-    .transaction-route-desktop-table th, .transaction-route-desktop-table td { padding: 9px 12px; }
+    /* 左右 12 → 10px：给「操作」列让位。已关联的行比别的行多两个按钮
+       （修改匹配 / 撤销匹配），加上租客姓名那列要放下"Bríd Ní Bhraonáin"这种
+       带变音符的全名，十列加起来刚好顶出容器几个像素、多一条横向滚动条。
+       十个格子各收 2px 就有 40px 余量，肉眼看不出，也扛得住以后更长的姓名。 */
+    .transaction-route-desktop-table th, .transaction-route-desktop-table td { padding: 9px 10px; }
     /* 这一列短、且都是不该断开的原子值（日期、月份、用途、状态）。不锁住的话，
        浏览器在列被挤窄时会挑软柿子——"09-01"从连字符处断成两行、"同住代付"四个
        汉字断成两行。锁住之后被压缩的就只剩「匹配依据」那句本来就该折行的说明。 */
@@ -107,8 +111,11 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
     .transaction-route-desktop-table .route-txn-context { min-width: 150px; color: var(--foreground-muted); font-size: 12px; }
     .transaction-route-desktop-table .route-txn-amount { white-space: nowrap; font: 700 13px var(--mono); }
     /* 「匹配依据」是一句话，折行不心疼，所以宽度从这里匀给付款人和房产/房间——
-       那两列是姓名和地址，断在中间比这句话多折一行难读得多。 */
-    .transaction-route-desktop-table .route-txn-reason { max-width: 190px; }
+       那两列是姓名和地址，断在中间比这句话多折一行难读得多。
+       190 → 172 是给这一行的长内容让的：已关联的行比其他行多两个按钮（修改/撤销），
+       操作列因此宽了 4px，整张表就顶出容器 4px、多一条横向滚动条。这点宽度从
+       这句话里扣，比让按钮换行或让日期断成两行都划算。 */
+    .transaction-route-desktop-table .route-txn-reason { max-width: 172px; }
     .transaction-route-desktop-table .route-txn-period { white-space: nowrap; font: 600 12px var(--mono); }
     /* 没解析出月份时留一行灰字占位，不要留空。空单元格和"这笔不用管月份"长得
        一样，房东分不清是没识别出来还是压根不需要识别。 */
@@ -119,7 +126,7 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
     .transaction-list-match > summary::-webkit-details-marker { display: none; }
     .transaction-list-match form { display: grid; gap: 7px; min-width: 220px; margin-top: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-muted); white-space: normal; }
     .transaction-list-match form > label { display: grid; gap: 4px; color: var(--foreground-muted); font-size: 11px; }
-    .transaction-list-match form select { min-height: 36px; font-size: 12px; }
+    .transaction-list-match form select, .transaction-list-match form input { min-height: 36px; font-size: 12px; }
     .transaction-list-match-submit { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .transaction-list-match-submit > label { display: inline-flex; align-items: center; gap: 6px; color: var(--foreground-muted); font-size: 11px; white-space: nowrap; }
     .transaction-list-match-submit > label input { margin: 0; }
@@ -247,6 +254,12 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
       .transaction-review-actions form[data-tenant-period-match] select { min-width: 0; min-height: 44px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 11px; }
       .transaction-review-actions form[data-tenant-period-match] .btn { grid-column: 1/-1; }
       .transaction-review-actions select { min-width: 0; min-height: 44px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 11px; }
+      /* 已关联的卡片比别的卡片多两颗 details 按钮（修改匹配 / 撤销匹配）。默认那套
+         两列网格会把三样东西排成"查看 | 修改匹配"再单吊一颗撤销，留一个空格；
+         更糟的是网格项默认拉伸对齐，修改匹配一展开，"查看"就被抻成一根竖条。
+         带 details 的卡片改成单列堆叠，summary 撑满整行，展开的表单自然占满宽度。 */
+      .transaction-review-actions:has(details) { grid-template-columns: 1fr; align-items: start; }
+      .transaction-review-actions:has(details) > details > summary { width: 100%; justify-content: center; }
     }
   </style>
 </head>
@@ -322,7 +335,9 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
       <section class="panel surface" aria-labelledby="statement-title">
         <div class="panel-head"><h2 id="statement-title">流水明细</h2><span class="tiny">{{.LastSync}}</span></div>
         {{if .TransactionRows}}
-        {{if eq .PageKey "transactions"}}<div class="transaction-route-desktop-list table-wrap"><table class="transaction-route-desktop-table"><thead><tr><th>日期</th><th>付款人</th><th>租客姓名</th><th>房产 / 房间</th><th>金额</th><th>识别租金月份</th><th>建议分配</th><th>匹配依据</th><th>状态</th><th>操作</th></tr></thead><tbody>{{range .TransactionRows}}{{$row := .}}<tr><td class="mono route-txn-fixed">{{if .DateShort}}{{.DateShort}}{{else}}{{.DateDisplay}}{{end}}</td><td class="route-txn-payer"><strong>{{.PayerName}}</strong></td><td>{{if .MatchedTenantName}}{{.MatchedTenantName}}{{else}}—{{end}}</td><td class="route-txn-context">{{if .ObjectLabel}}{{.ObjectLabel}}{{else}}{{.AccountName}}{{end}}</td><td class="route-txn-amount">{{.AmountDisplay}}</td><td class="route-txn-period">{{if .ParsedPeriodDisplay}}{{.ParsedPeriodDisplay}}{{else}}<span class="route-txn-period-none">未识别</span>{{end}}</td><td class="route-txn-fixed">{{if .AllocationUseDisplay}}{{.AllocationUseDisplay}}{{else}}{{.MatchStatusLabel}}{{end}}</td><td class="route-txn-context route-txn-reason">{{if .MatchReason}}{{.MatchReason}}{{else}}—{{end}}</td><td class="route-txn-fixed"><span class="status {{.MatchStatus}}">{{.MatchStatusLabel}}</span></td><td class="route-txn-action">{{if .ManualMatchOptions}}<a class="btn subtle" href="{{.DetailURL}}">查看详情</a><details class="transaction-list-match"><summary class="btn primary">匹配流水</summary><form method="post" action="{{$.CanonicalPath}}/confirm" data-tenant-period-match><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="remember_payer" value="0"><input type="hidden" name="return_to" value="{{.ReturnURL}}"><label>租客<select name="tenant_id" aria-label="选择匹配租客" data-searchable required><option value="">选择租客</option>{{range .ManualMatchTenantOptions}}<option value="{{.ID}}"{{if eq .ID $row.CandidateTenantID}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>{{template "tenant-period-calendar" (tenantPeriodMatchCalendar .ManualMatchOptions .CandidateTenantID .CandidatePeriod)}}<div class="transaction-list-match-submit"><label class="tiny"><input type="checkbox" name="remember_payer" value="1" checked> 记住付款人</label><button class="btn primary" type="submit">确认匹配</button></div></form></details>{{else}}<a class="btn subtle" href="{{.DetailURL}}">查看详情</a>{{end}}</td></tr>{{end}}</tbody></table></div>{{end}}
+        {{if eq .PageKey "transactions"}}<div class="transaction-route-desktop-list table-wrap"><table class="transaction-route-desktop-table"><thead><tr><th>日期</th><th>付款人</th><th>租客姓名</th><th>房产 / 房间</th><th>金额</th><th>识别租金月份</th><th>建议分配</th><th>匹配依据</th><th>状态</th><th>操作</th></tr></thead><tbody>{{range .TransactionRows}}{{$row := .}}<tr><td class="mono route-txn-fixed">{{if .DateShort}}{{.DateShort}}{{else}}{{.DateDisplay}}{{end}}</td><td class="route-txn-payer"><strong>{{.PayerName}}</strong></td><td>{{if .MatchedTenantName}}{{.MatchedTenantName}}{{else}}—{{end}}</td><td class="route-txn-context">{{if .ObjectLabel}}{{.ObjectLabel}}{{else}}{{.AccountName}}{{end}}</td><td class="route-txn-amount">{{.AmountDisplay}}</td><td class="route-txn-period">{{if .ParsedPeriodDisplay}}{{.ParsedPeriodDisplay}}{{else}}<span class="route-txn-period-none">未识别</span>{{end}}</td><td class="route-txn-fixed">{{if .AllocationUseDisplay}}{{.AllocationUseDisplay}}{{else}}{{.MatchStatusLabel}}{{end}}</td><td class="route-txn-context route-txn-reason">{{if .MatchReason}}{{.MatchReason}}{{else}}—{{end}}</td><td class="route-txn-fixed"><span class="status {{.MatchStatus}}">{{.MatchStatusLabel}}</span></td><td class="route-txn-action"><a class="btn subtle" href="{{.DetailURL}}">查看详情</a>{{if .ManualMatchOptions}}<details class="transaction-list-match"><summary class="btn primary">匹配流水</summary><form method="post" action="{{$.CanonicalPath}}/confirm" data-tenant-period-match><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="remember_payer" value="0"><input type="hidden" name="return_to" value="{{.ReturnURL}}"><label>租客<select name="tenant_id" aria-label="选择匹配租客" data-searchable required><option value="">选择租客</option>{{range .ManualMatchTenantOptions}}<option value="{{.ID}}"{{if eq .ID $row.CandidateTenantID}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>{{template "tenant-period-calendar" (tenantPeriodMatchCalendar .ManualMatchOptions .CandidateTenantID .CandidatePeriod)}}<div class="transaction-list-match-submit"><label class="tiny"><input type="checkbox" name="remember_payer" value="1" checked> 记住付款人</label><button class="btn primary" type="submit">确认匹配</button></div></form></details>{{else if or (eq .MatchStatus "matched") (eq .MatchStatus "partial")}}<details class="transaction-list-match"><summary class="btn">修改匹配</summary>{{if .CanEditRentMatch}}<form method="post" action="{{$.CanonicalPath}}/rematch"><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="return_to" value="{{.ReturnURL}}"><label>租客<select name="tenant_id" aria-label="修改匹配租客" data-searchable required><option value="">选择租客</option>{{range .RematchTenantOptions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label><label>租金月份<select name="period" aria-label="修改租金月份" required><option value="">选择租金月份</option>{{range .RematchMonthOptions}}<option value="{{.Period}}">{{.Label}} · 未收 {{.Remaining}}</option>{{end}}</select></label><button class="btn primary" type="submit">确认修改</button></form>{{else if .CanRematch}}<p class="tiny">当前没有可替换的租金目标；如需调整，请先撤销匹配。</p>{{else}}<p class="tiny">该流水已拆分或含其他用途；请先撤销匹配，再重新归类。</p>{{end}}</details>{{/* 撤销是两步：这里只发一个 GET，跳到确认页把该流水的全部分配摊开给人看，
+    填完原因才真的 POST。所以这个表单没有原因输入框，method 也是 get —— 老表格里
+    那一份写的是 post + 原因，靠页尾脚本改成 get 再删掉输入框，这里不重复那个把戏。 */}}<details class="transaction-list-match"><summary class="btn danger">撤销匹配</summary><form method="get" action="{{$.CanonicalPath}}/revoke"><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="return_to" value="{{.ReturnURL}}"><p class="tiny">下一步会列出这笔流水的全部分配，确认后才作废。</p><button class="btn danger" type="submit">继续撤销</button></form></details>{{end}}</td></tr>{{end}}</tbody></table></div>{{end}}
         <div class="billing-table-wrap table-wrap"><table class="transaction-table">
           <thead><tr><th class="txn-col-type">类型</th><th class="txn-col-payer"><a class="sort-link{{if .PayerSort.Active}} active{{end}}" href="{{.PayerSort.URL}}">付款人{{if .PayerSort.Arrow}}<span class="sort-arrow">{{.PayerSort.Arrow}}</span>{{end}}</a></th><th class="txn-col-tenant">租客姓名</th><th class="txn-col-amount"><a class="sort-link{{if .AmountSort.Active}} active{{end}}" href="{{.AmountSort.URL}}">金额／余额{{if .AmountSort.Arrow}}<span class="sort-arrow">{{.AmountSort.Arrow}}</span>{{end}}</a></th><th class="txn-col-date"><a class="sort-link{{if .ArrivalSort.Active}} active{{end}}" href="{{.ArrivalSort.URL}}">到账／租金月{{if .ArrivalSort.Arrow}}<span class="sort-arrow">{{.ArrivalSort.Arrow}}</span>{{end}}</a></th><th class="txn-col-desc">描述</th><th class="txn-col-account">账户</th><th class="txn-col-action">用途／处理</th></tr></thead>
           <tbody>{{range .TransactionRows}}
@@ -364,6 +379,12 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
               <a class="btn" href="{{.DetailURL}}">{{if .CanConfirm}}查看分配{{else}}查看{{end}}</a>
               {{if .ManualMatchOptions}}
               <form method="post" action="{{$.CanonicalPath}}/confirm" data-tenant-period-match><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="remember_payer" value="0"><input type="hidden" name="return_to" value="{{$row.ReturnURL}}"><select name="tenant_id" aria-label="选择匹配租客" data-searchable required><option value="">选择租客</option>{{range .ManualMatchTenantOptions}}<option value="{{.ID}}"{{if eq .ID $row.CandidateTenantID}} selected{{end}}>{{.Name}}</option>{{end}}</select>{{template "tenant-period-calendar" (tenantPeriodMatchCalendar .ManualMatchOptions .CandidateTenantID .CandidatePeriod)}}<label class="tiny"><input type="checkbox" name="remember_payer" value="1" checked> 记住付款人</label><button class="btn primary" type="submit">匹配流水</button></form>
+              {{else if or (eq .MatchStatus "matched") (eq .MatchStatus "partial")}}
+              {{/* 窄屏的「改错出口」。桌面表格 ≤640px 是藏起来的，手机上只剩这张卡片；
+                 只给一个"处理流水"的话，点进详情页也只有修改匹配——那里还写着
+                 "请先在流水列表撤销匹配"，而手机上根本没有那张列表。两条路都堵死。 */}}
+              <details class="transaction-list-match"><summary class="btn">修改匹配</summary>{{if .CanEditRentMatch}}<form method="post" action="{{$.CanonicalPath}}/rematch"><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="return_to" value="{{$row.ReturnURL}}"><label>租客<select name="tenant_id" aria-label="修改匹配租客" data-searchable required><option value="">选择租客</option>{{range .RematchTenantOptions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label><label>租金月份<select name="period" aria-label="修改租金月份" required><option value="">选择租金月份</option>{{range .RematchMonthOptions}}<option value="{{.Period}}">{{.Label}} · 未收 {{.Remaining}}</option>{{end}}</select></label><button class="btn primary" type="submit">确认修改</button></form>{{else if .CanRematch}}<p class="tiny">当前没有可替换的租金目标；如需调整，请先撤销匹配。</p>{{else}}<p class="tiny">该流水已拆分或含其他用途；请先撤销匹配，再重新归类。</p>{{end}}</details>
+              <details class="transaction-list-match"><summary class="btn danger">撤销匹配</summary><form method="get" action="{{$.CanonicalPath}}/revoke"><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="return_to" value="{{$row.ReturnURL}}"><p class="tiny">下一步会列出这笔流水的全部分配，确认后才作废。</p><button class="btn danger" type="submit">继续撤销</button></form></details>
               {{else}}
               <a class="btn primary" href="{{.DetailURL}}">处理流水</a>
               {{end}}

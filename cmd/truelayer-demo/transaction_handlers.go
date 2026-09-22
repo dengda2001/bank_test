@@ -279,7 +279,9 @@ func (a *app) handleTransactionRevokePreview(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := revokePreviewTemplate.Execute(w, transactionRevokePreviewDataFromModel(preview)); err != nil {
+	// 确认页要把"从哪来"原样带回去。这里复用列表侧同一套白名单校验，
+	// 免得确认页成为开放重定向的跳板。
+	if err := revokePreviewTemplate.Execute(w, transactionRevokePreviewDataFromModel(preview, transactionReturnTarget(r))); err != nil {
 		http.Error(w, "unable to render transaction preview", http.StatusInternalServerError)
 	}
 }

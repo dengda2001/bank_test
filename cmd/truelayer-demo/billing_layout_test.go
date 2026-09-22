@@ -548,3 +548,73 @@ func TestTransactionRouteShowsTheParsedRentMonth(t *testing.T) {
 		t.Fatal("日期格没有挂上 route-txn-fixed，nowrap 落不到它身上")
 	}
 }
+
+// 详情页对已关联的流水写着「如需标记为非租金，请先在流水列表撤销匹配」——而新的
+// /transactions 表格里根本没有撤销，那句话指的就是个死胡同：点错了只能一笔笔点进
+// 详情页看，看完也没地方改。老表格（/billing）一直有修改匹配 + 撤销匹配，新的这套
+// 建的时候只搬了「匹配流水」，把改错的出口漏了。
+//
+// 这条盯住出口本身：已关联的行必须同时给出改法和撤销，且两个表单都要带 return_to，
+// 否则改完会被扔回没筛选的列表。
+func TestMatchedTransactionRowOffersRematchAndRevoke(t *testing.T) {
+	page := renderBillingPage(t, billingPageData{
+		PageKey: "transactions", CanonicalPath: "/transactions", TransactionScope: "pending",
+		TransactionRows: []transactionPageRow{{
+			ID: "12", DetailKey: "12", DetailURL: "/transactions?detail=12",
+			Direction: "income", PayerName: "BRID NI BHRAONAIN", AmountDisplay: "€950.00",
+			MatchStatus: "matched", MatchStatusLabel: "已关联", MatchedTenantName: "Bríd Ní Bhraonáin",
+			CanRematch: true, CanEditRentMatch: true,
+			RematchTenantOptions: []billingTenantOption{{ID: 11, Name: "Bríd Ní Bhraonáin"}},
+			RematchMonthOptions:  []billingMonthOption{{Period: "2026-10", Label: "2026 年 10 月", Remaining: "€950.00"}},
+			ReturnURL:            "/transactions?match_status=pending",
+		}},
+	})
+
+	// 两种改错出口都在。
+	for _, expected := range []string{`<summary class="btn">修改匹配</summary>`, `<summary class="btn danger">撤销匹配</summary>`} {
+		if !strings.Contains(page, expected) {
+			t.Fatalf("已关联的行没有 %q，点错了没法改", expected)
+		}
+	}
+	// 修改：POST 到 /transactions/rematch，带回跳地址。
+	if !strings.Contains(page, `<form method="post" action="/transactions/rematch">`) {
+		t.Fatal("修改匹配没有指向 /transactions/rematch")
+	}
+	// 撤销：这里必须是 GET。撤销是两步走的——先跳到确认页把全部分配摊开，填完原因
+	// 才真的 POST。写成 POST 就跳过确认页直接作废了。
+	if !strings.Contains(page, `<form method="get" action="/transactions/revoke">`) {
+		t.Fatal("撤销匹配应该是 GET 到确认页，不是直接提交作废")
+	}
+	// 桌面表格和窄屏卡片各一份，所以是 4。两边都得带 return_to——窄屏那侧少了它，
+	// 手机上改完一笔会掉回没筛选的列表。
+	if got := strings.Count(page, `name="return_to" value="/transactions?match_status=pending"`); got != 4 {
+		t.Fatalf("return_to 出现 %d 次，want 4（桌面/窄屏 × 修改/撤销）；少的那份改完会掉回没筛选的列表", got)
+	}
+	// 窄屏那边单独钉一下：桌面表格 ≤640px 是 display:none，手机上只剩卡片这一份。
+	// 只给"处理流水"的话，点进详情页也没有撤销——那里写的是"请先在流水列表撤销匹配"，
+	// 而手机上根本没有那张列表。
+	mobile := markupBetween(t, page, `<div class="transaction-route-mobile-list">`, `</article>`)
+	if !strings.Contains(mobile, `summary class="btn">修改匹配`) || !strings.Contains(mobile, `summary class="btn danger">撤销匹配`) {
+		t.Fatal("窄屏卡片没有改错出口：手机上点错了没地方改")
+	}
+	if !strings.Contains(mobile, `<form method="get" action="/transactions/revoke">`) {
+		t.Fatal("窄屏的撤销不是 GET 到确认页")
+	}
+}
+
+// 没有关联的行不该出现改错的出口——那两个按钮只会让人以为已经关联了。
+func TestUnmatchedTransactionRowHidesRematchAndRevoke(t *testing.T) {
+	page := renderBillingPage(t, billingPageData{
+		PageKey: "transactions", CanonicalPath: "/transactions", TransactionScope: "pending",
+		TransactionRows: []transactionPageRow{{
+			ID: "13", DetailKey: "13", DetailURL: "/transactions?detail=13",
+			Direction: "income", PayerName: "NO REFERENCE LTD", AmountDisplay: "€40.00",
+			MatchStatus: "unmatched", MatchStatusLabel: "未匹配",
+		}},
+	})
+	for _, unexpected := range []string{"修改匹配", "撤销匹配", "/transactions/rematch", "/transactions/revoke"} {
+		if strings.Contains(page, unexpected) {
+			t.Fatalf("未关联的行不该出现 %q", unexpected)
+		}
+	}
+}
