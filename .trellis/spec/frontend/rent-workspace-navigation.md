@@ -21,8 +21,10 @@
   `view=tenants`; `/bills/settle` remains a legacy action alias.
 - `/tenancies` is retired and has no registered GET or POST handler; both
   methods return 404.
-- `/billing` remains the bank-transaction matching alias. It is not a rent-bill
-  route and must not be removed with `/bills` navigation.
+- `/billing` is retired: every `/billing*` route was removed and the bank
+  callback now lands on `/transactions`. It used to render a second, older
+  transaction page (not an alias at all), which is why it outlived `/bills`.
+  The list itself is `/transactions`; there is no second path to keep in sync.
 
 ### 3. Contracts
 
@@ -64,14 +66,14 @@
   and view.
 - Base: an old `/bills?period=2026-09` bookmark opens the tenant view for that
   month without a standalone bill page.
-- Bad: adding a bills link back to primary navigation, deleting `/billing`,
-  redirecting an action to an external `return_to`, or keeping a template-only
-  source of rent amounts.
+- Bad: adding a bills link back to primary navigation, redirecting an action to
+  an external `return_to`, or keeping a template-only source of rent amounts.
 
 ### 6. Tests Required
 
 - Route tests assert `/bills` redirect context, `/tenancies` GET/POST 404,
-  retained action aliases, and `/billing` transaction behavior.
+  retained action aliases, and that the bank callback lands on `/transactions`
+  rather than on a retired path.
 - Redirect tests reject external, malformed, and non-workspace return paths and
   retain the allowed month/view for safe same-site paths.
 - Template tests assert no standalone bill or tenancy navigation item, that

@@ -393,7 +393,6 @@ type transactionPageRow struct {
 	ObjectLabel               string
 	RoomOnlyLabel             string
 	ParsedPeriodDisplay       string
-	FinalPeriodDisplay        string
 	Description               string
 	AccountName               string
 	AccountID                 string
@@ -510,7 +509,12 @@ func transactionPageRowFromModel(row paymentTransaction) transactionPageRow {
 	}
 }
 
-func enrichTransactionPageRow(row transactionPageRow, source paymentTransaction, allocations []paymentAllocation, obligations []rentObligation) transactionPageRow {
+// enrichTransactionPageRow fills in the money side of a row from its effective
+// allocations. The rent month those allocations point at used to be collected
+// here too, for the legacy table's 租金月 column; that table is gone and the
+// surviving list shows the month parsed out of the bank text instead, so the
+// obligation walk that fed it went with it.
+func enrichTransactionPageRow(row transactionPageRow, source paymentTransaction, allocations []paymentAllocation) transactionPageRow {
 	summary := summarizeTransactionAllocations(source, allocations)
 	row.AllocatedAmountDisplay = formatMoney(centsToMoney(summary.AllocatedCents), source.Currency, 2)
 	row.RemainingAmountDisplay = formatMoney(centsToMoney(summary.RemainingCents), source.Currency, 2)
@@ -527,8 +531,6 @@ func enrichTransactionPageRow(row transactionPageRow, source paymentTransaction,
 		}
 		row.AllocationUseDisplay = strings.Join(labels, " · ")
 	}
-	periods := make([]string, 0)
-	seenPeriods := make(map[string]struct{})
 	for _, allocation := range allocations {
 		if !ledgerAllocationIsEffective(allocation) {
 			continue
@@ -536,22 +538,7 @@ func enrichTransactionPageRow(row transactionPageRow, source paymentTransaction,
 		if row.TenantID == 0 && allocation.TenantID != nil && *allocation.TenantID != 0 {
 			row.TenantID = *allocation.TenantID
 		}
-		if ledgerAllocationKind(allocation) != allocationKindRent || allocation.RentObligationID == nil {
-			continue
-		}
-		for _, obligation := range obligations {
-			if obligation.ID != *allocation.RentObligationID {
-				continue
-			}
-			period := monthStart(obligation.PeriodMonth).Format("2006-01")
-			if _, seen := seenPeriods[period]; !seen {
-				seenPeriods[period] = struct{}{}
-				periods = append(periods, period)
-			}
-			break
-		}
 	}
-	row.FinalPeriodDisplay = strings.Join(periods, ", ")
 	return row
 }
 

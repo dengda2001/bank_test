@@ -30,16 +30,6 @@ func tenantPeriodMatchCalendar(options []billingRentMatchOption, selectedTenantI
 	return tenantPeriodMatchCalendarData{Options: calendarOptions, SelectedTenantID: selectedTenantID, SelectedPeriod: selectedPeriod}
 }
 
-func tenantPeriodMatchCalendarForTenant(options []billingMonthOption, tenantID uint64, selectedPeriod string) tenantPeriodMatchCalendarData {
-	calendarOptions := make([]tenantPeriodMatchOption, 0, len(options))
-	for _, option := range options {
-		calendarOptions = append(calendarOptions, tenantPeriodMatchOption{
-			TenantID: tenantID, Period: option.Period, PeriodLabel: option.Label, Expected: option.Expected, Remaining: option.Remaining,
-		})
-	}
-	return tenantPeriodMatchCalendarData{Options: calendarOptions, SelectedTenantID: tenantID, SelectedPeriod: selectedPeriod}
-}
-
 // workspaceShell is the page chrome every workspace page shares: the sidebar
 // navigation and, on narrow screens, the compact bar that opens it as a drawer.
 //
@@ -52,8 +42,7 @@ type workspaceShell struct {
 	// ActivePage selects the highlighted nav item. Canonical pages use
 	// "rent-dashboard", "bills", "transactions", "dunning", "properties",
 	// "rooms", "tenants", "tenancies", "cash-receipts", "expenses", "bank"
-	// or "more";
-	// "billing" remains the legacy transaction alias.
+	// or "more".
 	ActivePage  string
 	Username    string
 	Environment string
@@ -122,8 +111,7 @@ var workspaceNav = embeddedWebText("web/templates/partials/workspace-nav.html")
 // clone. "collection-settle-form" lives here because /bills and the rent
 // workspace's tenant view must render the same inline form.
 var workspaceBase = template.Must(template.New("workspace").Funcs(template.FuncMap{
-	"tenantPeriodMatchCalendar":          tenantPeriodMatchCalendar,
-	"tenantPeriodMatchCalendarForTenant": tenantPeriodMatchCalendarForTenant,
+	"tenantPeriodMatchCalendar": tenantPeriodMatchCalendar,
 }).ParseFS(webFiles,
 	"web/templates/partials/workspace-nav.html",
 	"web/templates/partials/collection-settle-form.html",

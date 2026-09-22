@@ -159,7 +159,7 @@ func (s *transactionService) listTransactionPageRowsWithTotal(ctx context.Contex
 	}
 	for _, transaction := range transactions {
 		allocations := allocationsByTransaction[transaction.ID]
-		row := enrichTransactionPageRow(transactionPageRowFromModel(transaction), transaction, allocations, obligations)
+		row := enrichTransactionPageRow(transactionPageRowFromModel(transaction), transaction, allocations)
 		decorateTransactionPageRow(&row, transaction, allocations, obligations, tenants, tenantByID, tenantNames, payers)
 		rows = append(rows, row)
 	}

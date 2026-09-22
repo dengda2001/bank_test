@@ -41,7 +41,10 @@ func verifyE2EHTTPNoResidue(ctx context.Context, options e2eOptions, manifest e2
 		{name: "primary room detail", path: fmt.Sprintf("/rooms/%d?period=%s", artifacts.RoomIDs[0], manifest.Period), status: http.StatusNotFound, markers: []string{manifest.RunID + " Rosewood Court"}},
 		{name: "tenant list", path: "/tenants", status: http.StatusOK, markers: []string{manifest.TenantA.Name, manifest.TenantB.Name, manifest.TenantC.Name, manifest.TenantD.Name}},
 		{name: "rent dashboard", path: "/rent-dashboard?view=tenants&period=" + url.QueryEscape(manifest.Period), status: http.StatusOK, markers: []string{manifest.TenantA.Name, manifest.TenantB.Name, manifest.TenantC.Name, manifest.TenantD.Name}},
-		{name: "billing list", path: "/billing", status: http.StatusOK, markers: []string{manifest.RunID + " rent payment", manifest.RunID + " E2E account"}},
+		// 列表页的两张表不再渲染流水的 description（那句 "… rent payment" 只活在
+		// 详情页上），所以这里换成付款人姓名和账户名——同样带 RunID，同样只在
+		// 这一轮的流水还在时才出现在 /transactions 上。
+		{name: "transaction list", path: "/transactions", status: http.StatusOK, markers: []string{manifest.TenantA.PayerName, manifest.RunID + " E2E account"}},
 	} {
 		response, requestErr := client.do(ctx, http.MethodGet, check.path, nil)
 		step := e2eHTTPStep(http.MethodGet, check.path, map[string]any{"status_code": check.status, "run_data_absent": true}, response, requestErr)

@@ -9,13 +9,12 @@ import (
 )
 
 func transactionReturnTarget(r *http.Request) string {
-	fallback := "/billing"
-	if strings.HasPrefix(r.URL.Path, "/transactions/") {
-		fallback = "/transactions"
-	}
+	// The only transaction list is /transactions now that the /billing alias is
+	// gone, so an unusable return_to can only fall back to one place.
+	const fallback = "/transactions"
 	raw := strings.TrimSpace(r.FormValue("return_to"))
 	target, err := url.ParseRequestURI(raw)
-	if err != nil || target.IsAbs() || target.Host != "" || (target.Path != "/billing" && target.Path != "/transactions" && target.Path != "/rent-dashboard") {
+	if err != nil || target.IsAbs() || target.Host != "" || (target.Path != "/transactions" && target.Path != "/rent-dashboard") {
 		return fallback
 	}
 	allowed := map[string]bool{"match_status": true, "scope": true, "period": true, "payer": true, "tenant_id": true, "direction": true, "rent_period": true, "allocation": true, "sort": true, "page": true, "page_size": true, "pending": true, "arrival_from": true, "arrival_to": true, "view": true, "property_id": true, "room_id": true, "search": true, "status": true}
@@ -324,27 +323,27 @@ func (a *app) handlePayerConfirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Redirect(w, r, "/billing?error=invalid_payer_confirmation", http.StatusFound)
+		http.Redirect(w, r, "/transactions?error=invalid_payer_confirmation", http.StatusFound)
 		return
 	}
 	transactionID, err := parsePositiveUint(r.Form.Get("transaction_id"))
 	if err != nil {
-		http.Redirect(w, r, "/billing?error=invalid_payer_confirmation", http.StatusFound)
+		http.Redirect(w, r, "/transactions?error=invalid_payer_confirmation", http.StatusFound)
 		return
 	}
 	tenantID, err := parsePositiveUint(r.Form.Get("tenant_id"))
 	if err != nil {
-		http.Redirect(w, r, "/billing?error=invalid_payer_confirmation", http.StatusFound)
+		http.Redirect(w, r, "/transactions?error=invalid_payer_confirmation", http.StatusFound)
 		return
 	}
 	periodValue := strings.TrimSpace(r.Form.Get("period"))
 	if periodValue == "" {
-		http.Redirect(w, r, "/billing?error=invalid_payer_confirmation", http.StatusFound)
+		http.Redirect(w, r, "/transactions?error=invalid_payer_confirmation", http.StatusFound)
 		return
 	}
 	period, err := parsePeriodMonth(periodValue)
 	if err != nil {
-		http.Redirect(w, r, "/billing?error=invalid_payer_confirmation", http.StatusFound)
+		http.Redirect(w, r, "/transactions?error=invalid_payer_confirmation", http.StatusFound)
 		return
 	}
 	rememberPayer := true
@@ -358,10 +357,10 @@ func (a *app) handlePayerConfirm(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := newTransactionService(a.db).confirmHistoricalPayerMatch(r.Context(), userID, transactionID, tenantID, period, rememberPayer); err != nil {
-		http.Redirect(w, r, "/billing?error=payer_confirmation_failed", http.StatusFound)
+		http.Redirect(w, r, "/transactions?error=payer_confirmation_failed", http.StatusFound)
 		return
 	}
-	http.Redirect(w, r, "/billing?message=payer_confirmed", http.StatusFound)
+	http.Redirect(w, r, "/transactions?message=payer_confirmed", http.StatusFound)
 }
 
 func parsePositiveUint(value string) (uint64, error) {

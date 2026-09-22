@@ -67,8 +67,8 @@ func TestWorkspaceTemplatesIncludeSharedCalendarPicker(t *testing.T) {
 		name   string
 		render func(*strings.Builder) error
 	}{
-		{name: "billing", render: func(body *strings.Builder) error {
-			return billingTemplate.Execute(body, billingPageData{})
+		{name: "transactions", render: func(body *strings.Builder) error {
+			return transactionListTemplate.Execute(body, transactionListPageData{})
 		}},
 		{name: "tenants", render: func(body *strings.Builder) error {
 			return tenantTemplate.Execute(body, tenantPageData{})
@@ -284,7 +284,7 @@ func TestHashPasswordDoesNotStorePlaintext(t *testing.T) {
 
 func TestUserSessionCookieAuthenticatesWithUserID(t *testing.T) {
 	a := testApp()
-	req := httptest.NewRequest(http.MethodGet, "/billing", nil)
+	req := httptest.NewRequest(http.MethodGet, "/transactions", nil)
 	req.AddCookie(userSessionCookie(a.cfg, 42, "ddrzh", time.Now().Add(sessionTTL)))
 
 	if !a.isAuthenticated(req) {
@@ -335,11 +335,11 @@ func TestEncodeRefreshTokenPlaintextEscapeIsLocalOnly(t *testing.T) {
 	}
 }
 
-func TestBillingRequiresSession(t *testing.T) {
+func TestTransactionListRequiresSession(t *testing.T) {
 	a := testApp()
 	rec := httptest.NewRecorder()
 
-	a.handleBilling(rec, httptest.NewRequest(http.MethodGet, "/billing", nil))
+	a.handleTransactions(rec, httptest.NewRequest(http.MethodGet, "/transactions", nil))
 
 	if rec.Code != http.StatusFound {
 		t.Fatalf("status=%d want %d", rec.Code, http.StatusFound)
@@ -349,12 +349,12 @@ func TestBillingRequiresSession(t *testing.T) {
 	}
 }
 
-func TestBillingWithoutDatabaseReturnsServiceUnavailable(t *testing.T) {
+func TestTransactionListWithoutDatabaseReturnsServiceUnavailable(t *testing.T) {
 	a := testApp()
-	req := httptest.NewRequest(http.MethodGet, "/billing", nil)
+	req := httptest.NewRequest(http.MethodGet, "/transactions", nil)
 	req.AddCookie(sessionCookie(a.cfg, time.Now().Add(sessionTTL)))
 	rec := httptest.NewRecorder()
-	a.handleBilling(rec, req)
+	a.handleTransactions(rec, req)
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status=%d want %d body=%s", rec.Code, http.StatusServiceUnavailable, rec.Body.String())
 	}
@@ -604,8 +604,8 @@ func TestHandleRefreshRedirectsOnTransactionFetchFailure(t *testing.T) {
 	if rec.Code != http.StatusFound {
 		t.Fatalf("status=%d want %d", rec.Code, http.StatusFound)
 	}
-	if loc := rec.Header().Get("Location"); loc != "/billing?error=data_fetch_failed" {
-		t.Fatalf("Location=%q want /billing?error=data_fetch_failed", loc)
+	if loc := rec.Header().Get("Location"); loc != "/transactions?error=data_fetch_failed" {
+		t.Fatalf("Location=%q want /transactions?error=data_fetch_failed", loc)
 	}
 	if transactionFrom == "2026-01-01" {
 		t.Fatalf("refresh used uncapped historical from date %q", transactionFrom)
@@ -650,10 +650,10 @@ func TestFetchDemoResultKeepsSuccessfulAccountsWhenAnotherTransactionFetchFails(
 	}
 }
 
-func TestBillingTemplateShowsDataFetchError(t *testing.T) {
+func TestTransactionListShowsDataFetchError(t *testing.T) {
 	var body strings.Builder
 
-	err := billingTemplate.Execute(&body, billingPageData{
+	err := transactionListTemplate.Execute(&body, transactionListPageData{
 		workspaceShell: workspaceShell{Username: "ddrzh", Environment: "sandbox"},
 		LastSync:       "尚未同步",
 		Error:          "data_fetch_failed",
@@ -663,13 +663,13 @@ func TestBillingTemplateShowsDataFetchError(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(body.String(), "银行数据刷新失败") {
-		t.Fatalf("billing page did not render data fetch error notice: %s", body.String())
+		t.Fatalf("transaction list did not render data fetch error notice: %s", body.String())
 	}
 }
 
-func TestBillingTemplateRendersTransactionFilters(t *testing.T) {
+func TestTransactionListRendersFilters(t *testing.T) {
 	var body strings.Builder
-	err := billingTemplate.Execute(&body, billingPageData{
+	err := transactionListTemplate.Execute(&body, transactionListPageData{
 		workspaceShell:    workspaceShell{Username: "ddrzh", Environment: "sandbox"},
 		DirectionFilter:   "expense",
 		MatchStatusFilter: "unmatched",
@@ -691,21 +691,24 @@ func TestBillingTemplateRendersTransactionFilters(t *testing.T) {
 	}
 	for _, expected := range []string{"name=\"period\"", "name=\"direction\"", "name=\"match_status\"", `onchange="this.form.submit()"`, "Boiler repair", "支出"} {
 		if !strings.Contains(body.String(), expected) {
-			t.Fatalf("billing page missing %q: %s", expected, body.String())
+			t.Fatalf("transaction list missing %q: %s", expected, body.String())
 		}
 	}
 }
 
-func TestBillingTemplateShowsMonthChoiceForRememberedTenant(t *testing.T) {
+// 记住的付款人：租客已经识别出来了，行里只该再问一次租金月份。租客下拉预选到
+// 那一户，月份交给日历控件——选项袋里带 data-tenant，选完才报出应交与未收。
+func TestTransactionListShowsMonthChoiceForRememberedTenant(t *testing.T) {
 	var body strings.Builder
-	err := billingTemplate.Execute(&body, billingPageData{
-		PageKey: "transactions", CanonicalPath: "/transactions",
+	err := transactionListTemplate.Execute(&body, transactionListPageData{
+		CanonicalPath: "/transactions",
 		TransactionRows: []transactionPageRow{{
-			Direction:        "income",
-			MatchStatus:      "needs_review",
-			MatchStatusLabel: "需处理",
-			TenantID:         7,
-			NeedsMonthChoice: true,
+			Direction:         "income",
+			MatchStatus:       "needs_review",
+			MatchStatusLabel:  "需处理",
+			TenantID:          7,
+			CandidateTenantID: 7,
+			NeedsMonthChoice:  true,
 			MonthOptions: []billingMonthOption{{
 				Period:    "2026-08",
 				Label:     "2026年8月",
@@ -713,54 +716,43 @@ func TestBillingTemplateShowsMonthChoiceForRememberedTenant(t *testing.T) {
 				Paid:      "EUR 0.00",
 				Remaining: "EUR 950.00",
 			}},
-			RematchTenantOptions: []billingTenantOption{{ID: 7, Name: "Aoife"}},
-			ManualMatchOptions:   []billingRentMatchOption{{TenantID: 7, TenantName: "Aoife", Period: "2026-08", PeriodLabel: "2026年8月", Remaining: "EUR 950.00"}},
+			ManualMatchTenantOptions: []billingTenantOption{{ID: 7, Name: "Aoife"}},
+			ManualMatchOptions:       []billingRentMatchOption{{TenantID: 7, TenantName: "Aoife", Period: "2026-08", PeriodLabel: "2026年8月", Expected: "EUR 950.00", Remaining: "EUR 950.00"}},
 		}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	monthChoice := markupBetween(t, body.String(), `<form class="month-choice-form"`, `</form>`)
-	if !strings.Contains(body.String(), "已识别租客，请确认租金月份") {
-		t.Fatalf("billing page missing remembered-tenant explanation: %s", body.String())
-	}
-	for _, expected := range []string{"data-tenant-period-match", "data-tenant-period-input", `data-tenant="7"`, "2026年8月", "EUR 950.00", "确认匹配"} {
+	monthChoice := markupBetween(t, body.String(), `action="/transactions/confirm" data-tenant-period-match`, `</form>`)
+	for _, expected := range []string{`<option value="7" selected>Aoife</option>`, "data-tenant-period-input", `data-tenant="7"`, "2026年8月", "EUR 950.00", "确认匹配"} {
 		if !strings.Contains(monthChoice, expected) {
-			t.Fatalf("billing page missing month-choice text %q: %s", expected, monthChoice)
+			t.Fatalf("remembered-tenant row is missing %q: %s", expected, monthChoice)
 		}
 	}
 	if strings.Contains(monthChoice, `<select name="period"`) {
 		t.Fatalf("remembered-tenant month choice still renders a repeated period select: %s", monthChoice)
 	}
 	if !strings.Contains(embeddedWebText("web/static/js/workspace-controls.js"), `form.querySelector('[name="tenant_id"]')`) {
-		t.Fatal("the shared tenant/month calendar does not support the fixed hidden tenant in this form")
+		t.Fatal("the shared tenant/month calendar does not read the tenant select in this form")
 	}
 }
 
-func TestBillingTemplateOffersHistoricalPayerPreview(t *testing.T) {
+// 历史付款人预览原先只挂在老页面顶栏上。老顶栏删掉后它搬到了流水列表的工具行里，
+// 只剩这一个入口，所以这条断言守着入口不丢。
+func TestTransactionListOffersHistoricalPayerPreview(t *testing.T) {
 	var body strings.Builder
-	if err := billingTemplate.Execute(&body, billingPageData{}); err != nil {
+	if err := transactionListTemplate.Execute(&body, transactionListPageData{CanonicalPath: "/transactions"}); err != nil {
 		t.Fatal(err)
 	}
 	page := body.String()
-	for _, expected := range []string{"/billing/payer/preview", "添加拆分项", "allocation_kind[]"} {
-		if !strings.Contains(page, expected) {
-			t.Fatalf("billing page missing historical preview or split control %q", expected)
-		}
+	if !strings.Contains(page, `<form method="post" action="/transactions/payer/preview">`) {
+		t.Fatalf("transaction list lost the historical payer preview entry point: %s", page)
 	}
 }
 
-func TestBillingTemplateHidesAllocationForCompletedOrIgnoredIncome(t *testing.T) {
-	for _, status := range []string{"matched", "ignored"} {
-		var body strings.Builder
-		if err := billingTemplate.Execute(&body, billingPageData{TransactionRows: []transactionPageRow{{Direction: "income", MatchStatus: status}}}); err != nil {
-			t.Fatal(err)
-		}
-		if strings.Contains(body.String(), `<form class="allocation-form"`) {
-			t.Fatalf("status=%s should not offer a new allocation form", status)
-		}
-	}
-}
+// TestBillingTemplateHidesAllocationForCompletedOrIgnoredIncome moved to the
+// transaction detail page: the 归类／拆分 form no longer lives in the list at all,
+// so the guard is asserted in transaction_detail_test.go.
 
 func TestAllocationFormValuesSupportsRepeatedAndScalarFields(t *testing.T) {
 	repeated := url.Values{"amount[]": {"100.00", "50.00"}}
@@ -773,18 +765,18 @@ func TestAllocationFormValuesSupportsRepeatedAndScalarFields(t *testing.T) {
 	}
 }
 
-func TestBillingMutationRoutesRequireAuthentication(t *testing.T) {
+func TestTransactionMutationRoutesRequireAuthentication(t *testing.T) {
 	routes := []struct {
 		path    string
 		handler func(*app) http.HandlerFunc
 	}{
-		{path: "/billing/allocate", handler: func(a *app) http.HandlerFunc { return a.handleTransactionAllocation }},
-		{path: "/billing/rematch", handler: func(a *app) http.HandlerFunc { return a.handleTransactionRematch }},
-		{path: "/billing/ignore", handler: func(a *app) http.HandlerFunc { return a.handleTransactionIgnore }},
-		{path: "/billing/restore", handler: func(a *app) http.HandlerFunc { return a.handleTransactionRestore }},
-		{path: "/billing/revoke", handler: func(a *app) http.HandlerFunc { return a.handleTransactionRevoke }},
-		{path: "/billing/payer/preview", handler: func(a *app) http.HandlerFunc { return a.handlePayerPreview }},
-		{path: "/billing/payer/confirm", handler: func(a *app) http.HandlerFunc { return a.handlePayerConfirm }},
+		{path: "/transactions/allocate", handler: func(a *app) http.HandlerFunc { return a.handleTransactionAllocation }},
+		{path: "/transactions/rematch", handler: func(a *app) http.HandlerFunc { return a.handleTransactionRematch }},
+		{path: "/transactions/ignore", handler: func(a *app) http.HandlerFunc { return a.handleTransactionIgnore }},
+		{path: "/transactions/restore", handler: func(a *app) http.HandlerFunc { return a.handleTransactionRestore }},
+		{path: "/transactions/revoke", handler: func(a *app) http.HandlerFunc { return a.handleTransactionRevoke }},
+		{path: "/transactions/payer/preview", handler: func(a *app) http.HandlerFunc { return a.handlePayerPreview }},
+		{path: "/transactions/payer/confirm", handler: func(a *app) http.HandlerFunc { return a.handlePayerConfirm }},
 	}
 	for _, route := range routes {
 		a := testApp()
@@ -817,9 +809,9 @@ func TestRevokePreviewTemplateShowsSourceAndEffectiveAllocations(t *testing.T) {
 		t.Fatal(err)
 	}
 	// 确认页必须把"从哪来"原样带回去。少了这个 hidden，从 /transactions 点撤销的人
-	// 确认完会落到兜底的 /billing —— 那是另一张表，等于让他重新找一遍这笔流水。
+	// 确认完会落到兜底的列表首页，等于让他重新找一遍这笔流水。
 	for _, expected := range []string{
-		"September rent", "EUR 2,000.00", "EUR 1,000.00", "Aoife Murphy", "/billing/revoke",
+		"September rent", "EUR 2,000.00", "EUR 1,000.00", "Aoife Murphy", "/transactions/revoke",
 		`<input type="hidden" name="return_to" value="/transactions?match_status=pending">`,
 		`<a class="back" href="/transactions?match_status=pending">返回流水</a>`,
 	} {
@@ -852,7 +844,7 @@ func TestHistoricalPayerPreviewTemplateConfirmsOneRowAtATime(t *testing.T) {
 		t.Fatal(err)
 	}
 	page := body.String()
-	if !strings.Contains(page, "/billing/payer/confirm") || strings.Count(page, "/billing/payer/confirm") != 1 {
+	if !strings.Contains(page, "/transactions/payer/confirm") || strings.Count(page, "/transactions/payer/confirm") != 1 {
 		t.Fatalf("historical preview should render one confirm form per row: %s", page)
 	}
 }

@@ -421,7 +421,7 @@ func canonicalPageShell(a *app, r *http.Request, active string, note string) wor
 }
 
 func bankRefreshRedirect(r *http.Request, query string) string {
-	path := "/billing"
+	path := "/transactions"
 	if r != nil && strings.HasPrefix(r.URL.Path, "/bank/") {
 		path = "/bank"
 	}
@@ -476,17 +476,6 @@ func legacyBillsWorkspaceURL(query url.Values) string {
 	}
 	target.RawQuery = values.Encode()
 	return target.String()
-}
-
-func (a *app) handleTransactions(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if _, ok := a.scopedPageUser(w, r); !ok {
-		return
-	}
-	a.handleBilling(w, r)
 }
 
 func (a *app) handleDunningPage(w http.ResponseWriter, r *http.Request) {
@@ -1828,8 +1817,6 @@ func roomPageDrawer(data roomPageData) *roomCreateDrawerData {
 }
 
 var roomEditPageTemplate = newWorkspacePageTemplate("room-edit-page", nil, `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RentOps Room Edit</title><style>`+workspacePageCSS+`</style></head><body><div class="app">{{template "workspace-nav" .}}<main class="content"><header class="topbar"><div><div class="brand-title">资产管理</div><h1>编辑房间</h1><div class="tiny">房间资料与入住租金计划分开维护</div></div><a class="btn" href="/rooms">返回房间</a></header>{{if .Error}}<div class="notice error">{{.Error}}</div>{{end}}<section class="panel surface entity-form" aria-labelledby="room-form-title"><div class="panel-head"><div><h2 id="room-form-title">房间资料</h2><p class="tiny">房间必须绑定一个房产。</p></div></div><form method="post" action="/rooms/{{.Form.ID}}"><input type="hidden" name="action" value="save"><div class="form-grid"><div class="form-field"><label for="room-label">房间名称</label><input id="room-label" name="room_label" value="{{.Form.RoomLabel}}" maxlength="191" required></div><div class="form-field"><label for="room-property">所属房产</label><select id="room-property" name="property_id" required><option value="">请选择房产</option>{{range .Properties}}<option value="{{.ID}}"{{if eq $.Form.PropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></div></div><div class="drawer-actions"><button class="btn primary" type="submit">保存房间</button></div></form></section></main></div></body></html>`)
-
-var legacyCashReceiptPageTemplate = newWorkspacePageTemplate("cash-receipts-legacy", nil, `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>RentOps Cash Receipts</title><style>`+workspacePageCSS+`</style></head><body><div class="app">{{template "workspace-nav" .}}<main class="content"><header class="topbar"><div><div class="brand-title">现金补录</div><h1>现金收款记录</h1><div class="tiny">现金不会伪装成银行流水；作废必须保留原因</div></div><a class="btn primary" href="/cash-receipts/new">新建现金收款</a></header>{{if eq .Message "cash_receipt_saved"}}<div class="notice ok" data-toast>现金收款已登记。</div>{{end}}{{if eq .Message "cash_receipt_voided"}}<div class="notice ok" data-toast>现金收款已撤销，原始收据仍保留。</div>{{end}}{{if .Error}}<div class="notice error">{{.Error}}</div>{{end}}<section class="panel surface"><div class="panel-head"><h2>收款列表</h2><form method="get" action="/cash-receipts"><select name="status"><option value=""{{if eq .StatusFilter ""}} selected{{end}}>全部状态</option><option value="confirmed"{{if eq .StatusFilter "confirmed"}} selected{{end}}>已确认</option><option value="voided"{{if eq .StatusFilter "voided"}} selected{{end}}>已作废</option></select></form></div>{{if .Rows}}<div class="table-wrap"><table><thead><tr><th>收据</th><th>租客／月份</th><th>金额</th><th>收款日期</th><th>状态</th><th>作废原因</th></tr></thead><tbody>{{range .Rows}}<tr data-page="cash-receipts" data-receipt-id="{{.ID}}"><td class="mono">{{.ReceiptNumber}}</td><td><a href="/tenants/{{.TenantID}}">{{.TenantName}}</a><br><span class="tiny">{{.Period}}</span></td><td class="amount">{{.Amount}}</td><td>{{.ReceivedAt}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span>{{if eq .Status "confirmed"}}<br><a class="btn subtle" href="{{.VoidURL}}">撤销</a>{{end}}</td><td>{{if .VoidReason}}{{.VoidReason}}{{else}}—{{end}}</td></tr>{{end}}</tbody></table></div>{{else}}<div class="empty">暂无现金收款记录。</div>{{end}}</section></main></div></body></html>`)
 
 var bankPageCSS = `
   .account-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 16px 20px; }

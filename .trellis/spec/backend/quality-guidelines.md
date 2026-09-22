@@ -50,7 +50,7 @@ Questions to answer:
 - `GET /` renders the local demo login screen when unauthenticated.
 - `POST /login-local` validates the configured demo administrator credential and sets the app session cookie.
 - `POST /logout` clears the app session cookie.
-- `GET /billing` requires the app session and renders the bank income workspace.
+- `GET /transactions` requires the app session and renders the bank income workspace.
 - `GET /login` requires the app session and starts the TrueLayer OAuth flow.
 - `GET /callback` requires the app session before exchanging an authorization code.
 - `GET|POST /refresh` requires the app session before using the stored refresh token.
@@ -75,19 +75,19 @@ Questions to answer:
 
 - Missing or invalid app session on protected route -> redirect to `/`.
 - Invalid demo login credentials -> redirect to `/?error=invalid_login`.
-- Missing stored refresh token on refresh -> redirect to `/billing?reconnect=1&error=no_saved_login`.
-- Refresh token rejected by provider -> redirect to `/billing?reconnect=1&error=refresh_failed`.
+- Missing stored refresh token on refresh -> redirect to `/transactions?reconnect=1&error=no_saved_login`.
+- Refresh token rejected by provider -> redirect to `/transactions?reconnect=1&error=refresh_failed`.
 - Missing or expired OAuth state -> reject callback before token exchange.
 
 #### 5. Good/Base/Bad Cases
 
 - Good: `/callback` checks the app session before consuming OAuth state, exchanging code, saving refresh token, or logging bank data.
-- Base: `/billing` can render with no token file and no bank log, showing a bind-bank empty state.
+- Base: `/transactions` can render with no token file and no bank log, showing a bind-bank empty state.
 - Bad: Returning raw bank JSON from `/callback` to an unauthenticated browser, or exchanging OAuth code without a valid app session.
 
 #### 6. Tests Required
 
-- Login success sets a session cookie and redirects to `/billing`.
+- Login success sets a session cookie and redirects to `/transactions`.
 - Protected routes reject missing sessions.
 - Callback without app session does not consume OAuth state.
 - Stored refresh token detection is covered.
@@ -265,8 +265,9 @@ preview.Passed = response.StatusCode == http.StatusOK && cashAmount && afterRema
 
 #### 3. Contracts
 
-- Canonical GET routes may keep legacy aliases, but legacy `/billing`, OAuth,
-  refresh, and cash subroutes remain functional.
+- Canonical GET routes may keep legacy aliases, but OAuth, refresh, and cash
+  subroutes remain functional. `/billing` is retired: it was never an alias, it
+  was a second page, and every `/billing*` route is gone.
 - Every action exposes a stable URL/method and declares reason or confirmation
   requirements; templates never infer these from labels or amounts.
 - Bank pages expose connection/sync health and account metadata, never token

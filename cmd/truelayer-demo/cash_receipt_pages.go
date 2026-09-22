@@ -226,7 +226,7 @@ func (a *app) renderCashReceiptHostPage(w http.ResponseWriter, r *http.Request, 
 	pageRequest.URL = pageURL
 	pageRequest.RequestURI = pageURL.RequestURI()
 	if path == "/transactions" {
-		a.handleBilling(w, pageRequest)
+		a.handleTransactions(w, pageRequest)
 		return true
 	}
 	if tenantID > 0 {

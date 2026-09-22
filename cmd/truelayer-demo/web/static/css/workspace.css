@@ -575,7 +575,7 @@
       .mono { font-size: 12px; }
       th { font-size: 12px; }
       /* 日期单元格整格是 mono（应缴日 / 创建时间）。它们逐字断成 3–5 行后不可读，
-         又不会被溢出检测捕获。副行仍可换行，否则 /billing 的到账列会被撑爆。 */
+         又不会被溢出检测捕获。副行仍可换行，日期那种整格 nowrap 会撑宽整张表。 */
       td.mono { white-space: nowrap; }
       td.mono .tiny { white-space: normal; }
 
@@ -596,7 +596,7 @@
       /* 控件基础高度 40px（.btn 也是 40px），差 4px。逐页补会漏，这里一次抬到
          44px；checkbox/radio 由 input[type=...] 的 0,1,1 规则管着，不受影响。
          注意基础样式是拼在每页自己的 <style> 之前的，所以页内更具体的规则
-         （如 /billing 那批 30px 的归类控件）会盖过这一条 —— 那些归各页的窄屏块管。 */
+         （如流水详情页那批 36px 的归类控件）会盖过这一条 —— 那些归各页的窄屏块管。 */
       input, select, textarea, .btn { min-height: 44px; }
       /* 抽屉打开后 .nav a 就是唯一的导航方式，基础样式里它是 40px。 */
       .nav a { min-height: 44px; }
@@ -665,14 +665,14 @@
 
       /* 对象、租住安排和现金等简单列表在手机上直接变成纵向卡片，避免把主流程
          藏在横向滚动表格里。账单／租客／支出页有更具体的页面级重排规则。 */
-      .table-wrap:not(.billing-table-wrap):not(.tenant-table-wrap):not(.expense-table-wrap) { overflow: visible; }
-      .table-wrap:not(.billing-table-wrap):not(.tenant-table-wrap):not(.expense-table-wrap) > table { display: block; width: 100%; min-width: 0; }
-      .table-wrap:not(.billing-table-wrap):not(.tenant-table-wrap):not(.expense-table-wrap) > table > thead { display: none; }
-      .table-wrap:not(.billing-table-wrap):not(.tenant-table-wrap):not(.expense-table-wrap) > table > tbody { display: grid; gap: 10px; }
-      .table-wrap:not(.billing-table-wrap):not(.tenant-table-wrap):not(.expense-table-wrap) > table > tbody > tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
-      .table-wrap:not(.billing-table-wrap):not(.tenant-table-wrap):not(.expense-table-wrap) > table > tbody > tr > td { display: block; min-width: 0; padding: 0; border: 0; }
-      .table-wrap:not(.billing-table-wrap):not(.tenant-table-wrap):not(.expense-table-wrap) > table > tbody > tr > td:last-child { position: static !important; background: transparent !important; box-shadow: none !important; }
-      .table-wrap:not(.billing-table-wrap):not(.tenant-table-wrap):not(.expense-table-wrap) > table > tbody > tr > td .btn { min-height: 44px; }
+      .table-wrap:not(.tenant-table-wrap):not(.expense-table-wrap) { overflow: visible; }
+      .table-wrap:not(.tenant-table-wrap):not(.expense-table-wrap) > table { display: block; width: 100%; min-width: 0; }
+      .table-wrap:not(.tenant-table-wrap):not(.expense-table-wrap) > table > thead { display: none; }
+      .table-wrap:not(.tenant-table-wrap):not(.expense-table-wrap) > table > tbody { display: grid; gap: 10px; }
+      .table-wrap:not(.tenant-table-wrap):not(.expense-table-wrap) > table > tbody > tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+      .table-wrap:not(.tenant-table-wrap):not(.expense-table-wrap) > table > tbody > tr > td { display: block; min-width: 0; padding: 0; border: 0; }
+      .table-wrap:not(.tenant-table-wrap):not(.expense-table-wrap) > table > tbody > tr > td:last-child { position: static !important; background: transparent !important; box-shadow: none !important; }
+      .table-wrap:not(.tenant-table-wrap):not(.expense-table-wrap) > table > tbody > tr > td .btn { min-height: 44px; }
     }
     @media (min-width: 600px) and (max-width: 640px) {
       .mobile-bottom-nav { left: 50%; right: auto; width: min(560px, 100vw); transform: translateX(-50%); }

@@ -32,6 +32,10 @@ type transactionDetailPageData struct {
 	HasRawRecord     bool
 	Allocations      []transactionDetailAllocationRow
 	Events           []transactionDetailEvent
+	// TenantOptions feeds the 归类／拆分 select. The legacy table read this off
+	// the page-level transactionListPageData; the detail page has no such field, so it
+	// is built here from the tenants this handler already loads.
+	TenantOptions []billingTenantOption
 }
 
 // formatTransactionTimestamp renders the bank timestamp the same way the
@@ -71,8 +75,7 @@ type transactionDetailEvent struct {
 	Status    string
 }
 
-func setTransactionDetailLinks(path string, query url.Values, rows []transactionPageRow) {
-	pagePath := transactionListPath(path)
+func setTransactionDetailLinks(query url.Values, rows []transactionPageRow) {
 	for index := range rows {
 		row := &rows[index]
 		key := strings.TrimSpace(row.InternalID)
@@ -82,25 +85,19 @@ func setTransactionDetailLinks(path string, query url.Values, rows []transaction
 		row.DetailKey = key
 		values := cloneQueryValues(query)
 		values.Set("detail", key)
-		row.DetailURL = pagePath + "?" + values.Encode()
+		row.DetailURL = "/transactions?" + values.Encode()
 	}
 }
 
-func transactionListPath(path string) string {
-	if path == "/billing" {
-		return "/billing"
-	}
-	return "/transactions"
-}
-
-func transactionListURL(path string, query url.Values) string {
+// transactionListURL is the plain list URL for the current filter set: the
+// detail view is a query on the list, so leaving it means dropping "detail".
+func transactionListURL(query url.Values) string {
 	values := cloneQueryValues(query)
 	values.Del("detail")
-	pagePath := transactionListPath(path)
 	if len(values) == 0 {
-		return pagePath
+		return "/transactions"
 	}
-	return pagePath + "?" + values.Encode()
+	return "/transactions?" + values.Encode()
 }
 
 func cloneQueryValues(query url.Values) url.Values {
@@ -152,8 +149,10 @@ func (a *app) transactionDetailPageData(ctx context.Context, r *http.Request, us
 	if err != nil {
 		return transactionDetailPageData{}, err
 	}
+	// Ordered by name to match the tenant list the transactions page builds
+	// (handleTransactions), so the 归类／拆分 select reads the same on both surfaces.
 	var tenants []tenant
-	if err := a.db.WithContext(ctx).Where("user_id = ?", userID).Find(&tenants).Error; err != nil {
+	if err := a.db.WithContext(ctx).Where("user_id = ?", userID).Order("name ASC").Find(&tenants).Error; err != nil {
 		return transactionDetailPageData{}, err
 	}
 	var obligations []rentObligation
@@ -165,7 +164,7 @@ func (a *app) transactionDetailPageData(ctx context.Context, r *http.Request, us
 		return transactionDetailPageData{}, err
 	}
 
-	row := enrichTransactionPageRow(transactionPageRowFromModel(source), source, allocations, obligations)
+	row := enrichTransactionPageRow(transactionPageRowFromModel(source), source, allocations)
 	nameByTenant := make(map[uint64]string, len(tenants))
 	tenantByID := make(map[uint64]tenant, len(tenants))
 	for _, tenantRow := range tenants {
@@ -233,7 +232,7 @@ func (a *app) transactionDetailPageData(ctx context.Context, r *http.Request, us
 	if err != nil {
 		return transactionDetailPageData{}, err
 	}
-	backURL := transactionListURL(r.URL.Path, r.URL.Query())
+	backURL := transactionListURL(r.URL.Query())
 	data := transactionDetailPageData{
 		workspaceShell:   a.transactionDetailShell(r, userID, filters),
 		Transaction:      row,
@@ -241,7 +240,7 @@ func (a *app) transactionDetailPageData(ctx context.Context, r *http.Request, us
 		Subtitle:         row.AccountName + " · " + row.DateDisplay,
 		StatusClass:      row.MatchStatus,
 		BackURL:          backURL,
-		ActionBase:       transactionListPath(r.URL.Path),
+		ActionBase:       "/transactions",
 		TransactionTime:  formatTransactionTimestamp(source.TransactionTime),
 		AllocatedAmount:  row.AllocatedAmountDisplay,
 		RemainingAmount:  row.RemainingAmountDisplay,
@@ -254,20 +253,14 @@ func (a *app) transactionDetailPageData(ctx context.Context, r *http.Request, us
 		Allocations:      allocationRows,
 		AllocationCount:  effectiveAllocationCount(allocations),
 		Events:           events,
+		TenantOptions:    tenantOptionsFromRows(tenants),
 	}
 	data.HasRawRecord = data.RawRecord != ""
 	return data, nil
 }
 
-func pageActiveTransactionKey(r *http.Request) string {
-	if r.URL.Path == "/billing" {
-		return "billing"
-	}
-	return "transactions"
-}
-
 func (a *app) transactionDetailShell(r *http.Request, userID uint64, filters transactionFilters) workspaceShell {
-	shell := canonicalPageShell(a, r, pageActiveTransactionKey(r), "银行流水详情")
+	shell := canonicalPageShell(a, r, "transactions", "银行流水详情")
 	if a.db == nil || userID == 0 {
 		return shell
 	}

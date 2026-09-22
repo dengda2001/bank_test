@@ -31,7 +31,7 @@ func TestTransactionDetailLinksPreserveListState(t *testing.T) {
 		"sort":         {"amount_desc"},
 	}
 	rows := []transactionPageRow{{InternalID: "42"}, {InternalID: ""}}
-	setTransactionDetailLinks("/transactions", query, rows)
+	setTransactionDetailLinks(query, rows)
 
 	first, err := url.Parse(rows[0].DetailURL)
 	if err != nil {
@@ -43,14 +43,15 @@ func TestTransactionDetailLinksPreserveListState(t *testing.T) {
 	if rows[1].DetailKey != "demo-1" {
 		t.Fatalf("fallback row key = %q, want demo-1", rows[1].DetailKey)
 	}
-	listHTML, err := executeTemplate(billingTemplate, billingPageData{TransactionRows: rows, Page: 1, PageSize: 50})
+	listHTML, err := executeTemplate(transactionListTemplate, transactionListPageData{TransactionRows: rows, Page: 1, PageSize: 50})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(listHTML, `href="/transactions?detail=42`) || !strings.Contains(listHTML, `id="transaction-row-demo-1"`) {
+	// 稳定的锚点在手机卡片上：桌面表格 ≤640px 是藏起来的，卡片才是窄屏唯一那张列表。
+	if !strings.Contains(listHTML, `href="/transactions?detail=42`) || !strings.Contains(listHTML, `id="mobile-transaction-demo-1"`) {
 		t.Fatal("transaction list did not render its detail links and stable return anchors")
 	}
-	back := transactionListURL("/transactions", url.Values{"detail": {"42"}, "payer": {"CHEN"}, "page": {"3"}})
+	back := transactionListURL(url.Values{"detail": {"42"}, "payer": {"CHEN"}, "page": {"3"}})
 	if back != "/transactions?page=3&payer=CHEN" {
 		t.Fatalf("return URL = %q", back)
 	}
@@ -117,14 +118,18 @@ func TestTransactionDetailTemplateRendersPrototypeSectionsAndEscapesSourceData(t
 //
 // 确认匹配不再是页头第三格：它和右栏的「匹配流水」是同一个 action 的重复入口，
 // 页头那份已摘掉，所以下面确认相关的断言落在页面里唯一的那张匹配表单上。
+//
+// 页头现在是「编辑分配」「标记非租金」，再加一笔待处理的收入才有「归类／拆分」——
+// 这个入口是从老表格搬过来的，老表格删掉后它是归类唯一的下手处。
 func TestTransactionDetailHeaderActionsReuseListRowEndpoints(t *testing.T) {
-	render := func(t *testing.T, row transactionPageRow) string {
+	render := func(t *testing.T, row transactionPageRow, tenantOptions []billingTenantOption) string {
 		t.Helper()
 		page, err := executeTemplate(transactionDetailPageTemplate, transactionDetailPageData{
 			workspaceShell:  workspaceShell{ActivePage: "transactions"},
 			ActionBase:      "/transactions",
 			BackURL:         "/transactions?page=2",
 			TransactionTime: "2026-09-12 09:18",
+			TenantOptions:   tenantOptions,
 			Transaction:     row,
 		})
 		if err != nil {
@@ -135,8 +140,10 @@ func TestTransactionDetailHeaderActionsReuseListRowEndpoints(t *testing.T) {
 				t.Fatalf("transaction detail header is missing the %q entry", entry)
 			}
 		}
-		if got := strings.Count(page, `class="transaction-head-action"`); got != 2 {
-			t.Fatalf("transaction detail header renders %d entries, want 2", got)
+		// 三格恒定：每一格都带自己的兜底说明，所以不给某类流水摘掉按钮——按钮
+		// 消失时房东只会以为是页面坏了。
+		if got := strings.Count(page, `class="transaction-head-action"`); got != 3 {
+			t.Fatalf("transaction detail header renders %d entries, want 3", got)
 		}
 		return page
 	}
@@ -151,7 +158,7 @@ func TestTransactionDetailHeaderActionsReuseListRowEndpoints(t *testing.T) {
 		CanEditRentMatch:     true,
 		RematchTenantOptions: []billingTenantOption{{ID: 9, Name: "Aoife"}},
 		RematchMonthOptions:  []billingMonthOption{{Period: "2026-09", Label: "2026年9月", Remaining: "€0.00"}},
-	})
+	}, nil)
 	for _, marker := range []string{
 		`action="/transactions/rematch"`,
 		`aria-label="修改匹配租客" data-searchable`,
@@ -162,11 +169,21 @@ func TestTransactionDetailHeaderActionsReuseListRowEndpoints(t *testing.T) {
 			t.Fatalf("matched header missing %q", marker)
 		}
 	}
+	// 已关联的流水不给新的归类表单：钱已经落到某个租金月上了，再归一次是重复记账。
+	// 按钮还在，点开是一句"先在流水列表撤销匹配"。
+	if strings.Contains(matched, `action="/transactions/allocate"`) {
+		t.Fatalf("matched transaction still offers a fresh allocation form: %s", matched)
+	}
+	matchedAllocation := markupBetween(t, matched, `>归类／拆分</summary>`, `</details>`)
+	if !strings.Contains(matchedAllocation, "请先在流水列表撤销匹配") {
+		t.Fatalf("collapsed allocation entry gives no reason on a matched transaction: %s", matchedAllocation)
+	}
 
 	confirmable := render(t, transactionPageRow{
 		ID:                        "42",
 		Direction:                 "income",
 		MatchStatus:               "candidate",
+		RemainingAmountInput:      "640.00",
 		MatchStatusLabel:          "待确认",
 		CanConfirm:                true,
 		CandidateTenantName:       "C. CHEN",
@@ -177,7 +194,7 @@ func TestTransactionDetailHeaderActionsReuseListRowEndpoints(t *testing.T) {
 		//（matching_service.go 的 rematchFilterOptions），所以 fixture 也照这个形状给。
 		ManualMatchTenantOptions: []billingTenantOption{{ID: 9, Name: "C. CHEN"}},
 		ManualMatchOptions:       []billingRentMatchOption{{TenantID: 9, TenantName: "C. CHEN", Period: "2026-09", PeriodLabel: "2026年9月", Remaining: "EUR 640.00"}},
-	})
+	}, []billingTenantOption{{ID: 9, Name: "C. CHEN"}, {ID: 11, Name: "Aoife Murphy"}})
 	for _, marker := range []string{
 		`action="/transactions/confirm"`,
 		`name="tenant_id" aria-label="选择匹配租客" data-searchable`,
@@ -193,6 +210,28 @@ func TestTransactionDetailHeaderActionsReuseListRowEndpoints(t *testing.T) {
 	}
 	if got := strings.Count(confirmable, `action="/transactions/confirm"`); got != 1 {
 		t.Fatalf("transaction detail renders %d confirm forms, want the single one in the right rail", got)
+	}
+	allocation := markupBetween(t, confirmable, `action="/transactions/allocate"`, `</form>`)
+	for _, marker := range []string{
+		"添加拆分项",
+		`name="allocation_kind"`,
+		`name="amount"`,
+		`name="tenant_id"`,
+		`name="period"`,
+		`name="return_to" value="/transactions?page=2"`,
+	} {
+		if !strings.Contains(allocation, marker) {
+			t.Fatalf("detail-page allocation form missing %q: %s", marker, allocation)
+		}
+	}
+	// 「添加拆分项」克隆的是 <template> 里的空行。克隆体不走 Go 渲染，所以租客选项
+	// 必须在模板里就展开好——少一个 range，拆出来的第二行就只能选「不指定租客」，
+	// 而页面上看不出任何异常。
+	clone := markupBetween(t, confirmable, `<template data-allocation-line-template>`, `</template>`)
+	for _, name := range []string{"C. CHEN", "Aoife Murphy"} {
+		if !strings.Contains(clone, name) {
+			t.Fatalf("allocation clone template lost tenant %q: %s", name, clone)
+		}
 	}
 }
 

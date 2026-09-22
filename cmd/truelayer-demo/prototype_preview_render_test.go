@@ -99,9 +99,9 @@ func TestWritePrototypePreviewHTML(t *testing.T) {
 	})
 	write("transactions.html", func() error {
 		return writeFile("transactions.html", func(body *strings.Builder) error {
-			return billingTemplate.Execute(body, billingPageData{
+			return transactionListTemplate.Execute(body, transactionListPageData{
 				workspaceShell: workspaceShell{ActivePage: "transactions", Username: "audit", Environment: "sandbox", FootNote: "流水匹配", CompactTitle: "流水处理"},
-				PageKey:        "transactions", CanonicalPath: "/transactions", Connected: true, TransactionScope: "pending", PendingCount: 3,
+				CanonicalPath:  "/transactions", Connected: true, TransactionScope: "pending", PendingCount: 3,
 				PeriodFilter: "2026-09", MatchStatusSelection: "pending", TotalTransactions: 3, Page: 1, PageSize: 50, TotalPages: 1,
 				TransactionRows: []transactionPageRow{
 					{ID: "10", InternalID: "10", DetailKey: "10", DetailURL: "/transactions?detail=10&match_status=pending&period=2026-09", Direction: "income", DirectionLabel: "收入", PayerName: "WAHAJULLAH KHAN", DateShort: "09-01", ObjectLabel: "78 Old County Road · 03", AmountDisplay: "€1,250.00", AllocatedAmountDisplay: "€0.00", RemainingAmountDisplay: "€1,250.00", RemainingAmountInput: "1250.00", AllocationUseDisplay: "同住代付", DateDisplay: "01 Sep 2026 09:12", Description: "RENT SEPT 03", AccountName: "AIB", MatchStatus: "candidate", MatchStatusLabel: "待确认", CandidateTenantName: "WAHAJULLAH KHAN", CandidateRentObligationID: 301, CandidatePeriod: "2026-09", CanConfirm: true, MatchReason: "建议拆为两条责任，各 €625；确认前可调整。", ParsedPeriodDisplay: "2026-09", ManualMatchTenantOptions: []billingTenantOption{{ID: 7, Name: "WAHAJULLAH KHAN"}, {ID: 11, Name: "Bríd Ní Bhraonáin"}}, ManualMatchOptions: []billingRentMatchOption{{TenantID: 7, TenantName: "WAHAJULLAH KHAN", Period: "2026-09", PeriodLabel: "2026 年 9 月", Expected: "€625.00", Remaining: "€625.00"}}, ReturnURL: "/transactions?match_status=pending&period=2026-09"},
@@ -249,6 +249,10 @@ func TestWritePrototypePreviewHTML(t *testing.T) {
 						{TenantID: 11, TenantName: "Aoife Murphy", Period: "2026-09", PeriodLabel: "2026年9月", Expected: "€1,100.00", Remaining: "€400.00"},
 					},
 				},
+				// 「归类／拆分」的租客下拉在页面级数据上，不在行上（老表格用的就是
+				// 页面级的 $.TenantOptions）。漏了这一条，预览里的下拉只剩「不指定租客」，
+				// 看着像坏了，其实是夹具没给。
+				TenantOptions: []billingTenantOption{{ID: 9, Name: "C. CHEN"}, {ID: 11, Name: "Aoife Murphy"}},
 			})
 		})
 	})

@@ -63,10 +63,11 @@ value.
   `needs_review + overdue + partial + open` (`rent_workspace.go:944`). They are
   accepted by the parser (`transactions.go:318`) but never round-trip as a row's
   own status, so never derive a badge label from them.
-- **A shared page shares its controls.** `/billing` and `/transactions` render
-  different chrome from the same template (`main.go:502` routes both). Before
-  deleting a control, check which pages render it; deleting the wrong duplicate
-  silently strips filtering from the other page.
+- **Check for a second renderer before deleting a control.** `/billing` and
+  `/transactions` used to render different chrome from the same template behind
+  a `PageKey` branch, so a control could look like dead markup while the other
+  path still used it. That branch is gone, but the habit stands: a control
+  guarded by a condition is not the same as a control nothing renders.
 
 ### 4. Validation & Error Matrix
 
@@ -82,8 +83,9 @@ value.
 - Good: the transactions page has one `match_status` selector listing all seven
   reachable values including 已忽略, and its tab for `matched` reads 已关联 —
   the same word the row badge renders.
-- Base: `/billing` renders the filter bar's eight-option selector and no compact
-  form; its status filtering is unchanged by work done on `/transactions`.
+- Base: `/transactions` renders the filter bar's status selector on wide screens
+  and the compact quick-filter form on narrow ones; the retired `/billing` page
+  had its own eight-option selector, which is why the two used to drift.
 - Bad: two selects for one parameter. They pass a test that only asserts "a
   selector exists", then drift apart on the next feature.
 - Bad: rewording a dropdown option without checking the badge — this is how 逾期

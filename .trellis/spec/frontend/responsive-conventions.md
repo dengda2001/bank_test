@@ -262,7 +262,7 @@ show through, and mobile browsers draw no scrollbar, so the inset shadow is the
 only hint that more columns exist. `:not([colspan])` keeps full-width rows from
 being clipped.
 
-**A frozen column has to be narrow.** `/billing` proved this: a frozen amount
+**A frozen column has to be narrow.** The retired `/billing` table proved this: a frozen amount
 column (136–146px) plus the 88px action column took 72% of a 327px window, and
 once sticky pushed it left it covered the payer name — the one thing that says
 which row is being acted on. The fix was to stop freezing the amount and move it
@@ -467,7 +467,7 @@ description is normal.
 page-local rule has claimed.
 
 **Bad** — a `min-width` added where the real problem is that the column does not
-need to be a column. `/billing`'s secondary columns are dropped outright rather
+need to be a column. The retired `/billing` table's secondary columns were dropped outright rather
 than widened; `/tenant-detail`'s 130px label grid becomes one column rather than
 a narrower two.
 

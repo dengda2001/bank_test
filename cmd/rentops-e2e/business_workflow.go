@@ -228,7 +228,7 @@ func runE2EBusinessScenarios(ctx context.Context, options e2eOptions, manifest e
 	if err := e2eCreateAndAllocate(ctx, db, userID, client, manifest, roomIDs, tenantIDs); err != nil {
 		return recordE2EScenario(report, e2eScenarioReport{Name: "payment-allocation-and-third-party-payment", Status: "failed", Error: err.Error()}, writeReport)
 	}
-	paymentScenario := e2eScenarioReport{Name: "payment-allocation-and-third-party-payment", Status: "passed", Steps: []e2eStepReport{{Method: "POST", Path: "/billing/allocate", Expected: map[string]any{"shared_room_rent": "1200.00", "tenant_a": "700.00", "tenant_b": "500.00", "payer": tenants[0].Name}, Actual: map[string]any{"allocation_saved": true, "payer_is_tenant_a": true}, Passed: true}}}
+	paymentScenario := e2eScenarioReport{Name: "payment-allocation-and-third-party-payment", Status: "passed", Steps: []e2eStepReport{{Method: "POST", Path: "/transactions/allocate", Expected: map[string]any{"shared_room_rent": "1200.00", "tenant_a": "700.00", "tenant_b": "500.00", "payer": tenants[0].Name}, Actual: map[string]any{"allocation_saved": true, "payer_is_tenant_a": true}, Passed: true}}}
 	if err := recordE2EScenario(report, paymentScenario, writeReport); err != nil {
 		return err
 	}
@@ -323,7 +323,7 @@ func e2eCreateAndAllocate(ctx context.Context, db *sql.DB, userID uint64, client
 		sharedForm.Add("amount", e2eCentsToAmount(data.cents))
 		sharedForm.Add("note", fmt.Sprintf("%s shared responsibility %d", manifest.RunID, index+1))
 	}
-	response, err := client.do(ctx, http.MethodPost, "/billing/allocate", sharedForm)
+	response, err := client.do(ctx, http.MethodPost, "/transactions/allocate", sharedForm)
 	if err != nil || response.StatusCode != http.StatusFound || !strings.Contains(response.Location, "message=allocation_saved") {
 		return errors.New("shared-room payment allocation failed")
 	}
@@ -336,7 +336,7 @@ func e2eCreateAndAllocate(ctx context.Context, db *sql.DB, userID uint64, client
 		"allocation_kind": {"rent"}, "tenant_id": {strconv.FormatUint(tenantIDs[2], 10)},
 		"period": {manifest.Period}, "amount": {e2eCentsToAmount(manifest.Expected.TenantCPaidCents)}, "note": {manifest.RunID + " partial payment"},
 	}
-	response, err = client.do(ctx, http.MethodPost, "/billing/allocate", partialForm)
+	response, err = client.do(ctx, http.MethodPost, "/transactions/allocate", partialForm)
 	if err != nil || response.StatusCode != http.StatusFound || !strings.Contains(response.Location, "message=allocation_saved") {
 		return errors.New("partial payment allocation failed")
 	}

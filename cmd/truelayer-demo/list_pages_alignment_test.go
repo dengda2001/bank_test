@@ -289,14 +289,14 @@ func TestListPageTemplatesKeepHeadActionAndActionColumn(t *testing.T) {
 }
 
 // The action column must read the same on every list page. /transactions is
-// rendered by billing_page.go rather than one of the page templates above, and
+// rendered by transaction_list_page.go rather than one of the page templates above, and
 // this subtask left its row action as "处理" while every other page said
 // "查看详情" -- the one row its own PRD asked for and did not get. Pinned
 // separately so the next pass cannot quietly leave it behind again.
 func TestTransactionRouteActionColumnSaysViewDetails(t *testing.T) {
-	page := renderBillingPage(t, billingPageData{
+	page := renderTransactionListPage(t, transactionListPageData{
 		workspaceShell: workspaceShell{ActivePage: "transactions", CompactTitle: "流水处理"},
-		PageKey:        "transactions", CanonicalPath: "/transactions", TransactionScope: "pending", PendingCount: 1,
+		CanonicalPath:  "/transactions", TransactionScope: "pending", PendingCount: 1,
 		TransactionRows: []transactionPageRow{{
 			ID: "7", InternalID: "7", DetailKey: "7", DetailURL: "/transactions?detail=7&match_status=pending",
 			Direction: "income", PayerName: "WAHAJULLAH KHAN", AmountDisplay: "€1,250.00",

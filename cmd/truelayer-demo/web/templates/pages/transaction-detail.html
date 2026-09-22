@@ -73,6 +73,32 @@
               {{end}}
             </div>
           </details>
+          <details class="transaction-head-action">
+            <summary class="btn">归类／拆分</summary>
+            <div class="transaction-head-action-body">
+              {{if and (eq .Transaction.Direction "income") (ne .Transaction.MatchStatus "matched") (ne .Transaction.MatchStatus "ignored")}}
+                <p class="tiny">房租走匹配；押金、其他收入，或一笔拆成几份，走这里。保存只新增分配记录，不改银行原文。</p>
+                <form method="post" action="{{.ActionBase}}/allocate" data-allocation-form>
+                  <input type="hidden" name="transaction_id" value="{{.Transaction.ID}}">
+                  <input type="hidden" name="return_to" value="{{.BackURL}}">
+                  {{/* 首行服务端渲染，没有 JS 也能提交一笔；空行模板给「添加拆分项」克隆。
+                     克隆体里的 select 由 workspace-controls.js 的 MutationObserver 在
+                     append 之后自动增强，所以这里不能预先把行渲染成增强后的结构。 */}}
+                  <div class="allocation-rows" data-allocation-rows>
+                    <div class="allocation-line"><select name="allocation_kind" aria-label="入账用途"><option value="rent">房租</option><option value="deposit">押金</option><option value="other_income">其他收入</option></select><select name="tenant_id" aria-label="归类租客" data-searchable><option value="">不指定租客</option>{{range .TenantOptions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select><select name="period" aria-label="归类租金月份"><option value="">选择租金月份...</option>{{range .Transaction.MonthOptions}}<option value="{{.Period}}">{{.Label}} · 余款 {{.Remaining}}</option>{{end}}</select><input name="amount" inputmode="decimal" value="{{.Transaction.RemainingAmountInput}}" aria-label="归类金额" required><input name="note" placeholder="其他收入备注（其他收入必填）" aria-label="归类备注"></div>
+                  </div>
+                  <template data-allocation-line-template><div class="allocation-line"><select name="allocation_kind" aria-label="入账用途"><option value="rent">房租</option><option value="deposit">押金</option><option value="other_income">其他收入</option></select><select name="tenant_id" aria-label="归类租客" data-searchable><option value="">不指定租客</option>{{range .TenantOptions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select><select name="period" aria-label="归类租金月份"><option value="">选择租金月份...</option>{{range .Transaction.MonthOptions}}<option value="{{.Period}}">{{.Label}} · 余款 {{.Remaining}}</option>{{end}}</select><input name="amount" inputmode="decimal" value="" aria-label="归类金额" required><input name="note" placeholder="其他收入备注（其他收入必填）" aria-label="归类备注"></div></template>
+                  <div class="allocation-actions"><button class="btn" type="button" data-add-allocation-line>添加拆分项</button><button class="btn primary" type="submit">保存归类</button></div>
+                </form>
+              {{else if eq .Transaction.MatchStatus "ignored"}}
+                <p class="tiny">该流水已标记为非租金，不参与归类。如需归类，请先用上面的「恢复处理」。</p>
+              {{else if eq .Transaction.Direction "expense"}}
+                <p class="tiny">支出流水不走归类。</p>
+              {{else}}
+                <p class="tiny">该流水已有确认的租金匹配。如需改成押金或其他收入，请先在流水列表撤销匹配，再回到这里归类。</p>
+              {{end}}
+            </div>
+          </details>
         </div>
       </header>
 
@@ -114,15 +140,15 @@
               </div>
             </div>
             <dl class="transaction-facts">
-              <div><dt>银行姓名</dt><dd>{{.Transaction.PayerName}}</dd></div>
+              <div><dt>付款人名称</dt><dd>{{.Transaction.PayerName}}</dd></div>
               <div><dt>交易时间</dt><dd class="mono">{{.TransactionTime}}</dd></div>
-              <div><dt>摘要 / 参考</dt><dd>{{.Reference}}</dd></div>
-              <div><dt>入账账户</dt><dd>{{.Transaction.AccountName}}</dd></div>
+              <div><dt>流水号</dt><dd>{{.Reference}}</dd></div>
+              <div><dt>收款账户</dt><dd>{{.Transaction.AccountName}}</dd></div>
               <div><dt>识别租金月份</dt><dd>{{if .ParsedPeriod}}{{.ParsedPeriod}}{{else}}未识别{{end}}{{if .ParsedPeriodNote}}<small>{{.ParsedPeriodNote}}</small>{{end}}</dd></div>
               <div><dt>数据来源</dt><dd>{{.SourceLabel}}</dd></div>
-              <div><dt>外部流水号</dt><dd>{{.ProviderID}}</dd></div>
-              <div><dt>付款人编号</dt><dd>{{.Transaction.PayerID}}</dd></div>
-              <div><dt>账户标识</dt><dd>{{if .Transaction.AccountID}}{{.Transaction.AccountID}}{{else}}—{{end}}</dd></div>
+              <div><dt>银行交易 ID</dt><dd>{{.ProviderID}}</dd></div>
+              <div><dt>稳定付款人 ID</dt><dd>{{if eq .Transaction.PayerID "无付款人编号"}}未提供{{else}}{{.Transaction.PayerID}}{{end}}</dd></div>
+              <div><dt>收款账户 ID</dt><dd>{{if .Transaction.AccountID}}{{.Transaction.AccountID}}{{else}}—{{end}}</dd></div>
             </dl>
             <div class="transaction-raw-description">
               <h3>原始描述</h3>
@@ -235,25 +261,18 @@
   </div>
   <script>
     (() => {
-      document.querySelectorAll("[data-tenant-period-match]").forEach((form) => {
-        const tenant = form.querySelector('select[name="tenant_id"]');
-        const period = form.querySelector('select[name="period"]');
-        if (!tenant || !period) return;
-        const filterPeriods = () => {
-          const selectedTenant = tenant.value;
-          let selectedStillAvailable = false;
-          Array.from(period.options).forEach((option) => {
-            if (!option.value) return;
-            const visible = !selectedTenant || option.dataset.tenant === selectedTenant;
-            option.hidden = !visible;
-            option.disabled = !visible;
-            if (visible && option.selected) selectedStillAvailable = true;
-          });
-          if (!selectedStillAvailable) period.value = "";
-          period.dispatchEvent(new Event("change", {bubbles: true}));
-        };
-        tenant.addEventListener("change", filterPeriods);
-        filterPeriods();
+      const form = document.querySelector("[data-allocation-form]");
+      if (!form) return;
+      const rows = form.querySelector("[data-allocation-rows]");
+      const template = form.querySelector("[data-allocation-line-template]");
+      const add = form.querySelector("[data-add-allocation-line]");
+      if (!rows || !template || !add) return;
+      add.addEventListener("click", () => {
+        // The blank line is stamped un-enhanced. workspace-controls.js watches
+        // documentElement, so the select inside it gets picked up once it is in
+        // the real DOM — which is why the clone must not carry the enhanced
+        // wrapper markup.
+        rows.appendChild(template.content.firstElementChild.cloneNode(true));
       });
     })();
   </script>

@@ -88,8 +88,8 @@ func TestCollectionSummaryCollapsesInThe1100Tier(t *testing.T) {
 // §1): the chrome is shared, not duplicated.
 func TestEveryWorkspacePageRendersTheSharedChromeOnce(t *testing.T) {
 	pages := map[string]func() (string, error){
-		"billing": func() (string, error) {
-			return executeTemplate(billingTemplate, billingPageData{})
+		"transactions": func() (string, error) {
+			return executeTemplate(transactionListTemplate, transactionListPageData{})
 		},
 		"rent-workspace": func() (string, error) {
 			// The legacy no-database fallback template was removed; the dashboard
@@ -340,42 +340,18 @@ func TestMobileExpenseListUsesCards(t *testing.T) {
 	}
 }
 
-func TestMobileBillingRowsStackAsCards(t *testing.T) {
-	page, err := executeTemplate(billingTemplate, billingPageData{
-		TransactionRows: []transactionPageRow{{
-			ID:               "7",
-			Direction:        "income",
-			DirectionLabel:   "收入",
-			PayerName:        "陈先生",
-			AmountDisplay:    "EUR 640.00",
-			DateDisplay:      "10 Sep 2026",
-			Description:      "September rent",
-			MatchStatus:      "candidate",
-			MatchStatusLabel: "待确认",
-		}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, marker := range []string{
-		`class="billing-table-wrap table-wrap"`,
-		`class="transaction-table"`,
-		`.billing-table-wrap .transaction-table tbody tr { display: grid;`,
-		`class="txn-amount-mobile"`,
-	} {
-		if !strings.Contains(page, marker) {
-			t.Fatalf("mobile billing cards missing %q", marker)
-		}
-	}
-}
+// TestMobileBillingRowsStackAsCards was removed with the legacy table. The
+// transaction list stacks as cards on phones through its own markup
+// (.transaction-route-mobile-list / .transaction-review-card), which
+// TestTransactionRouteUsesPrototypeQueueAndKeepsLocalReturnPath covers.
 
 func TestMobileSimpleTablesStackAsCards(t *testing.T) {
 	base, mobile := splitWorkspaceCSS(t)
-	if strings.Contains(base, "table-wrap:not(.billing-table-wrap)") {
+	if strings.Contains(base, "table-wrap:not(") {
 		t.Fatal("simple-table mobile rules leaked into the desktop stylesheet")
 	}
 	for _, marker := range []string{
-		`.table-wrap:not(.billing-table-wrap):not(.tenant-table-wrap):not(.expense-table-wrap) > table { display: block;`,
+		`.table-wrap:not(.tenant-table-wrap):not(.expense-table-wrap) > table { display: block;`,
 		`> table > thead { display: none; }`,
 		`> table > tbody > tr { display: grid;`,
 		`> table > tbody > tr > td:last-child { position: static !important;`,
@@ -474,8 +450,8 @@ func TestTenantDetailProfileListStacksOnlyOnNarrowScreens(t *testing.T) {
 // while the other four keep their badges.
 func TestNavCountsOnlyRenderWhereTheyDidBefore(t *testing.T) {
 	withBadges := map[string]func() (string, error){
-		"billing": func() (string, error) {
-			return executeTemplate(billingTemplate, billingPageData{workspaceShell: workspaceShell{
+		"transactions": func() (string, error) {
+			return executeTemplate(transactionListTemplate, transactionListPageData{workspaceShell: workspaceShell{
 				ShowNavCounts: true, TenantCount: 3, IncomeCount: 4, ExpenseCount: 5,
 			}})
 		},
@@ -565,79 +541,20 @@ func TestPayerPreviewScrollsTheTableNotTheCard(t *testing.T) {
 	}
 }
 
-// The billing action column measured 320px, so it cannot be frozen; narrow
-// screens swap it for a status badge plus a 处理 toggle that expands in place and
-// drop the two secondary columns. Desktop keeps the content inline: there is no
-// summary to click, and the ~3 lines of script only strip the open attribute
-// where the narrow-screen block applies.
-//
-// The amount moves into that summary rather than staying frozen beside it. Frozen
-// as its own column it was 136-146px, which together with the 88px action column
-// took 72% of a 327px window and — once sticky pushed it left — covered the payer
-// column outright. The payer name is the only thing that says which row is being
-// acted on, so the amount rides along in the frozen cell instead.
-func TestBillingActionCellCollapsesOnlyOnNarrowScreens(t *testing.T) {
-	page := renderBillingPage(t, billingPageData{workspaceShell: workspaceShell{
-		ShowNavCounts: true, TenantCount: 1, IncomeCount: 1, ExpenseCount: 1,
-	},
-		TransactionRows: []transactionPageRow{{ID: "7", Direction: "income", DirectionLabel: "收入"}},
-	})
+// TestBillingActionCellCollapsesOnlyOnNarrowScreens was removed with the legacy
+// table. The frozen 处理 column, its <details class="txn-action"> markup and the
+// script that stripped its open attribute all lived in that table; the surviving
+// desktop table is not frozen and needs none of it.
 
-	if !strings.Contains(page, `<details class="txn-action" open>`) {
-		t.Fatal("the action cell is not a <details> opened for the wide-screen rendering")
-	}
-	if !strings.Contains(page, `<summary class="txn-summary">`) {
-		t.Fatal("the collapsed action cell has no summary")
-	}
-	if !strings.Contains(page, `.txn-col-action > .txn-action > summary { display: none; }`) {
-		t.Fatal("the summary is not hidden on wide screens")
-	}
-	// A closed <details> hides its content through the UA stylesheet; the markup
-	// therefore ships open and the script closes it only where the narrow-screen
-	// block applies.
-	if !strings.Contains(page, `window.matchMedia('(max-width: 640px)')`) {
-		t.Fatal("nothing collapses the action cell on narrow screens")
-	}
-	if !strings.Contains(page, `document.querySelectorAll('details.txn-action[open]').forEach(function(node){node.removeAttribute('open');})`) {
-		t.Fatal("the collapse script does not remove the open attribute")
-	}
-
-	for _, expected := range []string{
-		// Dropping the two secondary columns lowers the table's floor from 1040px,
-		// but it must not fall to 0: with no floor CJK wraps one character per line.
-		".transaction-table { min-width: 680px; }",
-		".transaction-table .txn-col-desc,\n      .transaction-table .txn-col-account { display: none; }",
-		// The amount column goes too, and its content reappears inside the frozen
-		// action cell. A frozen amount that covers the payer is worse than a frozen
-		// amount the user reaches by scrolling a little.
-		".transaction-table .txn-col-amount { display: none; }",
-		".transaction-table .txn-col-action { width: 118px; padding: 10px 8px; }",
-		".txn-amount-mobile { display: block; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }",
-	} {
-		if !strings.Contains(page, expected) {
-			t.Fatalf("billing narrow-screen CSS is missing %q", expected)
-		}
-	}
-	// The carried amount must not reach wide screens. Two rules keep it out: the
-	// page-local default below the wide-screen block hides it always, and the
-	// wide-screen block hides the whole summary it lives in.
-	if !strings.Contains(page, ".txn-amount-mobile { display: none; }") {
-		t.Fatal("the carried amount is not hidden by default")
-	}
-	if wide := strings.Index(page, ".txn-amount-mobile { display: none; }"); wide > strings.Index(page, ".txn-amount-mobile { display: block;") {
-		t.Fatal("the mobile override is written before the wide-screen default")
-	}
-}
-
-// The billing narrow-screen block has to sit after the wide-screen one, or the
-// sticky amount column and the hidden secondary columns would apply at 1280px.
-func TestBillingNarrowScreenBlockFollowsTheWideScreenOne(t *testing.T) {
-	page := renderBillingPage(t, billingPageData{})
+// The transaction page's narrow-screen block has to sit after the wide-screen
+// one, or rules meant for phones would also apply at 1280px.
+func TestTransactionPageNarrowScreenBlockFollowsTheWideScreenOne(t *testing.T) {
+	page := renderTransactionListPage(t, transactionListPageData{})
 	wide := strings.Index(page, "@media (min-width: 641px) {")
 	// Anchored on a declaration, not a comment: html/template strips CSS comments.
-	narrow := strings.Index(page, ".confirm-form .btn,\n      .bind-form select,")
+	narrow := strings.Index(page, ".transaction-route-mobile-list { display: grid;")
 	if wide < 0 || narrow < 0 {
-		t.Fatalf("billing media blocks are missing (wide=%d narrow=%d)", wide, narrow)
+		t.Fatalf("transaction page media blocks are missing (wide=%d narrow=%d)", wide, narrow)
 	}
 	if narrow < wide {
 		t.Fatal("the narrow-screen block is written before the wide-screen block")

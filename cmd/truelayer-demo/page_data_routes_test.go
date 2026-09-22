@@ -26,10 +26,10 @@ func TestCanonicalPageRoutesRequireAuthentication(t *testing.T) {
 	}
 }
 
-func TestCanonicalRoutesKeepLegacyRefreshTargetAndBankTarget(t *testing.T) {
+func TestCanonicalRoutesKeepRefreshAndBankTargets(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/refresh", nil)
-	if got := bankRefreshRedirect(request, "message=refreshed"); got != "/billing?message=refreshed" {
-		t.Fatalf("legacy refresh target=%q", got)
+	if got := bankRefreshRedirect(request, "message=refreshed"); got != "/transactions?message=refreshed" {
+		t.Fatalf("transactions refresh target=%q", got)
 	}
 	request = httptest.NewRequest(http.MethodPost, "/bank/sync", nil)
 	if got := bankRefreshRedirect(request, "message=refreshed"); got != "/bank?message=refreshed" {

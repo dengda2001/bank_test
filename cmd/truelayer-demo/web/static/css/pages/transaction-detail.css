@@ -5,10 +5,12 @@
 .transaction-detail-mark { display: grid; width: 48px; height: 48px; flex: 0 0 auto; place-items: center; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--accent); font: 700 16px var(--mono); }
 .transaction-detail-eyebrow { margin: 0 0 4px; color: var(--accent); font: 11px var(--mono); letter-spacing: .08em; }
 .transaction-detail-head h1 { font-size: 25px; }
-/* 页头两操作：原型把「编辑分配 / 标记非租金 / 确认匹配」放在 head-actions。
+/* 页头三操作：原型把「编辑分配 / 标记非租金 / 确认匹配」放在 head-actions。
    确认匹配那格已摘掉——它和右栏的「匹配流水」是同一个 action 的重复入口，
-   页头多一个只是让人先选一次点哪个。剩下的每个入口用 <details> 展开已有动作
-   表单，表单与列表行内同名动作同源同 action。 */
+   页头多一个只是让人先选一次点哪个。「归类／拆分」是从老流水表格搬过来的：
+   它原先只挂在老表格上，新界面两处文案都在让人「撤销后重新归类」，却到不了。
+   剩下的每个入口用 <details> 展开已有动作表单，表单与列表行内同名动作同源同
+   action。 */
 .transaction-detail-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .transaction-detail-actions .btn { white-space: nowrap; }
 .transaction-head-action { position: relative; }
@@ -19,6 +21,12 @@
 .transaction-head-action-body form { display: grid; gap: 8px; }
 .transaction-head-action-body .tiny { margin: 0; }
 .transaction-head-action-body select, .transaction-head-action-body input { min-height: 38px; }
+/* 归类／拆分：一笔流水可以拆成几行，每行是「用途 / 租客 / 月份 / 金额 / 备注」。
+   行间那条分隔线不是装饰——两行紧挨着会看成一串控件，分不出是一笔的两份。 */
+.transaction-head-action-body .allocation-rows { display: grid; gap: 10px; }
+.transaction-head-action-body .allocation-line { display: grid; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.transaction-head-action-body .allocation-line:last-child { padding-bottom: 0; border-bottom: 0; }
+.transaction-head-action-body .allocation-actions { display: grid; grid-template-columns: auto 1fr; gap: 8px; }
 /* 原始描述并进「原始流水」之后的小标题。它是银行给的那句话，和上面的
    结构化字段同属一份记录，所以用 h3 而不是再开一块 panel。 */
 .transaction-raw-description { display: grid; gap: 7px; padding: 0 16px 14px; }

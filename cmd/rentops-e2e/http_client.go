@@ -191,8 +191,8 @@ func (c *e2eHTTPClient) authenticationScenario(ctx context.Context, username, pa
 		return markFailure("valid local login failed")
 	}
 
-	protectedResponse, err := c.do(ctx, http.MethodGet, "/billing", nil)
-	protectedStep := e2eHTTPStep(http.MethodGet, "/billing", map[string]any{
+	protectedResponse, err := c.do(ctx, http.MethodGet, "/transactions", nil)
+	protectedStep := e2eHTTPStep(http.MethodGet, "/transactions", map[string]any{
 		"status_code": http.StatusOK,
 	}, protectedResponse, err)
 	if err == nil {
@@ -230,8 +230,8 @@ func (c *e2eHTTPClient) authenticationScenario(ctx context.Context, username, pa
 		return markFailure("invalid local login was accepted")
 	}
 
-	unauthorizedResponse, err := unauthenticated.do(ctx, http.MethodGet, "/billing", nil)
-	unauthorizedStep := e2eHTTPStep(http.MethodGet, "/billing", map[string]any{
+	unauthorizedResponse, err := unauthenticated.do(ctx, http.MethodGet, "/transactions", nil)
+	unauthorizedStep := e2eHTTPStep(http.MethodGet, "/transactions", map[string]any{
 		"status_code": http.StatusFound,
 		"location":    "/",
 	}, unauthorizedResponse, err)

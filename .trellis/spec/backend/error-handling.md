@@ -64,7 +64,7 @@ Questions to answer:
 
 - `TL_FROM=YYYY-MM-DD` remains the configured historical start date for a fresh bank authorization callback.
 - Manual refresh must cap the transaction `from` date to the later of `TL_FROM` and the UTC date 90 days before refresh.
-- Manual refresh failures use `/billing?error=data_fetch_failed` for transaction data-fetch failure.
+- Manual refresh failures use `/transactions?error=data_fetch_failed` for transaction data-fetch failure.
 
 #### 4. Validation & Error Matrix
 
@@ -83,8 +83,8 @@ Questions to answer:
 #### 6. Tests Required
 
 - Unit test `refreshTransactionFrom` for old and recent configured dates.
-- Handler test for refresh transaction failure: redirects to `/billing?error=data_fetch_failed`, does not append a log line, and does not use the uncapped historical date.
-- Template test for the billing page error notice.
+- Handler test for refresh transaction failure: redirects to `/transactions?error=data_fetch_failed`, does not append a log line, and does not use the uncapped historical date.
+- Template test for the transaction list error notice.
 
 #### 7. Wrong vs Correct
 
