@@ -131,7 +131,10 @@
     <script>
       document.addEventListener("submit", (event) => {
         const trigger = event.target.querySelector("[data-confirm='true']");
-        if (trigger && !window.confirm("确认执行此高风险操作吗？")) event.preventDefault();
+        // 删除按钮搬进编辑抽屉后，离它要删的对象远了，泛泛一句"高风险操作"
+        // 说不清删的是谁。按钮可以自带 data-confirm-message，没有就退回通用文案。
+        const message = trigger && trigger.getAttribute("data-confirm-message");
+        if (trigger && !window.confirm(message || "确认执行此高风险操作吗？")) event.preventDefault();
       });
     </script>{{end}}
 {{define "workspace-object-tabs"}}<nav class="object-tabs" aria-label="对象类型"><a href="/properties"{{if eq .ActivePage "properties"}} class="active" aria-current="page"{{end}}>房产</a><a href="/rooms"{{if eq .ActivePage "rooms"}} class="active" aria-current="page"{{end}}>房间</a><a href="/tenants"{{if eq .ActivePage "tenants"}} class="active" aria-current="page"{{end}}>租客</a></nav>{{end}}

@@ -11,7 +11,9 @@
 2. **逾期天数**：`rent_workspace_page.go` 的 `rentRoomDetailPageData` 加 `OverdueDays int`，在 `loadRoomDetail` 里从 `Summary.DueDate` 推出；先补单元测试（逾期／未逾期／日期不可解析三种），再动模板。
 3. **平账适配器**：读 `manualBalanceRedirectURL`，确认 `return_to` 允许 `/rooms/...` 且不放行外站；加 `RoomDetailSettleForm` 适配器；模板里给责任表行尾接 `collection-settle-form`。参考 `workspace_alignment_test.go:376` 的 `TestTenantSettleFormCarriesTheWorkspaceContext` 补同款契约测试。
 4. **KPI 与表格配色**：在 `workspace.css` 补 `metric-primary/success/warning` 定义；未付卡加警示色与左侧色条；责任表未付列同色系；"已收"为 0 时不显示正向色。
-5. **删除搬家**：把页头与移动底栏的删除表单合并进编辑抽屉底部危险区；加后果文案；`workspace-nav.html` 的 confirm 支持 `data-confirm-message` 并保留回退；调整移动端底栏列数与失效的 CSS 规则。
+5. ~~**删除搬家**~~ ✅ 已完成（09-23）：页头与移动底栏的删除表单合并进编辑抽屉底部危险区；加后果文案；`workspace-nav.html` 的 confirm 支持 `data-confirm-message` 并保留回退；清掉失效的 `.delete-object-form{display:contents}` 与 `.delete-object-form{margin:0}`。
+   - **范围扩大（dd 09-23 追问「删除房间/房产有放进编辑页吗」）**：同样形状的 `property-detail.html` 一并改了（页头 :25、移动 :98 → 编辑抽屉危险区）。新建抽屉在 `room-create-drawer.html` / `properties.html`，天然看不到删除。
+   - `TestObjectDetailsExposeConfirmedDeleteActions` 的两个 fixture 补 `Editing: true`，并新增「抽屉关着时页面里不该有 delete」的反向断言——这条才是"平时看不到删除"的守卫。
 6. **信息归位与砍块**：删 `room-plan-summary` 整段及其 CSS；「房间信息」补"每月交租日"与"计划区间"。
 7. **空态折叠**：判据换成 `.PaymentCount`；`<details>` 折叠 + 摘要行按钮阻止冒泡。
 8. **本页术语**：已覆盖→已收、责任人→租客。

@@ -36,11 +36,18 @@
 .entity-drawer .drawer-close { display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid var(--border); border-radius: 8px; color: var(--foreground); font-size: 24px; line-height: 1; text-decoration: none; }
 .entity-drawer form { display: grid; gap: 16px; }
 .entity-drawer .drawer-actions { position: sticky; bottom: -22px; z-index: 1; margin: 0 -22px -22px; padding: 14px 22px calc(14px + env(safe-area-inset-bottom)); background: color-mix(in oklch,var(--surface) 94%,transparent); border-top: 1px solid var(--border); }
+/* 删除从页头搬进编辑抽屉后的危险区。它排在保存表单之后：底部那条保存栏是
+   sticky 的，所以危险区要滚到底才完整露出来——这是有意的，破坏性操作不该
+   和"保存更改"并排。 */
+.entity-drawer .drawer-danger-zone { display: grid; gap: 12px; margin-top: 4px; padding: 15px; border: 1px solid color-mix(in oklch,var(--danger) 26%,var(--border)); border-radius: 10px; background: color-mix(in oklch,var(--danger) 4%,var(--surface)); }
+.entity-drawer .drawer-danger-zone h3 { margin: 0 0 4px; color: var(--danger); font-size: 14px; }
+.entity-drawer .drawer-danger-zone .delete-object-form { display: flex; justify-content: flex-start; }
 @media (max-width: 640px) {
   .entity-drawer-backdrop { align-items: flex-end; }
   .entity-drawer { width: 100%; height: auto; max-height: min(86dvh,760px); padding: 18px 16px 0; border-radius: 18px 18px 0 0; }
   .entity-drawer .panel-head { top: -18px; min-height: 0; margin: -18px -16px 0; padding: 16px; border-bottom: 0; }
   .entity-drawer .drawer-actions { bottom: 0; margin: 0 -16px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
+  .entity-drawer .drawer-danger-zone { margin-bottom: 16px; }
   .room-rent-setup .room-meta-form-grid { grid-template-columns: 1fr; }
   .property-edit-grid { grid-template-columns: 1fr; gap: 12px; }
   .property-edit-grid .full { grid-column: auto; }

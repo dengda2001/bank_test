@@ -22,7 +22,7 @@
             <div class="identity-meta"><span>{{.Property.CityRegion}}</span><span>{{.Property.RoomCount}} 个房间</span><span>{{.Property.ResponsibilityCount}} 条责任记录</span><span class="detail-status {{.Property.CollectionStatus}}">{{if .Property.CollectionStatusLabel}}{{.Property.CollectionStatusLabel}}{{else}}{{.Property.StatusLabel}}{{end}}</span></div>
           </div>
         </div>
-        <div class="actions"><a class="btn" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}&amp;edit=1">编辑房产</a><a class="btn" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}&amp;expense=1">新增支出</a><a class="btn primary" href="/dunning?period={{.Period}}">提醒未收租客</a><form method="post" action="/properties/{{.Property.ID}}" class="delete-object-form"><input type="hidden" name="action" value="delete"><input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="list_status" value="{{.ListStatus}}"><input type="hidden" name="list_search" value="{{.ListSearch}}"><input type="hidden" name="list_collection" value="{{.ListCollection}}"><button class="btn danger" type="submit" data-confirm="true">删除房产</button></form></div>
+        <div class="actions"><a class="btn" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}&amp;edit=1">编辑房产</a><a class="btn" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}&amp;expense=1">新增支出</a><a class="btn primary" href="/dunning?period={{.Period}}">提醒未收租客</a></div>
       </header>
 
       {{if eq .Message "expense_added"}}<div class="notice ok" data-toast>支出记录已保存。</div>{{else if eq .Message "room_saved"}}<div class="notice ok" data-toast>房间资料已保存。</div>{{else if .Message}}<div class="notice ok" data-toast>资料已保存。</div>{{end}}
@@ -41,6 +41,10 @@
             </div>
             <div class="drawer-actions"><a class="btn subtle" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}">取消</a><button class="btn primary" type="submit">保存更改</button></div>
           </form>
+          <section class="drawer-danger-zone" aria-labelledby="property-danger-title">
+            <div><h3 id="property-danger-title">删除房产</h3><p class="tiny">房产下还有房间、租金或支出记录时删不掉，系统会拦下来；不再使用时可以改用停用。确认删除后资料无法恢复。</p></div>
+            <form method="post" action="/properties/{{.Property.ID}}" class="delete-object-form"><input type="hidden" name="action" value="delete"><input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="list_status" value="{{.ListStatus}}"><input type="hidden" name="list_search" value="{{.ListSearch}}"><input type="hidden" name="list_collection" value="{{.ListCollection}}"><button class="btn danger" type="submit" data-confirm="true" data-confirm-message="删除房产「{{.Property.Name}}」及其资料？若仍有关联房间、租金或支出记录，系统会拒绝。">删除房产</button></form>
+          </section>
         </section>
       </div>
       {{end}}
@@ -95,7 +99,7 @@
           <section class="panel surface property-mobile-recent"><div class="panel-head"><h2>最近记录</h2></div>{{if .Expenses}}<div class="attention-list">{{range .Expenses}}<div class="property-room-prototype-row"><span><strong>{{.Description}}</strong><small>{{.DateDisplay}} · {{.Category}}</small></span><strong class="amount">{{.AmountDisplay}}</strong></div>{{end}}</div>{{else}}<div class="workspace-empty">暂无近期记录。</div>{{end}}</section>
         </aside>
       </div>
-      <div class="property-detail-mobile-actions"><a class="btn subtle" href="/properties?period={{.Period}}&amp;status={{.ListStatus}}&amp;search={{.ListSearch}}&amp;collection={{.ListCollection}}">返回列表</a><a class="btn primary" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}&amp;edit=1">编辑资料</a><a class="btn" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}&amp;expense=1">新增支出</a><form method="post" action="/properties/{{.Property.ID}}" class="delete-object-form"><input type="hidden" name="action" value="delete"><input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="list_status" value="{{.ListStatus}}"><input type="hidden" name="list_search" value="{{.ListSearch}}"><input type="hidden" name="list_collection" value="{{.ListCollection}}"><button class="btn danger" type="submit" data-confirm="true">删除房产</button></form></div>
+      <div class="property-detail-mobile-actions"><a class="btn subtle" href="/properties?period={{.Period}}&amp;status={{.ListStatus}}&amp;search={{.ListSearch}}&amp;collection={{.ListCollection}}">返回列表</a><a class="btn primary" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}&amp;edit=1">编辑资料</a><a class="btn" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}&amp;expense=1">新增支出</a></div>
     </main>
   </div>
 </body>

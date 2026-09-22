@@ -256,19 +256,43 @@ func TestPropertyDetailRoomActionColumnSaysViewDetails(t *testing.T) {
 }
 
 func TestObjectDetailsExposeConfirmedDeleteActions(t *testing.T) {
-	propertyPage, err := executeTemplate(propertyDetailPageTemplate, propertyDetailPageData{
+	// 房产和房间的删除按钮搬进了编辑抽屉：平时浏览（抽屉关着）看不到，
+	// 打开「编辑资料」才出现。所以两边各渲染两次——关着断言没有，开着断言有。
+	propertyClosed, err := executeTemplate(propertyDetailPageTemplate, propertyDetailPageData{
 		workspaceShell: workspaceShell{ActivePage: "properties"}, Period: "2026-09",
 		Property: propertyPageRow{ID: 12, Name: "Canal House", Status: "active"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	roomPage, err := executeTemplate(rentRoomDetailTemplate, rentRoomDetailPageData{
+	propertyPage, err := executeTemplate(propertyDetailPageTemplate, propertyDetailPageData{
+		workspaceShell: workspaceShell{ActivePage: "properties"}, Period: "2026-09",
+		Property: propertyPageRow{ID: 12, Name: "Canal House", Status: "active"}, Editing: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	roomClosed, err := executeTemplate(rentRoomDetailTemplate, rentRoomDetailPageData{
 		workspaceShell: workspaceShell{ActivePage: "rooms"}, Period: "2026-09", RoomID: 8,
 		RoomLabel: "A-01", PropertyName: "Canal House", Summary: rentWorkspaceRoomRow{Status: "active"},
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	roomPage, err := executeTemplate(rentRoomDetailTemplate, rentRoomDetailPageData{
+		workspaceShell: workspaceShell{ActivePage: "rooms"}, Period: "2026-09", RoomID: 8,
+		RoomLabel: "A-01", PropertyName: "Canal House", Summary: rentWorkspaceRoomRow{Status: "active"}, Editing: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, closed := range []struct{ name, page string }{
+		{"property detail", propertyClosed},
+		{"room detail", roomClosed},
+	} {
+		if strings.Contains(closed.page, `name="action" value="delete"`) {
+			t.Errorf("%s offers a delete action while the edit drawer is closed", closed.name)
+		}
 	}
 	tenantPage, err := executeTemplate(tenantDetailTemplate, tenantDetailPageData{
 		workspaceShell: workspaceShell{ActivePage: "tenants"}, Tenant: tenantRecord{ID: "9", Name: "Aoife Murphy", Status: "active"},
