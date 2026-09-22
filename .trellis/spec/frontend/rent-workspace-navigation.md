@@ -21,10 +21,13 @@
   `view=tenants`; `/bills/settle` remains a legacy action alias.
 - `/tenancies` is retired and has no registered GET or POST handler; both
   methods return 404.
-- `/billing` is retired: every `/billing*` route was removed and the bank
-  callback now lands on `/transactions`. It used to render a second, older
-  transaction page (not an alias at all), which is why it outlived `/bills`.
-  The list itself is `/transactions`; there is no second path to keep in sync.
+- `/billing` is a forwarding alias only: `handleBillingAlias` 302s to
+  `/transactions` with the query string intact. It used to render a second,
+  older transaction table (not an alias at all), which is why it outlived
+  `/bills`; that table is gone. Two things keep the route alive: the bank
+  authorization callback lands on `/billing?message=bank_connected`, and old
+  bookmarks point at it. The list itself is `/transactions` — there is no
+  second page and no second path to keep in sync.
 
 ### 3. Contracts
 
@@ -72,8 +75,9 @@
 ### 6. Tests Required
 
 - Route tests assert `/bills` redirect context, `/tenancies` GET/POST 404,
-  retained action aliases, and that the bank callback lands on `/transactions`
-  rather than on a retired path.
+  retained action aliases, and that `/billing` forwards its whole query string
+  to `/transactions` (so the bank callback's `message` and a bookmark's filters
+  both survive the hop).
 - Redirect tests reject external, malformed, and non-workspace return paths and
   retain the allowed month/view for safe same-site paths.
 - Template tests assert no standalone bill or tenancy navigation item, that

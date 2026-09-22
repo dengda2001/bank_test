@@ -77,13 +77,13 @@ Open:
 http://localhost:8080
 ```
 
-Sign in with the configured demo admin credentials. The app redirects to `/billing`, the transaction-only statement page. The sidebar also contains `/rent-dashboard`, `/tenants`, and `/expenses`.
+Sign in with the configured demo admin credentials. The app redirects to `/transactions`, the transaction-only statement page (`/billing` is kept as a forwarding alias for the bank callback and old bookmarks). The sidebar also contains `/rent-dashboard`, `/tenants`, and `/expenses`.
 
 `/tenants` stores tenant identity and payer details. Room occupancy, responsible tenants, monthly rent, and due day are maintained as a rent plan from the room page; property and room records do not have effective-date fields. `/rent-dashboard` shows expected, paid, partial, overdue, review, and expense totals. `/expenses` stores manual outgoing records and projects them into the unified transaction table.
 
 Click **Bind bank account** to start the TrueLayer authorization flow. After consent, the callback checks the local app session, fetches bank data, appends it to the JSONL log, and redirects back to the billing page.
 
-The default scopes include `offline_access`, so the first successful consent stores an encrypted refresh token in the current user's `bank_connections` row. After that, use **Refresh bank data** on `/billing` or open `/refresh` while signed in to get a fresh access token and query again without completing bank login each time. If you use `TL_AUTH_URL`, make sure that Console-generated link also includes the `offline_access` scope, otherwise TrueLayer will not return a refresh token.
+The default scopes include `offline_access`, so the first successful consent stores an encrypted refresh token in the current user's `bank_connections` row. After that, use **Refresh bank data** on `/transactions` or open `/refresh` while signed in to get a fresh access token and query again without completing bank login each time. If you use `TL_AUTH_URL`, make sure that Console-generated link also includes the `offline_access` scope, otherwise TrueLayer will not return a refresh token.
 
 ### MySQL-backed tests
 

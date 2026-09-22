@@ -84,8 +84,9 @@ value.
   reachable values including 已忽略, and its tab for `matched` reads 已关联 —
   the same word the row badge renders.
 - Base: `/transactions` renders the filter bar's status selector on wide screens
-  and the compact quick-filter form on narrow ones; the retired `/billing` page
-  had its own eight-option selector, which is why the two used to drift.
+  and the compact quick-filter form on narrow ones; the `/billing` page it
+  replaced had its own eight-option selector, which is why the two used to drift.
+  `/billing` now only forwards here, so there is one selector to keep honest.
 - Bad: two selects for one parameter. They pass a test that only asserts "a
   selector exists", then drift apart on the next feature.
 - Bad: rewording a dropdown option without checking the badge — this is how 逾期

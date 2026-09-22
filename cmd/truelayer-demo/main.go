@@ -498,6 +498,8 @@ func newAppMux(a *app) *http.ServeMux {
 	mux.HandleFunc("/bills/generate", a.handleBillsGenerate)
 	mux.HandleFunc("/bills/settle/preview", a.handleManualBalancePreview)
 	mux.HandleFunc("/bills/settle", a.handleDashboardManualBalance)
+	// /billing 只转发：银行授权回调落在这里，老书签也指向它。它自己不再渲染页面。
+	mux.HandleFunc("/billing", a.handleBillingAlias)
 	mux.HandleFunc("/transactions", a.handleTransactions)
 	mux.HandleFunc("/transactions/confirm", a.handleRentMatchConfirmation)
 	mux.HandleFunc("/transactions/rematch", a.handleTransactionRematch)
@@ -1844,7 +1846,9 @@ func (a *app) handleCallback(w http.ResponseWriter, r *http.Request) {
 			_ = a.bankConnections.markLastSync(ctx, userID)
 		}
 	}
-	http.Redirect(w, r, "/transactions?message=bank_connected", http.StatusFound)
+	// 落点是 /billing 而不是 /transactions：那是外面唯一还认得的 URL（老书签、文档、
+	// 我们自己的审计脚本都写着它），由 handleBillingAlias 转发到列表页。
+	http.Redirect(w, r, "/billing?message=bank_connected", http.StatusFound)
 }
 
 func (a *app) handleRefresh(w http.ResponseWriter, r *http.Request) {

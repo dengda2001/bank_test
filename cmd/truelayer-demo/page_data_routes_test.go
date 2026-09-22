@@ -6,12 +6,15 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
+
+	"gorm.io/gorm"
 )
 
 func TestCanonicalPageRoutesRequireAuthentication(t *testing.T) {
 	a := testApp()
 	handler := newAppMux(&a)
-	paths := []string{"/bills", "/transactions", "/dunning", "/properties", "/properties/1", "/properties/not-an-id", "/rooms", "/rooms/1", "/cash-receipts", "/bank"}
+	paths := []string{"/bills", "/billing", "/transactions", "/dunning", "/properties", "/properties/1", "/properties/not-an-id", "/rooms", "/rooms/1", "/cash-receipts", "/bank"}
 	for _, path := range paths {
 		t.Run(path, func(t *testing.T) {
 			rec := httptest.NewRecorder()
@@ -34,6 +37,40 @@ func TestCanonicalRoutesKeepRefreshAndBankTargets(t *testing.T) {
 	request = httptest.NewRequest(http.MethodPost, "/bank/sync", nil)
 	if got := bankRefreshRedirect(request, "message=refreshed"); got != "/bank?message=refreshed" {
 		t.Fatalf("canonical refresh target=%q", got)
+	}
+}
+
+// /billing 是银行回调的落点，也是老书签，所以它必须一直在——但它只转发，
+// 不再渲染第二张流水表。查询串原样带过去，老书签里的筛选条件才不丢。
+func TestBillingAliasForwardsQueryToTheTransactionList(t *testing.T) {
+	a := testApp()
+	a.db = &gorm.DB{}
+	for _, tc := range []struct{ path, want string }{
+		{path: "/billing", want: "/transactions"},
+		{path: "/billing?message=bank_connected", want: "/transactions?message=bank_connected"},
+		{path: "/billing?period=2026-09&match_status=pending", want: "/transactions?period=2026-09&match_status=pending"},
+		{path: "/billing?reconnect=1&error=no_saved_login", want: "/transactions?reconnect=1&error=no_saved_login"},
+	} {
+		rec := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodGet, tc.path, nil)
+		// 别名和 /bills 一样先过会话：未登录时它得先去登录，而不是把人送到列表页。
+		request.AddCookie(userSessionCookie(a.cfg, 42, "ddrzh", time.Now().Add(sessionTTL)))
+		a.handleBillingAlias(rec, request)
+		if got := rec.Header().Get("Location"); got != tc.want {
+			t.Fatalf("%s -> %q, want %q", tc.path, got, tc.want)
+		}
+		if rec.Code != http.StatusFound {
+			t.Fatalf("%s status=%d, want %d", tc.path, rec.Code, http.StatusFound)
+		}
+	}
+}
+
+func TestBillingAliasRejectsNonGet(t *testing.T) {
+	rec := httptest.NewRecorder()
+	a := testApp()
+	a.handleBillingAlias(rec, httptest.NewRequest(http.MethodPost, "/billing", nil))
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("POST /billing status=%d, want %d", rec.Code, http.StatusMethodNotAllowed)
 	}
 }
 

@@ -266,8 +266,9 @@ preview.Passed = response.StatusCode == http.StatusOK && cashAmount && afterRema
 #### 3. Contracts
 
 - Canonical GET routes may keep legacy aliases, but OAuth, refresh, and cash
-  subroutes remain functional. `/billing` is retired: it was never an alias, it
-  was a second page, and every `/billing*` route is gone.
+  subroutes remain functional. `/billing` survives as a forwarding alias to
+  `/transactions` (bank callback landing + old bookmarks); it used to be a
+  second page behind a `PageKey` branch, and that page is gone.
 - Every action exposes a stable URL/method and declares reason or confirmation
   requirements; templates never infer these from labels or amounts.
 - Bank pages expose connection/sync health and account metadata, never token

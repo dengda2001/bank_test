@@ -454,6 +454,28 @@ func (a *app) handleBills(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, legacyBillsWorkspaceURL(r.URL.Query()), http.StatusFound)
 }
 
+// handleBillingAlias is the one URL outside the app that still has to resolve:
+// the bank authorization callback lands on /billing?message=bank_connected, and
+// old bookmarks point here too. The page that used to live at /billing was a
+// second, older transaction table and is gone; this forwards instead. The query
+// goes over verbatim because /transactions reads the same keys the old page did
+// (message, error, reconnect, period, match_status...), so a bookmarked filter
+// keeps working. /bills is the same shape (see handleBills).
+func (a *app) handleBillingAlias(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := a.scopedPageUser(w, r); !ok {
+		return
+	}
+	target := "/transactions"
+	if raw := r.URL.RawQuery; raw != "" {
+		target += "?" + raw
+	}
+	http.Redirect(w, r, target, http.StatusFound)
+}
+
 func legacyBillsWorkspaceURL(query url.Values) string {
 	period, err := parsePeriodMonth(strings.TrimSpace(query.Get("period")))
 	if err != nil {

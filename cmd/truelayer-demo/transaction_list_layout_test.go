@@ -11,7 +11,8 @@ import (
 func renderTransactionListPage(t *testing.T, data transactionListPageData) string {
 	t.Helper()
 	if data.CanonicalPath == "" {
-		// 唯一的流水列表是 /transactions；/billing 那条别名路由已经删了。
+		// 渲染流水列表的只有 /transactions。/billing 还在，但它只做 302 转发，
+		// 不会走到这个模板，所以它不该是任何断言里的 CanonicalPath。
 		data.CanonicalPath = "/transactions"
 	}
 	var body strings.Builder
