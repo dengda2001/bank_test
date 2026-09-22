@@ -75,11 +75,13 @@ func (s *roomRentPlanService) SaveRoomRentPlan(ctx context.Context, command Save
 		if roomRow.RentPlanVersion != command.ExpectedTimelineVersion {
 			return ErrStaleRentPlanTimeline
 		}
-		if err := validatePlanMembersBelongToUser(tx, command.UserID, members); err != nil {
-			return err
-		}
-		if err := validateTenantRoomMonthAvailability(tx, command.UserID, command.RoomID, command.EffectiveMonth, members); err != nil {
-			return err
+		if len(members) > 0 {
+			if err := validatePlanMembersBelongToUser(tx, command.UserID, members); err != nil {
+				return err
+			}
+			if err := validateTenantRoomMonthAvailability(tx, command.UserID, command.RoomID, command.EffectiveMonth, members); err != nil {
+				return err
+			}
 		}
 		locked, err := rentFactsLockedFromMonth(tx, command.UserID, command.RoomID, command.EffectiveMonth)
 		if err != nil {
@@ -121,7 +123,7 @@ func (s *roomRentPlanService) SaveRoomRentPlan(ctx context.Context, command Save
 			Update("rent_plan_version", version).Error; err != nil {
 			return err
 		}
-		if !command.EffectiveMonth.After(dublinCurrentMonth(time.Now())) {
+		if len(members) > 0 && !command.EffectiveMonth.After(dublinCurrentMonth(time.Now())) {
 			return materializeRoomRentFactsInTx(tx, command.UserID, command.RoomID, command.EffectiveMonth)
 		}
 		return nil
@@ -221,13 +223,13 @@ func validateRoomRentPlanCommand(command SaveRoomRentPlanCommand) ([]RoomRentPla
 	}
 	command.Currency = currency
 	if len(command.Members) == 0 {
-		return nil, ErrInvalidRentPlan
+		return nil, nil
 	}
 	members := append([]RoomRentPlanMemberInput(nil), command.Members...)
 	sort.Slice(members, func(i, j int) bool { return members[i].TenantID < members[j].TenantID })
 	seen := make(map[uint64]struct{}, len(members))
-	allUnspecified := true
-	var total int64
+	unspecifiedIDs := make([]uint64, 0, len(members))
+	var specifiedTotal int64
 	for _, member := range members {
 		if member.TenantID == 0 {
 			return nil, ErrInvalidRentPlan
@@ -236,31 +238,36 @@ func validateRoomRentPlanCommand(command SaveRoomRentPlanCommand) ([]RoomRentPla
 			return nil, ErrInvalidRentPlan
 		}
 		seen[member.TenantID] = struct{}{}
-		if member.ResponsibilityCents != 0 {
-			allUnspecified = false
+		if member.ResponsibilityCents == 0 {
+			unspecifiedIDs = append(unspecifiedIDs, member.TenantID)
+			continue
 		}
+		if member.ResponsibilityCents < 0 || member.ResponsibilityCents > math.MaxInt64-specifiedTotal {
+			return nil, ErrInvalidRentPlan
+		}
+		specifiedTotal += member.ResponsibilityCents
 	}
-	if allUnspecified {
-		ids := make([]uint64, len(members))
-		for i := range members {
-			ids[i] = members[i].TenantID
+	if len(unspecifiedIDs) > 0 {
+		remaining := command.MonthlyRentCents - specifiedTotal
+		if remaining <= 0 {
+			return nil, ErrInvalidRentPlan
 		}
-		shares, err := splitRentAmountEvenly(command.MonthlyRentCents, ids)
+		shares, err := splitRentAmountEvenly(remaining, unspecifiedIDs)
 		if err != nil {
 			return nil, ErrInvalidRentPlan
 		}
+		amountByTenantID := make(map[uint64]int64, len(shares))
+		for _, share := range shares {
+			amountByTenantID[share.TenantID] = share.AmountCents
+		}
 		for i := range members {
-			members[i].ResponsibilityCents = shares[i].AmountCents
+			if members[i].ResponsibilityCents == 0 {
+				members[i].ResponsibilityCents = amountByTenantID[members[i].TenantID]
+			}
 		}
 		return members, nil
 	}
-	for _, member := range members {
-		if member.ResponsibilityCents <= 0 || member.ResponsibilityCents > math.MaxInt64-total {
-			return nil, ErrInvalidRentPlan
-		}
-		total += member.ResponsibilityCents
-	}
-	if total != command.MonthlyRentCents {
+	if specifiedTotal != command.MonthlyRentCents {
 		return nil, ErrInvalidRentPlan
 	}
 	return members, nil

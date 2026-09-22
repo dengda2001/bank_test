@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -40,6 +41,59 @@ func TestRoomRentPlanRejectsPastEffectiveMonth(t *testing.T) {
 	})
 	if !errors.Is(err, ErrInvalidRentPlan) {
 		t.Fatalf("past effective month error=%v; want ErrInvalidRentPlan", err)
+	}
+}
+
+func TestRoomRentPlanAllowsAnEmptyRoomWithAStoredRentRule(t *testing.T) {
+	month := dublinCurrentMonth(time.Now())
+	members, err := validateRoomRentPlanCommand(SaveRoomRentPlanCommand{
+		UserID: 1, RoomID: 1, EffectiveMonth: month,
+		MonthlyRentCents: 100000, Currency: ledgerCurrencyEUR, DueDay: 1,
+	})
+	if err != nil {
+		t.Fatalf("empty room rent rule error = %v", err)
+	}
+	if len(members) != 0 {
+		t.Fatalf("empty room rent rule members = %#v, want none", members)
+	}
+}
+
+func TestRoomRentPlanSplitsTheRemainderBetweenUnspecifiedMembers(t *testing.T) {
+	month := dublinCurrentMonth(time.Now())
+	members, err := validateRoomRentPlanCommand(SaveRoomRentPlanCommand{
+		UserID: 1, RoomID: 1, EffectiveMonth: month,
+		MonthlyRentCents: 100001, Currency: ledgerCurrencyEUR, DueDay: 1,
+		Members: []RoomRentPlanMemberInput{
+			{TenantID: 3},
+			{TenantID: 2, ResponsibilityCents: 30000},
+			{TenantID: 1},
+		},
+	})
+	if err != nil {
+		t.Fatalf("partial responsibility plan error = %v", err)
+	}
+	want := []RoomRentPlanMemberInput{
+		{TenantID: 1, ResponsibilityCents: 35001},
+		{TenantID: 2, ResponsibilityCents: 30000},
+		{TenantID: 3, ResponsibilityCents: 35000},
+	}
+	if !reflect.DeepEqual(members, want) {
+		t.Fatalf("partial responsibility plan = %#v, want %#v", members, want)
+	}
+}
+
+func TestRoomRentPlanRejectsPartialResponsibilityWithoutAPositiveRemainder(t *testing.T) {
+	month := dublinCurrentMonth(time.Now())
+	_, err := validateRoomRentPlanCommand(SaveRoomRentPlanCommand{
+		UserID: 1, RoomID: 1, EffectiveMonth: month,
+		MonthlyRentCents: 100000, Currency: ledgerCurrencyEUR, DueDay: 1,
+		Members: []RoomRentPlanMemberInput{
+			{TenantID: 1, ResponsibilityCents: 100000},
+			{TenantID: 2},
+		},
+	})
+	if !errors.Is(err, ErrInvalidRentPlan) {
+		t.Fatalf("partial responsibility without remainder error = %v, want ErrInvalidRentPlan", err)
 	}
 }
 
