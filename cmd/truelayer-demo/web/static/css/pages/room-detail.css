@@ -10,6 +10,11 @@
   .detail-head .actions .btn { white-space:nowrap; }
   .detail-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:16px; }
   .detail-table { min-width:760px; }
+  /* 未付列与 KPI 的未付卡同色系：房东扫一眼就能定位"是哪一格欠着"，
+     不需要在两处之间来回对照。 */
+  .room-responsibility-section .detail-table th.due-cell { color: var(--danger); }
+  .room-responsibility-section .detail-table .due-cell { background: color-mix(in oklch, var(--danger) 5%, transparent); }
+  .room-responsibility-section .detail-table td.due-cell { color: var(--danger); font-weight: 700; }
   .detail-section { margin-bottom:16px; }
   .detail-section h2 { margin:0; }
   .room-detail-page { padding-bottom: 28px; }

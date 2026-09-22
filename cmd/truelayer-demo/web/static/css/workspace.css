@@ -243,6 +243,14 @@
     .metric strong { display: block; margin-top: 12px; font-size: clamp(26px, 3vw, 38px); line-height: 1; font-weight: 800; }
     .metric span,
     .tiny { display: block; margin-top: 8px; color: var(--foreground-muted); font-size: 12px; line-height: 1.55; }
+    /* KPI 卡的三个语义修饰类。模板从 09-15 起就在用 metric-primary/success/warning，
+       但这里一直没有定义，所以三张卡长得完全一样，"未付"读起来和"已收"一样平静。
+       primary 保持中性——应收是个读数，不是判断；success 只在真有进账时给正向色
+       （0 元的绿会被读成"没事"）；warning 是唯一带警示色的卡。 */
+    .metric.metric-success strong { color: var(--positive); }
+    .metric.metric-warning { padding-left: 15px; border-left: 3px solid var(--danger); background: color-mix(in oklch, var(--danger) 5%, var(--surface)); }
+    .metric.metric-warning strong { color: var(--danger); }
+    .metric.metric-warning span { color: color-mix(in oklch, var(--danger) 55%, var(--foreground-muted)); }
     .notice { margin-bottom: 14px; padding: 13px 15px; border-radius: 8px; border: 1px solid var(--border); color: var(--foreground-subtle); background: var(--surface-muted); }
     .notice.error { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
     .notice.ok { border-color: #a7f3d0; background: #ecfdf5; color: #065f46; }

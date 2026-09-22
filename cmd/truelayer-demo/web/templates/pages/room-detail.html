@@ -84,9 +84,9 @@
 	  {{if .ExpenseDrawer}}{{template "expense-form-drawer" .ExpenseDrawer}}{{end}}
 
       <section class="detail-summary" aria-label="房间月度汇总">
-        <article class="panel metric metric-primary"><div class="label">本月房间应收</div><strong>{{.Summary.ExpectedAmount}}</strong><span>{{.PeriodLabel}} · {{.Summary.TenantCount}} 位责任人</span></article>
-        <article class="panel metric metric-success"><div class="label">已覆盖</div><strong>{{.Summary.PaidAmount}}</strong><span>{{if eq .Summary.Status "vacant"}}无当月应收{{else}}{{.Summary.CollectionPercent}}% 收缴率{{end}}</span></article>
-        <article class="panel metric metric-warning"><div class="label">未付</div><strong>{{.Summary.BalanceAmount}}</strong><span>{{.Summary.StatusLabel}}</span></article>
+        <article class="panel metric metric-primary"><div class="label">本月房间应收</div><strong>{{.Summary.ExpectedAmount}}</strong><span>{{.PeriodLabel}} · {{.Summary.TenantCount}} 位租客</span></article>
+        <article class="panel metric{{if gt .Summary.PaidCents 0}} metric-success{{end}}"><div class="label">已收</div><strong>{{.Summary.PaidAmount}}</strong><span>{{if eq .Summary.Status "vacant"}}无当月应收{{else}}{{.Summary.CollectionPercent}}% 收缴率{{end}}</span></article>
+        <article class="panel metric{{if gt .Summary.BalanceCents 0}} metric-warning{{end}}"><div class="label">未付</div><strong>{{.Summary.BalanceAmount}}</strong><span>{{.Summary.StatusLabel}}</span></article>
         <article class="panel metric"><div class="label">付款记录</div><strong>{{.PaymentCount}} 笔</strong><span>本月关联收款</span></article>
       </section>
 
@@ -99,8 +99,8 @@
         <div class="detail-stack">
           <section class="panel surface detail-section room-responsibility-section">
             <div class="panel-head"><div><h2>租客责任</h2><p class="tiny">每一行对应一条当月个人责任。</p></div></div>
-            {{if .Tenants}}<div class="table-wrap"><table class="detail-table"><thead><tr><th>责任人</th><th>个人责任</th><th>已覆盖</th><th>未付</th><th>付款来源</th><th>状态</th></tr></thead><tbody>
-              {{range .Tenants}}<tr><td>{{if .TenantID}}<a href="/tenants/{{.TenantID}}"><strong>{{.TenantName}}</strong></a>{{else}}<strong>{{.TenantName}}</strong>{{end}}{{if .PaidByOther}}<br><span class="tiny">他人代付</span>{{end}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td>{{if .Payments}}{{range .Payments}}{{.Source}} · {{.ConfirmationSource}}{{break}}{{end}}{{else}}—{{end}}</td><td><span class="detail-status {{workspaceStatusClass .Status}}">{{.StatusLabel}}</span></td></tr>{{end}}
+            {{if .Tenants}}<div class="table-wrap"><table class="detail-table"><thead><tr><th>租客</th><th>个人责任</th><th>已收</th><th{{if gt .Summary.BalanceCents 0}} class="due-cell"{{end}}>未付</th><th>付款来源</th><th>状态</th></tr></thead><tbody>
+              {{range .Tenants}}<tr><td>{{if .TenantID}}<a href="/tenants/{{.TenantID}}"><strong>{{.TenantName}}</strong></a>{{else}}<strong>{{.TenantName}}</strong>{{end}}{{if .PaidByOther}}<br><span class="tiny">他人代付</span>{{end}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount{{if and (gt .BalanceCents 0) (not .IsForecast)}} due-cell{{end}}">{{.BalanceAmount}}</td><td>{{if .Payments}}{{range .Payments}}{{.Source}} · {{.ConfirmationSource}}{{break}}{{end}}{{else}}—{{end}}</td><td><span class="detail-status {{workspaceStatusClass .Status}}">{{.StatusLabel}}</span></td></tr>{{end}}
             </tbody></table></div><div class="room-responsibility-mobile-list">{{range .Tenants}}<div class="room-responsibility-mobile-row"><span>{{if .TenantID}}<a href="/tenants/{{.TenantID}}"><strong>{{.TenantName}}</strong></a>{{else}}<strong>{{.TenantName}}</strong>{{end}}<small>{{if .PaidByOther}}由同住人代付{{else}}本人付款{{end}}</small></span><strong class="amount">{{.ExpectedAmount}}</strong></div>{{end}}</div>{{else}}<div class="detail-list"><div class="workspace-empty">本月暂无个人责任。请检查当前入住与分担设置。</div></div>{{end}}
           </section>
 

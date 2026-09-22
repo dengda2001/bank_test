@@ -183,12 +183,24 @@ func TestWritePrototypePreviewHTML(t *testing.T) {
 			return rentRoomDetailTemplate.Execute(body, rentRoomDetailPageData{
 				workspaceShell: workspaceShell{ActivePage: "rooms", Username: "audit", Environment: "sandbox", FootNote: "房间详情", CompactTitle: "78 Old County Road · 房间 03"},
 				Period:         "2026-09", PeriodLabel: "2026 年 9 月", RoomID: 3, RoomLabel: "03", RoomType: "双人间", Capacity: 2, MonthlyRent: "€1,250", MonthlyRentValue: "1250.00", DueDay: 1, PropertyName: "78 Old County Road", ReturnURL: "/rooms?period=2026-09", FromList: true,
-				Summary: rentWorkspaceRoomRow{RoomID: 3, PropertyID: 7, Status: "paid", StatusLabel: "已收齐", TenantCount: 2, ExpectedAmount: "€1,250", PaidAmount: "€1,250", BalanceAmount: "€0", CollectionPercent: 100, DueDate: "2026-09-01"}, PaymentCount: 1,
+				Summary: rentWorkspaceRoomRow{RoomID: 3, PropertyID: 7, Status: "paid", StatusLabel: "已收齐", TenantCount: 2, ExpectedCents: 125000, PaidCents: 125000, BalanceCents: 0, ExpectedAmount: "€1,250", PaidAmount: "€1,250", BalanceAmount: "€0", CollectionPercent: 100, DueDate: "2026-09-01"}, PaymentCount: 1,
 				Tenants: []rentWorkspaceTenantRow{
-					{TenantID: 11, TenantName: "WAHAJULLAH KHAN", ExpectedAmount: "€625", PaidAmount: "€625", BalanceAmount: "€0", Status: "paid", StatusLabel: "已缴清"},
-					{TenantID: 12, TenantName: "同住人", ExpectedAmount: "€625", PaidAmount: "€625", BalanceAmount: "€0", Status: "paid", StatusLabel: "已缴清", PaidByOther: true},
+					{TenantID: 11, TenantName: "WAHAJULLAH KHAN", ExpectedCents: 62500, PaidCents: 62500, BalanceCents: 0, ExpectedAmount: "€625", PaidAmount: "€625", BalanceAmount: "€0", Status: "paid", StatusLabel: "已缴清"},
+					{TenantID: 12, TenantName: "同住人", ExpectedCents: 62500, PaidCents: 62500, BalanceCents: 0, ExpectedAmount: "€625", PaidAmount: "€625", BalanceAmount: "€0", Status: "paid", StatusLabel: "已缴清", PaidByOther: true},
 				},
 				Expenses: []rentWorkspaceExpenseView{{Description: "Kitchen repair", Category: "维修", ExpenseDate: "2026-09-12", Amount: "€50"}},
+			})
+		})
+	})
+	write("room-detail-overdue.html", func() error {
+		return writeFile("room-detail-overdue.html", func(body *strings.Builder) error {
+			return rentRoomDetailTemplate.Execute(body, rentRoomDetailPageData{
+				workspaceShell: workspaceShell{ActivePage: "rooms", Username: "audit", Environment: "sandbox", FootNote: "房间详情", CompactTitle: "72 Walkinstown Rd · 房间 08"},
+				Period:         "2026-09", PeriodLabel: "2026 年 9 月", RoomID: 8, RoomLabel: "08", RoomType: "单人间", Capacity: 1, MonthlyRent: "€800", MonthlyRentValue: "800.00", DueDay: 1, PropertyName: "72 Walkinstown Rd", ReturnURL: "/rooms?period=2026-09", FromList: true,
+				Summary: rentWorkspaceRoomRow{RoomID: 8, PropertyID: 72, Status: "overdue", StatusLabel: "已逾期", TenantCount: 1, ExpectedCents: 80000, PaidCents: 0, BalanceCents: 80000, ExpectedAmount: "€800", PaidAmount: "€0", BalanceAmount: "€800", CollectionPercent: 0, DueDate: "2026-09-01"},
+				Tenants: []rentWorkspaceTenantRow{
+					{TenantID: 21, TenantName: "AJAY", ExpectedCents: 80000, PaidCents: 0, BalanceCents: 80000, ExpectedAmount: "€800", PaidAmount: "€0", BalanceAmount: "€800", Status: "overdue", StatusLabel: "已逾期"},
+				},
 			})
 		})
 	})
