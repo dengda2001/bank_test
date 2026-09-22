@@ -66,7 +66,7 @@ func (s *monthlyRentFactsService) ensureMonthlyRentFacts(ctx context.Context, us
 	if err := s.db.WithContext(ctx).Table("room_rent_plans AS ta").
 		Select("ta.room_id AS room_id, r.property_id AS property_id").
 		Joins("JOIN rooms AS r ON r.id = ta.room_id AND r.user_id = ta.user_id").
-		Where("ta.user_id = ? AND ta.effective_from_month <= ? AND (ta.effective_to_month IS NULL OR ta.effective_to_month >= ?)", userID, periodMonth, periodMonth).
+		Where("ta.user_id = ? AND ta.effective_from_month <= ? AND (ta.effective_to_month IS NULL OR ta.effective_to_month >= ?) AND EXISTS (SELECT 1 FROM room_rent_plan_members AS tm WHERE tm.user_id = ta.user_id AND tm.room_rent_plan_id = ta.id)", userID, periodMonth, periodMonth).
 		Order("ta.room_id ASC").Scan(&arrangements).Error; err != nil {
 		return err
 	}

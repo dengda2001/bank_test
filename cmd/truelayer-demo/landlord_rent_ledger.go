@@ -239,6 +239,9 @@ func (s *rentLedgerService) ensureRentCharge(ctx context.Context, userID, proper
 		if err := tx.Where("user_id = ? AND room_rent_plan_id = ?", userID, planRow.ID).Order("tenant_id ASC, id ASC").Find(&members).Error; err != nil {
 			return err
 		}
+		if len(members) == 0 {
+			return gorm.ErrRecordNotFound
+		}
 		plan, err := buildRentChargePlan(planRow, members, periodMonth)
 		if err != nil {
 			return err

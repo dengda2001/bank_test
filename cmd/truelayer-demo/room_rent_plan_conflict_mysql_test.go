@@ -105,6 +105,27 @@ func TestSaveRoomRentPlanStoresAnEmptyCurrentMonthPlanWithoutRentFactsOnMySQL(t 
 	}
 }
 
+func TestEnsureMonthlyRentFactsSkipsAnEmptyRoomPlanOnMySQL(t *testing.T) {
+	f := newRoomRentPlanConflictFixture(t)
+	month := dublinCurrentMonth(time.Now())
+	if _, _, err := newRoomRentPlanService(f.db).SaveRoomRentPlan(f.ctx, SaveRoomRentPlanCommand{
+		UserID: f.owner.ID, RoomID: f.roomOne.ID, EffectiveMonth: month,
+		MonthlyRentCents: 100000, Currency: ledgerCurrencyEUR, DueDay: 1,
+	}); err != nil {
+		t.Fatalf("save empty room rent plan: %v", err)
+	}
+	if err := newMonthlyRentFactsService(f.db).ensureMonthlyRentFacts(f.ctx, f.owner.ID, month, rentFactsIntentRead); err != nil {
+		t.Fatalf("ensure monthly facts for empty room plan: %v", err)
+	}
+	var chargeCount int64
+	if err := f.db.WithContext(f.ctx).Model(&rentCharge{}).Where("user_id = ? AND room_id = ? AND period_month = ?", f.owner.ID, f.roomOne.ID, month).Count(&chargeCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if chargeCount != 0 {
+		t.Fatalf("empty room plan charge count = %d, want 0", chargeCount)
+	}
+}
+
 func TestSaveRoomRentPlanRejectsCurrentMonthTenantRoomConflictOnMySQL(t *testing.T) {
 	f := newRoomRentPlanConflictFixture(t)
 	month := dublinCurrentMonth(time.Now())
