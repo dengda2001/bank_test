@@ -97,6 +97,29 @@ func TestRoomRentPlanRejectsPartialResponsibilityWithoutAPositiveRemainder(t *te
 	}
 }
 
+func TestTenantRoomPlanAssignmentValidatesBrowserMemberSnapshot(t *testing.T) {
+	month := dublinCurrentMonth(time.Now())
+	valid := tenantRoomPlanAssignmentInput{
+		RoomID: 1, EffectiveMonth: month,
+		ExistingMembers: []RoomRentPlanMemberInput{{TenantID: 2}, {TenantID: 3, ResponsibilityCents: 40000}},
+	}
+	if err := validateTenantRoomPlanAssignment(valid); err != nil {
+		t.Fatalf("valid tenant room assignment error = %v", err)
+	}
+	if err := validateTenantRoomPlanAssignment(tenantRoomPlanAssignmentInput{
+		RoomID: 1, EffectiveMonth: month,
+		ExistingMembers: []RoomRentPlanMemberInput{{TenantID: 2}, {TenantID: 2}},
+	}); !errors.Is(err, ErrInvalidRentPlan) {
+		t.Fatalf("duplicate browser members error = %v, want ErrInvalidRentPlan", err)
+	}
+	if sameRoomPlanMemberIDs([]roomRentPlanMember{{TenantID: 2}, {TenantID: 3}}, []RoomRentPlanMemberInput{{TenantID: 3}, {TenantID: 2}}) != true {
+		t.Fatal("matching room members should be accepted regardless of browser order")
+	}
+	if sameRoomPlanMemberIDs([]roomRentPlanMember{{TenantID: 2}}, []RoomRentPlanMemberInput{{TenantID: 3}}) {
+		t.Fatal("changed room members should be rejected as stale")
+	}
+}
+
 func TestRoomRentPlanTenantRoomConflictUsesStablePageMessage(t *testing.T) {
 	if got := rentPlanErrorMessage("tenant_room_month_conflict"); got != "该租客从所选月份起已在其他房间入住，请先结束原房间的入住计划。" {
 		t.Fatalf("tenant room conflict message=%q", got)

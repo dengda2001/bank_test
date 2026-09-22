@@ -156,6 +156,56 @@ func TestCreateRoomWithRentPlanStoresAnEmptyRentRuleAtomicallyOnMySQL(t *testing
 	}
 }
 
+func TestCreateTenantWithRoomPlanAddsTheFirstOccupantAtomicallyOnMySQL(t *testing.T) {
+	f := newRoomRentPlanConflictFixture(t)
+	month := dublinCurrentMonth(time.Now())
+	if _, version, err := newRoomRentPlanService(f.db).SaveRoomRentPlan(f.ctx, SaveRoomRentPlanCommand{
+		UserID: f.owner.ID, RoomID: f.roomOne.ID, EffectiveMonth: month,
+		MonthlyRentCents: 100000, Currency: ledgerCurrencyEUR, DueDay: 1,
+	}); err != nil {
+		t.Fatalf("save empty room rent plan: %v", err)
+	} else {
+		created, err := newTenantService(f.db).createTenantWithRoomPlan(f.ctx, f.owner.ID, tenantInput{Name: "First occupant", Status: "active"}, tenantRoomPlanAssignmentInput{
+			RoomID: f.roomOne.ID, EffectiveMonth: month, ExpectedTimelineVersion: version,
+		})
+		if err != nil {
+			t.Fatalf("create first occupant with room plan: %v", err)
+		}
+		plans, err := newLandlordRentRepository(f.db).listRoomRentPlans(f.ctx, f.owner.ID, roomRentPlanQuery{RoomID: f.roomOne.ID, EffectiveFromMonthOnOrBefore: &month, EffectiveToMonthOnOrAfter: &month})
+		if err != nil || len(plans) != 1 {
+			t.Fatalf("load current plan after adding first occupant: plans=%+v err=%v", plans, err)
+		}
+		members, err := newLandlordRentRepository(f.db).listRoomRentPlanMembers(f.ctx, f.owner.ID, roomRentPlanMemberQuery{RoomRentPlanID: plans[0].ID})
+		if err != nil || len(members) != 1 || members[0].TenantID != created.ID || members[0].ResponsibilityCents != 100000 {
+			t.Fatalf("first occupant members=%+v err=%v", members, err)
+		}
+	}
+}
+
+func TestCreateTenantWithRoomPlanRollsBackWhenThePlanVersionIsStaleOnMySQL(t *testing.T) {
+	f := newRoomRentPlanConflictFixture(t)
+	month := dublinCurrentMonth(time.Now())
+	if _, _, err := newRoomRentPlanService(f.db).SaveRoomRentPlan(f.ctx, SaveRoomRentPlanCommand{
+		UserID: f.owner.ID, RoomID: f.roomOne.ID, EffectiveMonth: month,
+		MonthlyRentCents: 100000, Currency: ledgerCurrencyEUR, DueDay: 1,
+	}); err != nil {
+		t.Fatalf("save empty room rent plan: %v", err)
+	}
+	_, err := newTenantService(f.db).createTenantWithRoomPlan(f.ctx, f.owner.ID, tenantInput{Name: "Stale occupant", Status: "active"}, tenantRoomPlanAssignmentInput{
+		RoomID: f.roomOne.ID, EffectiveMonth: month, ExpectedTimelineVersion: 0,
+	})
+	if !errors.Is(err, ErrStaleRentPlanTimeline) {
+		t.Fatalf("stale room plan error = %v, want ErrStaleRentPlanTimeline", err)
+	}
+	var count int64
+	if err := f.db.WithContext(f.ctx).Model(&tenant{}).Where("user_id = ? AND name = ?", f.owner.ID, "Stale occupant").Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("stale tenant count = %d, want rollback", count)
+	}
+}
+
 func TestSaveRoomRentPlanRejectsCurrentMonthTenantRoomConflictOnMySQL(t *testing.T) {
 	f := newRoomRentPlanConflictFixture(t)
 	month := dublinCurrentMonth(time.Now())

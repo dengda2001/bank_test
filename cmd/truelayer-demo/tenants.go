@@ -61,6 +61,20 @@ type tenantInput struct {
 	Status                    string
 }
 
+// tenantRoomPlanAssignmentInput is submitted only while creating a tenant.
+// ExistingMembers is intentionally limited to the members that were present
+// in the selected room plan. The new tenant is injected by the service after
+// its database ID is allocated, so a browser can never nominate another
+// tenant as the new occupant.
+type tenantRoomPlanAssignmentInput struct {
+	PropertyID                   uint64
+	RoomID                       uint64
+	EffectiveMonth               time.Time
+	ExpectedTimelineVersion      uint64
+	ExistingMembers              []RoomRentPlanMemberInput
+	NewTenantResponsibilityCents int64
+}
+
 func newTenantService(db *gorm.DB) *tenantService { return &tenantService{db: db} }
 
 func validateTenantPayerInput(input tenantPayerInput) error {
@@ -167,17 +181,132 @@ func (s *tenantService) createTenant(ctx context.Context, userID uint64, input t
 	if err := validateTenantInput(input); err != nil {
 		return tenant{}, err
 	}
-	row := tenant{UserID: userID, Name: input.Name, DisplayAlias: input.DisplayAlias, Email: input.Email, Status: input.Status}
+	var row tenant
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&row).Error; err != nil {
-			return err
-		}
-		if input.PayerNameHint != "" {
-			return addTenantPayerInTx(tx, userID, row.ID, tenantPayerInput{PayerID: input.PayerID, Name: input.PayerNameHint}, "tenant_profile")
-		}
-		return nil
+		created, err := createTenantInTx(tx, userID, input)
+		row = created
+		return err
 	})
 	return row, err
+}
+
+// createTenantWithRoomPlan creates the tenant and changes the selected room's
+// plan in one outer transaction. SaveRoomRentPlan opens a GORM savepoint when
+// it receives that transaction; any error still rolls back the tenant record.
+func (s *tenantService) createTenantWithRoomPlan(ctx context.Context, userID uint64, input tenantInput, assignment tenantRoomPlanAssignmentInput) (tenant, error) {
+	if userID == 0 {
+		return tenant{}, errors.New("userID is required")
+	}
+	if err := validateTenantInput(input); err != nil {
+		return tenant{}, err
+	}
+	if err := validateTenantRoomPlanAssignment(assignment); err != nil {
+		return tenant{}, err
+	}
+
+	var created tenant
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		row, err := createTenantInTx(tx, userID, input)
+		if err != nil {
+			return err
+		}
+		created = row
+
+		var roomRow room
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("user_id = ? AND id = ? AND status = ?", userID, assignment.RoomID, "active").
+			First(&roomRow).Error; err != nil {
+			return err
+		}
+		if assignment.PropertyID != 0 && roomRow.PropertyID != assignment.PropertyID {
+			return ErrInvalidRentPlan
+		}
+		if roomRow.RentPlanVersion != assignment.ExpectedTimelineVersion {
+			return ErrStaleRentPlanTimeline
+		}
+
+		effectiveMonth := monthStart(assignment.EffectiveMonth)
+		var activePlan roomRentPlan
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("user_id = ? AND room_id = ? AND effective_from_month <= ? AND (effective_to_month IS NULL OR effective_to_month >= ?)", userID, roomRow.ID, effectiveMonth, effectiveMonth).
+			Order("effective_from_month DESC, id DESC").First(&activePlan).Error; err != nil {
+			return err
+		}
+		var currentMembers []roomRentPlanMember
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("user_id = ? AND room_rent_plan_id = ?", userID, activePlan.ID).
+			Order("tenant_id ASC, id ASC").Find(&currentMembers).Error; err != nil {
+			return err
+		}
+		if !sameRoomPlanMemberIDs(currentMembers, assignment.ExistingMembers) {
+			return ErrStaleRentPlanTimeline
+		}
+
+		members := append([]RoomRentPlanMemberInput(nil), assignment.ExistingMembers...)
+		members = append(members, RoomRentPlanMemberInput{TenantID: created.ID, ResponsibilityCents: assignment.NewTenantResponsibilityCents})
+		_, _, err = newRoomRentPlanService(tx).SaveRoomRentPlan(ctx, SaveRoomRentPlanCommand{
+			UserID:                  userID,
+			RoomID:                  roomRow.ID,
+			EffectiveMonth:          effectiveMonth,
+			MonthlyRentCents:        activePlan.MonthlyRentCents,
+			Currency:                activePlan.Currency,
+			DueDay:                  activePlan.DueDay,
+			Members:                 members,
+			ExpectedTimelineVersion: assignment.ExpectedTimelineVersion,
+		})
+		return err
+	})
+	if err != nil {
+		return tenant{}, err
+	}
+	return created, nil
+}
+
+func createTenantInTx(tx *gorm.DB, userID uint64, input tenantInput) (tenant, error) {
+	row := tenant{UserID: userID, Name: input.Name, DisplayAlias: input.DisplayAlias, Email: input.Email, Status: input.Status}
+	if err := tx.Create(&row).Error; err != nil {
+		return tenant{}, err
+	}
+	if input.PayerNameHint != "" {
+		if err := addTenantPayerInTx(tx, userID, row.ID, tenantPayerInput{PayerID: input.PayerID, Name: input.PayerNameHint}, "tenant_profile"); err != nil {
+			return tenant{}, err
+		}
+	}
+	return row, nil
+}
+
+func validateTenantRoomPlanAssignment(assignment tenantRoomPlanAssignmentInput) error {
+	if assignment.RoomID == 0 || assignment.EffectiveMonth.IsZero() || assignment.NewTenantResponsibilityCents < 0 || monthStart(assignment.EffectiveMonth).Before(dublinCurrentMonth(time.Now())) {
+		return ErrInvalidRentPlan
+	}
+	seen := make(map[uint64]struct{}, len(assignment.ExistingMembers))
+	for _, member := range assignment.ExistingMembers {
+		if member.TenantID == 0 || member.ResponsibilityCents < 0 {
+			return ErrInvalidRentPlan
+		}
+		if _, exists := seen[member.TenantID]; exists {
+			return ErrInvalidRentPlan
+		}
+		seen[member.TenantID] = struct{}{}
+	}
+	return nil
+}
+
+func sameRoomPlanMemberIDs(current []roomRentPlanMember, submitted []RoomRentPlanMemberInput) bool {
+	if len(current) != len(submitted) {
+		return false
+	}
+	expected := make(map[uint64]struct{}, len(current))
+	for _, member := range current {
+		expected[member.TenantID] = struct{}{}
+	}
+	for _, member := range submitted {
+		if _, ok := expected[member.TenantID]; !ok {
+			return false
+		}
+		delete(expected, member.TenantID)
+	}
+	return len(expected) == 0
 }
 
 func (s *tenantService) updateTenant(ctx context.Context, userID, tenantID uint64, input tenantInput) (tenant, error) {
