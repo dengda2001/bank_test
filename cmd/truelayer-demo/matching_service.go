@@ -262,6 +262,7 @@ func availableRentOptions(source paymentTransaction, obligations []rentObligatio
 			TenantName:       firstNonEmpty(tenantNames[obligation.TenantID], "租客"),
 			Period:           monthStart(obligation.PeriodMonth).Format("2006-01"),
 			PeriodLabel:      formatMonthLabel(obligation.PeriodMonth),
+			Expected:         formatMoney(centsToMoney(obligation.ExpectedAmountCents), source.Currency, 2),
 			Remaining:        formatMoney(centsToMoney(remaining), source.Currency, 2),
 			Label:            fmt.Sprintf("%s · %d年%d月 · 未收 %s", firstNonEmpty(tenantNames[obligation.TenantID], "租客"), obligation.PeriodMonth.Year(), obligation.PeriodMonth.Month(), formatMoney(centsToMoney(remaining), source.Currency, 2)),
 		})

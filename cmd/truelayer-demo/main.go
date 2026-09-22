@@ -184,8 +184,12 @@ type billingRentMatchOption struct {
 	TenantName       string
 	Period           string
 	PeriodLabel      string
-	Remaining        string
-	Label            string
+	// Expected is the month's full 应交房租 and Remaining is what is still 未收。
+	// 匹配时房东要拿流水金额跟这两个数对一眼，所以两个都带出来：只有未收的话，
+	// 一笔部分缴过的月份看起来跟没缴过一样。
+	Expected  string
+	Remaining string
+	Label     string
 }
 
 type tenantRecord struct {

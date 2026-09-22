@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 func renderBillingPage(t *testing.T, data billingPageData) string {
@@ -88,8 +89,8 @@ func TestDirectTransactionMatchUsesCalendarWithoutRepeatedMonthOptions(t *testin
 			ID: "7", DetailURL: "/transactions?detail=7", ReturnURL: "/transactions",
 			ManualMatchTenantOptions: []billingTenantOption{{ID: 7, Name: "Aoife Murphy"}, {ID: 8, Name: "Bríd Murphy"}},
 			ManualMatchOptions: []billingRentMatchOption{
-				{TenantID: 7, TenantName: "Aoife Murphy", Period: "2026-09", PeriodLabel: "2026年9月", Remaining: "€950.00"},
-				{TenantID: 8, TenantName: "Bríd Murphy", Period: "2026-09", PeriodLabel: "2026年9月", Remaining: "€1,100.00"},
+				{TenantID: 7, TenantName: "Aoife Murphy", Period: "2026-09", PeriodLabel: "2026年9月", Expected: "€950.00", Remaining: "€950.00"},
+				{TenantID: 8, TenantName: "Bríd Murphy", Period: "2026-09", PeriodLabel: "2026年9月", Expected: "€1,100.00", Remaining: "€1,100.00"},
 			},
 		}},
 	})
@@ -101,6 +102,11 @@ func TestDirectTransactionMatchUsesCalendarWithoutRepeatedMonthOptions(t *testin
 		`data-tenant-period-options`,
 		`data-tenant-period-rent`,
 		`aria-live="polite"`,
+		// 选完租客和月份之后那一行要报出所选月份的交租数字，所以数据袋里必须
+		// 同时有「应交」和「未收」——前端只负责显示，金额由服务端格式化好。
+		`data-label="2026年9月"`,
+		`data-due="€950.00"`,
+		`data-rent="€950.00"`,
 	} {
 		if !strings.Contains(form, marker) {
 			t.Errorf("calendar match form missing %q: %s", marker, form)
@@ -108,6 +114,53 @@ func TestDirectTransactionMatchUsesCalendarWithoutRepeatedMonthOptions(t *testin
 	}
 	if strings.Contains(form, `<select name="period"`) {
 		t.Errorf("calendar match form still renders the repeated period select: %s", form)
+	}
+}
+
+// 日历数据袋里的「应交」有两处来源：可匹配责任（billingRentMatchOption）和
+// 已识别租客的月份列表（billingMonthOption）。两条都要带上金额，否则选完月份
+// 那一行只能报未收，部分缴过的月份看起来就和一分没缴的一样。
+func TestTenantPeriodCalendarCarriesTheRentDueFromBothSources(t *testing.T) {
+	fromRentOptions := tenantPeriodMatchCalendar([]billingRentMatchOption{
+		{TenantID: 7, Period: "2026-09", PeriodLabel: "2026年9月", Expected: "€950.00", Remaining: "€400.00"},
+	}, 7, "")
+	if got := fromRentOptions.Options; len(got) != 1 || got[0].Expected != "€950.00" || got[0].Remaining != "€400.00" {
+		t.Fatalf("rent-match calendar options dropped the amounts: %+v", got)
+	}
+
+	fromMonthOptions := tenantPeriodMatchCalendarForTenant([]billingMonthOption{
+		{Period: "2026-09", Label: "2026年9月", Expected: "€800.00", Paid: "€300.00", Remaining: "€500.00"},
+	}, 8, "")
+	if got := fromMonthOptions.Options; len(got) != 1 || got[0].Expected != "€800.00" || got[0].Remaining != "€500.00" {
+		t.Fatalf("month calendar options dropped the amounts: %+v", got)
+	}
+}
+
+// availableRentOptions 是首页「处理流水」和流水列表匹配表单的共同数据源，
+// 它得把责任的全额带出来，「应交」才有值可显示。
+func TestAvailableRentOptionsCarryTheFullRentDue(t *testing.T) {
+	obligations := []rentObligation{{
+		ID: 11, TenantID: 7, PeriodMonth: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
+		ExpectedAmountCents: 95000, PaidAmountCents: 40000, Currency: "EUR",
+	}}
+	options := availableRentManualMatchOptions(paymentTransaction{Currency: "EUR"}, obligations, map[uint64]string{7: "Aoife Murphy"}, 55000)
+	if len(options) != 1 {
+		t.Fatalf("got %d options, want the one outstanding obligation", len(options))
+	}
+	if options[0].Expected != "EUR 950.00" || options[0].Remaining != "EUR 550.00" {
+		t.Fatalf("option does not separate 应交 from 未收: %+v", options[0])
+	}
+}
+
+// 提示行由 JS 现算，Go 侧只能断言"数据送到了"和"JS 会读"。这条盯住后半截：
+// data-due 送到 <template> 之后得有人读它，否则页面照旧只报未收，而且不会有
+// 任何测试或编译错误提醒——这正是上一版漏掉应交时的样子。
+func TestTenantPeriodHelperReadsBothAmountsAndMarksThemSet(t *testing.T) {
+	script := embeddedWebText("web/static/js/workspace-controls.js")
+	for _, expected := range []string{"option.dataset.due", "option.dataset.rent", "helper.classList.add('is-set')"} {
+		if !strings.Contains(script, expected) {
+			t.Fatalf("tenant/month helper no longer wires up %q; the 应交/未收 line would silently fall back to 未收 only", expected)
+		}
 	}
 }
 

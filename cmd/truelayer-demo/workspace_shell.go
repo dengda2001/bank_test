@@ -16,6 +16,7 @@ type tenantPeriodMatchOption struct {
 	TenantID    uint64
 	Period      string
 	PeriodLabel string
+	Expected    string
 	Remaining   string
 }
 
@@ -23,7 +24,7 @@ func tenantPeriodMatchCalendar(options []billingRentMatchOption, selectedTenantI
 	calendarOptions := make([]tenantPeriodMatchOption, 0, len(options))
 	for _, option := range options {
 		calendarOptions = append(calendarOptions, tenantPeriodMatchOption{
-			TenantID: option.TenantID, Period: option.Period, PeriodLabel: option.PeriodLabel, Remaining: option.Remaining,
+			TenantID: option.TenantID, Period: option.Period, PeriodLabel: option.PeriodLabel, Expected: option.Expected, Remaining: option.Remaining,
 		})
 	}
 	return tenantPeriodMatchCalendarData{Options: calendarOptions, SelectedTenantID: selectedTenantID, SelectedPeriod: selectedPeriod}
@@ -33,7 +34,7 @@ func tenantPeriodMatchCalendarForTenant(options []billingMonthOption, tenantID u
 	calendarOptions := make([]tenantPeriodMatchOption, 0, len(options))
 	for _, option := range options {
 		calendarOptions = append(calendarOptions, tenantPeriodMatchOption{
-			TenantID: tenantID, Period: option.Period, PeriodLabel: option.Label, Remaining: option.Remaining,
+			TenantID: tenantID, Period: option.Period, PeriodLabel: option.Label, Expected: option.Expected, Remaining: option.Remaining,
 		})
 	}
 	return tenantPeriodMatchCalendarData{Options: calendarOptions, SelectedTenantID: tenantID, SelectedPeriod: selectedPeriod}

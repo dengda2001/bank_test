@@ -1,7 +1,10 @@
 {{define "tenant-period-calendar"}}
 <label class="tenant-period-field">租金月份
   <input type="month" name="period" value="{{.SelectedPeriod}}" aria-label="选择租金月份" data-tenant-period-input required>
-  <template data-tenant-period-options>{{range .Options}}<option value="{{.Period}}" data-tenant="{{.TenantID}}" data-rent="{{.Remaining}}">{{.PeriodLabel}} · 未收 {{.Remaining}}</option>{{end}}</template>
+  {{/* 这个 <template> 不渲染给用户看，只是给 workspace-controls.js 读的数据袋：
+      value/文字都不会显示。房东选完租客和月份后，下面那行提示要同时报出所选
+      月份的「应交」和「未收」，所以两个数都得带过来。 */}}
+  <template data-tenant-period-options>{{range .Options}}<option value="{{.Period}}" data-tenant="{{.TenantID}}" data-label="{{.PeriodLabel}}" data-due="{{.Expected}}" data-rent="{{.Remaining}}">{{.PeriodLabel}} · 未收 {{.Remaining}}</option>{{end}}</template>
   <small class="tiny tenant-period-rent" data-tenant-period-rent aria-live="polite">先选择租客，再选择租金月份。</small>
 </label>
 {{end}}

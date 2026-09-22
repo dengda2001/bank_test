@@ -154,6 +154,13 @@
   color: var(--foreground-muted);
 }
 
+/* 选完租客和月份之后，这一行从引导语变成所选月份的应交／未收金额。
+   数字是要拿来跟流水金额对照的，得比提示语重。 */
+.tenant-period-rent.is-set {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
 .workspace-select-option {
   display: flex;
   align-items: center;

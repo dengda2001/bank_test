@@ -326,7 +326,12 @@
     .workspace-queue-item:not(:last-child) { border-right: 1px solid color-mix(in oklch, #d07b8a 24%, var(--border)); }
     .workspace-queue-process { position: absolute; right: 14px; bottom: 12px; }
     .workspace-queue-process-trigger { min-height: 32px; padding: 0 10px; font-size: 11px; }
-    .workspace-queue-process-body { position: fixed; z-index: 1600; top: 50%; left: 50%; display: grid; align-content: start; gap: 12px; width: min(430px, calc(100vw - 24px)); max-height: min(80vh, 620px); overflow: auto; padding: 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: 0 18px 58px rgb(15 23 42 / 28%); transform: translate(-50%, -50%); }
+    /* 这里给的是 height 而不是 max-height。租金月份用的是 calendar.js 的浮层，
+       它是绝对定位、挂在输入框下方约 300px 高，超出面板的部分会被 overflow 裁掉
+       ——之前用 max-height 时面板只有内容那么高，浮层一开就被切掉，得先滚动面板
+       才看得见日历。固定一个够高的高度，浮层就有地方整个摊开。overflow 留着当
+       矮屏幕上的兜底。 */
+    .workspace-queue-process-body { position: fixed; z-index: 1600; top: 50%; left: 50%; display: grid; align-content: start; gap: 12px; width: min(520px, calc(100vw - 24px)); height: min(86vh, 700px); overflow: auto; padding: 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: 0 18px 58px rgb(15 23 42 / 28%); transform: translate(-50%, -50%); }
     .workspace-queue-process-body[hidden] { display: none; }
     .workspace-queue-process-body dl { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px 12px; margin: 0; }
     .workspace-queue-process-body dl > div { display: grid; gap: 3px; min-width: 0; }

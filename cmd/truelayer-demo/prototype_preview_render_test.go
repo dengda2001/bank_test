@@ -204,6 +204,51 @@ func TestWritePrototypePreviewHTML(t *testing.T) {
 			})
 		})
 	})
+	// 流水详情是这一版改动最大的页面，之前没有预览夹具，改完只能靠读模板确认。
+	// 给一份"待确认"状态的流水：右栏的匹配表单、左栏的原始流水都在这一个状态下
+	// 才同时有内容。
+	write("transaction-detail.html", func() error {
+		return writeFile("transaction-detail.html", func(body *strings.Builder) error {
+			return transactionDetailPageTemplate.Execute(body, transactionDetailPageData{
+				workspaceShell:   workspaceShell{ActivePage: "transactions", Username: "audit", Environment: "sandbox", FootNote: "流水详情", CompactTitle: "EUR 640.00 · 收入"},
+				Title:            "EUR 640.00 · 收入",
+				Subtitle:         "AIB Current Account · 2026-09-12 09:18",
+				StatusClass:      "candidate",
+				ActionBase:       "/transactions",
+				BackURL:          "/transactions?period=2026-09&match_status=pending",
+				AllocatedAmount:  "EUR 0.00",
+				RemainingAmount:  "EUR 640.00",
+				SourceLabel:      "TrueLayer 银行同步",
+				ProviderID:       "tl-8f21c4",
+				Reference:        "RENT SEPT 2026",
+				RawRecord:        "{\n  \"amount\": 640.00,\n  \"currency\": \"GBP\",\n  \"timestamp\": \"2026-09-12T09:18:00Z\",\n  \"description\": \"CREDIT TRANSFER\\nC. CHEN\\nRENT SEPT 2026\"\n}",
+				HasRawRecord:     true,
+				TransactionTime:  "2026-09-12 09:18",
+				ParsedPeriod:     "2026-09",
+				ParsedPeriodNote: "由摘要中的 SEPT 识别",
+				Transaction: transactionPageRow{
+					ID:                        "42",
+					Direction:                 "income",
+					MatchStatus:               "candidate",
+					MatchStatusLabel:          "待确认",
+					PayerName:                 "C. CHEN",
+					PayerID:                   "payer-9",
+					AccountName:               "AIB Current Account",
+					AccountID:                 "acc-2",
+					Description:               "CREDIT TRANSFER\nC. CHEN\nRENT SEPT 2026",
+					CanConfirm:                true,
+					CandidateTenantName:       "C. CHEN",
+					CandidatePeriod:           "2026-09",
+					CandidateRentObligationID: 77,
+					ManualMatchTenantOptions:  []billingTenantOption{{ID: 9, Name: "C. CHEN"}, {ID: 11, Name: "Aoife Murphy"}},
+					ManualMatchOptions: []billingRentMatchOption{
+						{TenantID: 9, TenantName: "C. CHEN", Period: "2026-09", PeriodLabel: "2026年9月", Expected: "€640.00", Remaining: "€640.00"},
+						{TenantID: 11, TenantName: "Aoife Murphy", Period: "2026-09", PeriodLabel: "2026年9月", Expected: "€1,100.00", Remaining: "€400.00"},
+					},
+				},
+			})
+		})
+	})
 	write("rent-workspace.html", func() error {
 		return writeFile("rent-workspace.html", func(body *strings.Builder) error {
 			period := parseTestPeriod(t, "2026-09")
@@ -217,7 +262,18 @@ func TestWritePrototypePreviewHTML(t *testing.T) {
 				workspaceShell: workspaceShell{ActivePage: "rent-dashboard", Username: "audit", Environment: "sandbox", FootNote: "月度收租工作台", CompactTitle: "本月收租", ShowNavCounts: true},
 				Filters:        rentWorkspaceFilters{PeriodMonth: period, View: rentWorkspaceViewProperties, Status: "all", Page: 1, PageSize: 12}, Period: "2026-09", PeriodLabel: "2026 年 9 月", PreviousPeriod: "2026-08", NextPeriod: "2026-10", View: rentWorkspaceViewProperties,
 				Summary:      rentWorkspaceSummary{ExpectedCents: 2621000, PaidCents: 2279000, BalanceCents: 342000, ExpectedAmount: "€26,210", PaidAmount: "€22,790", BalanceAmount: "€3,420", ExpenseAmount: "€1,600", NetAmount: "€21,190", CollectionPercent: 86, TotalRooms: 25, PaidRooms: 15, UnpaidRooms: 7, VacantRooms: 3, ResponsibilityCount: 40, FollowupCount: 4},
-				PendingCount: 3, PendingItems: []rentWorkspacePendingItem{{Index: 1, Title: "WAHAJULLAH KHAN", Subtitle: "09-01 · 同住代付待确认", Amount: "€1,250", DetailURL: "/transactions?detail=10&period=2026-09", ListURL: "/transactions?period=2026-09&match_status=pending"}, {Index: 2, Title: "付款人待识别", Subtitle: "09-04 · AIB · RENT SEPT", Amount: "€800", DetailURL: "/transactions?detail=11&period=2026-09", ListURL: "/transactions?period=2026-09&match_status=pending"}}, PropertyOptions: []rentWorkspacePropertyOption{{ID: 7, Name: "78 Old County Road"}},
+				PendingCount: 3, PendingItems: []rentWorkspacePendingItem{{
+					Index: 1, ID: 10, Title: "WAHAJULLAH KHAN", Subtitle: "09-01 · 同住代付待确认", Amount: "€1,250", RemainingAmount: "€1,250",
+					DateTime: "2026-09-01 09:12", Description: "RENT SEPT 03", Reference: "TL-8f21c4",
+					// 展开浮窗里那张匹配表单要有内容，日历和「应交／未收」提示才看得见；
+					// 生产里这两份选项由 availableRentManualMatchOptions 一起给出来。
+					TenantOptions: []billingTenantOption{{ID: 11, Name: "WAHAJULLAH KHAN"}, {ID: 12, Name: "同住人"}},
+					MatchOptions: []billingRentMatchOption{
+						{TenantID: 11, TenantName: "WAHAJULLAH KHAN", Period: "2026-09", PeriodLabel: "2026年9月", Expected: "€625.00", Remaining: "€625.00"},
+						{TenantID: 12, TenantName: "同住人", Period: "2026-09", PeriodLabel: "2026年9月", Expected: "€625.00", Remaining: "€625.00"},
+					},
+					DetailURL: "/transactions?detail=10&period=2026-09", ReturnURL: "/rent-dashboard?period=2026-09", ListURL: "/transactions?period=2026-09&match_status=pending",
+				}, {Index: 2, Title: "付款人待识别", Subtitle: "09-04 · AIB · RENT SEPT", Amount: "€800", DetailURL: "/transactions?detail=11&period=2026-09", ListURL: "/transactions?period=2026-09&match_status=pending"}}, PropertyOptions: []rentWorkspacePropertyOption{{ID: 7, Name: "78 Old County Road"}},
 				PropertyRows: []rentWorkspacePropertyRow{property}, PropertyTreeRows: []rentWorkspacePropertyTreeRow{{Property: property, Rooms: []rentWorkspaceRoomTreeRow{{Room: room, Tenants: tenantRows}}}},
 				RoomRows: []rentWorkspaceRoomRow{room}, RoomTreeRows: []rentWorkspaceRoomTreeRow{{Room: room, Tenants: tenantRows}}, TenantRows: tenantRows, TotalRows: 1, FilteredCount: 1, TotalPages: 1, Page: 1, PageSize: 12,
 			})

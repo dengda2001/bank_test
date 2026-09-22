@@ -414,6 +414,8 @@
     const options = Array.from(metadata.content.querySelectorAll('option')).map((option) => ({
       tenantID: option.dataset.tenant || '',
       period: option.value,
+      label: option.dataset.label || '',
+      due: option.dataset.due || '',
       remaining: option.dataset.rent || '',
     }));
     const hiddenPeriod = () => period.closest('.calendar-control')?.querySelector('input[type="hidden"][name="period"]');
@@ -428,6 +430,10 @@
       const selected = periodValue();
       period.dataset.calendarAllowedValues = matching.map((option) => option.period).join(',');
       const match = matching.find((option) => option.period === selected);
+      // This line alternates between nudging the next step and reporting the
+      // selected month's amounts. The two carry different weight, so a class
+      // drives the colour; without it a hint and a figure look equally loud.
+      helper.classList.remove('is-set');
       if (selected && !match) {
         setPeriod('');
         helper.textContent = tenant.value ? '请选择该租客可匹配的月份。' : '先选择租客，再选择租金月份。';
@@ -438,7 +444,17 @@
       } else if (!selected) {
         helper.textContent = matching.length ? '请选择可匹配的租金月份。' : '该租客没有可直接匹配的租金月份。';
       } else {
-        helper.textContent = '本月待匹配租金：' + match.remaining;
+        // Expected is the month's full rent obligation, remaining is what is
+        // still outstanding. The landlord eyeballs both against the transaction
+        // amount to tell whether it covers the month — remaining alone makes a
+        // partly-paid month look identical to an untouched one.
+        const figures = [];
+        if (match.due) figures.push('应交 ' + match.due);
+        if (match.remaining) figures.push('未收 ' + match.remaining);
+        helper.textContent = figures.length
+          ? (match.label ? match.label + '：' : '') + figures.join(' · ')
+          : '该月份没有待匹配的租金。';
+        helper.classList.add('is-set');
       }
     };
     tenant.addEventListener('change', sync);
