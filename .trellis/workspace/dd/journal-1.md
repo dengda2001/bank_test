@@ -1082,3 +1082,36 @@ Seeded the local rentops database from the Rosewood rent ledger (4 properties / 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 30: 房间入住与租金计划交付
+
+**Date**: 2026-09-22
+**Task**: 房间入住与租金计划交付
+**Branch**: `main`
+
+### Summary
+
+完成房间收租计划切换：迁移至 room rent plan、计划唯一写入口、租客月度唯一房间约束、真实 E2E 与移动端浏览器验收。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `80d34f0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
