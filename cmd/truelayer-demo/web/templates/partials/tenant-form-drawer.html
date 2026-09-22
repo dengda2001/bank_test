@@ -66,11 +66,11 @@
 
   const amount = (cents, currency) => new Intl.NumberFormat("zh-CN", {style: "currency", currency: currency || "EUR", minimumFractionDigits: 2}).format(cents / 100);
   const selectedRoom = () => room.options[room.selectedIndex];
-  const plansForRoom = () => {
-    const option = selectedRoom();
+  const plansForOption = (option) => {
     if (!option?.value) return [];
     try { return JSON.parse(option.dataset.plans || "[]"); } catch (_) { return []; }
   };
+  const plansForRoom = () => plansForOption(selectedRoom());
   const activePlan = () => plansForRoom().find((plan) => plan.effective_from_month <= month.value && (!plan.effective_to_month || plan.effective_to_month >= month.value));
   const setText = (element, value) => { element.textContent = value; };
   const inputCents = (input) => {
@@ -121,9 +121,15 @@
       setText(preview, error);
       return;
     }
+    const overview = document.createElement("small");
+    if (unspecified.length) {
+      overview.textContent = "已固定 " + amount(specified, plan.currency) + " · 剩余 " + amount(plan.monthly_rent_cents - specified, plan.currency) + " · " + unspecified.length + " 人均分";
+    } else {
+      overview.textContent = "已填写合计 " + amount(specified, plan.currency) + " · 无需均分";
+    }
     const title = document.createElement("strong");
     title.textContent = "预计每人责任";
-    preview.append(title);
+    preview.append(title, overview);
     const list = document.createElement("div");
     for (const value of values) {
       const row = document.createElement("span");
@@ -181,7 +187,8 @@
     const propertyID = property.value;
     for (const option of Array.from(room.options)) {
       if (!option.value) continue;
-      const visible = Boolean(propertyID) && option.dataset.propertyId === propertyID;
+      const hasPlan = plansForOption(option).some((plan) => plan.effective_from_month <= month.value && (!plan.effective_to_month || plan.effective_to_month >= month.value));
+      const visible = Boolean(propertyID) && option.dataset.propertyId === propertyID && hasPlan;
       option.hidden = !visible;
       option.disabled = !visible;
     }
@@ -191,7 +198,7 @@
   };
   property.addEventListener("change", filterRooms);
   room.addEventListener("change", refreshPlan);
-  month.addEventListener("change", refreshPlan);
+  month.addEventListener("change", filterRooms);
   newResponsibility.addEventListener("input", renderPreview);
   form.addEventListener("submit", () => {
     const plan = activePlan();

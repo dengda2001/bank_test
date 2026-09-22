@@ -206,8 +206,10 @@ descriptions refer to retired behavior.
   intent)` is the only business entry point that generates obligations.
   `intent` is `rentFactsIntentRead` or
   `rentFactsIntentExplicitPayment`.
-- UI writes use `POST /rooms/{id}/rent-plan`; they do not write plans through
-  tenant, property, or physical-room profile forms.
+- UI writes normally use `POST /rooms/{id}/rent-plan`. Two creation-time
+  composite paths may call that same plan service: creating a room creates its
+  first empty-member plan, and creating a tenant may add the new tenant to a
+  selected room plan. Neither path writes rent columns on `rooms` or `tenants`.
 
 ### 3. Contracts
 
@@ -222,14 +224,23 @@ descriptions refer to retired behavior.
 - Current asset status does not rewrite the rent-plan timeline or historical
   facts. Rent fact selection follows the plan's month interval, not a property
   or room validity date.
-- A saved plan requires positive EUR rent, a due day from 1 through 31, and at
-  least one distinct same-account tenant. If all member amounts are omitted,
-  the service splits cents evenly; otherwise every responsibility must be
-  positive and their sum must equal the room total.
+- A saved plan requires positive EUR rent and a due day from 1 through 31.
+  An empty member list is a valid vacant-room rent rule: it keeps the timeline
+  and schedule but creates no charge or obligation. With members, a zero
+  responsibility means “unspecified”: all-zero members split the total evenly;
+  positive entries are fixed and the positive remainder is split evenly between
+  the unspecified members; when every member is positive, their sum must equal
+  the room total.
 - Plan writes lock the room and compare `ExpectedTimelineVersion`. The
   replacement, unlocked-fact deletion, member writes, version increment, and
   applicable fact materialization run in one transaction. A current or past
-  effective month materializes its facts; a future plan does not.
+  non-empty plan materializes its facts; an empty plan and a future plan do not.
+- `createRoomWithRentPlan` creates the physical room and its zero-member plan
+  in one transaction. `createTenantWithRoomPlan` creates the tenant, locks the
+  selected room, re-reads its active plan and member IDs, then writes the
+  complete new plan in the same outer transaction. The browser's property,
+  rent, due-day, plan members, and timeline version are hints only; the service
+  revalidates ownership and uses the stored plan schedule.
 - A tenant may belong to at most one room in any rent month. `SaveRoomRentPlan`
   locks the active tenant rows before checking other-room plans from the
   effective month onward; an overlap returns `ErrTenantRoomMonthConflict`.
@@ -259,8 +270,10 @@ descriptions refer to retired behavior.
 | Condition | Result |
 |---|---|
 | Missing user, room, effective month, rent, or due day | `ErrInvalidRentPlan`; no writes |
-| Duplicate member, foreign-account tenant, or responsibility sum mismatch | Reject; no partial writes |
+| Duplicate member, foreign-account tenant, fixed total that leaves no positive remainder, or final responsibility sum mismatch | Reject; no partial writes |
+| Empty member plan | Persist only the vacant-room rent rule; do not create a charge or obligation |
 | Timeline version differs from `rooms.rent_plan_version` | `ErrStaleRentPlanTimeline`; refresh before retry |
+| Composite tenant write has a changed active member set or mismatched property | Reject as stale/invalid and roll back the new tenant and payer |
 | Overlapping or duplicate plan interval | `ErrRentPlanTimelineConflict`; transaction rolls back |
 | Allocation, cash receipt, or dunning history exists from edited month onward | `ErrRentPlanFactsLocked`; preserve facts and timeline |
 | Financial fact chain changed while acquiring locks | `ErrRentFactsConflict`; roll back and offer retry |
@@ -269,29 +282,31 @@ descriptions refer to retired behavior.
 
 ### 5. Good/Base/Bad Cases
 
-- Good: change monthly rent from the room's rent-plan page and let the service
-  atomically replace that month onward after checking locks and timeline
-  version.
+- Good: change monthly rent from the room's rent-plan page, or create a room
+  or tenant through its composite command; each route delegates to the same
+  room-plan service and atomically checks locks and timeline version.
 - Base: deactivate a physical room without inventing an asset effective date;
   its rent-plan history remains tied to plan months.
-- Bad: put `active_from`, `inactive_from`, rent, or due-day fields back on
-  property/room forms, or update tenant rent fields as a second write path.
+- Bad: persist `active_from`, `inactive_from`, rent, or due-day fields on a
+  property/room/tenant profile, or update tenant rent without replacing the
+  room-plan timeline through the plan service.
 - Bad: materialize a future obligation during a dashboard preview or delete a
   charge after an allocation/cash/dunning record has referenced it.
 
 ### 6. Tests Required
 
-- Unit tests cover member splitting, sum validation, month normalization,
-  timeline replacement, version conflicts, lock detection, and future-read
-  previews.
+- Unit tests cover empty-plan preservation, member splitting (including partial
+  fixed amounts), sum validation, month normalization, timeline replacement,
+  version conflicts, lock detection, and future-read previews.
 - MySQL integration tests use a disposable database to apply migrations from
   fresh state, reapply them, and prove migration 014 refuses non-empty
   pre-014 business tables without deleting their rows.
 - MySQL service tests cover save/end transaction boundaries, allocation/cash/
   dunning locks, and concurrent writers returning a retryable conflict.
 - Handler/template tests assert property and room forms contain no asset
-  validity fields, tenant forms contain no rent-plan fields, `/tenancies` GET
-  and POST are 404, and desktop/mobile workspace views preserve tenant/room
+  validity fields, room creation has required rent/month/due-day inputs, tenant
+  creation (but not tenant edit) has the optional room-plan fields, `/tenancies`
+  GET and POST are 404, and desktop/mobile workspace views preserve tenant/room
   filtering.
 - Run focused, package, and repository checks plus MySQL integration tests when
   `RENTOPS_MYSQL_TEST_DSN` is configured. Do not mark the Trellis task complete
@@ -302,7 +317,7 @@ descriptions refer to retired behavior.
 Wrong:
 
 ```go
-// Treat a physical room as if its existence starts in a rent month.
+// Persist rent on the physical room instead of creating a room-plan rule.
 roomInput.ActiveFrom = submittedMonth
 roomInput.MonthlyRentCents = submittedRent
 ```
@@ -310,12 +325,11 @@ roomInput.MonthlyRentCents = submittedRent
 Correct:
 
 ```go
-plan, version, err := newRoomRentPlanService(db).SaveRoomRentPlan(ctx,
-    SaveRoomRentPlanCommand{
-        UserID: userID, RoomID: roomID, EffectiveMonth: month,
-        MonthlyRentCents: rentCents, DueDay: dueDay, Members: members,
-        ExpectedTimelineVersion: currentVersion,
-    })
+created, plan, err := newLandlordDomainService(db).createRoomWithRentPlan(ctx,
+    userID, roomInput,
+    roomRentPlanSetupInput{EffectiveMonth: month, MonthlyRentCents: rentCents,
+        Currency: ledgerCurrencyEUR, DueDay: dueDay},
+)
 ```
 
 Keep asset identity/status in `properties` and `rooms`; keep occupancy,

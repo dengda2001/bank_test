@@ -214,7 +214,7 @@ func TestRoomAndNewTenantFormsExposeTheCompositeRentPlanFields(t *testing.T) {
 			t.Errorf("new tenant form is missing room-plan field %q", expected)
 		}
 	}
-	for _, expected := range []string{`id="tenant-existing-occupants"`, "留空则按照入住人数均分房间租金"} {
+	for _, expected := range []string{`id="tenant-existing-occupants"`, "留空则按照入住人数均分房间租金", "已固定 "} {
 		if !strings.Contains(tenantPage, expected) {
 			t.Errorf("new tenant form is missing grouped occupancy hint %q", expected)
 		}
