@@ -126,6 +126,36 @@ func TestEnsureMonthlyRentFactsSkipsAnEmptyRoomPlanOnMySQL(t *testing.T) {
 	}
 }
 
+func TestCreateRoomWithRentPlanStoresAnEmptyRentRuleAtomicallyOnMySQL(t *testing.T) {
+	f := newRoomRentPlanConflictFixture(t)
+	var propertyRow property
+	if err := f.db.WithContext(f.ctx).Where("user_id = ?", f.owner.ID).First(&propertyRow).Error; err != nil {
+		t.Fatal(err)
+	}
+	month := dublinCurrentMonth(time.Now())
+	created, plan, err := newLandlordDomainService(f.db).createRoomWithRentPlan(f.ctx, f.owner.ID, roomInput{
+		PropertyID: propertyRow.ID, RoomLabel: "Rent Rule First",
+	}, roomRentPlanSetupInput{
+		EffectiveMonth: month, MonthlyRentCents: 123456, Currency: ledgerCurrencyEUR, DueDay: 1,
+	})
+	if err != nil {
+		t.Fatalf("create room with rent plan: %v", err)
+	}
+	if created.RentPlanVersion != 1 || plan.RoomID != created.ID || plan.MonthlyRentCents != 123456 || plan.DueDay != 1 {
+		t.Fatalf("created room=%+v plan=%+v, want versioned empty rent rule", created, plan)
+	}
+	var memberCount, chargeCount int64
+	if err := f.db.WithContext(f.ctx).Model(&roomRentPlanMember{}).Where("user_id = ? AND room_rent_plan_id = ?", f.owner.ID, plan.ID).Count(&memberCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := f.db.WithContext(f.ctx).Model(&rentCharge{}).Where("user_id = ? AND room_id = ?", f.owner.ID, created.ID).Count(&chargeCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if memberCount != 0 || chargeCount != 0 {
+		t.Fatalf("new empty room members=%d charges=%d, want neither", memberCount, chargeCount)
+	}
+}
+
 func TestSaveRoomRentPlanRejectsCurrentMonthTenantRoomConflictOnMySQL(t *testing.T) {
 	f := newRoomRentPlanConflictFixture(t)
 	month := dublinCurrentMonth(time.Now())

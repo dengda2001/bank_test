@@ -33,6 +33,13 @@ type roomInput struct {
 	Notes      string
 }
 
+type roomRentPlanSetupInput struct {
+	EffectiveMonth   time.Time
+	MonthlyRentCents int64
+	Currency         string
+	DueDay           int
+}
+
 type landlordDomainService struct {
 	db *gorm.DB
 }
@@ -96,22 +103,13 @@ func (s *landlordDomainService) createRoom(ctx context.Context, userID uint64, i
 	if userID == 0 || input.PropertyID == 0 {
 		return room{}, errors.New("userID and propertyID are required")
 	}
-	input.RoomLabel = strings.TrimSpace(input.RoomLabel)
-	if input.RoomLabel == "" {
-		return room{}, errRoomLabelRequired
-	}
-	input.RoomType = strings.TrimSpace(input.RoomType)
-	if len([]rune(input.RoomLabel)) > 191 || len([]rune(input.RoomType)) > 64 || len([]rune(input.Notes)) > 2000 || input.Capacity < 0 || input.Capacity > 100 {
-		return room{}, errors.New("room details are invalid")
-	}
-	if input.RoomType == "" {
-		input.RoomType = "其他"
-	}
-	if input.Capacity == 0 {
-		input.Capacity = 1
+	var err error
+	input, err = normalizeNewRoomInput(input)
+	if err != nil {
+		return room{}, err
 	}
 	var row room
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var propertyRow property
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND id = ?", userID, input.PropertyID).First(&propertyRow).Error; err != nil {
 			return err
@@ -120,6 +118,77 @@ func (s *landlordDomainService) createRoom(ctx context.Context, userID uint64, i
 		return tx.Create(&row).Error
 	})
 	return row, err
+}
+
+func (s *landlordDomainService) createRoomWithRentPlan(ctx context.Context, userID uint64, input roomInput, setup roomRentPlanSetupInput) (room, roomRentPlan, error) {
+	if userID == 0 || input.PropertyID == 0 {
+		return room{}, roomRentPlan{}, errors.New("userID and propertyID are required")
+	}
+	var err error
+	input, err = normalizeNewRoomInput(input)
+	if err != nil {
+		return room{}, roomRentPlan{}, err
+	}
+	setup, err = normalizeRoomRentPlanSetup(userID, setup)
+	if err != nil {
+		return room{}, roomRentPlan{}, err
+	}
+	var created room
+	var plan roomRentPlan
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var propertyRow property
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND id = ?", userID, input.PropertyID).First(&propertyRow).Error; err != nil {
+			return err
+		}
+		created = room{UserID: userID, PropertyID: input.PropertyID, RoomLabel: input.RoomLabel, RoomType: input.RoomType, Capacity: input.Capacity, Notes: nullableString(strings.TrimSpace(input.Notes)), Status: "active"}
+		if err := tx.Create(&created).Error; err != nil {
+			return err
+		}
+		plan = roomRentPlan{UserID: userID, RoomID: created.ID, EffectiveFromMonth: setup.EffectiveMonth, MonthlyRentCents: setup.MonthlyRentCents, Currency: setup.Currency, DueDay: setup.DueDay}
+		if err := tx.Create(&plan).Error; err != nil {
+			return translateRentPlanConstraintError(err)
+		}
+		if err := tx.Model(&room{}).Where("user_id = ? AND id = ? AND rent_plan_version = ?", userID, created.ID, 0).Update("rent_plan_version", 1).Error; err != nil {
+			return err
+		}
+		created.RentPlanVersion = 1
+		return nil
+	})
+	return created, plan, err
+}
+
+func normalizeNewRoomInput(input roomInput) (roomInput, error) {
+	input.RoomLabel = strings.TrimSpace(input.RoomLabel)
+	if input.RoomLabel == "" {
+		return roomInput{}, errRoomLabelRequired
+	}
+	input.RoomType = strings.TrimSpace(input.RoomType)
+	if len([]rune(input.RoomLabel)) > 191 || len([]rune(input.RoomType)) > 64 || len([]rune(input.Notes)) > 2000 || input.Capacity < 0 || input.Capacity > 100 {
+		return roomInput{}, errors.New("room details are invalid")
+	}
+	if input.RoomType == "" {
+		input.RoomType = "其他"
+	}
+	if input.Capacity == 0 {
+		input.Capacity = 1
+	}
+	return input, nil
+}
+
+func normalizeRoomRentPlanSetup(userID uint64, setup roomRentPlanSetupInput) (roomRentPlanSetupInput, error) {
+	setup.EffectiveMonth = monthStart(setup.EffectiveMonth)
+	currency, err := normalizeLedgerCurrency(setup.Currency)
+	if err != nil {
+		return roomRentPlanSetupInput{}, ErrInvalidRentPlan
+	}
+	setup.Currency = currency
+	if _, err := validateRoomRentPlanCommand(SaveRoomRentPlanCommand{
+		UserID: userID, RoomID: 1, EffectiveMonth: setup.EffectiveMonth,
+		MonthlyRentCents: setup.MonthlyRentCents, Currency: setup.Currency, DueDay: setup.DueDay,
+	}); err != nil {
+		return roomRentPlanSetupInput{}, err
+	}
+	return setup, nil
 }
 
 func (s *landlordDomainService) updateRoom(ctx context.Context, userID, roomID uint64, input roomInput) (room, error) {
