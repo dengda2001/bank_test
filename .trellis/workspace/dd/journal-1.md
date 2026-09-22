@@ -19,7 +19,9 @@ Implemented demo login, protected TrueLayer bank routes, redirected successful a
 
 ### Main Changes
 
-(Add details)
+- Added confirmed property, room, and tenant deletion from their detail pages, with transaction-scoped ownership checks and dependency guards that preserve rent, payment, expense, receipt, and dunning history.
+- Replaced repeated direct-match month options with the shared calendar and added the selected month's outstanding-rent helper; the remembered-tenant month path uses the same control.
+- Enabled shared case-insensitive substring tenant search on every tenant picker, including room rent-plan members and actual cash payers.
 
 ### Git Commits
 
@@ -29,7 +31,9 @@ Implemented demo login, protected TrueLayer bank routes, redirected successful a
 
 ### Testing
 
-- [OK] (Add test results)
+- [OK] `go test ./... -count=1`
+- [OK] `go vet ./...`
+- [OK] disposable-MySQL deletion guard regression
 
 ### Status
 
@@ -1103,6 +1107,40 @@ Seeded the local rentops database from the Rosewood rent ledger (4 properties / 
 | Hash | Message |
 |------|---------|
 | `80d34f0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 31: 对象删除、匹配日历与租客搜索修复
+
+**Date**: 2026-09-22
+**Task**: 对象删除、匹配日历与租客搜索修复
+**Branch**: `main`
+
+### Summary
+
+完成安全删除、匹配月份日历和租客模糊搜索修复；全量 Go、vet 与 MySQL 保护回归通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e465b9a` | (see git log) |
+| `3692312` | (see git log) |
 
 ### Testing
 

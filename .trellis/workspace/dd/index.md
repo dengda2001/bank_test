@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 30
+- **Total Sessions**: 31
 - **Last Active**: 2026-09-22
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1117 | Active |
+| `journal-1.md` | ~1151 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 31 | 2026-09-22 | 对象删除、匹配日历与租客搜索修复 | `e465b9a`, `3692312` | `main` |
 | 30 | 2026-09-22 | 房间入住与租金计划交付 | `80d34f0` | `main` |
 | 29 | 2026-09-21 | 精简流水与主页的状态控件与用词 | `6a9b9a9` | `main` |
 | 28 | 2026-09-20 | 工作台交互与控件改造 | `24d218f` | `fix/workspace-quick-fixes` |
