@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -490,5 +491,60 @@ func TestBillingSortFlipsBothWays(t *testing.T) {
 	back := billingSortURL(base, "payer_asc")
 	if !strings.Contains(back, "sort=payer_asc") {
 		t.Fatalf("flipping the heading did not change the sort: %s", back)
+	}
+}
+
+// /transactions 的表格加了「识别租金月份」列。这里钉三件事：已识别的行直接显示月份
+// （2026-09，和详情页同一款值）；没解析出来的行显示"未识别"而不是空格；窄屏卡片跟着
+// 一起显示。
+//
+// 为什么要单独钉"未识别"：空格和"这笔压根不用管月份"在屏幕上长得一模一样。留空的话
+// 房东分不清是没识别出来、还是不需要识别，这一列就白加了。
+func TestTransactionRouteShowsTheParsedRentMonth(t *testing.T) {
+	page := renderBillingPage(t, billingPageData{
+		PageKey: "transactions", CanonicalPath: "/transactions", TransactionScope: "pending",
+		TransactionRows: []transactionPageRow{
+			{
+				ID: "7", DetailKey: "7", Direction: "income", PayerName: "WAHAJULLAH KHAN",
+				AmountDisplay: "€1,250.00", Description: "RENT SEPT",
+				MatchStatus: "candidate", MatchStatusLabel: "待确认", ParsedPeriodDisplay: "2026-09",
+			},
+			{
+				ID: "8", DetailKey: "8", Direction: "income", PayerName: "NO REFERENCE LTD",
+				AmountDisplay: "€40.00", Description: "TRANSFER",
+				MatchStatus: "unmatched", MatchStatusLabel: "未匹配",
+			},
+		},
+	})
+
+	if !strings.Contains(page, "<th>识别租金月份</th>") {
+		t.Fatal("流水表没有「识别租金月份」表头")
+	}
+	// 除了表头，每一行都要有这一格；少一格就等于那一行的月份在桌面上看不出来。
+	if got := strings.Count(page, `class="route-txn-period"`); got != 2 {
+		t.Fatalf("识别租金月份列渲染了 %d 格，want 2（两行各一格）", got)
+	}
+	if !strings.Contains(page, `<td class="route-txn-period">2026-09</td>`) {
+		t.Fatal("已识别出来的月份没有直接显示在行里")
+	}
+	if !strings.Contains(page, `class="route-txn-period-none">未识别<`) {
+		t.Fatal("未识别的行渲染成了空单元格：空格看不出是没识别还是不需要识别")
+	}
+	for _, expected := range []string{"识别租金月份：2026-09", "识别租金月份：未识别"} {
+		if !strings.Contains(page, expected) {
+			t.Fatalf("窄屏卡片没有跟着显示 %q，两端说法不一致", expected)
+		}
+	}
+
+	// 这是第 10 列，而表格在加列之前就已经占满容器（1440 宽下 9 列正好铺满 1146px）。
+	// 短列不锁 nowrap，浏览器被挤窄时会挑软柿子：日期从连字符处断成 "09-"/"01"、
+	// "同住代付"四个汉字断成两行。锁住之后被压缩的只剩「匹配依据」那句本就该折行的
+	// 说明。加列之前没有这个现象，所以这条断言是跟着新列一起来的。
+	nowrap := regexp.MustCompile(`\.transaction-route-desktop-table th, \.transaction-route-desktop-table \.route-txn-fixed \{[^}]*white-space:\s*nowrap`)
+	if !nowrap.MatchString(page) {
+		t.Fatal("短列丢了 nowrap：多出来的这一列会把日期和用途挤成两行")
+	}
+	if !strings.Contains(page, `<td class="mono route-txn-fixed">`) {
+		t.Fatal("日期格没有挂上 route-txn-fixed，nowrap 落不到它身上")
 	}
 }

@@ -393,7 +393,6 @@ type transactionPageRow struct {
 	ObjectLabel               string
 	RoomOnlyLabel             string
 	ParsedPeriodDisplay       string
-	ParsedPeriodSourceDisplay string
 	FinalPeriodDisplay        string
 	Description               string
 	AccountName               string
@@ -482,33 +481,32 @@ func transactionPageRowFromModel(row paymentTransaction) transactionPageRow {
 		parsedPeriod = monthStart(*row.ParsedPeriodMonth).Format("2006-01")
 	}
 	return transactionPageRow{
-		ID:                        strconv.FormatUint(row.ID, 10),
-		InternalID:                strconv.FormatUint(row.ID, 10),
-		Direction:                 row.Direction,
-		DirectionLabel:            directionLabel,
-		PayerName:                 firstNonEmpty(stringValue(row.PayerName), "未知付款人"),
-		PayerNameKind:             firstNonEmpty(row.PayerNameKind, "unknown"),
-		PayerID:                   firstNonEmpty(stringValue(row.PayerID), "无付款人编号"),
-		AmountDisplay:             formatMoney(centsToMoney(row.AmountCents), row.Currency, 2),
-		AmountInput:               strconv.FormatFloat(centsToMoney(row.AmountCents), 'f', 2, 64),
-		AllocatedAmountDisplay:    formatMoney(0, row.Currency, 2),
-		RemainingAmountDisplay:    formatMoney(centsToMoney(row.AmountCents), row.Currency, 2),
-		RemainingAmountInput:      strconv.FormatFloat(centsToMoney(row.AmountCents), 'f', 2, 64),
-		DateDisplay:               dateDisplay,
-		DateShort:                 dateShort,
-		ParsedPeriodDisplay:       parsedPeriod,
-		ParsedPeriodSourceDisplay: row.ParsedPeriodSource,
-		Description:               firstNonEmpty(row.Description, "无描述"),
-		AccountName:               firstNonEmpty(stringValue(row.AccountName), "未知账户"),
-		AccountID:                 stringValue(row.AccountID),
-		TransactionID:             firstNonEmpty(stringValue(row.ProviderTransactionID), "#"+strconv.FormatUint(row.ID, 10)),
-		ProviderTransactionID:     firstNonEmpty(stringValue(row.ProviderTransactionID), "无银行流水号"),
-		Source:                    row.Source,
-		MatchStatus:               row.MatchStatus,
-		MatchStatusLabel:          statusLabel,
-		MatchReason:               row.MatchReason,
-		ManualAdjustmentReason:    row.ManualAdjustmentReason,
-		TenantID:                  tenantID,
+		ID:                     strconv.FormatUint(row.ID, 10),
+		InternalID:             strconv.FormatUint(row.ID, 10),
+		Direction:              row.Direction,
+		DirectionLabel:         directionLabel,
+		PayerName:              firstNonEmpty(stringValue(row.PayerName), "未知付款人"),
+		PayerNameKind:          firstNonEmpty(row.PayerNameKind, "unknown"),
+		PayerID:                firstNonEmpty(stringValue(row.PayerID), "无付款人编号"),
+		AmountDisplay:          formatMoney(centsToMoney(row.AmountCents), row.Currency, 2),
+		AmountInput:            strconv.FormatFloat(centsToMoney(row.AmountCents), 'f', 2, 64),
+		AllocatedAmountDisplay: formatMoney(0, row.Currency, 2),
+		RemainingAmountDisplay: formatMoney(centsToMoney(row.AmountCents), row.Currency, 2),
+		RemainingAmountInput:   strconv.FormatFloat(centsToMoney(row.AmountCents), 'f', 2, 64),
+		DateDisplay:            dateDisplay,
+		DateShort:              dateShort,
+		ParsedPeriodDisplay:    parsedPeriod,
+		Description:            firstNonEmpty(row.Description, "无描述"),
+		AccountName:            firstNonEmpty(stringValue(row.AccountName), "未知账户"),
+		AccountID:              stringValue(row.AccountID),
+		TransactionID:          firstNonEmpty(stringValue(row.ProviderTransactionID), "#"+strconv.FormatUint(row.ID, 10)),
+		ProviderTransactionID:  firstNonEmpty(stringValue(row.ProviderTransactionID), "无银行流水号"),
+		Source:                 row.Source,
+		MatchStatus:            row.MatchStatus,
+		MatchStatusLabel:       statusLabel,
+		MatchReason:            row.MatchReason,
+		ManualAdjustmentReason: row.ManualAdjustmentReason,
+		TenantID:               tenantID,
 	}
 }
 
