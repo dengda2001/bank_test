@@ -178,6 +178,14 @@
   cursor: pointer;
 }
 
+/* 模糊搜索靠 JS 给不匹配的项设 hidden。上面的 display:flex 是作者样式，会压过
+   浏览器默认的 [hidden]{display:none}，不补这条兜底就等于搜索框能打字、列表纹丝
+   不动。本文件里 .workspace-select-clear / -popup / -empty 都有各自的兜底，只有
+   选项本身漏了。 */
+.workspace-select-option[hidden] {
+  display: none;
+}
+
 .workspace-select-option:hover,
 .workspace-select-option.is-active {
   background: var(--surface-muted);

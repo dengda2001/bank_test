@@ -1,6 +1,7 @@
 package main
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -335,6 +336,8 @@ func TestTenantPickersOptIntoSharedFuzzySearch(t *testing.T) {
 			path: "web/static/js/workspace-controls.js",
 			markers: []string{
 				`labelText.toLocaleLowerCase().includes(query)`,
+				// 过滤的落点：不匹配的项靠 hidden 藏起来。
+				`item.hidden = !matches`,
 			},
 		},
 	} {
@@ -344,5 +347,30 @@ func TestTenantPickersOptIntoSharedFuzzySearch(t *testing.T) {
 				t.Fatalf("tenant picker asset %s is missing %q", test.path, marker)
 			}
 		}
+	}
+}
+
+// 模糊搜索是两半：JS 给不匹配的项设 hidden，CSS 负责把它藏住。JS 那半单独在
+// 上面钉住了，CSS 这半要单独钉——因为 .workspace-select-option 上的 display:flex
+// 是作者样式，会压过浏览器默认的 [hidden]{display:none}。少了这条兜底，搜索框
+// 照样收字、列表一个不少，从外面看就是"模糊搜索没生效"，而上面的 JS 标记全都还在，
+// 光靠那一半断言发现不了。
+func TestFuzzySearchFilteredOptionsAreActuallyHidden(t *testing.T) {
+	css := embeddedWebText("web/static/css/workspace-controls.css")
+
+	// 只取 .workspace-select-option[hidden] 那一条规则本身，别让文件里其他
+	// [hidden] 兜底（-clear/-popup/-empty）替我证明。
+	start := strings.Index(css, ".workspace-select-option[hidden]")
+	if start < 0 {
+		t.Fatal("选项没有 [hidden] 兜底：display:flex 会压过浏览器的 [hidden]{display:none}，模糊搜索过滤完列表不会变")
+	}
+	open := strings.Index(css[start:], "{")
+	end := strings.Index(css[start:], "}")
+	if open < 0 || end < open {
+		t.Fatalf("选项的 [hidden] 规则不是一条完整规则：%q", css[start:])
+	}
+	rule := css[start+open : start+end]
+	if !regexp.MustCompile(`display:\s*none`).MatchString(rule) {
+		t.Fatalf("选项的 [hidden] 规则没有把它藏起来：%q", rule)
 	}
 }
