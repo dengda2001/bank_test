@@ -17,3 +17,7 @@ node_modules/
 # Ad-hoc archives
 *.zip
 
+
+# 本地收租明细 / 流水导出 / 数据库转储（含银行连接令牌），一律不入库
+真实流水数据/
+收租明细_*.xlsx
