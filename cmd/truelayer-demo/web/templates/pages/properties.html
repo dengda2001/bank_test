@@ -18,7 +18,7 @@
         <a class="btn primary" href="/properties?add=1&amp;period={{.Period}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}&amp;collection={{.CollectionFilter}}"><span class="desktop-object-action">新增房产</span><span class="mobile-object-action">新增</span></a>
       </header>
       {{template "workspace-object-tabs" .}}
-      {{if .Message}}<div class="notice ok" data-toast>{{if eq .Message "property_saved"}}房产资料已保存。{{else if eq .Message "property_deactivated"}}房产已停用。{{else}}操作已完成。{{end}}</div>{{end}}
+      {{if .Message}}<div class="notice ok" data-toast>{{if eq .Message "property_saved"}}房产资料已保存。{{else if eq .Message "property_deactivated"}}房产已停用。{{else if eq .Message "property_deleted"}}房产已删除。{{else}}操作已完成。{{end}}</div>{{end}}
       {{if .Error}}<div class="notice error">房产操作未完成，请检查资料后重试。</div>{{end}}
 
       {{if .ShowForm}}

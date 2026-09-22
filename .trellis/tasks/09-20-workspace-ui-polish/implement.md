@@ -55,6 +55,8 @@
 
 **Rollback point:** deletion handlers/service and calendar presentation are independently revertible; neither changes the schema or ledger rules.
 
+**Completed evidence:** focused renderer tests cover the delete actions and all tenant pickers' searchable opt-in. A disposable MySQL test database verifies that independent records are removed (including the tenant payer-alias cascade), while property, room, tenant, and matched-transaction history guard cases remain intact. The calendar renderer test confirms that matching periods are metadata rather than repeated visible options and includes the outstanding-rent helper.
+
 ## Verification
 
 - Run focused Go tests for room create/edit/detail rendering and room-update value preservation.

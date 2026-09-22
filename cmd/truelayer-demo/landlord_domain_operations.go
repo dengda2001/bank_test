@@ -11,8 +11,10 @@ import (
 )
 
 var (
-	errPropertyNameRequired = errors.New("property name is required")
-	errRoomLabelRequired    = errors.New("room label is required")
+	errPropertyNameRequired    = errors.New("property name is required")
+	errRoomLabelRequired       = errors.New("room label is required")
+	errPropertyDeletionBlocked = errors.New("property has linked rooms or financial records")
+	errRoomDeletionBlocked     = errors.New("room has linked rent or expense records")
 )
 
 type propertyInput struct {
@@ -176,4 +178,78 @@ func (s *landlordDomainService) deactivateRoom(ctx context.Context, userID, room
 		return errors.New("userID and roomID are required")
 	}
 	return s.db.WithContext(ctx).Model(&room{}).Where("user_id = ? AND id = ?", userID, roomID).Update("status", "inactive").Error
+}
+
+func scopedDependencyExists(tx *gorm.DB, value any, query string, args ...any) (bool, error) {
+	var count int64
+	if err := tx.Model(value).Where(query, args...).Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// deleteProperty only removes an object that has no child rooms or financial
+// history. Historical ledger rows must stay traceable, so callers can use the
+// existing deactivation action when this guard rejects the deletion.
+func (s *landlordDomainService) deleteProperty(ctx context.Context, userID, propertyID uint64) error {
+	if userID == 0 || propertyID == 0 {
+		return errors.New("userID and propertyID are required")
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row property
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", propertyID, userID).First(&row).Error; err != nil {
+			return err
+		}
+		for _, dependency := range []struct {
+			value any
+			query string
+			args  []any
+		}{
+			{&room{}, "user_id = ? AND property_id = ?", []any{userID, propertyID}},
+			{&rentCharge{}, "user_id = ? AND property_id = ?", []any{userID, propertyID}},
+			{&manualExpense{}, "user_id = ? AND property_id = ?", []any{userID, propertyID}},
+		} {
+			exists, err := scopedDependencyExists(tx, dependency.value, dependency.query, dependency.args...)
+			if err != nil {
+				return err
+			}
+			if exists {
+				return errPropertyDeletionBlocked
+			}
+		}
+		return tx.Delete(&row).Error
+	})
+}
+
+// deleteRoom follows the same historical-record guard as property deletion.
+// A rent plan, charge, or expense means the room remains part of the audit
+// trail and should be deactivated rather than removed.
+func (s *landlordDomainService) deleteRoom(ctx context.Context, userID, roomID uint64) error {
+	if userID == 0 || roomID == 0 {
+		return errors.New("userID and roomID are required")
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row room
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", roomID, userID).First(&row).Error; err != nil {
+			return err
+		}
+		for _, dependency := range []struct {
+			value any
+			query string
+			args  []any
+		}{
+			{&roomRentPlan{}, "user_id = ? AND room_id = ?", []any{userID, roomID}},
+			{&rentCharge{}, "user_id = ? AND room_id = ?", []any{userID, roomID}},
+			{&manualExpense{}, "user_id = ? AND room_id = ?", []any{userID, roomID}},
+		} {
+			exists, err := scopedDependencyExists(tx, dependency.value, dependency.query, dependency.args...)
+			if err != nil {
+				return err
+			}
+			if exists {
+				return errRoomDeletionBlocked
+			}
+		}
+		return tx.Delete(&row).Error
+	})
 }

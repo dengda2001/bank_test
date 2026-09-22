@@ -24,6 +24,19 @@ func TestCashReceiptPageRendersPrototypeListCardsAndDrawer(t *testing.T) {
 	}
 }
 
+func TestInlineCashReceiptPayerPickerSupportsFuzzySearch(t *testing.T) {
+	var body strings.Builder
+	if err := cashReceiptTemplate.Execute(&body, cashReceiptFormData{
+		Period: "2026-09", Currency: "EUR", ReceivedAt: "2026-09-19", IdempotencyKey: "cash-test",
+		Tenants: []tenant{{ID: 3, Name: "Tenant A"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body.String(), `name="payer_tenant_id" data-searchable`) {
+		t.Fatal("the actual-payer tenant picker does not opt into shared fuzzy search")
+	}
+}
+
 func TestCashReceiptListURLPreservesListContext(t *testing.T) {
 	values := url.Values{
 		"list_period": {"2026-09"}, "list_status": {cashReceiptStatusVoided}, "list_search": {"Tenant A"},

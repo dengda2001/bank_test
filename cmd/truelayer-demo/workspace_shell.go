@@ -7,13 +7,36 @@ import (
 )
 
 type tenantPeriodMatchCalendarData struct {
-	Options          []billingRentMatchOption
+	Options          []tenantPeriodMatchOption
 	SelectedTenantID uint64
 	SelectedPeriod   string
 }
 
+type tenantPeriodMatchOption struct {
+	TenantID    uint64
+	Period      string
+	PeriodLabel string
+	Remaining   string
+}
+
 func tenantPeriodMatchCalendar(options []billingRentMatchOption, selectedTenantID uint64, selectedPeriod string) tenantPeriodMatchCalendarData {
-	return tenantPeriodMatchCalendarData{Options: options, SelectedTenantID: selectedTenantID, SelectedPeriod: selectedPeriod}
+	calendarOptions := make([]tenantPeriodMatchOption, 0, len(options))
+	for _, option := range options {
+		calendarOptions = append(calendarOptions, tenantPeriodMatchOption{
+			TenantID: option.TenantID, Period: option.Period, PeriodLabel: option.PeriodLabel, Remaining: option.Remaining,
+		})
+	}
+	return tenantPeriodMatchCalendarData{Options: calendarOptions, SelectedTenantID: selectedTenantID, SelectedPeriod: selectedPeriod}
+}
+
+func tenantPeriodMatchCalendarForTenant(options []billingMonthOption, tenantID uint64, selectedPeriod string) tenantPeriodMatchCalendarData {
+	calendarOptions := make([]tenantPeriodMatchOption, 0, len(options))
+	for _, option := range options {
+		calendarOptions = append(calendarOptions, tenantPeriodMatchOption{
+			TenantID: tenantID, Period: option.Period, PeriodLabel: option.Label, Remaining: option.Remaining,
+		})
+	}
+	return tenantPeriodMatchCalendarData{Options: calendarOptions, SelectedTenantID: tenantID, SelectedPeriod: selectedPeriod}
 }
 
 // workspaceShell is the page chrome every workspace page shares: the sidebar
@@ -98,7 +121,8 @@ var workspaceNav = embeddedWebText("web/templates/partials/workspace-nav.html")
 // clone. "collection-settle-form" lives here because /bills and the rent
 // workspace's tenant view must render the same inline form.
 var workspaceBase = template.Must(template.New("workspace").Funcs(template.FuncMap{
-	"tenantPeriodMatchCalendar": tenantPeriodMatchCalendar,
+	"tenantPeriodMatchCalendar":          tenantPeriodMatchCalendar,
+	"tenantPeriodMatchCalendarForTenant": tenantPeriodMatchCalendarForTenant,
 }).ParseFS(webFiles,
 	"web/templates/partials/workspace-nav.html",
 	"web/templates/partials/collection-settle-form.html",

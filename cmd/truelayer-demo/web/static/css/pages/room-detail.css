@@ -80,7 +80,7 @@
     .detail-summary .metric .label{font-size:10px;white-space:nowrap}
     .detail-summary .metric strong{font-size:13px}
     .detail-table{min-width:680px}
-    .room-detail-page{gap:13px;padding-bottom:116px}
+    .room-detail-page{gap:13px;padding-bottom:170px}
     .detail-head{align-items:flex-start;margin:0;padding:14px;border:1px solid color-mix(in oklch,var(--sidebar) 18%,var(--border));border-radius:12px;background:var(--sidebar);color:var(--surface)}
     .detail-head .actions{display:none}
     .room-detail-identity{gap:0}
@@ -114,6 +114,7 @@
     .room-edit-desktop-only{display:none}
     .room-detail-grid aside{grid-template-columns:1fr}
     .room-detail-grid aside .detail-section:last-child{grid-column:auto}
-    .room-detail-mobile-actions{position:fixed;left:0;right:0;bottom:calc(68px + env(safe-area-inset-bottom));z-index:35;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:10px 16px;background:color-mix(in oklch,var(--surface) 96%,transparent);border-top:1px solid var(--border);backdrop-filter:blur(12px)}
+    .room-detail-mobile-actions{position:fixed;left:0;right:0;bottom:calc(68px + env(safe-area-inset-bottom));z-index:35;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:10px 16px;background:color-mix(in oklch,var(--surface) 96%,transparent);border-top:1px solid var(--border);backdrop-filter:blur(12px)}
+    .room-detail-mobile-actions .delete-object-form{display:contents}
     .room-detail-mobile-actions .btn{min-height:44px}
   }

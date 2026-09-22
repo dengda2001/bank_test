@@ -405,7 +405,7 @@
 
   const initTenantPeriodMatch = (form) => {
     if (form.dataset.tenantPeriodMatchReady) return;
-    const tenant = form.querySelector('select[name="tenant_id"]');
+    const tenant = form.querySelector('[name="tenant_id"]');
     const period = form.querySelector('[data-tenant-period-input]');
     const metadata = form.querySelector('template[data-tenant-period-options]');
     const helper = form.querySelector('[data-tenant-period-rent]');

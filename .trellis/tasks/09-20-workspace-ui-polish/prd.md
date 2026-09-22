@@ -23,12 +23,12 @@
 - [ ] An empty dashboard manual-review queue has a green visual state; a non-empty queue retains its existing attention state.
 - [ ] Opening and using the tenant selector in the dashboard processing panel keeps the panel anchored and visible, with selectable tenant options.
 - [ ] Changing match status on `/transactions` automatically submits the current filter form while preserving its other filter values.
-- [ ] Tenant search accepts partial text and narrows options by tenant name across dashboard processing, transaction list/detail matching, the transaction tenant filter, and cash-receipt entry.
+- [x] Tenant search accepts partial text and narrows options by tenant name across dashboard processing, transaction list/detail matching, the transaction tenant filter, and cash-receipt entry.
 - [ ] The collection-status selector label is fully readable on both property and room management pages at supported widths.
 - [ ] Every transaction row exposes “查看详情”; rows eligible for direct matching retain that action alongside “匹配流水”.
-- [ ] A newly created, otherwise unused property, room, or tenant can be deleted; the user returns to the relevant list with a success notice.
-- [ ] A property with rooms, a room with a rent plan, rent charge, or expense, and a tenant with plan, obligation, payment, or receipt history cannot be deleted; the original record remains and the UI explains why.
-- [ ] Matching-month controls contain no duplicate tenant/month options, use the shared calendar, only enable months eligible for the selected tenant, and show that month's outstanding rent below the calendar.
+- [x] A newly created, otherwise unused property, room, or tenant can be deleted; the user returns to the relevant list with a success notice.
+- [x] A property with rooms, a room with a rent plan, rent charge, or expense, and a tenant with plan, obligation, payment, or receipt history cannot be deleted; the original record remains and the UI explains why.
+- [x] Matching-month controls contain no duplicate tenant/month options, use the shared calendar, only enable months eligible for the selected tenant, and show that month's outstanding rent below the calendar.
 
 ## Constraints and Notes
 

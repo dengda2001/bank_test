@@ -30,6 +30,7 @@ func TestExpensePageUsesPrototypeListAndAddDrawer(t *testing.T) {
 	err := expenseTemplate.Execute(&body, expensePageData{
 		workspaceShell: workspaceShell{ExpenseCount: 1},
 		Period:         "2026-09", StatusFilter: "all", Search: "repair", ShowForm: true,
+		ExpenseDrawer: &expenseDrawerData{Period: "2026-09", Today: "2026-09-19", Properties: []expensePropertyOption{{ID: 7, Name: "Old County"}}, ReturnURL: "/expenses", PostReturnURL: "/expenses"},
 		FilteredCount: 1, Today: "2026-09-19",
 		Properties: []expensePropertyOption{{ID: 7, Name: "Old County"}},
 		Rooms:      []expenseRoomOption{{ID: 3, PropertyID: 7, Label: "03"}},

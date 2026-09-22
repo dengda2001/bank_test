@@ -18,7 +18,7 @@
         <a class="btn primary" href="/rooms?add=1&amp;period={{.Period}}{{if .PropertyID}}&amp;property_id={{.PropertyID}}{{end}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}&amp;collection={{.CollectionFilter}}"><span class="desktop-object-action">新增房间</span><span class="mobile-object-action">新增</span></a>
       </header>
       {{template "workspace-object-tabs" .}}
-      {{if .Message}}<div class="notice ok" data-toast>房间资料已保存。</div>{{end}}
+      {{if .Message}}<div class="notice ok" data-toast>{{if eq .Message "room_deleted"}}房间已删除。{{else}}房间资料已保存。{{end}}</div>{{end}}
       {{if .Error}}<div class="notice error">房间操作未完成，请检查资料后重试。</div>{{end}}
 
       {{if .ShowForm}}

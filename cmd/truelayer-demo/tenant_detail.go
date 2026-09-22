@@ -404,7 +404,9 @@ var tenantDetailTemplate = newWorkspacePageTemplate("tenant-detail", nil, `<!doc
       .tenant-detail-main { order: 2; }
       .tenant-responsibility-list { padding-left: 16px; padding-right: 16px; }
       .tenant-responsibility-row { padding: 9px 0; }
+      .tenant-detail-page { padding-bottom: 116px; }
       .tenant-detail-mobile-actions { position: fixed; left: 0; right: 0; bottom: calc(68px + env(safe-area-inset-bottom)); z-index: 35; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 16px; background: color-mix(in oklch, var(--surface) 96%, transparent); border-top: 1px solid var(--border); backdrop-filter: blur(12px); }
+      .tenant-detail-mobile-actions .delete-object-form { display: contents; }
       .tenant-detail-mobile-actions .btn { min-height: 44px; }
       /* 「档案信息」的标签列实测文字宽只有 32px，却固定占 130px，把值列压到
          139px：邮箱从域名中间裂开、房间地址折 4 行。窄屏改单列，值列拿到全部
@@ -425,11 +427,12 @@ var tenantDetailTemplate = newWorkspacePageTemplate("tenant-detail", nil, `<!doc
   {{template "workspace-nav" .}}
   <main class="content">
 	<div class="tenant-detail-page">
-<header class="tenant-detail-head"><a class="tenant-detail-back" href="/tenants{{if .ReturnSearch}}?search={{urlquery .ReturnSearch}}{{end}}">← 返回租客管理</a><div class="tenant-identity-row"><div class="tenant-identity"><div class="identity-mark">TN</div><div><div class="brand-title">租客详情</div><h1>{{if .Tenant.DisplayAlias}}{{.Tenant.DisplayAlias}}{{else}}{{.Tenant.Name}}{{end}}</h1><div class="tenant-identity-meta"><span>姓名：{{.Tenant.Name}}</span>{{if .Tenant.Email}}<span>邮箱：{{.Tenant.Email}}</span>{{end}}<span class="detail-status {{.Tenant.Status}}">{{if eq .Tenant.Status "active"}}有效档案{{else}}已停用{{end}}</span></div></div></div><div class="actions"><a class="btn" href="{{.EditURL}}">编辑资料</a><a class="btn primary" href="{{.CashReceiptOpenURL}}">录入现金收款</a></div></div></header>
+<header class="tenant-detail-head"><a class="tenant-detail-back" href="/tenants{{if .ReturnSearch}}?search={{urlquery .ReturnSearch}}{{end}}">← 返回租客管理</a><div class="tenant-identity-row"><div class="tenant-identity"><div class="identity-mark">TN</div><div><div class="brand-title">租客详情</div><h1>{{if .Tenant.DisplayAlias}}{{.Tenant.DisplayAlias}}{{else}}{{.Tenant.Name}}{{end}}</h1><div class="tenant-identity-meta"><span>姓名：{{.Tenant.Name}}</span>{{if .Tenant.Email}}<span>邮箱：{{.Tenant.Email}}</span>{{end}}<span class="detail-status {{.Tenant.Status}}">{{if eq .Tenant.Status "active"}}有效档案{{else}}已停用{{end}}</span></div></div></div><div class="actions"><a class="btn" href="{{.EditURL}}">编辑资料</a><a class="btn primary" href="{{.CashReceiptOpenURL}}">录入现金收款</a><form method="post" action="/tenants/{{.Tenant.ID}}" class="delete-object-form"><input type="hidden" name="action" value="delete"><input type="hidden" name="search" value="{{.ReturnSearch}}"><button class="btn danger" type="submit" data-confirm="true">删除租客</button></form></div></div></header>
 	{{if eq .Message "cash_receipt_saved"}}<div class="notice ok" data-toast>现金收款已入账，并计入对应租金月份。</div>{{end}}
 	{{if eq .Message "cash_receipt_voided"}}<div class="notice ok" data-toast>现金收款已撤销，原始记录与撤销原因已保留。</div>{{end}}
     {{if eq .Message "payer_added"}}<div class="notice ok" data-toast>付款人关系已保存。</div>{{end}}
     {{if eq .Message "payer_removed"}}<div class="notice ok" data-toast>付款人关系已移除，历史记录未改变。</div>{{end}}
+	{{if eq .Error "tenant_delete_blocked"}}<div class="notice error">该租客已有租金或收款记录，不能删除；如不再使用，请停用档案。</div>{{end}}
     {{if eq .Error "invalid_payer"}}<div class="notice error">付款人名称不能为空，且字段长度必须有效。</div>{{end}}
 	{{if eq .Message "tenant_updated"}}<div class="notice ok" data-toast>租客资料已更新。</div>{{end}}
 	{{if .ShowForm}}{{template "tenant-form-drawer" .}}{{end}}
@@ -439,7 +442,7 @@ var tenantDetailTemplate = newWorkspacePageTemplate("tenant-detail", nil, `<!doc
 	  <form class="history-filter" method="get" action="/tenants/{{.Tenant.ID}}"><label for="range">历史范围<select id="range" name="range"><option value="12"{{if eq .HistoryRange "12"}} selected{{end}}>近 12 个月</option><option value="24"{{if eq .HistoryRange "24"}} selected{{end}}>近 24 个月</option></select></label><input type="hidden" name="page_size" value="{{.History.PageSize}}"><button class="btn" type="submit">搜索</button></form>
 	  {{if .History.Rows}}<div class="table-wrap"><table class="history-table"><thead><tr><th>月份／房间</th><th>应缴日</th><th>个人责任</th><th>实收覆盖</th><th>未收</th><th>状态／来源</th></tr></thead><tbody>{{range .History.Rows}}<tr><td><strong>{{.PeriodLabel}}</strong><br>{{if .RoomID}}<a href="/rooms/{{.RoomID}}?period={{.Period}}&amp;rent=1">{{if .PropertyName}}{{.PropertyName}} · {{end}}{{.RoomLabel}} · 前往调整入住与租金</a>{{else}}<span class="tiny">房间信息待核对</span>{{end}}</td><td class="mono">{{.DueDate}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span>{{if .Payments}}<div class="payment-list">{{range .Payments}}<div class="payment-item"><span class="amount">{{.AmountDisplay}}</span><span class="mono">{{.DateDisplay}}</span><span>{{.Source}}</span>{{if eq .Source "现金"}}<a class="void-link" href="/cash-receipts/void?receipt_id={{.PaymentID}}">撤销</a>{{end}}</div>{{end}}</div>{{else}}<div class="tiny">暂无有效收款</div>{{end}}</td></tr>{{end}}</tbody></table></div>{{else}}<div class="empty">所选期间没有个人责任。</div>{{end}}
 	  {{if gt .History.TotalPages 1}}<div class="pagination">{{if .History.HasPrev}}<a class="btn subtle" href="/tenants/{{.Tenant.ID}}?from_month={{.History.FromPeriod}}&amp;to_month={{.History.ToPeriod}}&amp;page={{.History.PrevPage}}&amp;page_size={{.History.PageSize}}{{if $.ReturnSearch}}&amp;search={{urlquery $.ReturnSearch}}{{end}}">上一页</a>{{end}}<span class="pagination-numbers" aria-label="选择页码">{{range .History.Pagination}}{{if .Ellipsis}}<span class="pagination-ellipsis" aria-hidden="true">…</span>{{else if .Current}}<span class="pagination-number is-current" aria-current="page">{{.Number}}</span>{{else}}<a class="pagination-number" href="{{.URL}}">{{.Number}}</a>{{end}}{{end}}</span><span class="tiny">第 {{.History.Page}} / {{.History.TotalPages}} 页</span>{{if .History.HasNext}}<a class="btn subtle" href="/tenants/{{.Tenant.ID}}?from_month={{.History.FromPeriod}}&amp;to_month={{.History.ToPeriod}}&amp;page={{.History.NextPage}}&amp;page_size={{.History.PageSize}}{{if $.ReturnSearch}}&amp;search={{urlquery $.ReturnSearch}}{{end}}">下一页</a>{{end}}</div>{{end}}
-	</section><section class="panel surface tenant-paid-for-panel" aria-labelledby="paid-for-title"><div class="panel-head"><div><h2 id="paid-for-title">代付与被代付</h2><p class="tiny">只影响责任覆盖，不改变每位住客的责任归属。</p></div></div>{{if .PaidByOtherRows}}<div class="table-wrap"><table class="paid-for-table"><thead><tr><th>责任月份</th><th>实际付款人</th><th>责任所有者</th><th class="amount">分配金额</th><th>结果</th></tr></thead><tbody>{{range .PaidByOtherRows}}<tr><td class="mono">{{.PeriodLabel}}</td><td>{{.PayerName}}{{if eq .Result "本人被代付"}} <span class="payer-badge">代付</span>{{end}}</td><td>{{.OwnerName}}</td><td class="amount">{{.Amount}}</td><td><span class="status paid">{{.Result}}</span></td></tr>{{end}}</tbody></table></div>{{else}}<div class="empty">所选期间没有代付或代收记录。</div>{{end}}</section><section class="panel surface tenant-responsibility-panel" aria-labelledby="responsibility-title"><div class="panel-head"><h2 id="responsibility-title">责任与代付</h2><span class="tiny">{{.CurrentPeriod}}</span></div><div class="tenant-responsibility-list"><div class="tenant-responsibility-row"><span><strong>本月个人责任</strong><small>由房间入住与租金计划生成</small></span><strong>{{if .HasCurrentBilling}}{{.CurrentBilling.ExpectedAmount}}{{else}}—{{end}}</strong></div><div class="tenant-responsibility-row"><span><strong>已确认收款</strong><small>{{if .HasCurrentBilling}}{{if .CurrentBilling.Payments}}{{range .CurrentBilling.Payments}}{{.Source}} {{.AmountDisplay}} · {{.DateDisplay}} {{end}}{{else}}暂无有效收款{{end}}{{else}}当月暂无账单{{end}}</small></span><strong>{{if .HasCurrentBilling}}{{.CurrentBilling.PaidAmount}}{{else}}—{{end}}</strong></div></div></section><aside class="tenant-detail-side"><section class="panel surface" aria-labelledby="profile-title"><div class="panel-head"><h2 id="profile-title">租客档案</h2><span class="tiny">档案信息</span></div><dl class="profile-list"><dt>邮箱</dt><dd>{{if .Tenant.Email}}{{.Tenant.Email}}{{else}}未填写{{end}}</dd><dt>状态</dt><dd>{{if eq .Tenant.Status "active"}}有效档案{{else}}已停用{{end}}</dd><dt>档案建立</dt><dd>{{.Tenant.CreatedAt}}</dd></dl><p class="tiny">入住关系、租金和责任金额由对应房间的“入住与租金”计划维护。</p></section><section class="panel surface" aria-labelledby="payer-title"><div class="panel-head"><h2 id="payer-title">付款识别</h2><span class="tiny">付款人名称与参考码</span></div><div class="reference-row"><div><strong>{{if .History.Reference}}{{.History.Reference}}{{else}}暂无付款参考码{{end}}</strong><span class="tiny">付款参考码</span></div>{{if .History.Reference}}<button class="btn subtle copy-reference" type="button" data-copy-value="{{.History.Reference}}">复制</button>{{end}}</div><div class="payer-list">{{if .Payers}}{{range .Payers}}<div class="payer-item"><div class="payer-meta"><strong>{{.Name}}</strong><span class="mono">{{if .PayerID}}ID: {{.PayerID}}{{else}}仅名称，无稳定 ID{{end}}</span>{{if .Shared}}<span class="flag">共享／冲突候选，不能自动选租客</span>{{end}}{{if .RemovedAt}}<span class="tiny">已移除：{{.RemovedAt}}</span>{{end}}</div>{{if not .RemovedAt}}<form method="post" action="/tenants/{{$.Tenant.ID}}/payers/remove"><input type="hidden" name="payer_id" value="{{.ID}}"><button class="btn subtle" type="submit">移除</button></form>{{end}}</div>{{end}}{{else}}<div class="empty">暂无付款人关系。</div>{{end}}</div><form method="post" action="/tenants/{{.Tenant.ID}}/payers" class="form"><label for="payer_name">付款人名称</label><input id="payer_name" name="payer_name" placeholder="例如 Mike" required><label for="payer_id_detail">稳定付款人 ID（可选）</label><input id="payer_id_detail" name="payer_id" placeholder="银行提供时填写"><button class="btn primary" type="submit">添加付款人</button></form></section><div class="risk-note">是否欠租只看个人责任的未覆盖金额。即使由他人代付，完整覆盖后也不会进入催收。</div></aside></div><div class="tenant-detail-mobile-actions"><a class="btn" href="{{.EditURL}}">编辑资料</a><a class="btn primary" href="{{.CashReceiptOpenURL}}">现金补录</a></div></div>
+	</section><section class="panel surface tenant-paid-for-panel" aria-labelledby="paid-for-title"><div class="panel-head"><div><h2 id="paid-for-title">代付与被代付</h2><p class="tiny">只影响责任覆盖，不改变每位住客的责任归属。</p></div></div>{{if .PaidByOtherRows}}<div class="table-wrap"><table class="paid-for-table"><thead><tr><th>责任月份</th><th>实际付款人</th><th>责任所有者</th><th class="amount">分配金额</th><th>结果</th></tr></thead><tbody>{{range .PaidByOtherRows}}<tr><td class="mono">{{.PeriodLabel}}</td><td>{{.PayerName}}{{if eq .Result "本人被代付"}} <span class="payer-badge">代付</span>{{end}}</td><td>{{.OwnerName}}</td><td class="amount">{{.Amount}}</td><td><span class="status paid">{{.Result}}</span></td></tr>{{end}}</tbody></table></div>{{else}}<div class="empty">所选期间没有代付或代收记录。</div>{{end}}</section><section class="panel surface tenant-responsibility-panel" aria-labelledby="responsibility-title"><div class="panel-head"><h2 id="responsibility-title">责任与代付</h2><span class="tiny">{{.CurrentPeriod}}</span></div><div class="tenant-responsibility-list"><div class="tenant-responsibility-row"><span><strong>本月个人责任</strong><small>由房间入住与租金计划生成</small></span><strong>{{if .HasCurrentBilling}}{{.CurrentBilling.ExpectedAmount}}{{else}}—{{end}}</strong></div><div class="tenant-responsibility-row"><span><strong>已确认收款</strong><small>{{if .HasCurrentBilling}}{{if .CurrentBilling.Payments}}{{range .CurrentBilling.Payments}}{{.Source}} {{.AmountDisplay}} · {{.DateDisplay}} {{end}}{{else}}暂无有效收款{{end}}{{else}}当月暂无账单{{end}}</small></span><strong>{{if .HasCurrentBilling}}{{.CurrentBilling.PaidAmount}}{{else}}—{{end}}</strong></div></div></section><aside class="tenant-detail-side"><section class="panel surface" aria-labelledby="profile-title"><div class="panel-head"><h2 id="profile-title">租客档案</h2><span class="tiny">档案信息</span></div><dl class="profile-list"><dt>邮箱</dt><dd>{{if .Tenant.Email}}{{.Tenant.Email}}{{else}}未填写{{end}}</dd><dt>状态</dt><dd>{{if eq .Tenant.Status "active"}}有效档案{{else}}已停用{{end}}</dd><dt>档案建立</dt><dd>{{.Tenant.CreatedAt}}</dd></dl><p class="tiny">入住关系、租金和责任金额由对应房间的“入住与租金”计划维护。</p></section><section class="panel surface" aria-labelledby="payer-title"><div class="panel-head"><h2 id="payer-title">付款识别</h2><span class="tiny">付款人名称与参考码</span></div><div class="reference-row"><div><strong>{{if .History.Reference}}{{.History.Reference}}{{else}}暂无付款参考码{{end}}</strong><span class="tiny">付款参考码</span></div>{{if .History.Reference}}<button class="btn subtle copy-reference" type="button" data-copy-value="{{.History.Reference}}">复制</button>{{end}}</div><div class="payer-list">{{if .Payers}}{{range .Payers}}<div class="payer-item"><div class="payer-meta"><strong>{{.Name}}</strong><span class="mono">{{if .PayerID}}ID: {{.PayerID}}{{else}}仅名称，无稳定 ID{{end}}</span>{{if .Shared}}<span class="flag">共享／冲突候选，不能自动选租客</span>{{end}}{{if .RemovedAt}}<span class="tiny">已移除：{{.RemovedAt}}</span>{{end}}</div>{{if not .RemovedAt}}<form method="post" action="/tenants/{{$.Tenant.ID}}/payers/remove"><input type="hidden" name="payer_id" value="{{.ID}}"><button class="btn subtle" type="submit">移除</button></form>{{end}}</div>{{end}}{{else}}<div class="empty">暂无付款人关系。</div>{{end}}</div><form method="post" action="/tenants/{{.Tenant.ID}}/payers" class="form"><label for="payer_name">付款人名称</label><input id="payer_name" name="payer_name" placeholder="例如 Mike" required><label for="payer_id_detail">稳定付款人 ID（可选）</label><input id="payer_id_detail" name="payer_id" placeholder="银行提供时填写"><button class="btn primary" type="submit">添加付款人</button></form></section><div class="risk-note">是否欠租只看个人责任的未覆盖金额。即使由他人代付，完整覆盖后也不会进入催收。</div></aside></div><div class="tenant-detail-mobile-actions"><a class="btn" href="{{.EditURL}}">编辑资料</a><a class="btn primary" href="{{.CashReceiptOpenURL}}">现金补录</a><form method="post" action="/tenants/{{.Tenant.ID}}" class="delete-object-form"><input type="hidden" name="action" value="delete"><input type="hidden" name="search" value="{{.ReturnSearch}}"><button class="btn danger" type="submit" data-confirm="true">删除租客</button></form></div></div>
   </main>
 </div><script>(function(){var buttons=document.querySelectorAll('.copy-reference');for(var i=0;i<buttons.length;i++){buttons[i].addEventListener('click',function(){var button=this;var value=button.getAttribute('data-copy-value')||'';if(!value){return;}var flash=function(){var original=button.textContent;button.textContent='已复制';window.setTimeout(function(){button.textContent=original;},1500);};if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(value).then(flash,function(){});return;}var field=document.createElement('textarea');field.value=value;document.body.appendChild(field);field.select();try{document.execCommand('copy');flash();}catch(error){}document.body.removeChild(field);});}})();</script></body></html>`)
 
@@ -474,12 +477,12 @@ func (a *app) handleTenantDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	payers, err := newTenantService(a.db).listTenantPayers(r.Context(), userID, tenantID, true)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "tenant detail unavailable", http.StatusInternalServerError)
 		return
 	}
 	var allPayers []tenantPayer
 	if err := a.db.WithContext(r.Context()).Where("user_id = ?", userID).Find(&allPayers).Error; err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "tenant detail unavailable", http.StatusInternalServerError)
 		return
 	}
 	showForm := r.URL.Query().Get("edit") == "1" || isTenantFormError(r.URL.Query().Get("error"))
@@ -611,7 +614,64 @@ func (a *app) handleTenantSubroute(w http.ResponseWriter, r *http.Request) {
 		a.handleRemoveTenantPayer(w, r)
 		return
 	}
+	if r.Method == http.MethodPost {
+		a.handleTenantMutation(w, r)
+		return
+	}
 	a.handleTenantDetail(w, r)
+}
+
+func (a *app) handleTenantMutation(w http.ResponseWriter, r *http.Request) {
+	if !a.requireAuth(w, r) {
+		return
+	}
+	userID, ok := a.currentUserID(r)
+	if !ok || a.db == nil {
+		http.Error(w, "database session required", http.StatusServiceUnavailable)
+		return
+	}
+	rawID := strings.Trim(strings.TrimPrefix(r.URL.Path, "/tenants/"), "/")
+	tenantID, err := strconv.ParseUint(rawID, 10, 64)
+	if err != nil || tenantID == 0 || strings.Contains(rawID, "/") {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, tenantDeleteDetailURL(tenantID, "", "invalid_form"), http.StatusFound)
+		return
+	}
+	if r.Form.Get("action") != "delete" {
+		http.Error(w, "tenant action is invalid", http.StatusBadRequest)
+		return
+	}
+	if err := newTenantService(a.db).deleteTenant(r.Context(), userID, tenantID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		if errors.Is(err, errTenantDeletionBlocked) {
+			http.Redirect(w, r, tenantDeleteDetailURL(tenantID, r.Form.Get("search"), "tenant_delete_blocked"), http.StatusFound)
+			return
+		}
+		http.Error(w, "tenant deletion failed", http.StatusInternalServerError)
+		return
+	}
+	query := url.Values{"message": []string{"tenant_deleted"}}
+	if search := strings.TrimSpace(r.Form.Get("search")); search != "" {
+		query.Set("search", search)
+	}
+	http.Redirect(w, r, "/tenants?"+query.Encode(), http.StatusFound)
+}
+
+func tenantDeleteDetailURL(tenantID uint64, search, errorCode string) string {
+	query := url.Values{}
+	if search = strings.TrimSpace(search); search != "" {
+		query.Set("search", search)
+	}
+	if errorCode != "" {
+		query.Set("error", errorCode)
+	}
+	return "/tenants/" + strconv.FormatUint(tenantID, 10) + "?" + query.Encode()
 }
 
 func tenantIDFromPayerPath(path string) (uint64, bool) {

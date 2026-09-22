@@ -86,26 +86,40 @@ func TestWorkspaceTemplatesIncludeSharedCalendarPicker(t *testing.T) {
 			}
 			page := body.String()
 			for _, expected := range []string{
-				".calendar-popover",
-				"calendar-input",
-				"input[type=\"date\"], input[type=\"month\"]",
-				// Three-level zoom: the header title is clickable (日→月→年) and the
-				// outermost level is a decade grid.
-				".calendar-title {\n",
-				".calendar-year-grid {",
-				"zoomTo('month', '选择月份')",
-				"zoomTo('year', '选择年份')",
-				"const renderYear = () => {",
-				// Outside-click detection must use the dispatch-time event path:
-				// render() detaches the clicked node, so a contains() check on the
-				// live DOM makes the picker close on its own inner clicks.
-				"event.composedPath().includes(wrapper)",
+				`href="/static/css/calendar.css"`,
+				`src="/static/js/calendar.js" defer`,
+				`src="/static/js/workspace-controls.js" defer`,
 			} {
 				if !strings.Contains(page, expected) {
 					t.Fatalf("expected shared calendar picker marker %q", expected)
 				}
 			}
 		})
+	}
+
+	calendarJS := embeddedWebText("web/static/js/calendar.js")
+	for _, expected := range []string{
+		"calendar-input",
+		`input[type="date"], input[type="month"]`,
+		// Three-level zoom: the header title is clickable (日→月→年) and the
+		// outermost level is a decade grid.
+		"zoomTo('month', '选择月份')",
+		"zoomTo('year', '选择年份')",
+		"const renderYear = () => {",
+		// Outside-click detection must use the dispatch-time event path:
+		// render() detaches the clicked node, so a contains() check on the
+		// live DOM makes the picker close on its own inner clicks.
+		"event.composedPath().includes(wrapper)",
+	} {
+		if !strings.Contains(calendarJS, expected) {
+			t.Fatalf("calendar script missing %q", expected)
+		}
+	}
+	calendarCSS := embeddedWebText("web/static/css/calendar.css")
+	for _, expected := range []string{".calendar-popover {", ".calendar-year-grid {"} {
+		if !strings.Contains(calendarCSS, expected) {
+			t.Fatalf("calendar stylesheet missing %q", expected)
+		}
 	}
 }
 
@@ -438,7 +452,6 @@ func TestValidateTenantInputAcceptsOnlyPersonAndPayerIdentity(t *testing.T) {
 	}
 }
 
-
 func TestExpenseInputFromFormKeepsRoomAndTenantHints(t *testing.T) {
 	form := url.Values{}
 	form.Set("description", "Boiler repair")
@@ -707,10 +720,20 @@ func TestBillingTemplateShowsMonthChoiceForRememberedTenant(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"已识别租客，请确认租金月份", "选择租客", "选择月份", "2026年8月", "Aoife", "EUR 950.00", "确认匹配"} {
-		if !strings.Contains(body.String(), expected) {
-			t.Fatalf("billing page missing month-choice text %q: %s", expected, body.String())
+	monthChoice := markupBetween(t, body.String(), `<form class="month-choice-form"`, `</form>`)
+	if !strings.Contains(body.String(), "已识别租客，请确认租金月份") {
+		t.Fatalf("billing page missing remembered-tenant explanation: %s", body.String())
+	}
+	for _, expected := range []string{"data-tenant-period-match", "data-tenant-period-input", `data-tenant="7"`, "2026年8月", "EUR 950.00", "确认匹配"} {
+		if !strings.Contains(monthChoice, expected) {
+			t.Fatalf("billing page missing month-choice text %q: %s", expected, monthChoice)
 		}
+	}
+	if strings.Contains(monthChoice, `<select name="period"`) {
+		t.Fatalf("remembered-tenant month choice still renders a repeated period select: %s", monthChoice)
+	}
+	if !strings.Contains(embeddedWebText("web/static/js/workspace-controls.js"), `form.querySelector('[name="tenant_id"]')`) {
+		t.Fatal("the shared tenant/month calendar does not support the fixed hidden tenant in this form")
 	}
 }
 

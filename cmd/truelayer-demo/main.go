@@ -523,7 +523,7 @@ func loadConfig() (config, error) {
 		From:                   strings.TrimSpace(os.Getenv("TL_FROM")),
 		LogFile:                strings.TrimSpace(getenv("TL_LOG_FILE", "bank-data.jsonl")),
 		TokenFile:              strings.TrimSpace(getenv("TL_TOKEN_FILE", "truelayer-token.json")),
-	MySQLDSN:               strings.TrimSpace(os.Getenv("MYSQL_DSN")),
+		MySQLDSN:               strings.TrimSpace(os.Getenv("MYSQL_DSN")),
 		DatabaseURL:            strings.TrimSpace(os.Getenv("DATABASE_URL")),
 		MigrationsDir:          strings.TrimSpace(getenv("MIGRATIONS_DIR", "migrations")),
 		BankTokenEncryptionKey: strings.TrimSpace(os.Getenv("BANK_TOKEN_ENCRYPTION_KEY")),
@@ -2564,6 +2564,7 @@ var tenantTemplate = newWorkspacePageTemplate("tenants", nil, `<!doctype html>
 
       {{if eq .Message "tenant_added"}}<div class="notice ok" data-toast>租客资料已保存。</div>{{end}}
       {{if eq .Message "tenant_updated"}}<div class="notice ok" data-toast>租客资料已更新。</div>{{end}}
+		{{if eq .Message "tenant_deleted"}}<div class="notice ok" data-toast>租客已删除。</div>{{end}}
 		{{if and .Error (not .ShowForm)}}<div class="notice error">请检查租客姓名、邮箱、付款人名称及状态。</div>{{end}}
 
       <section class="summary" aria-label="Tenant summary">

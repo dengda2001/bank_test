@@ -1060,10 +1060,12 @@ func (a *app) handlePropertyMutation(w http.ResponseWriter, r *http.Request, pro
 			redirectPropertyList(w, r, "", "property_action_failed", false)
 			return
 		}
-		redirectPropertyMutation(w, r, propertyID, "", true)
+		redirectPropertyMutation(w, r, propertyID, "", "", true)
 		return
 	case "deactivate":
 		err = service.deactivateProperty(r.Context(), userID, propertyID)
+	case "delete":
+		err = service.deleteProperty(r.Context(), userID, propertyID)
 	case "save":
 		input := propertyInput{Name: r.Form.Get("name"), CityRegion: r.Form.Get("city_region"), Address: r.Form.Get("address"), Timezone: r.Form.Get("timezone"), Notes: r.Form.Get("notes")}
 		if propertyID == 0 {
@@ -1080,27 +1082,38 @@ func (a *app) handlePropertyMutation(w http.ResponseWriter, r *http.Request, pro
 	}
 	if err != nil {
 		if action == "save" && propertyID != 0 {
-			redirectPropertyMutation(w, r, propertyID, "property_action_failed", true)
+			redirectPropertyMutation(w, r, propertyID, "", "property_action_failed", true)
+			return
+		}
+		if action == "delete" && propertyID != 0 && errors.Is(err, errPropertyDeletionBlocked) {
+			redirectPropertyMutation(w, r, propertyID, "", "property_delete_blocked", false)
 			return
 		}
 		redirectPropertyList(w, r, "", "property_action_failed", action == "save")
 		return
 	}
 	if action == "save" && propertyID != 0 {
-		redirectPropertyMutation(w, r, propertyID, "property_saved", false)
+		redirectPropertyMutation(w, r, propertyID, "property_saved", "", false)
 		return
 	}
 	if action == "deactivate" {
 		redirectPropertyList(w, r, "property_deactivated", "", false)
 		return
 	}
+	if action == "delete" {
+		redirectPropertyList(w, r, "property_deleted", "", false)
+		return
+	}
 	redirectPropertyList(w, r, "property_saved", "", false)
 }
 
-func redirectPropertyMutation(w http.ResponseWriter, r *http.Request, propertyID uint64, message string, editing bool) {
+func redirectPropertyMutation(w http.ResponseWriter, r *http.Request, propertyID uint64, message, errorCode string, editing bool) {
 	query := url.Values{}
 	if message != "" {
 		query.Set("message", message)
+	}
+	if errorCode != "" {
+		query.Set("error", errorCode)
 	}
 	if period, err := parsePeriodMonth(strings.TrimSpace(r.Form.Get("period"))); err == nil {
 		query.Set("period", period.Format("2006-01"))
@@ -1195,6 +1208,21 @@ func redirectRoomEdit(w http.ResponseWriter, r *http.Request, roomID uint64, err
 		query.Set("period", period.Format("2006-01"))
 	}
 	query.Set("error", errorCode)
+	copyRoomReturnContext(query, r.Form)
+	http.Redirect(w, r, "/rooms/"+strconv.FormatUint(roomID, 10)+"?"+query.Encode(), http.StatusFound)
+}
+
+func redirectRoomDetail(w http.ResponseWriter, r *http.Request, roomID uint64, message, errorCode string) {
+	query := url.Values{}
+	if period, err := parsePeriodMonth(strings.TrimSpace(r.Form.Get("period"))); err == nil {
+		query.Set("period", period.Format("2006-01"))
+	}
+	if message != "" {
+		query.Set("message", message)
+	}
+	if errorCode != "" {
+		query.Set("error", errorCode)
+	}
 	copyRoomReturnContext(query, r.Form)
 	http.Redirect(w, r, "/rooms/"+strconv.FormatUint(roomID, 10)+"?"+query.Encode(), http.StatusFound)
 }
@@ -1414,7 +1442,7 @@ func (a *app) handleRoomMutation(w http.ResponseWriter, r *http.Request, pathID 
 	}
 	action := firstNonEmpty(strings.TrimSpace(r.Form.Get("action")), "save")
 	propertyID, parseErr := parsePositiveUint(r.Form.Get("property_id"))
-	if parseErr != nil && action != "deactivate" {
+	if parseErr != nil && action != "deactivate" && action != "delete" {
 		if roomID != 0 {
 			redirectRoomEdit(w, r, roomID, "room_action_failed")
 		} else if redirectPropertyRoom("", "room_action_failed", true) {
@@ -1430,6 +1458,8 @@ func (a *app) handleRoomMutation(w http.ResponseWriter, r *http.Request, pathID 
 	switch action {
 	case "deactivate":
 		err = service.deactivateRoom(r.Context(), userID, roomID, time.Time{})
+	case "delete":
+		err = service.deleteRoom(r.Context(), userID, roomID)
 	case "save", "save_and_setup":
 		capacity := 1
 		if roomID != 0 {
@@ -1458,6 +1488,10 @@ func (a *app) handleRoomMutation(w http.ResponseWriter, r *http.Request, pathID 
 		if errors.Is(err, ErrRoomPropertyLocked) {
 			errorCode = "room_property_locked"
 		}
+		if action == "delete" && errors.Is(err, errRoomDeletionBlocked) {
+			redirectRoomDetail(w, r, roomID, "", "room_delete_blocked")
+			return
+		}
 		if roomID != 0 {
 			redirectRoomEdit(w, r, roomID, errorCode)
 		} else if redirectPropertyRoom("", errorCode, true) {
@@ -1470,6 +1504,10 @@ func (a *app) handleRoomMutation(w http.ResponseWriter, r *http.Request, pathID 
 	if action == "save_and_setup" && createdRoomID != 0 {
 		query := url.Values{"period": []string{validatedPeriodValue(r.Form.Get("period"))}, "rent": []string{"1"}}
 		http.Redirect(w, r, "/rooms/"+strconv.FormatUint(createdRoomID, 10)+"?"+query.Encode(), http.StatusFound)
+		return
+	}
+	if action == "delete" {
+		redirectRoomList(w, r, "room_deleted", "", false)
 		return
 	}
 	if roomID != 0 {
@@ -1565,6 +1603,8 @@ func roomMutationErrorMessage(errorCode string) string {
 		return "房间已有租金记录，不能更改所属房产。"
 	case "room_action_failed":
 		return "房间资料未能保存，请检查输入内容。"
+	case "room_delete_blocked":
+		return "该房间已有租金或支出记录，不能删除；如不再使用，请停用它。"
 	default:
 		return ""
 	}

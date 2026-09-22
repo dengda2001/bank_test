@@ -254,3 +254,71 @@ func TestPropertyDetailRoomActionColumnSaysViewDetails(t *testing.T) {
 		t.Fatal(`a property detail room action still reads 详情; it must match the list pages`)
 	}
 }
+
+func TestObjectDetailsExposeConfirmedDeleteActions(t *testing.T) {
+	propertyPage, err := executeTemplate(propertyDetailPageTemplate, propertyDetailPageData{
+		workspaceShell: workspaceShell{ActivePage: "properties"}, Period: "2026-09",
+		Property: propertyPageRow{ID: 12, Name: "Canal House", Status: "active"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	roomPage, err := executeTemplate(rentRoomDetailTemplate, rentRoomDetailPageData{
+		workspaceShell: workspaceShell{ActivePage: "rooms"}, Period: "2026-09", RoomID: 8,
+		RoomLabel: "A-01", PropertyName: "Canal House", Summary: rentWorkspaceRoomRow{Status: "active"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tenantPage, err := executeTemplate(tenantDetailTemplate, tenantDetailPageData{
+		workspaceShell: workspaceShell{ActivePage: "tenants"}, Tenant: tenantRecord{ID: "9", Name: "Aoife Murphy", Status: "active"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		page, action, label string
+	}{
+		{propertyPage, `action="/properties/12"`, "删除房产"},
+		{roomPage, `action="/rooms/8"`, "删除房间"},
+		{tenantPage, `action="/tenants/9"`, "删除租客"},
+	} {
+		if !strings.Contains(test.page, test.action) || !strings.Contains(test.page, `name="action" value="delete"`) || !strings.Contains(test.page, `data-confirm="true"`) || !strings.Contains(test.page, test.label) {
+			t.Errorf("detail page is missing confirmed delete action %q", test.label)
+		}
+	}
+}
+
+func TestTenantPickersOptIntoSharedFuzzySearch(t *testing.T) {
+	for _, test := range []struct {
+		path    string
+		markers []string
+	}{
+		{
+			path: "web/templates/pages/room-detail.html",
+			markers: []string{
+				`<select name="tenant_id" data-searchable required>`,
+				`<select name="tenant_id" data-searchable>`,
+			},
+		},
+		{
+			path: "web/templates/partials/cash-receipt-drawer.html",
+			markers: []string{
+				`name="tenant_id" data-searchable`,
+			},
+		},
+		{
+			path: "web/static/js/workspace-controls.js",
+			markers: []string{
+				`labelText.toLocaleLowerCase().includes(query)`,
+			},
+		},
+	} {
+		contents := embeddedWebText(test.path)
+		for _, marker := range test.markers {
+			if !strings.Contains(contents, marker) {
+				t.Fatalf("tenant picker asset %s is missing %q", test.path, marker)
+			}
+		}
+	}
+}

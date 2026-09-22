@@ -184,7 +184,7 @@ func TestObjectListMutationRedirectsPreservePeriodAndFilters(t *testing.T) {
 	propertyDetailRequest := httptest.NewRequest(http.MethodPost, "/properties/3", nil)
 	propertyDetailRequest.Form = url.Values{"period": {"2026-06"}, "list_status": {"all"}, "list_search": {"Canal House"}, "list_collection": {"paid"}}
 	propertyDetailRecorder := httptest.NewRecorder()
-	redirectPropertyMutation(propertyDetailRecorder, propertyDetailRequest, 3, "", true)
+	redirectPropertyMutation(propertyDetailRecorder, propertyDetailRequest, 3, "", "", true)
 	propertyDetailTarget, err := url.Parse(propertyDetailRecorder.Header().Get("Location"))
 	if err != nil {
 		t.Fatal(err)

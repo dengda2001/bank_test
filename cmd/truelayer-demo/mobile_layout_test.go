@@ -466,7 +466,7 @@ func TestTenantDetailProfileListStacksOnlyOnNarrowScreens(t *testing.T) {
 	}
 }
 
-// The count badges are a per-page property, not a responsive one: four pages
+// The count badges are a per-page property, not a responsive one: three pages
 // render them, three never did. This used to be phrased as a desktop-freeze
 // constraint, but it survives the unfreeze (responsive-conventions.md §1) as
 // exactly what it says -- the shared chrome must not gain markup a page never
@@ -500,8 +500,8 @@ func TestNavCountsOnlyRenderWhereTheyDidBefore(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		if got := strings.Count(page, `class="nav-count"`); got != 4 {
-			t.Fatalf("%s renders %d count badges, want 4", name, got)
+		if got := strings.Count(page, `class="nav-count"`); got != 3 {
+			t.Fatalf("%s renders %d count badges, want 3", name, got)
 		}
 	}
 

@@ -26,6 +26,8 @@ type tenant struct {
 
 type tenantService struct{ db *gorm.DB }
 
+var errTenantDeletionBlocked = errors.New("tenant has linked rent or payment records")
+
 type tenantPayer struct {
 	ID                  uint64 `gorm:"primaryKey"`
 	UserID              uint64
@@ -205,6 +207,43 @@ func (s *tenantService) updateTenant(ctx context.Context, userID, tenantID uint6
 		return tenant{}, err
 	}
 	return row, nil
+}
+
+// deleteTenant intentionally refuses to erase a tenant with rent or payment
+// history. Tenant payers cascade with an otherwise independent profile, while
+// all ledger-facing records stay intact and can be retired through the normal
+// inactive status instead.
+func (s *tenantService) deleteTenant(ctx context.Context, userID, tenantID uint64) error {
+	if userID == 0 || tenantID == 0 {
+		return errors.New("userID and tenantID are required")
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row tenant
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", tenantID, userID).First(&row).Error; err != nil {
+			return err
+		}
+		for _, dependency := range []struct {
+			value any
+			query string
+			args  []any
+		}{
+			{&roomRentPlanMember{}, "user_id = ? AND tenant_id = ?", []any{userID, tenantID}},
+			{&rentObligation{}, "user_id = ? AND tenant_id = ?", []any{userID, tenantID}},
+			{&paymentAllocation{}, "user_id = ? AND tenant_id = ?", []any{userID, tenantID}},
+			{&paymentTransaction{}, "user_id = ? AND matched_tenant_id = ?", []any{userID, tenantID}},
+			{&cashReceipt{}, "user_id = ? AND payer_tenant_id = ?", []any{userID, tenantID}},
+			{&dunningSendAttempt{}, "user_id = ? AND tenant_id = ?", []any{userID, tenantID}},
+		} {
+			exists, err := scopedDependencyExists(tx, dependency.value, dependency.query, dependency.args...)
+			if err != nil {
+				return err
+			}
+			if exists {
+				return errTenantDeletionBlocked
+			}
+		}
+		return tx.Delete(&row).Error
+	})
 }
 
 func (s *tenantService) listTenants(ctx context.Context, userID uint64) ([]tenantRecord, error) {
