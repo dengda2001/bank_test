@@ -374,3 +374,53 @@ func TestFuzzySearchFilteredOptionsAreActuallyHidden(t *testing.T) {
 		t.Fatalf("选项的 [hidden] 规则没有把它藏起来：%q", rule)
 	}
 }
+
+// 房产详情页的「未收」卡是窄屏专用的（`.property-mobile-unpaid` 默认 display:none，
+// ≤640px 才顶掉第 3 张卡露出来），所以它在桌面上根本看不见——欠着钱也是灰的这件事
+// 只有拿手机看才发现。房间详情页的同名卡（room-detail.html 的「未付」）早就按余额
+// 上了 metric-warning，房产页这张一直是裸的 .metric。
+//
+// workspace.css 里那三个语义修饰类的注释写得很清楚：「调用方是按状态条件加类的」，
+// 也就是说类出现即代表状态成立。房产页就是当时漏掉的那个调用方。
+func TestPropertyDetailUnpaidCardWarnsOnlyWhenMoneyIsOwed(t *testing.T) {
+	render := func(balanceCents int64) string {
+		t.Helper()
+		var body strings.Builder
+		if err := propertyDetailPageTemplate.Execute(&body, propertyDetailPageData{
+			workspaceShell: workspaceShell{ActivePage: "properties"},
+			Period:         "2026-09",
+			Property: propertyPageRow{
+				ID: 1, Name: "Canal House", Status: "active", StatusLabel: "有效",
+				BalanceCents: balanceCents, BalanceAmount: "€1,250.00",
+			},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return body.String()
+	}
+
+	// 欠着钱：这张卡得带上警示色，且类必须和 property-mobile-unpaid 挂在同一个
+	// 元素上——挂到隔壁那张卡上，着色就落在一个窄屏根本不显示的元素里了。
+	owed := render(125000)
+	if !strings.Contains(owed, `class="panel metric property-mobile-unpaid metric-warning"`) {
+		t.Fatal("未收卡欠着钱却没有看色：欠 1250 和欠 0 元长得一样")
+	}
+	// 没欠钱（或已结清）：不该有警示色。0 元的红会被读成"出事了"。
+	clear := render(0)
+	if strings.Contains(clear, "metric-warning") {
+		t.Fatal("未收为 0 的卡不该报红")
+	}
+	if !strings.Contains(clear, `class="panel metric property-mobile-unpaid"`) {
+		t.Fatal("未收卡本身不见了：着色条件写错会连卡片一起改没")
+	}
+
+	// 类只是开关，颜色得真有人给。这一段钉住 workspace.css 那侧还在定义它，
+	// 否则测试绿着、屏幕上仍然是灰的。
+	warning := regexp.MustCompile(`\.metric\.metric-warning\s*\{[^}]*color-mix\(in oklch, ?var\(--danger\)`).FindString(embeddedWebText("web/static/css/workspace.css"))
+	if warning == "" {
+		t.Fatal("workspace.css 不再给 metric-warning 上警示底色，模板加了类也看不出差别")
+	}
+	if !strings.Contains(embeddedWebText("web/static/css/workspace.css"), ".metric.metric-warning strong { color: var(--danger); }") {
+		t.Fatal("metric-warning 的金额不再是警示色")
+	}
+}
