@@ -60,14 +60,19 @@ func TestTenantPayerNormalizationAndSharing(t *testing.T) {
 	}
 }
 
-func TestTenantFormDoesNotExposeRentPlanFields(t *testing.T) {
+func TestTenantCreateFormExposesOnlyItsOptionalRoomPlanFields(t *testing.T) {
 	page, err := executeTemplate(tenantTemplate, tenantPageData{ShowForm: true, Form: tenantRecord{Status: "active"}, ReturnURL: "/tenants", PostReturnURL: "/tenants?add=1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{"monthly_rent", "room_id", "due_day", "rent_effective_from_month", "arrangement_start_month", "room_plan"} {
+	for _, field := range []string{"property_id", "room_id", "arrangement_start_month", "room_plan", "new_responsibility"} {
+		if !strings.Contains(page, `name="`+field+`"`) {
+			t.Errorf("tenant create form is missing room-plan field %q", field)
+		}
+	}
+	for _, field := range []string{"monthly_rent", "due_day", "rent_effective_from_month"} {
 		if strings.Contains(page, `name="`+field+`"`) {
-			t.Errorf("tenant form still posts rent-plan field %q", field)
+			t.Errorf("tenant form exposes room-owned rent-plan field %q", field)
 		}
 	}
 }

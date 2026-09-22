@@ -10,8 +10,16 @@
         <div class="form-field"><label for="room-label">房间名称</label><input id="room-label" name="room_label" maxlength="191" required autofocus></div>
         <div class="form-field"><label for="room-property">所属房产</label><select id="room-property" name="property_id" required><option value="">请选择房产</option>{{range .Properties}}<option value="{{.ID}}"{{if eq $.Form.PropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></div>
       </div>
+      <fieldset class="tenant-form-section room-rent-setup"><legend>租金规则</legend>
+        <div class="room-meta-form-grid">
+          <div class="form-field"><label for="room-monthly-rent">房间月租</label><input id="room-monthly-rent" name="monthly_rent" type="number" min="0.01" step="0.01" inputmode="decimal" value="{{.Form.MonthlyRent}}" required></div>
+          <div class="form-field"><label for="room-effective-month">租金生效月份</label><input id="room-effective-month" name="effective_month" type="month" value="{{.Form.EffectiveMonth}}" required></div>
+          <div class="form-field"><label for="room-due-day">默认交租日</label><input id="room-due-day" name="due_day" type="number" min="1" max="31" step="1" value="{{.Form.DueDay}}" required></div>
+        </div>
+        <p class="tiny">保存为空房间后，可在新增租客时设置入住与分摊租金。</p>
+      </fieldset>
       <div class="form-field"><label for="room-notes">房间备注</label><textarea id="room-notes" name="notes" maxlength="2000">{{.Form.Notes}}</textarea></div>
-      <div class="drawer-actions"><a class="btn subtle" href="{{.ReturnURL}}">取消</a><button class="btn" type="submit" name="action" value="save">仅保存空房间</button><button class="btn primary" type="submit" name="action" value="save_and_setup">保存并设置入住与租金</button></div>
+      <div class="drawer-actions"><a class="btn subtle" href="{{.ReturnURL}}">取消</a><button class="btn" type="submit" name="action" value="save">仅保存空房间</button><button class="btn primary" type="submit" name="action" value="save_and_setup">保存并设置租客</button></div>
     </form>
   </section>
 </div>

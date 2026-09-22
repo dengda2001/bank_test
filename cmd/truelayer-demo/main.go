@@ -245,6 +245,42 @@ type tenantPageData struct {
 	Form          tenantRecord
 	ReturnURL     string
 	PostReturnURL string
+	ErrorMessage  string
+
+	TenantProperties            []tenantPropertyAssignmentOption
+	TenantRooms                 []tenantRoomAssignmentOption
+	TenantAssignmentPropertyID  uint64
+	TenantAssignmentRoomID      uint64
+	TenantArrangementStartMonth string
+}
+
+type tenantPropertyAssignmentOption struct {
+	ID   uint64
+	Name string
+}
+
+type tenantRoomAssignmentOption struct {
+	ID              uint64
+	PropertyID      uint64
+	PropertyName    string
+	RoomLabel       string
+	RentPlanVersion uint64
+	PlansJSON       string
+}
+
+type tenantRoomPlanWire struct {
+	EffectiveFromMonth string                     `json:"effective_from_month"`
+	EffectiveToMonth   string                     `json:"effective_to_month,omitempty"`
+	MonthlyRentCents   int64                      `json:"monthly_rent_cents"`
+	Currency           string                     `json:"currency"`
+	DueDay             int                        `json:"due_day"`
+	Members            []tenantRoomPlanMemberWire `json:"members"`
+}
+
+type tenantRoomPlanMemberWire struct {
+	TenantID            uint64 `json:"tenant_id"`
+	TenantName          string `json:"tenant_name"`
+	ResponsibilityCents int64  `json:"responsibility_cents"`
 }
 
 type expensePageData struct {
@@ -1067,7 +1103,8 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 	if !a.requireAuth(w, r) {
 		return
 	}
-	if _, ok := a.scopedPageUser(w, r); !ok {
+	userID, ok := a.scopedPageUser(w, r)
+	if !ok {
 		return
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodPost {
@@ -1122,6 +1159,11 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	showForm := editing || r.URL.Query().Get("add") == "1" || r.URL.Query().Get("error") != ""
+	assignmentPropertyID, assignmentRoomID, arrangementStartMonth, assignmentErr := tenantAssignmentSelectionFromQuery(r.URL.Query())
+	if assignmentErr != nil {
+		http.Error(w, "tenant room selection is invalid", http.StatusBadRequest)
+		return
+	}
 	returnQuery := url.Values{"search": []string{search}}
 	returnURL := "/tenants"
 	if search != "" {
@@ -1135,6 +1177,13 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 		postReturnQuery.Set("edit", formRecord.ID)
 	} else if showForm {
 		postReturnQuery.Set("add", "1")
+		if assignmentPropertyID != 0 {
+			postReturnQuery.Set("property_id", strconv.FormatUint(assignmentPropertyID, 10))
+		}
+		if assignmentRoomID != 0 {
+			postReturnQuery.Set("room_id", strconv.FormatUint(assignmentRoomID, 10))
+		}
+		postReturnQuery.Set("arrangement_start_month", arrangementStartMonth)
 	}
 	postReturnURL := "/tenants"
 	if encoded := postReturnQuery.Encode(); encoded != "" {
@@ -1152,19 +1201,31 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 			IncomeCount:   incomeCount,
 			ExpenseCount:  expenseCount,
 		}),
-		PageKey:       "tenants",
-		CanonicalPath: "/tenants",
-		Message:       r.URL.Query().Get("message"),
-		Error:         r.URL.Query().Get("error"),
-		Rows:          tenants,
-		Search:        search,
-		FilteredCount: len(tenants),
-		ActiveCount:   activeCount,
-		ShowForm:      showForm,
-		Editing:       editing,
-		Form:          formRecord,
-		ReturnURL:     returnURL,
-		PostReturnURL: postReturnURL,
+		PageKey:                     "tenants",
+		CanonicalPath:               "/tenants",
+		Message:                     r.URL.Query().Get("message"),
+		Error:                       r.URL.Query().Get("error"),
+		Rows:                        tenants,
+		Search:                      search,
+		FilteredCount:               len(tenants),
+		ActiveCount:                 activeCount,
+		ShowForm:                    showForm,
+		Editing:                     editing,
+		Form:                        formRecord,
+		ReturnURL:                   returnURL,
+		PostReturnURL:               postReturnURL,
+		ErrorMessage:                tenantFormErrorMessage(r.URL.Query().Get("error")),
+		TenantAssignmentPropertyID:  assignmentPropertyID,
+		TenantAssignmentRoomID:      assignmentRoomID,
+		TenantArrangementStartMonth: arrangementStartMonth,
+	}
+	if showForm && !editing {
+		properties, rooms, loadErr := a.loadTenantRoomAssignmentOptions(r.Context(), userID)
+		if loadErr != nil {
+			http.Error(w, loadErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		data.TenantProperties, data.TenantRooms = properties, rooms
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tenantTemplate.Execute(w, data); err != nil {
@@ -1186,8 +1247,23 @@ func (a *app) createTenant(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := a.persistTenantRecord(r.Context(), r, r.Form); err != nil {
-		if errors.Is(err, errInvalidTenantInput) {
-			http.Redirect(w, r, tenantFormRedirectURL(returnTo, "", "invalid_tenant"), http.StatusFound)
+		errorCode := ""
+		switch {
+		case errors.Is(err, errInvalidTenantInput):
+			errorCode = "invalid_tenant"
+		case errors.Is(err, errInvalidTenantRoomPlan), errors.Is(err, ErrInvalidRentPlan):
+			errorCode = "tenant_room_invalid"
+		case errors.Is(err, ErrStaleRentPlanTimeline):
+			errorCode = "tenant_room_stale"
+		case errors.Is(err, ErrTenantRoomMonthConflict):
+			errorCode = "tenant_room_conflict"
+		case errors.Is(err, ErrRentPlanFactsLocked):
+			errorCode = "tenant_room_locked"
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			errorCode = "tenant_room_unavailable"
+		}
+		if errorCode != "" {
+			http.Redirect(w, r, tenantFormRedirectURL(returnTo, "", errorCode), http.StatusFound)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1258,6 +1334,7 @@ func filterTenantRecords(rows []tenantRecord, search string) []tenantRecord {
 }
 
 var errInvalidTenantInput = errors.New("invalid tenant input")
+var errInvalidTenantRoomPlan = errors.New("invalid tenant room plan")
 
 func (a *app) listTenantRecords(ctx context.Context, r *http.Request) ([]tenantRecord, error) {
 	userID, ok := a.currentUserID(r)
@@ -1285,7 +1362,19 @@ func (a *app) persistTenantRecord(ctx context.Context, r *http.Request, values f
 			_, err = service.updateTenant(ctx, userID, tenantID, input)
 		}
 	} else {
-		_, err = service.createTenant(ctx, userID, input)
+		form, ok := values.(url.Values)
+		if !ok {
+			return errInvalidTenantRoomPlan
+		}
+		assignment, hasAssignment, assignmentErr := tenantRoomPlanAssignmentInputFromForm(form)
+		if assignmentErr != nil {
+			return errInvalidTenantRoomPlan
+		}
+		if hasAssignment {
+			_, err = service.createTenantWithRoomPlan(ctx, userID, input, assignment)
+		} else {
+			_, err = service.createTenant(ctx, userID, input)
+		}
 	}
 	if err != nil {
 		if isValidationError(err) {
@@ -1294,6 +1383,154 @@ func (a *app) persistTenantRecord(ctx context.Context, r *http.Request, values f
 		return err
 	}
 	return nil
+}
+
+func tenantAssignmentSelectionFromQuery(values url.Values) (propertyID, roomID uint64, arrangementMonth string, err error) {
+	if propertyID, err = parseOptionalUint(values.Get("property_id")); err != nil {
+		return 0, 0, "", err
+	}
+	if roomID, err = parseOptionalUint(values.Get("room_id")); err != nil {
+		return 0, 0, "", err
+	}
+	arrangementMonth = dublinCurrentMonth(time.Now()).Format("2006-01")
+	if raw := strings.TrimSpace(values.Get("arrangement_start_month")); raw != "" {
+		month, monthErr := parsePeriodMonth(raw)
+		if monthErr != nil {
+			return 0, 0, "", monthErr
+		}
+		arrangementMonth = month.Format("2006-01")
+	}
+	return propertyID, roomID, arrangementMonth, nil
+}
+
+func (a *app) loadTenantRoomAssignmentOptions(ctx context.Context, userID uint64) ([]tenantPropertyAssignmentOption, []tenantRoomAssignmentOption, error) {
+	repo := newLandlordRentRepository(a.db)
+	properties, err := repo.listProperties(ctx, userID, propertyQuery{Status: "active"})
+	if err != nil {
+		return nil, nil, err
+	}
+	rooms, err := repo.listRooms(ctx, userID, roomQuery{Status: "active"})
+	if err != nil {
+		return nil, nil, err
+	}
+	plans, err := repo.listRoomRentPlans(ctx, userID, roomRentPlanQuery{})
+	if err != nil {
+		return nil, nil, err
+	}
+	members, err := repo.listRoomRentPlanMembers(ctx, userID, roomRentPlanMemberQuery{})
+	if err != nil {
+		return nil, nil, err
+	}
+	var tenants []tenant
+	if err := a.db.WithContext(ctx).Where("user_id = ? AND status = ?", userID, "active").Find(&tenants).Error; err != nil {
+		return nil, nil, err
+	}
+
+	propertyNameByID := make(map[uint64]string, len(properties))
+	propertyOptions := make([]tenantPropertyAssignmentOption, 0, len(properties))
+	for _, row := range properties {
+		propertyNameByID[row.ID] = row.Name
+		propertyOptions = append(propertyOptions, tenantPropertyAssignmentOption{ID: row.ID, Name: row.Name})
+	}
+	tenantNameByID := make(map[uint64]string, len(tenants))
+	for _, row := range tenants {
+		tenantNameByID[row.ID] = firstNonEmpty(row.DisplayAlias, row.Name)
+	}
+	membersByPlanID := make(map[uint64][]tenantRoomPlanMemberWire)
+	for _, row := range members {
+		membersByPlanID[row.RoomRentPlanID] = append(membersByPlanID[row.RoomRentPlanID], tenantRoomPlanMemberWire{
+			TenantID: row.TenantID, TenantName: firstNonEmpty(tenantNameByID[row.TenantID], "已停用租客"), ResponsibilityCents: row.ResponsibilityCents,
+		})
+	}
+	plansByRoomID := make(map[uint64][]tenantRoomPlanWire)
+	for _, row := range plans {
+		wire := tenantRoomPlanWire{
+			EffectiveFromMonth: row.EffectiveFromMonth.Format("2006-01"), MonthlyRentCents: row.MonthlyRentCents,
+			Currency: row.Currency, DueDay: row.DueDay, Members: membersByPlanID[row.ID],
+		}
+		if row.EffectiveToMonth != nil {
+			wire.EffectiveToMonth = row.EffectiveToMonth.Format("2006-01")
+		}
+		plansByRoomID[row.RoomID] = append(plansByRoomID[row.RoomID], wire)
+	}
+	options := make([]tenantRoomAssignmentOption, 0, len(rooms))
+	for _, row := range rooms {
+		plansJSON, marshalErr := json.Marshal(plansByRoomID[row.ID])
+		if marshalErr != nil {
+			return nil, nil, marshalErr
+		}
+		options = append(options, tenantRoomAssignmentOption{
+			ID: row.ID, PropertyID: row.PropertyID, PropertyName: propertyNameByID[row.PropertyID], RoomLabel: row.RoomLabel,
+			RentPlanVersion: row.RentPlanVersion, PlansJSON: string(plansJSON),
+		})
+	}
+	return propertyOptions, options, nil
+}
+
+type tenantRoomPlanMemberForm struct {
+	TenantID            uint64 `json:"tenant_id"`
+	ResponsibilityCents int64  `json:"responsibility_cents"`
+}
+
+func tenantRoomPlanAssignmentInputFromForm(values url.Values) (tenantRoomPlanAssignmentInput, bool, error) {
+	rawRoomID := strings.TrimSpace(values.Get("room_id"))
+	if rawRoomID == "" {
+		return tenantRoomPlanAssignmentInput{}, false, nil
+	}
+	roomID, roomErr := parsePositiveUint(rawRoomID)
+	propertyID, propertyErr := parsePositiveUint(values.Get("property_id"))
+	effectiveMonth, monthErr := parsePeriodMonth(strings.TrimSpace(values.Get("arrangement_start_month")))
+	version, versionErr := strconv.ParseUint(strings.TrimSpace(values.Get("plan_version")), 10, 64)
+	newResponsibility, responsibilityErr := parseOptionalRentPlanAmountCents(values.Get("new_responsibility"))
+	if roomErr != nil || propertyErr != nil || monthErr != nil || versionErr != nil || responsibilityErr != nil {
+		return tenantRoomPlanAssignmentInput{}, false, errInvalidTenantRoomPlan
+	}
+	rawPlan := strings.TrimSpace(values.Get("room_plan"))
+	if len(rawPlan) > 64*1024 {
+		return tenantRoomPlanAssignmentInput{}, false, errInvalidTenantRoomPlan
+	}
+	members := make([]tenantRoomPlanMemberForm, 0)
+	if rawPlan != "" {
+		decoder := json.NewDecoder(strings.NewReader(rawPlan))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&members); err != nil {
+			return tenantRoomPlanAssignmentInput{}, false, errInvalidTenantRoomPlan
+		}
+		var extra any
+		if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+			return tenantRoomPlanAssignmentInput{}, false, errInvalidTenantRoomPlan
+		}
+	}
+	assignment := tenantRoomPlanAssignmentInput{
+		PropertyID: propertyID, RoomID: roomID, EffectiveMonth: effectiveMonth, ExpectedTimelineVersion: version,
+		ExistingMembers: make([]RoomRentPlanMemberInput, 0, len(members)), NewTenantResponsibilityCents: newResponsibility,
+	}
+	for _, member := range members {
+		assignment.ExistingMembers = append(assignment.ExistingMembers, RoomRentPlanMemberInput{TenantID: member.TenantID, ResponsibilityCents: member.ResponsibilityCents})
+	}
+	if err := validateTenantRoomPlanAssignment(assignment); err != nil {
+		return tenantRoomPlanAssignmentInput{}, false, errInvalidTenantRoomPlan
+	}
+	return assignment, true, nil
+}
+
+func tenantFormErrorMessage(errorCode string) string {
+	switch errorCode {
+	case "invalid_tenant":
+		return "请检查租客姓名、邮箱和付款人资料。"
+	case "tenant_room_invalid":
+		return "请检查所选房产、房间、月份与租金金额。"
+	case "tenant_room_stale":
+		return "房间的入住或租金已更新，请重新打开表单后再保存。"
+	case "tenant_room_conflict":
+		return "该租客从所选月份起已在其他房间入住，请先结束原房间的计划。"
+	case "tenant_room_locked":
+		return "所选月份的租金已锁定，不能调整入住人员。"
+	case "tenant_room_unavailable":
+		return "所选房间或该月份的租金规则已不可用，请重新选择。"
+	default:
+		return "请检查租客姓名、邮箱、付款人名称及房间租金资料。"
+	}
 }
 
 func (a *app) handleExpenses(w http.ResponseWriter, r *http.Request) {
@@ -2578,7 +2815,7 @@ var tenantTemplate = newWorkspacePageTemplate("tenants", nil, `<!doctype html>
         <div class="panel-head"><h2 id="tenant-list-title">租客列表</h2><span class="tiny">{{.FilteredCount}} / {{.TenantCount}} 条记录</span></div>
         {{if .Rows}}
         <div class="tenant-mobile-list" aria-label="移动端租客列表">
-          {{range .Rows}}<article class="tenant-mobile-card panel"><div class="tenant-mobile-head"><div><h3>{{if .DisplayAlias}}{{.DisplayAlias}}{{else}}{{.Name}}{{end}}</h3>{{if .DisplayAlias}}<p>{{.Name}}</p>{{end}}<p>{{if .Email}}{{.Email}}{{else}}未填写邮箱{{end}}</p><p>{{if .PayerNameHint}}{{.PayerNameHint}}{{else}}暂无付款识别{{end}}</p></div><span class="status {{.Status}}">{{if eq .Status "active"}}有效{{else}}已停用{{end}}</span></div><div class="tenant-mobile-actions"><a class="btn subtle" href="/tenants/{{.ID}}{{if $.Search}}?search={{urlquery $.Search}}{{end}}">查看责任</a><a class="btn subtle" href="/tenants?edit={{.ID}}{{if $.Search}}&amp;search={{urlquery $.Search}}{{end}}">编辑档案</a></div>{{if .BillingHistory}}<details class="tenant-mobile-history"><summary>查看最近六个月责任</summary>{{range .BillingHistory}}<div class="tenant-mobile-history-row"><span>{{.PeriodLabel}} · {{.StatusLabel}}</span><strong>{{.BalanceAmount}}</strong></div>{{end}}</details>{{end}}</article>{{end}}
+          {{range .Rows}}<article class="tenant-mobile-card panel"><div class="tenant-mobile-head"><div><h3>{{if .DisplayAlias}}{{.DisplayAlias}}{{else}}{{.Name}}{{end}}</h3>{{if .DisplayAlias}}<p>{{.Name}}</p>{{end}}<p>{{if .Email}}{{.Email}}{{else}}未填写邮箱{{end}}</p><p>{{if .PayerNameHint}}{{.PayerNameHint}}{{else}}暂无付款识别{{end}}</p></div><span class="status {{.Status}}">{{if eq .Status "active"}}有效{{else}}已停用{{end}}</span></div><div class="tenant-mobile-actions"><a class="btn subtle" href="/tenants/{{.ID}}{{if $.Search}}?search={{urlquery $.Search}}{{end}}">详情</a><a class="btn subtle" href="/tenants?edit={{.ID}}{{if $.Search}}&amp;search={{urlquery $.Search}}{{end}}">编辑档案</a></div>{{if .BillingHistory}}<details class="tenant-mobile-history"><summary>查看最近六个月责任</summary>{{range .BillingHistory}}<div class="tenant-mobile-history-row"><span>{{.PeriodLabel}} · {{.StatusLabel}}</span><strong>{{.BalanceAmount}}</strong></div>{{end}}</details>{{end}}</article>{{end}}
         </div>
         <div class="tenant-table-wrap table-wrap">
           <table>
@@ -2590,7 +2827,7 @@ var tenantTemplate = newWorkspacePageTemplate("tenants", nil, `<!doctype html>
                 <td>{{if .PayerNameHint}}{{.PayerNameHint}}{{else}}暂无付款人名称{{end}}<br><span class="mono">付款人 ID：{{if .PayerID}}{{.PayerID}}{{else}}暂无{{end}}</span></td>
                 <td><span class="status {{.Status}}">{{if eq .Status "active"}}有效{{else}}已停用{{end}}</span></td>
                 <td class="mono">{{.CreatedAt}}</td>
-                <td><div class="row-actions"><a class="btn subtle" href="/tenants/{{.ID}}{{if $.Search}}?search={{urlquery $.Search}}{{end}}">查看责任</a><a class="btn subtle" href="/tenants?edit={{.ID}}{{if $.Search}}&amp;search={{urlquery $.Search}}{{end}}">编辑档案</a></div></td>
+                <td><div class="row-actions"><a class="btn subtle" href="/tenants/{{.ID}}{{if $.Search}}?search={{urlquery $.Search}}{{end}}">详情</a><a class="btn subtle" href="/tenants?edit={{.ID}}{{if $.Search}}&amp;search={{urlquery $.Search}}{{end}}">编辑档案</a></div></td>
               </tr>
               <tr id="tenant-billing-{{.ID}}" class="tenant-history-row" hidden><td colspan="5"><div class="tenant-history">
                 <div class="tenant-history-head"><h3>最近六个月个人责任</h3><span class="tiny">责任行按月份、房间分别保留</span></div>

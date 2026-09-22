@@ -121,14 +121,14 @@ func TestWorkspaceOutstandingFilterOnlyIncludesValidUnpaidResponsibilities(t *te
 	}
 }
 
-func TestRentWorkspaceTenantFormShowsNoRentPlanInputs(t *testing.T) {
+func TestRentWorkspaceTenantCreateFormShowsRoomPlanInputs(t *testing.T) {
 	page, err := executeTemplate(tenantTemplate, tenantPageData{ShowForm: true, Form: tenantRecord{Status: "active"}, ReturnURL: "/tenants", PostReturnURL: "/tenants?add=1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{"monthly_rent", "room_id", "due_day", "rent_effective_from_month", "arrangement_start_month", "room_plan"} {
-		if strings.Contains(page, `name="`+field+`"`) {
-			t.Errorf("tenant page still writes room rent field %q", field)
+	for _, field := range []string{"property_id", "room_id", "arrangement_start_month", "room_plan", "new_responsibility"} {
+		if !strings.Contains(page, `name="`+field+`"`) {
+			t.Errorf("tenant create page is missing room rent field %q", field)
 		}
 	}
 }

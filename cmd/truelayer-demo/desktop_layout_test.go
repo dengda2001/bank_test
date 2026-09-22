@@ -108,7 +108,7 @@ func TestDesktopAssetFormsExposeCreateAndEditControls(t *testing.T) {
 			t.Fatalf("room create form missing %q", marker)
 		}
 	}
-	for _, removed := range []string{`name="active_from"`, `name="inactive_from"`, `name="monthly_rent"`, `name="due_day"`} {
+	for _, removed := range []string{`name="active_from"`, `name="inactive_from"`} {
 		if strings.Contains(roomHTML.String(), removed) {
 			t.Fatalf("room create form exposes asset validity or rent-plan field %q", removed)
 		}
@@ -180,7 +180,7 @@ func TestRoomDetailEditDrawerOmitsRoomTypeAndCapacity(t *testing.T) {
 	}
 }
 
-func TestTenantCreateFormContainsOnlyIdentityAndPayerFields(t *testing.T) {
+func TestTenantCreateFormContainsIdentityPayerAndOptionalRoomPlanFields(t *testing.T) {
 	var page bytes.Buffer
 	if err := tenantTemplate.Execute(&page, tenantPageData{
 		workspaceShell: workspaceShell{Username: "owner", Environment: "test"},
@@ -194,9 +194,14 @@ func TestTenantCreateFormContainsOnlyIdentityAndPayerFields(t *testing.T) {
 			t.Fatalf("tenant identity form missing %q", marker)
 		}
 	}
-	for _, removed := range []string{`name="room_id"`, `name="monthly_rent"`, `name="due_day"`, `name="active_from"`, "租金金额", "缴租日"} {
+	for _, expected := range []string{`name="property_id"`, `name="room_id"`, `name="arrangement_start_month"`, `name="room_plan"`, `name="new_responsibility"`, "留空则按照入住人数均分房间租金"} {
+		if !strings.Contains(page.String(), expected) {
+			t.Fatalf("tenant create form missing optional room-plan field %q", expected)
+		}
+	}
+	for _, removed := range []string{`name="monthly_rent"`, `name="due_day"`, `name="active_from"`} {
 		if strings.Contains(page.String(), removed) {
-			t.Fatalf("tenant profile form must not contain rent-plan field %q", removed)
+			t.Fatalf("tenant create form must not contain room-owned field %q", removed)
 		}
 	}
 }

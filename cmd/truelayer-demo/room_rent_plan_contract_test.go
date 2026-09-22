@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"strings"
 	"testing"
@@ -120,6 +121,36 @@ func TestTenantRoomPlanAssignmentValidatesBrowserMemberSnapshot(t *testing.T) {
 	}
 }
 
+func TestTenantRoomPlanAssignmentInputFromForm(t *testing.T) {
+	month := dublinCurrentMonth(time.Now()).Format("2006-01")
+	assignment, present, err := tenantRoomPlanAssignmentInputFromForm(url.Values{
+		"property_id":             {"2"},
+		"room_id":                 {"3"},
+		"arrangement_start_month": {month},
+		"plan_version":            {"4"},
+		"new_responsibility":      {"350.01"},
+		"room_plan":               {`[{"tenant_id":8,"responsibility_cents":20000}]`},
+	})
+	if err != nil || !present {
+		t.Fatalf("parse tenant room assignment present=%t err=%v", present, err)
+	}
+	if assignment.PropertyID != 2 || assignment.RoomID != 3 || assignment.ExpectedTimelineVersion != 4 || assignment.NewTenantResponsibilityCents != 35001 || len(assignment.ExistingMembers) != 1 || assignment.ExistingMembers[0].TenantID != 8 {
+		t.Fatalf("parsed assignment = %#v", assignment)
+	}
+	if _, _, err := tenantRoomPlanAssignmentInputFromForm(url.Values{
+		"property_id":             {"2"},
+		"room_id":                 {"3"},
+		"arrangement_start_month": {month},
+		"plan_version":            {"4"},
+		"room_plan":               {`[{"tenant_id":8,"unexpected":true}]`},
+	}); !errors.Is(err, errInvalidTenantRoomPlan) {
+		t.Fatalf("unexpected browser plan fields error=%v, want errInvalidTenantRoomPlan", err)
+	}
+	if _, present, err := tenantRoomPlanAssignmentInputFromForm(url.Values{}); err != nil || present {
+		t.Fatalf("blank optional room assignment present=%t err=%v", present, err)
+	}
+}
+
 func TestRoomRentPlanTenantRoomConflictUsesStablePageMessage(t *testing.T) {
 	if got := rentPlanErrorMessage("tenant_room_month_conflict"); got != "该租客从所选月份起已在其他房间入住，请先结束原房间的入住计划。" {
 		t.Fatalf("tenant room conflict message=%q", got)
@@ -140,7 +171,7 @@ func TestTenanciesRouteIsNotRegistered(t *testing.T) {
 	}
 }
 
-func TestAssetAndTenantFormsKeepRentPlanFieldsOutOfAssetProfiles(t *testing.T) {
+func TestRoomAndNewTenantFormsExposeTheCompositeRentPlanFields(t *testing.T) {
 	propertyPage, err := executeTemplate(propertyPageTemplate, propertyPageData{
 		workspaceShell: workspaceShell{ActivePage: "properties"},
 		ShowForm:       true,
@@ -163,21 +194,43 @@ func TestAssetAndTenantFormsKeepRentPlanFieldsOutOfAssetProfiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, test := range []struct {
-		name string
-		page string
-		bad  []string
-	}{
-		{name: "property", page: propertyPage, bad: []string{`name="inactive_from"`}},
-		{name: "room", page: roomPage, bad: []string{`name="active_from"`, `name="inactive_from"`, `name="monthly_rent"`, `name="due_day"`}},
-		{name: "tenant", page: tenantPage, bad: []string{`name="room_id"`, `name="monthly_rent"`, `name="due_day"`, `name="responsibility_`, `name="room_plan"`}},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			for _, forbidden := range test.bad {
-				if strings.Contains(test.page, forbidden) {
-					t.Errorf("%s form exposes rent-plan/asset-validity field %q", test.name, forbidden)
-				}
-			}
-		})
+	for _, forbidden := range []string{`name="inactive_from"`} {
+		if strings.Contains(propertyPage, forbidden) {
+			t.Errorf("property form exposes asset-validity field %q", forbidden)
+		}
+	}
+	for _, expected := range []string{`name="monthly_rent"`, `name="effective_month"`, `name="due_day"`} {
+		if !strings.Contains(roomPage, expected) {
+			t.Errorf("new room form is missing rent-plan field %q", expected)
+		}
+	}
+	for _, forbidden := range []string{`name="active_from"`, `name="inactive_from"`} {
+		if strings.Contains(roomPage, forbidden) {
+			t.Errorf("room form exposes asset-validity field %q", forbidden)
+		}
+	}
+	for _, expected := range []string{`name="property_id"`, `name="room_id"`, `name="arrangement_start_month"`, `name="plan_version"`, `name="room_plan"`, `name="new_responsibility"`} {
+		if !strings.Contains(tenantPage, expected) {
+			t.Errorf("new tenant form is missing room-plan field %q", expected)
+		}
+	}
+	for _, expected := range []string{`id="tenant-existing-occupants"`, "留空则按照入住人数均分房间租金"} {
+		if !strings.Contains(tenantPage, expected) {
+			t.Errorf("new tenant form is missing grouped occupancy hint %q", expected)
+		}
+	}
+	editingTenantPage, err := executeTemplate(tenantTemplate, tenantPageData{
+		workspaceShell: workspaceShell{ActivePage: "tenants"},
+		ShowForm:       true,
+		Editing:        true,
+		Form:           tenantRecord{ID: "1", Status: "active"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{`name="room_id"`, `name="room_plan"`, `name="new_responsibility"`} {
+		if strings.Contains(editingTenantPage, forbidden) {
+			t.Errorf("tenant edit form exposes create-only room-plan field %q", forbidden)
+		}
 	}
 }

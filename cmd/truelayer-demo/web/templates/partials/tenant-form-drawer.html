@@ -1,8 +1,8 @@
 {{define "tenant-form-drawer"}}
 <div class="entity-drawer-backdrop"><section class="entity-drawer tenant-drawer" role="dialog" aria-modal="true" aria-labelledby="tenant-form-title">
-  <div class="panel-head"><div><h2 id="tenant-form-title">{{if .Editing}}编辑租客资料{{else}}新增租客{{end}}</h2><p class="tiny">租客资料用于识别人和联系信息；入住与租金在房间详情中维护。</p></div><a class="drawer-close" href="{{.ReturnURL}}" aria-label="关闭租客表单">×</a></div>
-  {{if .Error}}<div class="notice error" role="alert">请检查租客姓名、邮箱和付款人资料。</div>{{end}}
-  <form method="post" action="/tenants">
+  <div class="panel-head"><div><h2 id="tenant-form-title">{{if .Editing}}编辑租客资料{{else}}新增租客{{end}}</h2><p class="tiny">{{if .Editing}}编辑人员与付款人资料。{{else}}可选设置入住的房间与租金；留空仅保存租客资料。{{end}}</p></div><a class="drawer-close" href="{{.ReturnURL}}" aria-label="关闭租客表单">×</a></div>
+  {{if .Error}}<div class="notice error" role="alert">{{.ErrorMessage}}</div>{{end}}
+  <form method="post" action="/tenants" id="tenant-form">
     <input type="hidden" name="return_to" value="{{.PostReturnURL}}">
     {{if .Editing}}<input type="hidden" name="tenant_id" value="{{.Form.ID}}">{{end}}
     <fieldset class="tenant-form-section"><legend>人员资料</legend>
@@ -19,8 +19,187 @@
       <label for="payer_name_hint">付款人名称</label>
       <input id="payer_name_hint" name="payer_name_hint" value="{{.Form.PayerNameHint}}" maxlength="191">
     </fieldset>
+    {{if not .Editing}}
+    <fieldset class="tenant-form-section tenant-room-assignment" data-tenant-room-assignment>
+      <legend>入住与租金（可选）</legend>
+      <p class="tiny">留空则按照入住人数均分房间租金。</p>
+      <div class="room-meta-form-grid">
+        <div class="form-field"><label for="tenant-property">房产</label><select id="tenant-property" name="property_id"><option value="">暂不设置房产</option>{{range .TenantProperties}}<option value="{{.ID}}"{{if eq $.TenantAssignmentPropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></div>
+        <div class="form-field"><label for="tenant-room">房间</label><select id="tenant-room" name="room_id"><option value="">暂不设置房间</option>{{range .TenantRooms}}<option value="{{.ID}}" data-property-id="{{.PropertyID}}" data-rent-plan-version="{{.RentPlanVersion}}" data-plans="{{.PlansJSON}}"{{if eq $.TenantAssignmentRoomID .ID}} selected{{end}}>{{.RoomLabel}}</option>{{end}}</select></div>
+        <div class="form-field"><label for="tenant-arrangement-month">入住与租金生效月份</label><input id="tenant-arrangement-month" name="arrangement_start_month" type="month" value="{{.TenantArrangementStartMonth}}" required></div>
+      </div>
+      <input type="hidden" name="plan_version" id="tenant-plan-version"><input type="hidden" name="room_plan" id="tenant-room-plan">
+      <div class="tenant-room-rent-preview" id="tenant-room-rent-preview" hidden><div><span id="tenant-room-rent-label">房间月租</span><small id="tenant-room-due-day"></small></div><strong id="tenant-room-rent-amount"></strong></div>
+      <section class="tenant-responsibility-plan" id="tenant-responsibility-plan" hidden aria-live="polite">
+        <div><strong>新租客的租金（可选）</strong><span class="tiny">留空时会与其他未填写金额的入住人均分。</span></div>
+        <label class="tenant-responsibility-person" for="tenant-new-responsibility"><span class="tenant-responsibility-member current">新租客</span><span class="tenant-responsibility-amount">租金（可选）<input id="tenant-new-responsibility" name="new_responsibility" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="默认均分"></span></label>
+        <section class="tenant-existing-occupants" id="tenant-existing-occupants" hidden aria-label="该房间其他租客">
+          <div><strong>该房间已有租客</strong><span class="tiny">以下资料仅供确认；只能调整各自的租金，留空则参与均分。</span></div>
+          <div class="tenant-responsibility-rows" id="tenant-existing-occupant-rows"></div>
+        </section>
+        <div class="tenant-plan-preview" id="tenant-plan-preview"></div>
+      </section>
+    </fieldset>
+    {{end}}
     <input type="hidden" name="status" value="{{if .Form.Status}}{{.Form.Status}}{{else}}active{{end}}">
     <div class="drawer-actions"><a class="btn subtle" href="{{.ReturnURL}}">取消</a><button class="btn primary" type="submit">{{if .Editing}}保存更改{{else}}保存租客{{end}}</button></div>
   </form>
 </section></div>
+{{if not .Editing}}
+<script>
+(() => {
+  const form = document.querySelector("#tenant-form");
+  const property = form?.querySelector("#tenant-property");
+  const room = form?.querySelector("#tenant-room");
+  const month = form?.querySelector("#tenant-arrangement-month");
+  const version = form?.querySelector("#tenant-plan-version");
+  const roomPlan = form?.querySelector("#tenant-room-plan");
+  const rentPreview = form?.querySelector("#tenant-room-rent-preview");
+  const rentAmount = form?.querySelector("#tenant-room-rent-amount");
+  const dueDay = form?.querySelector("#tenant-room-due-day");
+  const responsibility = form?.querySelector("#tenant-responsibility-plan");
+  const existing = form?.querySelector("#tenant-existing-occupants");
+  const existingRows = form?.querySelector("#tenant-existing-occupant-rows");
+  const newResponsibility = form?.querySelector("#tenant-new-responsibility");
+  const preview = form?.querySelector("#tenant-plan-preview");
+  if (!form || !property || !room || !month || !version || !roomPlan || !rentPreview || !rentAmount || !dueDay || !responsibility || !existing || !existingRows || !newResponsibility || !preview) return;
+
+  const amount = (cents, currency) => new Intl.NumberFormat("zh-CN", {style: "currency", currency: currency || "EUR", minimumFractionDigits: 2}).format(cents / 100);
+  const selectedRoom = () => room.options[room.selectedIndex];
+  const plansForRoom = () => {
+    const option = selectedRoom();
+    if (!option?.value) return [];
+    try { return JSON.parse(option.dataset.plans || "[]"); } catch (_) { return []; }
+  };
+  const activePlan = () => plansForRoom().find((plan) => plan.effective_from_month <= month.value && (!plan.effective_to_month || plan.effective_to_month >= month.value));
+  const setText = (element, value) => { element.textContent = value; };
+  const inputCents = (input) => {
+    const raw = input.value.trim();
+    if (!raw) return 0;
+    if (!input.validity.valid) return null;
+    const parts = raw.split(".");
+    if (parts.length > 2 || parts[1]?.length > 2) return null;
+    const whole = Number(parts[0] || "0");
+    const fraction = Number((parts[1] || "").padEnd(2, "0") || "0");
+    if (!Number.isSafeInteger(whole) || !Number.isSafeInteger(fraction)) return null;
+    return whole * 100 + fraction;
+  };
+  const renderPreview = () => {
+    const plan = activePlan();
+    preview.replaceChildren();
+    newResponsibility.setCustomValidity("");
+    if (!plan) return;
+    const values = Array.from(existingRows.querySelectorAll("input[data-tenant-id]")).map((input) => ({id: Number(input.dataset.tenantId), name: input.dataset.tenantName || "已有租客", input}));
+    values.push({id: Number.MAX_SAFE_INTEGER, name: "新租客", input: newResponsibility});
+    let specified = 0;
+    const unspecified = [];
+    for (const value of values) {
+      const cents = inputCents(value.input);
+      if (cents === null) {
+        newResponsibility.setCustomValidity("租金最多保留两位小数，且必须为正数。");
+        setText(preview, "请检查租金输入。");
+        return;
+      }
+      value.cents = cents;
+      if (cents === 0) unspecified.push(value); else specified += cents;
+    }
+    let error = "";
+    if (unspecified.length) {
+      const remaining = plan.monthly_rent_cents - specified;
+      if (remaining <= 0) error = "已填写租金不能等于或超过房间月租；请留出可均分的金额。";
+      else {
+        unspecified.sort((a, b) => a.id - b.id);
+        const share = Math.floor(remaining / unspecified.length);
+        const remainder = remaining % unspecified.length;
+        unspecified.forEach((value, index) => { value.cents = share + (index < remainder ? 1 : 0); });
+      }
+    } else if (specified !== plan.monthly_rent_cents) {
+      error = "全部填写租金时，合计必须等于房间月租。";
+    }
+    if (error) {
+      newResponsibility.setCustomValidity(error);
+      setText(preview, error);
+      return;
+    }
+    const title = document.createElement("strong");
+    title.textContent = "预计每人责任";
+    preview.append(title);
+    const list = document.createElement("div");
+    for (const value of values) {
+      const row = document.createElement("span");
+      row.textContent = value.name + " · " + amount(value.cents, plan.currency);
+      list.append(row);
+    }
+    preview.append(list);
+  };
+  const renderExistingMembers = (plan) => {
+    existingRows.replaceChildren();
+    existing.hidden = !plan.members.length;
+    for (const member of plan.members) {
+      const row = document.createElement("label");
+      row.className = "tenant-responsibility-person";
+      const memberLabel = document.createElement("span");
+      memberLabel.className = "tenant-responsibility-member";
+      const name = document.createElement("strong");
+      name.textContent = member.tenant_name;
+      const current = document.createElement("small");
+      current.textContent = "当前 " + amount(member.responsibility_cents, plan.currency);
+      memberLabel.append(name, current);
+      const amountLabel = document.createElement("span");
+      amountLabel.className = "tenant-responsibility-amount";
+      amountLabel.append("调整后租金（可选）");
+      const input = document.createElement("input");
+      input.type = "number";
+      input.min = "0.01";
+      input.step = "0.01";
+      input.inputMode = "decimal";
+      input.placeholder = "默认均分";
+      input.dataset.tenantId = String(member.tenant_id);
+      input.dataset.tenantName = member.tenant_name;
+      input.addEventListener("input", renderPreview);
+      amountLabel.append(input);
+      row.append(memberLabel, amountLabel);
+      existingRows.append(row);
+    }
+  };
+  const refreshPlan = () => {
+    const option = selectedRoom();
+    const plan = activePlan();
+    const hasRoom = Boolean(option?.value);
+    version.value = plan ? option.dataset.rentPlanVersion || "" : "";
+    roomPlan.value = "";
+    room.setCustomValidity(hasRoom && !plan ? "所选月份没有生效租金，请先在房间详情中设置。" : "");
+    rentPreview.hidden = !plan;
+    responsibility.hidden = !plan;
+    if (!plan) { existingRows.replaceChildren(); existing.hidden = true; preview.replaceChildren(); return; }
+    setText(rentAmount, amount(plan.monthly_rent_cents, plan.currency));
+    setText(dueDay, "每月 " + plan.due_day + " 日交租");
+    renderExistingMembers(plan);
+    renderPreview();
+  };
+  const filterRooms = () => {
+    const propertyID = property.value;
+    for (const option of Array.from(room.options)) {
+      if (!option.value) continue;
+      const visible = Boolean(propertyID) && option.dataset.propertyId === propertyID;
+      option.hidden = !visible;
+      option.disabled = !visible;
+    }
+    const option = selectedRoom();
+    if (option?.value && option.disabled) room.value = "";
+    refreshPlan();
+  };
+  property.addEventListener("change", filterRooms);
+  room.addEventListener("change", refreshPlan);
+  month.addEventListener("change", refreshPlan);
+  newResponsibility.addEventListener("input", renderPreview);
+  form.addEventListener("submit", () => {
+    const plan = activePlan();
+    if (!room.value || !plan) { roomPlan.value = ""; return; }
+    roomPlan.value = JSON.stringify(Array.from(existingRows.querySelectorAll("input[data-tenant-id]")).map((input) => ({tenant_id: Number(input.dataset.tenantId), responsibility_cents: inputCents(input) || 0})));
+  });
+  filterRooms();
+})();
+</script>
+{{end}}
 {{end}}

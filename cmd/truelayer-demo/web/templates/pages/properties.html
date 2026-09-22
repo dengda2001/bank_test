@@ -54,7 +54,7 @@
         <div class="table-wrap object-table-wrap"><table class="object-table property-table"><thead><tr><th>房产</th><th>地址</th><th>房间</th><th>责任记录</th><th>本月应收</th><th>本月已收</th><th>状态</th><th>操作</th></tr></thead><tbody>
           {{range .Rows}}<tr data-page="properties" data-property-id="{{.ID}}">
             <td><a class="object-primary-link" href="/properties/{{.ID}}?period={{$.Period}}&amp;list_status={{$.StatusFilter}}&amp;list_search={{$.Search}}&amp;list_collection={{$.CollectionFilter}}">{{.Name}}</a></td><td>{{if .CityRegion}}{{.CityRegion}}{{else}}{{.Address}}{{end}}</td><td>{{.RoomCount}}</td><td>{{.ResponsibilityCount}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td><span class="status {{.CollectionStatus}}">{{.CollectionStatusLabel}}</span></td>
-            <td><a class="object-detail-link" href="/properties/{{.ID}}?period={{$.Period}}&amp;list_status={{$.StatusFilter}}&amp;list_search={{$.Search}}&amp;list_collection={{$.CollectionFilter}}">查看详情</a></td>
+            <td><a class="btn subtle" href="/properties/{{.ID}}?period={{$.Period}}&amp;list_status={{$.StatusFilter}}&amp;list_search={{$.Search}}&amp;list_collection={{$.CollectionFilter}}">查看详情</a></td>
           </tr>{{end}}
         </tbody></table></div>
         <div class="object-mobile-list">{{range .Rows}}<article class="object-mobile-card" data-page="properties" data-property-id="{{.ID}}">
