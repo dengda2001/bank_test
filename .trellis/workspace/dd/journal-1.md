@@ -1153,3 +1153,41 @@ Seeded the local rentops database from the Rosewood rent ledger (4 properties / 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 32: Tenant room rent setup
+
+**Date**: 2026-09-22
+**Task**: Tenant room rent setup
+**Branch**: `main`
+
+### Summary
+
+Added vacant room rent plans, atomic room and tenant composite writes, tenant room/rent assignment UI, detail buttons, and code-spec coverage. Full Go tests and vet passed; browser bridge was unavailable for interactive verification.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b7f2d41` | (see git log) |
+| `0ebad35` | (see git log) |
+| `6e3f510` | (see git log) |
+| `be1dfc7` | (see git log) |
+| `5cde6c5` | (see git log) |
+| `7320729` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
