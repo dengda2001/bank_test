@@ -9,6 +9,7 @@
 
   const selectSelector = "select:not([multiple]):not([data-workspace-select-ready])";
   const searchSelector = 'input[type="search"]:not([data-workspace-search-ready])';
+  const tenantPeriodMatchSelector = 'form[data-tenant-period-match]:not([data-tenant-period-match-ready])';
   const textNode = (value) => document.createTextNode(value || "");
 
   const getLabelText = (select) => {
@@ -402,12 +403,57 @@
     });
   };
 
+  const initTenantPeriodMatch = (form) => {
+    if (form.dataset.tenantPeriodMatchReady) return;
+    const tenant = form.querySelector('select[name="tenant_id"]');
+    const period = form.querySelector('[data-tenant-period-input]');
+    const metadata = form.querySelector('template[data-tenant-period-options]');
+    const helper = form.querySelector('[data-tenant-period-rent]');
+    if (!tenant || !period || !metadata || !helper) return;
+    form.dataset.tenantPeriodMatchReady = 'true';
+    const options = Array.from(metadata.content.querySelectorAll('option')).map((option) => ({
+      tenantID: option.dataset.tenant || '',
+      period: option.value,
+      remaining: option.dataset.rent || '',
+    }));
+    const hiddenPeriod = () => period.closest('.calendar-control')?.querySelector('input[type="hidden"][name="period"]');
+    const periodValue = () => hiddenPeriod()?.value || period.value || '';
+    const setPeriod = (value) => {
+      const hidden = hiddenPeriod();
+      if (hidden) hidden.value = value;
+      period.value = value ? value.replace(/^(\d{4})-(\d{2})$/, '$1年$2月') : '';
+    };
+    const sync = () => {
+      const matching = options.filter((option) => option.tenantID === tenant.value);
+      const selected = periodValue();
+      period.dataset.calendarAllowedValues = matching.map((option) => option.period).join(',');
+      const match = matching.find((option) => option.period === selected);
+      if (selected && !match) {
+        setPeriod('');
+        helper.textContent = tenant.value ? '请选择该租客可匹配的月份。' : '先选择租客，再选择租金月份。';
+        return;
+      }
+      if (!tenant.value) {
+        helper.textContent = '先选择租客，再选择租金月份。';
+      } else if (!selected) {
+        helper.textContent = matching.length ? '请选择可匹配的租金月份。' : '该租客没有可直接匹配的租金月份。';
+      } else {
+        helper.textContent = '本月待匹配租金：' + match.remaining;
+      }
+    };
+    tenant.addEventListener('change', sync);
+    period.addEventListener('change', sync);
+    sync();
+  };
+
   const enhance = (root) => {
     if (!root || root.nodeType !== Node.ELEMENT_NODE) return;
     if (root.matches(selectSelector)) initSelect(root);
     if (root.matches(searchSelector)) initSearchClear(root);
+    if (root.matches(tenantPeriodMatchSelector)) initTenantPeriodMatch(root);
     root.querySelectorAll(selectSelector).forEach(initSelect);
     root.querySelectorAll(searchSelector).forEach(initSearchClear);
+    root.querySelectorAll(tenantPeriodMatchSelector).forEach(initTenantPeriodMatch);
   };
 
   const start = () => {

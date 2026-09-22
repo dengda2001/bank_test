@@ -1,0 +1,7 @@
+{{define "tenant-period-calendar"}}
+<label class="tenant-period-field">租金月份
+  <input type="month" name="period" value="{{.SelectedPeriod}}" aria-label="选择租金月份" data-tenant-period-input required>
+  <template data-tenant-period-options>{{range .Options}}<option value="{{.Period}}" data-tenant="{{.TenantID}}" data-rent="{{.Remaining}}">{{.PeriodLabel}} · 未收 {{.Remaining}}</option>{{end}}</template>
+  <small class="tiny tenant-period-rent" data-tenant-period-rent aria-live="polite">先选择租客，再选择租金月份。</small>
+</label>
+{{end}}

@@ -81,7 +81,7 @@
                   <input type="hidden" name="transaction_id" value="{{.Transaction.ID}}">
                   <input type="hidden" name="return_to" value="{{.BackURL}}">
                   <select name="tenant_id" aria-label="选择匹配租客" data-searchable required><option value="">选择租客...</option>{{range .Transaction.ManualMatchTenantOptions}}<option value="{{.ID}}"{{if eq .ID $.Transaction.CandidateTenantID}} selected{{end}}>{{.Name}}</option>{{end}}</select>
-                  <select name="period" aria-label="选择租金月份" required><option value="">选择租金月份...</option>{{range .Transaction.ManualMatchOptions}}<option value="{{.Period}}" data-tenant="{{.TenantID}}"{{if and (eq .TenantID $.Transaction.CandidateTenantID) (eq .Period $.Transaction.CandidatePeriod)}} selected{{end}}>{{.PeriodLabel}} · {{.TenantName}} · 未收 {{.Remaining}}</option>{{end}}</select>
+                  {{template "tenant-period-calendar" (tenantPeriodMatchCalendar .Transaction.ManualMatchOptions .Transaction.CandidateTenantID .Transaction.CandidatePeriod)}}
                   <label class="tiny"><input type="checkbox" name="remember_payer" value="1" checked> 记住付款人</label>
                   <button class="btn primary" type="submit">确认匹配</button>
                 </form>
@@ -228,7 +228,7 @@
               <input type="hidden" name="remember_payer" value="0">
               <input type="hidden" name="return_to" value="{{.BackURL}}">
               <select name="tenant_id" aria-label="选择匹配租客" data-searchable required><option value="">选择租客...</option>{{range .Transaction.ManualMatchTenantOptions}}<option value="{{.ID}}"{{if eq .ID $.Transaction.CandidateTenantID}} selected{{end}}>{{.Name}}</option>{{end}}</select>
-              <select name="period" aria-label="选择租金月份" required><option value="">选择租金月份...</option>{{range .Transaction.ManualMatchOptions}}<option value="{{.Period}}" data-tenant="{{.TenantID}}"{{if and (eq .TenantID $.Transaction.CandidateTenantID) (eq .Period $.Transaction.CandidatePeriod)}} selected{{end}}>{{.PeriodLabel}} · {{.TenantName}} · 未收 {{.Remaining}}</option>{{end}}</select>
+              {{template "tenant-period-calendar" (tenantPeriodMatchCalendar .Transaction.ManualMatchOptions .Transaction.CandidateTenantID .Transaction.CandidatePeriod)}}
               <label class="tiny"><input type="checkbox" name="remember_payer" value="1" checked> 记住付款人</label>
               <button class="btn primary" type="submit">确认匹配</button>
             </form>

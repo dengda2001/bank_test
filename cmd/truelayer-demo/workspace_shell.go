@@ -6,6 +6,16 @@ import (
 	"strings"
 )
 
+type tenantPeriodMatchCalendarData struct {
+	Options          []billingRentMatchOption
+	SelectedTenantID uint64
+	SelectedPeriod   string
+}
+
+func tenantPeriodMatchCalendar(options []billingRentMatchOption, selectedTenantID uint64, selectedPeriod string) tenantPeriodMatchCalendarData {
+	return tenantPeriodMatchCalendarData{Options: options, SelectedTenantID: selectedTenantID, SelectedPeriod: selectedPeriod}
+}
+
 // workspaceShell is the page chrome every workspace page shares: the sidebar
 // navigation and, on narrow screens, the compact bar that opens it as a drawer.
 //
@@ -87,9 +97,12 @@ var workspaceNav = embeddedWebText("web/templates/partials/workspace-nav.html")
 // clones of this base, and a {{define}} in a page body stays inside its own
 // clone. "collection-settle-form" lives here because /bills and the rent
 // workspace's tenant view must render the same inline form.
-var workspaceBase = template.Must(template.New("workspace").ParseFS(webFiles,
+var workspaceBase = template.Must(template.New("workspace").Funcs(template.FuncMap{
+	"tenantPeriodMatchCalendar": tenantPeriodMatchCalendar,
+}).ParseFS(webFiles,
 	"web/templates/partials/workspace-nav.html",
 	"web/templates/partials/collection-settle-form.html",
+	"web/templates/partials/tenant-period-calendar.html",
 	"web/templates/partials/tenant-form-drawer.html",
 	"web/templates/partials/expense-form-drawer.html",
 	"web/templates/partials/cash-receipt-drawer.html",

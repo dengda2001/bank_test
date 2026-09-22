@@ -144,6 +144,16 @@
   display: none;
 }
 
+.tenant-period-field {
+  display: grid;
+  gap: 5px;
+}
+
+.tenant-period-rent {
+  min-height: 18px;
+  color: var(--foreground-muted);
+}
+
 .workspace-select-option {
   display: flex;
   align-items: center;

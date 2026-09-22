@@ -80,6 +80,37 @@ func TestTransactionRouteUsesPrototypeQueueAndKeepsLocalReturnPath(t *testing.T)
 	}
 }
 
+func TestDirectTransactionMatchUsesCalendarWithoutRepeatedMonthOptions(t *testing.T) {
+	page := renderBillingPage(t, billingPageData{
+		workspaceShell: workspaceShell{ActivePage: "transactions", CompactTitle: "流水处理"},
+		PageKey:        "transactions", CanonicalPath: "/transactions",
+		TransactionRows: []transactionPageRow{{
+			ID: "7", DetailURL: "/transactions?detail=7", ReturnURL: "/transactions",
+			ManualMatchTenantOptions: []billingTenantOption{{ID: 7, Name: "Aoife Murphy"}, {ID: 8, Name: "Bríd Murphy"}},
+			ManualMatchOptions: []billingRentMatchOption{
+				{TenantID: 7, TenantName: "Aoife Murphy", Period: "2026-09", PeriodLabel: "2026年9月", Remaining: "€950.00"},
+				{TenantID: 8, TenantName: "Bríd Murphy", Period: "2026-09", PeriodLabel: "2026年9月", Remaining: "€1,100.00"},
+			},
+		}},
+	})
+
+	form := markupBetween(t, page, `action="/transactions/confirm" data-tenant-period-match`, `</form>`)
+	for _, marker := range []string{
+		`type="month"`,
+		`data-tenant-period-input`,
+		`data-tenant-period-options`,
+		`data-tenant-period-rent`,
+		`aria-live="polite"`,
+	} {
+		if !strings.Contains(form, marker) {
+			t.Errorf("calendar match form missing %q: %s", marker, form)
+		}
+	}
+	if strings.Contains(form, `<select name="period"`) {
+		t.Errorf("calendar match form still renders the repeated period select: %s", form)
+	}
+}
+
 // The compact form and the filter bar each carried a 关联状态 selector, and they
 // drifted: the compact one never gained 已忽略, so a reader who used it could not
 // reach ignored rows at all. The filter bar keeps the only one, and it has to stay

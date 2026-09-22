@@ -44,6 +44,17 @@
 
 **Rollback point:** CSS modifiers and width rules can be independently reverted.
 
+### 5. Add safe deletion and deduplicated match-month calendar controls
+
+- Write focused service and handler tests for deleting empty property, room, and tenant records, and for retaining each object when its ledger or operational dependencies exist.
+- Add detail-page delete actions with a confirmation prompt and preserve each page's return context and error notice.
+- Replace direct transaction-matching month selects with the shared calendar. Keep match options as inert metadata, constrain calendar choices after tenant selection, and render an outstanding-rent helper below the field.
+- Reproduce the searchable tenant select in a browser while exercising the new month input; fix any interaction regression before shipping.
+
+**Risk files:** `landlord_domain_operations.go`, `tenants.go`, `page_data_routes.go`, `tenant_detail.go`, `billing_page.go`, `web/templates/pages/{rent-workspace,transaction-detail}.html`, `web/static/js/{calendar,workspace-controls}.js`.
+
+**Rollback point:** deletion handlers/service and calendar presentation are independently revertible; neither changes the schema or ledger rules.
+
 ## Verification
 
 - Run focused Go tests for room create/edit/detail rendering and room-update value preservation.
@@ -57,6 +68,7 @@
 2. Review the room update contract to ensure an edit cannot silently reset stored room type/capacity.
 3. Review portaled-popup stacking, pointer dismissal, keyboard focus, and mobile geometry in the browser.
 4. Inspect the final diff and ensure `docs/architecture/` and the rental spreadsheet remain untouched.
+5. Verify a deletion never cascades into historical rent, payment, or expense rows; verify matching periods remain server-validated after replacing the select.
 
 ## Rollback / non-goals
 

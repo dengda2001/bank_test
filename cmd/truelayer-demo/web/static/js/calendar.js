@@ -110,7 +110,10 @@
       const formatted = formatValue(kind, value);
       const min = input.getAttribute('min');
       const max = input.getAttribute('max');
-      return (!min || formatted >= min) && (!max || formatted <= max);
+      const hasAllowedValues = Object.prototype.hasOwnProperty.call(input.dataset, 'calendarAllowedValues');
+      const allowedValues = input.dataset.calendarAllowedValues || '';
+      const isAllowed = !hasAllowedValues || allowedValues.split(',').includes(formatted);
+      return isAllowed && (!min || formatted >= min) && (!max || formatted <= max);
     };
     const selectValue = (value) => {
       if (!isWithinRange(value)) return;

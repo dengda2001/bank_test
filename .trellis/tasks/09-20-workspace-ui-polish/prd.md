@@ -13,6 +13,8 @@
 5. Workspace tenant selectors used in manual review, transaction matching/filtering, and cash-receipt entry support typing to narrow available tenants by name.
 6. The property and room management collection-status selectors display their selected label without truncating it to an ellipsis.
 7. Every transaction row has a “查看详情” action, including rows that also expose a direct match action.
+8. Properties, rooms, and tenants that have no dependent operational or ledger data can be deleted from their detail pages. A deletion attempt must never erase rent, payment, or expense history: objects with dependencies stay intact and receive a clear explanation instead.
+9. Transaction matching uses the shared month calendar rather than rendering a repeated month option for every eligible tenant. After a tenant and an eligible month are selected, the control shows the matching month's outstanding rent in small helper text.
 
 ## Acceptance Criteria
 
@@ -24,6 +26,9 @@
 - [ ] Tenant search accepts partial text and narrows options by tenant name across dashboard processing, transaction list/detail matching, the transaction tenant filter, and cash-receipt entry.
 - [ ] The collection-status selector label is fully readable on both property and room management pages at supported widths.
 - [ ] Every transaction row exposes “查看详情”; rows eligible for direct matching retain that action alongside “匹配流水”.
+- [ ] A newly created, otherwise unused property, room, or tenant can be deleted; the user returns to the relevant list with a success notice.
+- [ ] A property with rooms, a room with a rent plan, rent charge, or expense, and a tenant with plan, obligation, payment, or receipt history cannot be deleted; the original record remains and the UI explains why.
+- [ ] Matching-month controls contain no duplicate tenant/month options, use the shared calendar, only enable months eligible for the selected tenant, and show that month's outstanding rent below the calendar.
 
 ## Constraints and Notes
 
