@@ -96,6 +96,39 @@ func TestRentWorkspaceMetricsKeepTheE2EShape(t *testing.T) {
 	}
 }
 
+// 警示色和正向色是"状态真的成立"的信号，不是装饰：一分钱没收就不该绿，
+// 余额为 0 就不该红，未来月份那张卡自己写着"未到期，不计入催收"，顶一张
+// 红卡等于自相矛盾。这四条把三类卡片的有色/无色组合钉住。
+func TestWorkspaceSummaryColoursOnlyReflectRealState(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		summary     rentWorkspaceSummary
+		future      bool
+		wantSuccess bool
+		wantWarning bool
+	}{
+		{"当月收齐", rentWorkspaceSummary{PaidCents: 125000, BalanceCents: 0}, false, true, false},
+		{"当月还有未结清", rentWorkspaceSummary{PaidCents: 0, BalanceCents: 80000}, false, false, true},
+		{"当月既没进账也没应收", rentWorkspaceSummary{}, false, false, false},
+		{"未来月份的预计缺口", rentWorkspaceSummary{BalanceCents: 80000}, true, false, false},
+	} {
+		page, err := executeTemplate(rentWorkspaceTemplate, rentWorkspacePageData{
+			Period: "2026-09", PeriodLabel: "2026年9月", TotalRows: 1,
+			IsFuturePeriod: test.future, Summary: test.summary,
+		})
+		if err != nil {
+			t.Fatalf("%s: %v", test.name, err)
+		}
+		block := markupBetween(t, page, `<section class="workspace-summary"`, `</section>`)
+		if got := strings.Contains(block, "metric-success"); got != test.wantSuccess {
+			t.Errorf("%s: metric-success=%v want %v", test.name, got, test.wantSuccess)
+		}
+		if got := strings.Contains(block, "metric-warning"); got != test.wantWarning {
+			t.Errorf("%s: metric-warning=%v want %v", test.name, got, test.wantWarning)
+		}
+	}
+}
+
 // The settle action belongs to a bill with an outstanding balance; a paid bill
 // offers only the plain detail link. This used to be asserted on the removed
 // legacy dashboard (and on its /rent-dashboard/settle form). /bills is the live

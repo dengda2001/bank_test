@@ -10,7 +10,10 @@
 1. **取基线**：跑一遍相关测试，把当前的红/绿记下来，尤其是 `detail_pages_alignment_test.go`、`entity_drawers_test.go`、`desktop_layout_test.go`、`prototype_preview_render_test.go`（这四组都直接执行房间详情模板，是本次的主要安全网）。
 2. **逾期天数**：`rent_workspace_page.go` 的 `rentRoomDetailPageData` 加 `OverdueDays int`，在 `loadRoomDetail` 里从 `Summary.DueDate` 推出；先补单元测试（逾期／未逾期／日期不可解析三种），再动模板。
 3. **平账适配器**：读 `manualBalanceRedirectURL`，确认 `return_to` 允许 `/rooms/...` 且不放行外站；加 `RoomDetailSettleForm` 适配器；模板里给责任表行尾接 `collection-settle-form`。参考 `workspace_alignment_test.go:376` 的 `TestTenantSettleFormCarriesTheWorkspaceContext` 补同款契约测试。
-4. **KPI 与表格配色**：在 `workspace.css` 补 `metric-primary/success/warning` 定义；未付卡加警示色与左侧色条；责任表未付列同色系；"已收"为 0 时不显示正向色。
+4. ~~**KPI 与表格配色**~~ ✅ 已完成（09-22/23）：在 `workspace.css` 补 `metric-primary/success/warning` 定义；未付卡加警示色与左侧色条；责任表未付列同色系；"已收"为 0 时不显示正向色。
+   - **范围扩大（dd 09-23 批准）**：`metric-*` 定义在共用的 `workspace.css`，另两个用同一批类的页面一并改成条件加类——`rent-workspace.html` 的"已收租金"（收 0 元不绿）与"未结清责任/预计未覆盖"（余额为 0 或未来月份不红）、`property-detail.html` 的"已收租金"。
+   - 新增 `TestWorkspaceSummaryColoursOnlyReflectRealState`（`dashboard_layout_test.go`）钉住四类组合，避免以后又退回无条件加类。
+   - **遗留**：`property-detail.html` 的"未收"卡（`property-mobile-unpaid`）仍然完全无色，即使欠着也不红，与房间页的未付卡不一致——dd 未拍板，未动。
 5. ~~**删除搬家**~~ ✅ 已完成（09-23）：页头与移动底栏的删除表单合并进编辑抽屉底部危险区；加后果文案；`workspace-nav.html` 的 confirm 支持 `data-confirm-message` 并保留回退；清掉失效的 `.delete-object-form{display:contents}` 与 `.delete-object-form{margin:0}`。
    - **范围扩大（dd 09-23 追问「删除房间/房产有放进编辑页吗」）**：同样形状的 `property-detail.html` 一并改了（页头 :25、移动 :98 → 编辑抽屉危险区）。新建抽屉在 `room-create-drawer.html` / `properties.html`，天然看不到删除。
    - `TestObjectDetailsExposeConfirmedDeleteActions` 的两个 fixture 补 `Editing: true`，并新增「抽屉关着时页面里不该有 delete」的反向断言——这条才是"平时看不到删除"的守卫。

@@ -35,8 +35,10 @@
     {{if not .PropertyOptions}}<div class="notice workspace-empty-notice">尚未建立房产。未绑定房间的历史租客责任仍可在租客视角查看；你可以先<a href="/properties?add=1">新建房产</a>。</div>{{end}}
     <section class="workspace-summary" aria-label="月度汇总">
       <div class="panel metric metric-main"><div class="label">{{if .IsFuturePeriod}}预计应收{{else}}所选月份应收{{end}}</div><strong>{{if .IsFuturePeriod}}{{.Summary.ForecastExpectedAmount}}{{else}}{{.Summary.ExpectedAmount}}{{end}}</strong><span>{{if .IsFuturePeriod}}{{.Summary.ForecastCount}} 条预计分摊{{else}}{{.Summary.ResponsibilityCount}} 条租客责任{{end}}</span></div>
-      <div class="panel metric metric-success"><div class="label">已收租金</div><strong>{{.Summary.PaidAmount}}</strong><span>收缴率 {{.Summary.CollectionPercent}}%</span></div>
-      <div class="panel metric metric-warning"><div class="label">{{if .IsFuturePeriod}}预计未覆盖{{else}}未结清责任{{end}}</div><strong>{{if .IsFuturePeriod}}{{.Summary.ProjectedBalanceAmount}}{{else}}{{.Summary.BalanceAmount}}{{end}}</strong><span>{{if .IsFuturePeriod}}未到期，不计入催收{{else}}{{.Summary.FollowupCount}} 条未结清责任{{end}}</span></div>
+      <div class="panel metric{{if gt .Summary.PaidCents 0}} metric-success{{end}}"><div class="label">已收租金</div><strong>{{.Summary.PaidAmount}}</strong><span>收缴率 {{.Summary.CollectionPercent}}%</span></div>
+      {{/* 警示色只给"现在就该处理的事"：未来月份那张卡自己写着"未到期，不计入催收"，
+          再顶一张红卡就是自相矛盾；余额为 0 时红卡更是在报假警。 */}}
+      <div class="panel metric{{if and (not .IsFuturePeriod) (gt .Summary.BalanceCents 0)}} metric-warning{{end}}"><div class="label">{{if .IsFuturePeriod}}预计未覆盖{{else}}未结清责任{{end}}</div><strong>{{if .IsFuturePeriod}}{{.Summary.ProjectedBalanceAmount}}{{else}}{{.Summary.BalanceAmount}}{{end}}</strong><span>{{if .IsFuturePeriod}}未到期，不计入催收{{else}}{{.Summary.FollowupCount}} 条未结清责任{{end}}</span></div>
       <div class="panel metric"><div class="label">所选月份支出</div><strong>{{.Summary.ExpenseAmount}}</strong><span>{{len .PropertyOptions}} 套房产均摊</span></div>
     </section>
     <section class="panel surface workspace-action-queue{{if eq .PendingCount 0}} is-empty{{end}}" id="pending-review" aria-label="待人工处理流水">

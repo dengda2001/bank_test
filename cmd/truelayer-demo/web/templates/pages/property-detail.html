@@ -53,7 +53,7 @@
 
       <section class="property-metrics" aria-label="房产月度汇总">
         <article class="panel metric metric-primary"><div class="label">本月应收</div><strong>{{.Property.ExpectedAmount}}</strong><span>{{.Property.RoomCount}} 间房 · {{.Property.ActiveRoomCount}} 间有效</span></article>
-        <article class="panel metric metric-success"><div class="label">已收租金</div><strong>{{.Property.PaidAmount}}</strong><span>收缴率 {{.Property.CollectionPercent}}%</span></article>
+        <article class="panel metric{{if gt .Property.PaidCents 0}} metric-success{{end}}"><div class="label">已收租金</div><strong>{{.Property.PaidAmount}}</strong><span>收缴率 {{.Property.CollectionPercent}}%</span></article>
         <article class="panel metric property-mobile-unpaid"><div class="label">未收</div><strong>{{.Property.BalanceAmount}}</strong><span>本月尚未覆盖</span></article>
         <article class="panel metric"><div class="label">本月支出</div><strong>{{.Property.ExpenseAmount}}</strong><span>本房产与房间的支出</span></article>
         <article class="panel metric"><div class="label">经营净额</div><strong>{{.Property.NetAmount}}</strong><span>已确认收入 − 有效支出</span></article>
