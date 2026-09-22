@@ -100,7 +100,7 @@ func TestRentWorkspaceDimensionChipsFollowTheActiveView(t *testing.T) {
 		})
 		chips := markupBetween(t, page, `class="workspace-dimension-summary"`, `class="panel-head workspace-dimension-head"`)
 		for _, expected := range []string{
-			`本月共 <strong>` + strconv.Itoa(tc.total) + `</strong> ` + tc.noun,
+			`所选月份共 <strong>` + strconv.Itoa(tc.total) + `</strong> ` + tc.noun,
 			`逾期未缴 <strong>2</strong>`,
 			`部分缴纳 <strong>1</strong>`,
 			`已缴满 <strong>1</strong>`,
@@ -111,6 +111,23 @@ func TestRentWorkspaceDimensionChipsFollowTheActiveView(t *testing.T) {
 		}
 		if !strings.Contains(page, "<h2>"+tc.headline+"</h2>") {
 			t.Fatalf("%s view does not name its own section", tc.view)
+		}
+	}
+}
+
+func TestWorkspaceTopUsesSelectedMonthAndOutstandingLanguage(t *testing.T) {
+	page := renderRentWorkspace(t, rentWorkspacePageData{
+		Period: "2026-09", PeriodLabel: "2026年9月", View: rentWorkspaceViewTenants,
+		Filters: rentWorkspaceFilters{PeriodMonth: time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC), View: rentWorkspaceViewTenants, Status: "outstanding", Sort: dashboardDefaultSort, Page: 1, PageSize: dashboardDefaultPageSize},
+	})
+	for _, expected := range []string{"所选月份", "未结清责任", `value="outstanding"`} {
+		if !strings.Contains(page, expected) {
+			t.Errorf("workspace is missing %q", expected)
+		}
+	}
+	for _, obsolete := range []string{"需继续跟进", "本月应收", `value="unpaid"`} {
+		if strings.Contains(page, obsolete) {
+			t.Errorf("workspace still uses obsolete top/filter label %q", obsolete)
 		}
 	}
 }

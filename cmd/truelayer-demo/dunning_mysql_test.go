@@ -31,9 +31,6 @@ func TestDunningCandidateReadModelIsScopedAndSkipsTodaySuccessOnMySQL(t *testing
 	validInput.Name = "Valid Recipient"
 	validInput.Email = "valid@example.test"
 	validInput.DisplayAlias = "Valid"
-	validInput.MonthlyRent = 1000
-	validInput.RentStartDate = "2026-01-01"
-	validInput.BillingStartDate = "2026-01-01"
 	validTenant, err := newTenantService(db).createTenant(ctx, owner.ID, validInput)
 	if err != nil {
 		t.Fatal(err)

@@ -103,19 +103,18 @@ The scripts written during the fix — they answer questions the audit could not
 
 ## Bringing up the instance to audit
 
-Point the harness at a **disposable** instance you started yourself. Do not point it
-at `:8081` / `bank.ddpl.top`: that is the production app against the production
-database, and an audit run against it is neither reproducible nor safe.
+Use `scripts/run-audit-local.sh` to start a populated disposable instance. It creates
+a fresh `rentops_audit_*` MySQL database, starts the app, and seeds properties,
+rooms, tenant profiles, current and future room plans, and cash receipts through the
+app's own forms. It then stays running for browser checks and drops the database when
+you stop it. The script refuses non-loopback MySQL and the production port.
 
-> **Not yet implemented in this checkout.** The one-shot local flow —
-> `scripts/run-audit-local.sh`, which will start a throwaway `rentops_audit_*` MySQL
-> DB, start the app, import the committed fixtures under `test-data/audit/`, seed the
-> action states, keep the app running, and tear everything down afterwards — is
-> delivered by 阶段 2 of the `09-17-mobile-audit-fixtures` task. Until it lands there
-> is no single command; bring the app up on a disposable DB and use
-> `scripts/run-e2e-local.sh` in this repo as the safety precedent. That script already
-> creates a throwaway `rentops_e2e_*` DB and refuses to touch a database whose name
-> does not match its prefix.
+```sh
+MYSQL_ADMIN_CMD='mysql -h 127.0.0.1 -P 3306 -u root' scripts/run-audit-local.sh
+```
+
+The printed account and URL are for that one disposable run. Do not point the
+harness at `:8081` / `bank.ddpl.top` or any shared database.
 
 How the desktop-regression claim was made, and how to redo it: build HEAD in a
 separate worktree, run that binary on a second port, and shoot both builds (snippet
@@ -123,15 +122,6 @@ above).
 
 ## The constraint that shaped the scripts
 
-Originally the `AUDIT_USER` account's rows lived in the **production** database, so
-every request this harness made had to be read-only: GETs, plus the single POST to
-`/billing/payer/preview`, whose handler only reads (it renders a preview and writes
-nothing). `audit-extra.mjs` still asserts on the final URL pathname before recording
-anything, because an unauthenticated or rejected request silently 302s to `/billing`
-and otherwise reports a page that was never measured — which is exactly what the
-first run of that script did.
-
-The `09-17-mobile-audit-fixtures` task removes that constraint by giving the harness
-disposable, committed data to run against, so it no longer has to be read-only. Until
-that seed lands, keep treating any run as potentially writing and never aim it at a
-shared instance.
+`seed-workspace.mjs` creates run-scoped records with normal UI writes. Do not reuse
+its account against a database containing data you need; the audit instance is meant
+to be disposable and is torn down as a whole.

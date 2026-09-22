@@ -11,7 +11,7 @@ import (
 func TestCanonicalPageRoutesRequireAuthentication(t *testing.T) {
 	a := testApp()
 	handler := newAppMux(&a)
-	paths := []string{"/bills", "/transactions", "/dunning", "/properties", "/properties/1", "/properties/not-an-id", "/rooms", "/rooms/1", "/tenancies", "/cash-receipts", "/bank"}
+	paths := []string{"/bills", "/transactions", "/dunning", "/properties", "/properties/1", "/properties/not-an-id", "/rooms", "/rooms/1", "/cash-receipts", "/bank"}
 	for _, path := range paths {
 		t.Run(path, func(t *testing.T) {
 			rec := httptest.NewRecorder()
@@ -51,19 +51,6 @@ func TestLegacyBillsURLRedirectPreservesTenantFilters(t *testing.T) {
 	}
 }
 
-func TestLegacyTenanciesURLMapsToRoomWorkspace(t *testing.T) {
-	target, err := url.Parse(legacyTenanciesRoomURL(url.Values{
-		"period": {"2026-08"}, "search": {"Canal House"}, "message": {"lease_saved"}, "error": {"lease_locked"},
-	}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	query := target.Query()
-	if target.Path != "/rooms" || query.Get("period") != "2026-08" || query.Get("search") != "Canal House" || query.Get("message") != "room_saved" || query.Get("error") != "room_arrangement_locked" {
-		t.Fatalf("legacy tenancies target=%q", target.String())
-	}
-}
-
 // The manual-balance form lives on the tenant responsibility workspace and
 // carries a required reason plus the canonical return context.
 func TestBillsManualBalanceRequiresReasonField(t *testing.T) {
@@ -98,10 +85,6 @@ func TestCanonicalPageTemplatesExposeSemanticEntityIDs(t *testing.T) {
 	if err := roomPageTemplate.Execute(&roomPage, roomPageData{Rows: []roomPageRow{{ID: 2, RoomLabel: "A-01", Status: "active", StatusLabel: "有效"}}}); err != nil {
 		t.Fatal(err)
 	}
-	var tenancyPage strings.Builder
-	if err := tenancyPageTemplate.Execute(&tenancyPage, tenancyPageData{TableRows: []tenancyPageRow{{ID: 3, RoomID: 2, RoomLabel: "A-01", Status: "active", StatusLabel: "有效"}}}); err != nil {
-		t.Fatal(err)
-	}
 	var bankPage strings.Builder
 	if err := bankPageTemplate.Execute(&bankPage, bankPageData{Runs: []bankPageRun{{ID: 4, Status: "succeeded", StatusLabel: "同步成功"}}}); err != nil {
 		t.Fatal(err)
@@ -111,9 +94,6 @@ func TestCanonicalPageTemplatesExposeSemanticEntityIDs(t *testing.T) {
 	}
 	if !strings.Contains(roomPage.String(), `data-room-id`) {
 		t.Fatal("room page does not expose a stable room id")
-	}
-	if !strings.Contains(tenancyPage.String(), `data-tenancy-id`) {
-		t.Fatal("tenancy page does not expose a stable tenancy id")
 	}
 	if !strings.Contains(bankPage.String(), `data-sync-run-id`) {
 		t.Fatal("bank page does not expose a stable sync run id")
@@ -221,7 +201,7 @@ func TestObjectListMutationRedirectsPreservePeriodAndFilters(t *testing.T) {
 	}
 }
 
-func TestRoomRentFormParsingUsesIntegerCentsAndValidBillDays(t *testing.T) {
+func TestRoomRentPlanFormParsesRentAsIntegerCents(t *testing.T) {
 	for _, tc := range []struct {
 		value string
 		want  int64
@@ -231,27 +211,29 @@ func TestRoomRentFormParsingUsesIntegerCentsAndValidBillDays(t *testing.T) {
 		{value: ".05", want: 5},
 		{value: "", want: 0},
 	} {
-		got, err := parseOptionalRoomRentCents(tc.value)
+		got, err := parseOptionalRentPlanAmountCents(tc.value)
 		if err != nil || got != tc.want {
 			t.Fatalf("parse room rent %q = %d, %v; want %d cents", tc.value, got, err, tc.want)
 		}
 	}
 	for _, invalid := range []string{"0", "0.00", "1.001", "-1", "1,200", "1."} {
-		if _, err := parseOptionalRoomRentCents(invalid); err == nil {
+		if _, err := parseOptionalRentPlanAmountCents(invalid); err == nil {
 			t.Fatalf("invalid room rent %q was accepted", invalid)
 		}
 	}
+}
 
-	if got, err := parseOptionalRoomDueDay("31"); err != nil || got != 31 {
-		t.Fatalf("parse bill day 31 = %d, %v", got, err)
+func TestRoomEditKeepsCurrentInactivePropertySelectable(t *testing.T) {
+	options := roomEditPropertyOptions([]property{
+		{ID: 1, Name: "Active property", Status: "active"},
+		{ID: 2, Name: "Current inactive property", Status: "inactive"},
+		{ID: 3, Name: "Other inactive property", Status: "inactive"},
+	}, 2)
+	if len(options) != 2 || options[0].ID != 1 || options[1].ID != 2 {
+		t.Fatalf("room edit property options=%+v; want active and current properties", options)
 	}
-	if got, err := parseOptionalRoomDueDay(""); err != nil || got != 0 {
-		t.Fatalf("parse blank bill day = %d, %v; want inherited value", got, err)
-	}
-	for _, invalid := range []string{"0", "32", "1.5", "due"} {
-		if _, err := parseOptionalRoomDueDay(invalid); err == nil {
-			t.Fatalf("invalid bill day %q was accepted", invalid)
-		}
+	if options[0].StatusLabel != "在用" || options[1].StatusLabel != "已停用" {
+		t.Fatalf("asset status labels=%q and %q", options[0].StatusLabel, options[1].StatusLabel)
 	}
 }
 
@@ -265,12 +247,12 @@ func TestRoomEditFailureRedirectPreservesPrototypeReturnContext(t *testing.T) {
 		"return_search":      {"room & tenant"},
 	}
 	recorder := httptest.NewRecorder()
-	redirectRoomEdit(recorder, request, 8, "room_arrangement_locked")
+	redirectRoomEdit(recorder, request, 8, "room_property_locked")
 	target, err := url.Parse(recorder.Header().Get("Location"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if target.Path != "/rooms/8" || target.Query().Get("period") != "2026-09" || target.Query().Get("edit") != "1" || target.Query().Get("from") != "rooms" || target.Query().Get("return_property_id") != "4" || target.Query().Get("return_status") != "active" || target.Query().Get("return_search") != "room & tenant" || target.Query().Get("error") != "room_arrangement_locked" {
+	if target.Path != "/rooms/8" || target.Query().Get("period") != "2026-09" || target.Query().Get("edit") != "1" || target.Query().Get("from") != "rooms" || target.Query().Get("return_property_id") != "4" || target.Query().Get("return_status") != "active" || target.Query().Get("return_search") != "room & tenant" || target.Query().Get("error") != "room_property_locked" {
 		t.Fatalf("room edit error redirect lost context: %s", target)
 	}
 }

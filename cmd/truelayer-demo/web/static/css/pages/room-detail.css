@@ -13,8 +13,31 @@
   .detail-section { margin-bottom:16px; }
   .detail-section h2 { margin:0; }
   .room-detail-page { padding-bottom: 28px; }
+  .room-plan-summary { margin-bottom:16px; }
+  .room-plan-summary-content { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; padding:0 20px 18px; }
+  .room-plan-summary-metric,.room-plan-summary-members { display:grid; gap:6px; min-width:0; padding:12px; border:1px solid var(--border); border-radius:8px; }
+  .room-plan-summary-metric span,.room-plan-summary-members>span { color:var(--foreground-muted); font-size:12px; }
+  .room-plan-summary-metric strong { overflow-wrap:anywhere; }
+  .room-plan-summary-members { grid-column:1/-1; }
+  .room-plan-summary-members>div { display:flex; flex-wrap:wrap; gap:8px; }
+  .room-plan-summary-members>div>span { padding:5px 8px; border-radius:999px; background:var(--surface-muted); font-size:12px; }
+  .room-plan-summary-empty { padding:0 20px 18px; color:var(--foreground-muted); }
   .room-meta-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
   .room-edit-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:19px 14px; }
+  .rent-plan-editor { width:min(820px,calc(100vw - 32px)); max-height:calc(100vh - 32px); overflow:auto; }
+  .plan-members-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:8px; }
+  .plan-members-head h3 { margin:0; font-size:15px; }
+  .plan-members-head p { margin:4px 0 0; }
+  .plan-split-toggle { display:flex; align-items:center; gap:8px; color:var(--foreground-muted); font-size:13px; }
+  .plan-member-rows { display:grid; gap:10px; }
+  .plan-member-row { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(140px,.8fr) auto; gap:10px; align-items:end; padding:12px; border:1px solid var(--border); border-radius:9px; background:var(--surface); }
+  .plan-member-row label { display:grid; gap:5px; min-width:0; }
+  .plan-member-row .tiny { color:var(--foreground-muted); }
+  .plan-member-row select,.plan-member-row input { width:100%; min-width:0; }
+  .end-occupancy-form { display:grid; gap:8px; padding-top:18px; border-top:1px solid var(--border); }
+  .end-occupancy-form > label { font-size:13px; font-weight:700; }
+  .end-occupancy-row { display:flex; gap:10px; }
+  .end-occupancy-row input { flex:1; min-width:0; }
   .room-edit-grid .full { grid-column:1/-1; }
   .room-edit-grid textarea { min-height:88px; }
   .room-responsibility-mobile-list,.room-mobile-facts,.detail-back-mobile,.detail-mobile-edit { display:none; }
@@ -80,10 +103,17 @@
     .room-timeline-title-desktop{display:none}
     .room-timeline-title-mobile{display:inline}
     .room-edit-grid{grid-template-columns:1fr;gap:12px}
+    .room-plan-summary-content { grid-template-columns:repeat(2,minmax(0,1fr)); padding-left:14px; padding-right:14px; }
+    .room-plan-summary-content .room-plan-summary-metric:nth-child(3) { grid-column:1/-1; }
+    .room-plan-summary .panel-head { align-items:flex-start; }
+    .room-plan-summary .panel-head .btn { min-height:40px; padding:7px 10px; white-space:nowrap; }
+    .plan-member-row { grid-template-columns:1fr; }
+    .plan-member-row .btn { justify-self:start; }
+    .end-occupancy-row { align-items:stretch; }
     .room-edit-grid .full{grid-column:auto}
     .room-edit-desktop-only{display:none}
     .room-detail-grid aside{grid-template-columns:1fr}
     .room-detail-grid aside .detail-section:last-child{grid-column:auto}
-    .room-detail-mobile-actions{position:fixed;left:0;right:0;bottom:calc(68px + env(safe-area-inset-bottom));z-index:35;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:10px 16px;background:color-mix(in oklch,var(--surface) 96%,transparent);border-top:1px solid var(--border);backdrop-filter:blur(12px)}
+    .room-detail-mobile-actions{position:fixed;left:0;right:0;bottom:calc(68px + env(safe-area-inset-bottom));z-index:35;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:10px 16px;background:color-mix(in oklch,var(--surface) 96%,transparent);border-top:1px solid var(--border);backdrop-filter:blur(12px)}
     .room-detail-mobile-actions .btn{min-height:44px}
   }

@@ -25,22 +25,6 @@ func TestWritePrototypePreviewHTML(t *testing.T) {
 		}
 		return os.WriteFile(filepath.Join(root, name), []byte(body.String()), 0o600)
 	}
-	write("tenancies.html", func() error {
-		return writeFile("tenancies.html", func(body *strings.Builder) error {
-			return tenancyPageTemplate.Execute(body, tenancyPageData{
-				workspaceShell: workspaceShell{ActivePage: "tenancies", Username: "audit", Environment: "sandbox", FootNote: "租约管理", ShowNavCounts: true},
-				Period:         "2026-09", StatusFilter: "all", ShowCreate: true,
-				Rooms:   []tenancyRoomOption{{ID: 3, Label: "78 Old County · 03"}},
-				Tenants: []tenancyTenantOption{{ID: 11, Name: "Tenant A"}, {ID: 12, Name: "Tenant B"}},
-				Form:    tenancyFormData{Period: "2026-09", StartDate: "2026-09-03", ContractDate: "2026-08-30", MoveInDate: "2025-09-01", DueDay: 1},
-				Rows:    []tenancyPageRow{{ID: 7, RecordLabel: "LEASE-000007", RoomID: 3, PropertyName: "78 Old County", RoomLabel: "03", StartDate: "2026-09-03", ContractDate: "2026-08-30", MoveInDate: "2025-09-01", MonthlyRent: "€1,250.00", DueDay: 1, Status: "active", StatusLabel: "执行中", Parties: []tenancyPartyView{{TenantID: 11, TenantName: "Tenant A", Responsibility: "€625.00"}, {TenantID: 12, TenantName: "Tenant B", Responsibility: "€625.00"}}}},
-				TableRows: []tenancyPageRow{
-					{ID: 7, RecordLabel: "LEASE-000007", RoomID: 3, PropertyName: "78 Old County", RoomLabel: "03", StartDate: "2026-09-03", ContractDate: "2026-08-30", MoveInDate: "2025-09-01", MonthlyRent: "€1,250.00", TenantID: 11, TenantName: "Tenant A", Responsibility: "€625.00", Status: "active", StatusLabel: "执行中"},
-					{ID: 7, RecordLabel: "LEASE-000007", RoomID: 3, PropertyName: "78 Old County", RoomLabel: "03", StartDate: "2026-09-03", ContractDate: "2026-08-30", MoveInDate: "2025-09-01", MonthlyRent: "€1,250.00", TenantID: 12, TenantName: "Tenant B", Responsibility: "€625.00", Status: "active", StatusLabel: "执行中"},
-				},
-			})
-		})
-	})
 	write("expenses.html", func() error {
 		return writeFile("expenses.html", func(body *strings.Builder) error {
 			return expenseTemplate.Execute(body, expensePageData{
@@ -131,7 +115,7 @@ func TestWritePrototypePreviewHTML(t *testing.T) {
 			return propertyPageTemplate.Execute(body, propertyPageData{
 				workspaceShell: workspaceShell{ActivePage: "properties", Username: "audit", Environment: "sandbox", FootNote: "房产管理", CompactTitle: "对象管理"},
 				Period:         "2026-09", PeriodLabel: "2026 年 9 月", PeriodOptions: pagePeriodOptions(parseTestPeriod(t, "2026-09")), StatusFilter: "all", CollectionFilter: "all", Search: "",
-				Rows: []propertyPageRow{{ID: 7, Mark: "78", Name: "78 Old County Road", CityRegion: "Dublin 12", Address: "78 Old County Road, Dublin 12", Timezone: "Europe/Dublin", Status: "active", StatusLabel: "有效", CollectionStatus: "paid", CollectionStatusLabel: "已收齐", RoomCount: 6, ResponsibilityCount: 9, ExpectedAmount: "€5,530", PaidAmount: "€5,530", BalanceAmount: "€0"}},
+				Rows: []propertyPageRow{{ID: 7, Mark: "78", Name: "78 Old County Road", CityRegion: "Dublin 12", Address: "78 Old County Road, Dublin 12", Timezone: "Europe/Dublin", Status: "active", StatusLabel: "在用", CollectionStatus: "paid", CollectionStatusLabel: "已收齐", RoomCount: 6, ResponsibilityCount: 9, ExpectedAmount: "€5,530", PaidAmount: "€5,530", BalanceAmount: "€0"}},
 			})
 		})
 	})
@@ -140,7 +124,7 @@ func TestWritePrototypePreviewHTML(t *testing.T) {
 			return propertyDetailPageTemplate.Execute(body, propertyDetailPageData{
 				workspaceShell: workspaceShell{ActivePage: "properties", Username: "audit", Environment: "sandbox", FootNote: "房产详情", CompactTitle: "78 Old County Road"},
 				Period:         "2026-09", PeriodLabel: "2026 年 9 月", ListStatus: "all",
-				Property: propertyPageRow{ID: 7, Mark: "78", Name: "78 Old County Road", CityRegion: "Dublin 12", Address: "78 Old County Road, Dublin 12", Timezone: "Europe/Dublin", Notes: "房产备注", Status: "active", StatusLabel: "有效", CollectionStatus: "paid", CollectionStatusLabel: "已收齐", RoomCount: 6, ActiveRoomCount: 6, ResponsibilityCount: 9, ExpectedAmount: "€5,530", PaidAmount: "€5,530", BalanceAmount: "€0", ExpenseAmount: "€400", NetAmount: "€5,130", CollectionPercent: 100},
+				Property: propertyPageRow{ID: 7, Mark: "78", Name: "78 Old County Road", CityRegion: "Dublin 12", Address: "78 Old County Road, Dublin 12", Timezone: "Europe/Dublin", Notes: "房产备注", Status: "active", StatusLabel: "在用", CollectionStatus: "paid", CollectionStatusLabel: "已收齐", RoomCount: 6, ActiveRoomCount: 6, ResponsibilityCount: 9, ExpectedAmount: "€5,530", PaidAmount: "€5,530", BalanceAmount: "€0", ExpenseAmount: "€400", NetAmount: "€5,130", CollectionPercent: 100},
 				Rooms:    []roomPageRow{{ID: 3, PropertyID: 7, PropertyName: "78 Old County Road", RoomLabel: "03", TenantNames: []string{"WAHAJULLAH KHAN", "Tenant B"}, MonthlyRent: "€1,250", ExpectedAmount: "€1,250", PaidAmount: "€1,250", BalanceAmount: "€0", Status: "paid", StatusLabel: "已收齐"}},
 				Editing:  true,
 			})
@@ -150,9 +134,9 @@ func TestWritePrototypePreviewHTML(t *testing.T) {
 		return writeFile("rooms.html", func(body *strings.Builder) error {
 			return roomPageTemplate.Execute(body, roomPageData{
 				workspaceShell: workspaceShell{ActivePage: "rooms", Username: "audit", Environment: "sandbox", FootNote: "房间管理", CompactTitle: "对象管理"},
-				Period:         "2026-09", PeriodLabel: "2026 年 9 月", PeriodOptions: pagePeriodOptions(parseTestPeriod(t, "2026-09")), StatusFilter: "all", CollectionFilter: "all", ShowForm: false, Form: roomPageForm{PropertyID: 7, Capacity: 2, DueDay: 1, ActiveFrom: "2026-09"},
+				Period:         "2026-09", PeriodLabel: "2026 年 9 月", PeriodOptions: pagePeriodOptions(parseTestPeriod(t, "2026-09")), StatusFilter: "all", CollectionFilter: "all", ShowForm: false, Form: roomPageForm{PropertyID: 7, Capacity: 2},
 				Properties: []propertyPageRow{{ID: 7, Name: "78 Old County Road", CityRegion: "Dublin 12", Address: "78 Old County Road, Dublin 12"}},
-				Rows:       []roomPageRow{{ID: 3, PropertyID: 7, PropertyName: "78 Old County Road", RoomLabel: "03", RoomType: "双人间", Capacity: 2, Status: "active", StatusLabel: "有效", CollectionStatus: "paid", CollectionStatusLabel: "已收齐", TenantNames: []string{"WAHAJULLAH KHAN", "Tenant B"}, ExpectedAmount: "€1,250", PaidAmount: "€1,250", BalanceAmount: "€0"}},
+				Rows:       []roomPageRow{{ID: 3, PropertyID: 7, PropertyName: "78 Old County Road", RoomLabel: "03", RoomType: "双人间", Capacity: 2, Status: "active", StatusLabel: "在用", CollectionStatus: "paid", CollectionStatusLabel: "已收齐", TenantNames: []string{"WAHAJULLAH KHAN", "Tenant B"}, ExpectedAmount: "€1,250", PaidAmount: "€1,250", BalanceAmount: "€0"}},
 			})
 		})
 	})
@@ -160,9 +144,9 @@ func TestWritePrototypePreviewHTML(t *testing.T) {
 		return writeFile("room-detail-edit.html", func(body *strings.Builder) error {
 			return rentRoomDetailTemplate.Execute(body, rentRoomDetailPageData{
 				workspaceShell: workspaceShell{ActivePage: "rooms", Username: "audit", Environment: "sandbox", FootNote: "房间详情", CompactTitle: "78 Old County Road · 房间 03"},
-				Period:         "2026-09", PeriodLabel: "2026 年 9 月", RoomID: 3, RoomLabel: "03", RoomType: "双人间", Capacity: 2, RoomActiveFrom: "2025-09", ContractDate: "2026-08-30", MoveInDate: "2025-09-01", MonthlyRent: "€1,250", DueDay: 1, PropertyName: "78 Old County Road",
+				Period:         "2026-09", PeriodLabel: "2026 年 9 月", RoomID: 3, RoomLabel: "03", RoomType: "双人间", Capacity: 2, MonthlyRent: "€1,250", DueDay: 1, PropertyName: "78 Old County Road",
 				Summary: rentWorkspaceRoomRow{RoomID: 3, PropertyID: 7, Status: "paid", StatusLabel: "已收齐", TenantCount: 2, ExpectedAmount: "€1,250", PaidAmount: "€1,250", BalanceAmount: "€0", CollectionPercent: 100, DueDate: "2026-09-01"}, PaymentCount: 1,
-				Form: roomPageForm{ID: 3, PropertyID: 7, RoomLabel: "03", RoomType: "双人间", Capacity: 2, MonthlyRentValue: "1250.00", DueDay: 1, ActiveFrom: "2025-09", Notes: "两人同住；两条个人责任各 €625。"}, Properties: []propertyPageRow{{ID: 7, Name: "78 Old County Road"}}, Editing: true,
+				Form: roomPageForm{ID: 3, PropertyID: 7, RoomLabel: "03", RoomType: "双人间", Capacity: 2, Notes: "两人同住；两条个人责任各 €625。"}, Properties: []propertyPageRow{{ID: 7, Name: "78 Old County Road"}}, Editing: true,
 			})
 		})
 	})
@@ -171,7 +155,7 @@ func TestWritePrototypePreviewHTML(t *testing.T) {
 			return propertyDetailPageTemplate.Execute(body, propertyDetailPageData{
 				workspaceShell: workspaceShell{ActivePage: "properties", Username: "audit", Environment: "sandbox", FootNote: "房产详情", CompactTitle: "78 Old County Road"},
 				Period:         "2026-09", PeriodLabel: "2026 年 9 月", ListStatus: "all", ListCollection: "all",
-				Property: propertyPageRow{ID: 7, Mark: "78", Name: "78 Old County Road", CityRegion: "Dublin 12", Address: "78 Old County Road, Dublin 12", Timezone: "Europe/Dublin", Notes: "房产备注", Status: "active", StatusLabel: "有效", CollectionStatus: "paid", CollectionStatusLabel: "已收齐", RoomCount: 6, ActiveRoomCount: 6, ResponsibilityCount: 9, ExpectedAmount: "€5,530", PaidAmount: "€5,530", BalanceAmount: "€0", ExpenseAmount: "€400", NetAmount: "€5,130", CollectionPercent: 100},
+				Property: propertyPageRow{ID: 7, Mark: "78", Name: "78 Old County Road", CityRegion: "Dublin 12", Address: "78 Old County Road, Dublin 12", Timezone: "Europe/Dublin", Notes: "房产备注", Status: "active", StatusLabel: "在用", CollectionStatus: "paid", CollectionStatusLabel: "已收齐", RoomCount: 6, ActiveRoomCount: 6, ResponsibilityCount: 9, ExpectedAmount: "€5,530", PaidAmount: "€5,530", BalanceAmount: "€0", ExpenseAmount: "€400", NetAmount: "€5,130", CollectionPercent: 100},
 				Rooms: []roomPageRow{
 					{ID: 3, PropertyID: 7, PropertyName: "78 Old County Road", RoomLabel: "03", TenantNames: []string{"WAHAJULLAH KHAN", "Tenant B"}, MonthlyRent: "€1,250", ExpectedAmount: "€1,250", PaidAmount: "€1,250", BalanceAmount: "€0", Status: "paid", StatusLabel: "已收齐"},
 					{ID: 5, PropertyID: 7, PropertyName: "78 Old County Road", RoomLabel: "05", TenantNames: []string{"SATVIK TALAWAR", "ANANYA M"}, MonthlyRent: "€1,200", ExpectedAmount: "€1,200", PaidAmount: "€1,200", BalanceAmount: "€0", Status: "paid", StatusLabel: "已收齐"},
@@ -198,7 +182,7 @@ func TestWritePrototypePreviewHTML(t *testing.T) {
 		return writeFile("room-detail.html", func(body *strings.Builder) error {
 			return rentRoomDetailTemplate.Execute(body, rentRoomDetailPageData{
 				workspaceShell: workspaceShell{ActivePage: "rooms", Username: "audit", Environment: "sandbox", FootNote: "房间详情", CompactTitle: "78 Old County Road · 房间 03"},
-				Period:         "2026-09", PeriodLabel: "2026 年 9 月", RoomID: 3, RoomLabel: "03", RoomType: "双人间", Capacity: 2, RoomActiveFrom: "2025-09", ContractDate: "2026-08-30", MoveInDate: "2025-09-01", MonthlyRent: "€1,250", MonthlyRentValue: "1250.00", DueDay: 1, PropertyName: "78 Old County Road", ReturnURL: "/rooms?period=2026-09", FromList: true,
+				Period:         "2026-09", PeriodLabel: "2026 年 9 月", RoomID: 3, RoomLabel: "03", RoomType: "双人间", Capacity: 2, MonthlyRent: "€1,250", MonthlyRentValue: "1250.00", DueDay: 1, PropertyName: "78 Old County Road", ReturnURL: "/rooms?period=2026-09", FromList: true,
 				Summary: rentWorkspaceRoomRow{RoomID: 3, PropertyID: 7, Status: "paid", StatusLabel: "已收齐", TenantCount: 2, ExpectedAmount: "€1,250", PaidAmount: "€1,250", BalanceAmount: "€0", CollectionPercent: 100, DueDate: "2026-09-01"}, PaymentCount: 1,
 				Tenants: []rentWorkspaceTenantRow{
 					{TenantID: 11, TenantName: "WAHAJULLAH KHAN", ExpectedAmount: "€625", PaidAmount: "€625", BalanceAmount: "€0", Status: "paid", StatusLabel: "已缴清"},

@@ -3,17 +3,16 @@ package main
 import "time"
 
 type property struct {
-	ID           uint64 `gorm:"primaryKey"`
-	UserID       uint64
-	Name         string
-	CityRegion   string
-	Address      *string
-	Timezone     string
-	Notes        *string
-	Status       string `gorm:"default:active"`
-	InactiveFrom *time.Time
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID         uint64 `gorm:"primaryKey"`
+	UserID     uint64
+	Name       string
+	CityRegion string
+	Address    *string
+	Timezone   string
+	Notes      *string
+	Status     string `gorm:"default:active"`
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 func (property) TableName() string {
@@ -21,61 +20,52 @@ func (property) TableName() string {
 }
 
 type room struct {
-	ID               uint64 `gorm:"primaryKey"`
-	UserID           uint64
-	PropertyID       uint64
-	RoomLabel        string
-	RoomType         string
-	Capacity         int
-	MonthlyRentCents int64
-	DueDay           int `gorm:"default:1"`
-	Notes            *string
-	Status           string `gorm:"default:active"`
-	ActiveFrom       time.Time
-	InactiveFrom     *time.Time
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID              uint64 `gorm:"primaryKey"`
+	UserID          uint64
+	PropertyID      uint64
+	RoomLabel       string
+	RoomType        string
+	Capacity        int
+	Notes           *string
+	Status          string `gorm:"default:active"`
+	RentPlanVersion uint64
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 func (room) TableName() string {
 	return "rooms"
 }
 
-type tenancyAgreement struct {
-	ID               uint64 `gorm:"primaryKey"`
-	UserID           uint64
-	RoomID           uint64
-	ContractDate     *time.Time
-	MoveInDate       *time.Time
-	StartDate        time.Time
-	EndDate          *time.Time
-	MonthlyRentCents int64
-	Currency         string
-	DueDay           int
-	Status           string `gorm:"default:active"`
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+type roomRentPlan struct {
+	ID                 uint64 `gorm:"primaryKey"`
+	UserID             uint64
+	RoomID             uint64
+	EffectiveFromMonth time.Time
+	EffectiveToMonth   *time.Time
+	MonthlyRentCents   int64
+	Currency           string
+	DueDay             int
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }
 
-func (tenancyAgreement) TableName() string {
-	return "tenancy_agreements"
+func (roomRentPlan) TableName() string {
+	return "room_rent_plans"
 }
 
-type agreementParty struct {
+type roomRentPlanMember struct {
 	ID                  uint64 `gorm:"primaryKey"`
 	UserID              uint64
-	AgreementID         uint64
+	RoomRentPlanID      uint64
 	TenantID            uint64
 	ResponsibilityCents int64
-	JoinedAt            *time.Time
-	LeftAt              *time.Time
-	Status              string `gorm:"default:active"`
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
 }
 
-func (agreementParty) TableName() string {
-	return "agreement_parties"
+func (roomRentPlanMember) TableName() string {
+	return "room_rent_plan_members"
 }
 
 type rentCharge struct {
@@ -83,7 +73,7 @@ type rentCharge struct {
 	UserID               uint64
 	PropertyID           uint64
 	RoomID               uint64
-	TenancyAgreementID   uint64
+	RoomRentPlanID       uint64
 	PeriodMonth          time.Time
 	DueDate              time.Time
 	ExpectedAmountCents  int64

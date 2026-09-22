@@ -1,6 +1,6 @@
 # Rent Workspace Navigation and Legacy Routes
 
-> Public page entry points and compatibility behavior for the simplified rent
+> Public page entry points and retained aliases for the room rent-plan
 > workflow.
 
 ## Scenario: Navigating, configuring, or settling monthly rent
@@ -8,7 +8,7 @@
 ### 1. Scope / Trigger
 
 - Trigger: changing rent workspace navigation, tenant/room configuration,
-  monthly responsibility actions, or `/bills` / `/tenancies` compatibility.
+  monthly responsibility actions, or a retained `/bills` compatibility route.
 - Applies to server-rendered templates in `cmd/truelayer-demo/web/`, route
   handlers in `main.go` and `page_data_routes.go`, and manual balance redirects.
 
@@ -19,8 +19,8 @@
 - `POST /rent-dashboard/settle` is the canonical manual-balance action.
 - `GET /bills?...` is a legacy redirect to `/rent-dashboard` with
   `view=tenants`; `/bills/settle` remains a legacy action alias.
-- `GET /tenancies?...` is a legacy redirect to `/rooms`; `POST /tenancies`
-  remains a compatibility handler for existing submissions.
+- `/tenancies` is retired and has no registered GET or POST handler; both
+  methods return 404.
 - `/billing` remains the bank-transaction matching alias. It is not a rent-bill
   route and must not be removed with `/bills` navigation.
 
@@ -28,15 +28,15 @@
 
 - Do not expose a standalone bills or leases/tenancies item in desktop sidebar,
   mobile navigation, or the More page. Rent collection lives under the
-  workspace tenant view; room totals are edited with the room and occupant
-  responsibilities with the tenant/occupancy form.
+  workspace tenant view; occupancy, rent, due day, and responsibilities are
+  edited only in the room rent-plan form. Tenant profile forms contain identity
+  and payer details, not rent-plan fields.
 - Keep system accounting facts behind the user-facing workflow. Templates must
   submit stable tenant/obligation identifiers and must not reconstruct money
   from display strings.
 - The `/bills` redirect preserves valid rent filters, month, and whitelisted
-  notice/error codes while selecting `view=tenants`. The `/tenancies` redirect
-  carries a valid month and bounded search, and maps old lease notices/errors to
-  room-arrangement language.
+  notice/error codes while selecting `view=tenants`. Do not redirect or add a
+  compatibility handler for `/tenancies`.
 - Workspace actions preserve the `period` and `view` from a same-site
   `return_to=/rent-dashboard?...`. A return target with an absolute URL,
   foreign host, userinfo, fragment, or a different path is rejected; fallback
@@ -53,10 +53,9 @@
 | Unauthenticated legacy GET | Auth flow; do not reveal account data |
 | Valid `GET /bills` | `302` to tenant view with supported context preserved |
 | Invalid bill period/filter | Safe current/default workspace filters; no arbitrary SQL filter |
-| Valid `GET /tenancies` | `302` to `/rooms` with supported context preserved |
+| `GET /tenancies` or `POST /tenancies` | `404`; route is retired |
 | External or malformed `return_to` | Ignore it and use a same-site workspace fallback |
 | `POST /rent-dashboard/settle` or legacy alias | Same validation and domain mutation; redirect into workspace |
-| `POST /tenancies` | Preserve compatibility handler; do not expose a new standalone edit page |
 
 ### 5. Good / Base / Bad Cases
 
@@ -71,13 +70,13 @@
 
 ### 6. Tests Required
 
-- Route tests assert `/bills` and `/tenancies` redirects, context preservation,
-  legacy POST/action aliases, and `/billing` transaction behavior.
+- Route tests assert `/bills` redirect context, `/tenancies` GET/POST 404,
+  retained action aliases, and `/billing` transaction behavior.
 - Redirect tests reject external, malformed, and non-workspace return paths and
   retain the allowed month/view for safe same-site paths.
-- Template tests assert no standalone bill or tenancy navigation item, and that
-  room/tenant forms render the saved responsibility schedule without duplicate
-  rent-maintenance fields.
+- Template tests assert no standalone bill or tenancy navigation item, that
+  the room rent-plan form shows the saved schedule, and that physical property,
+  room, and tenant forms contain no validity or rent-plan fields.
 - Run the focused Go route/template tests, `go test ./... -run '^$' -count=1`,
   `go vet ./...`, and `git diff --check`; run browser checks when the local
   browser acceptance environment is available.
@@ -101,5 +100,6 @@ Correct:
 </form>
 ```
 
-Legacy URLs stay as compatibility entry points, while the rendered product
-uses one canonical workspace and one accounting implementation.
+Only explicitly retained aliases such as `/bills` stay as compatibility entry
+points. `/tenancies` is retired, while the product uses one canonical workspace
+and one accounting implementation.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -145,6 +146,12 @@ func (s *transactionService) allocateTransactionInTx(txdb *gorm.DB, userID, tran
 	if userID == 0 || transactionID == 0 {
 		return transactionAllocationSummary{}, errors.New("userID and transactionID are required")
 	}
+	rentObligationIDs := make([]uint64, 0, len(drafts))
+	for _, draft := range drafts {
+		if draft.Kind == allocationKindRent {
+			rentObligationIDs = append(rentObligationIDs, draft.RentObligationID)
+		}
+	}
 	if strings.TrimSpace(confirmationSource) == "" {
 		confirmationSource = "manual"
 	}
@@ -171,19 +178,19 @@ func (s *transactionService) allocateTransactionInTx(txdb *gorm.DB, userID, tran
 		return transactionAllocationSummary{}, errors.New("restore ignored transaction before allocating it")
 	}
 
-	obligations := make(map[uint64]rentObligation)
+	lockedObligations, err := lockRentObligationRoomsInTx(txdb, userID, rentObligationIDs)
+	if err != nil {
+		return transactionAllocationSummary{}, err
+	}
+	obligations := make(map[uint64]rentObligation, len(lockedObligations))
 	now := time.Now().UTC()
-	for _, draft := range drafts {
-		if draft.Kind != allocationKindRent || draft.RentObligationID == 0 {
-			continue
-		}
-		if _, ok := obligations[draft.RentObligationID]; ok {
-			continue
-		}
-		var obligation rentObligation
-		if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", draft.RentObligationID, userID).First(&obligation).Error; err != nil {
-			return transactionAllocationSummary{}, err
-		}
+	lockedIDs := make([]uint64, 0, len(lockedObligations))
+	for obligationID := range lockedObligations {
+		lockedIDs = append(lockedIDs, obligationID)
+	}
+	sort.Slice(lockedIDs, func(i, j int) bool { return lockedIDs[i] < lockedIDs[j] })
+	for _, obligationID := range lockedIDs {
+		obligation := lockedObligations[obligationID]
 		var obligationAllocations []paymentAllocation
 		if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligation.ID, userID).Find(&obligationAllocations).Error; err != nil {
 			return transactionAllocationSummary{}, err

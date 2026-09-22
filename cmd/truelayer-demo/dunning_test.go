@@ -46,7 +46,7 @@ func TestDunningMessageUsesDublinDueDayAndFixedEnglishTemplates(t *testing.T) {
 
 func TestDunningMessageRejectsInvalidRecipientAndEmptyBalance(t *testing.T) {
 	sender := dunningSenderConfig{DisplayName: "Dublin Homes", ReplyToEmail: "landlord@example.test"}
-	candidate := dunningCandidate{TenantName: "Aoife", Period: "2026-09", DueDateValue: time.Date(2026, 9, 5, 0, 0, 0, 0, time.UTC), DueDate: "2026-09-05", BalanceCents: 50000, Currency: "EUR", Email: "not-an-email"}
+	candidate := dunningCandidate{TenantName: "Aoife", Period: "2026-09", DueDateValue: time.Date(2026, 9, 5, 0, 0, 0, 0, time.UTC), DueDate: "2026-09-05", BalanceCents: 50000, Email: "not-an-email"}
 	if _, err := buildDunningMessage(candidate, sender, time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC)); err == nil || !strings.Contains(err.Error(), "recipient") {
 		t.Fatalf("invalid recipient error=%v", err)
 	}
@@ -71,7 +71,7 @@ func TestDunningCandidateSkipsSameDaySuccessByDefault(t *testing.T) {
 		Currency:            "EUR",
 		Status:              "partial",
 		RecordStatus:        obligationRecordActive,
-	}, tenant{ID: 3, Name: "Aoife", Email: "aoife@example.test", Currency: "EUR"}, now, &dunningSendAttempt{DeliveryStatus: dunningDeliverySent, SentAt: &sentAt})
+	}, tenant{ID: 3, Name: "Aoife", Email: "aoife@example.test"}, now, &dunningSendAttempt{DeliveryStatus: dunningDeliverySent, SentAt: &sentAt})
 	if !candidate.SentToday || candidate.DefaultSelected || !candidate.Selectable {
 		t.Fatalf("candidate=%+v", candidate)
 	}

@@ -702,30 +702,6 @@ func (s *transactionService) countPendingTransactionsWithFilters(ctx context.Con
 	return count, nil
 }
 
-func fallbackTransactionPageRows(result demoResult, filters transactionFilters) []transactionPageRow {
-	rows := normalizePaymentTransactions(result)
-	pageRows := make([]transactionPageRow, 0, len(rows))
-	for _, input := range rows {
-		if filters.Direction != "" && input.Direction != filters.Direction {
-			continue
-		}
-		if filters.PendingOnly && (input.Direction != "income" || !isPendingMatchStatus(input.MatchStatus)) {
-			continue
-		}
-		if filters.MatchStatus != "" && input.MatchStatus != filters.MatchStatus {
-			continue
-		}
-		if filters.PeriodMonth != "" {
-			period, err := parsePeriodMonth(filters.PeriodMonth)
-			if err != nil || input.TransactionTime == nil || monthStart(*input.TransactionTime) != period {
-				continue
-			}
-		}
-		pageRows = append(pageRows, transactionPageRowFromModel(paymentTransactionFromInput(0, input)))
-	}
-	return pageRows
-}
-
 func firstNonZeroTime(value *time.Time) time.Time {
 	if value != nil {
 		return *value

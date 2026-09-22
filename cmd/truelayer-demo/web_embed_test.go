@@ -204,7 +204,7 @@ func TestEmbeddedRoomDetailUsesTypedDisplayFields(t *testing.T) {
 		ReturnSearch:     "A-01",
 		Editing:          true,
 		RoomID:           5,
-		Form:             roomPageForm{ID: 5, PropertyID: 3, RoomLabel: "A-01", ActiveFrom: "2026-01"},
+		Form:             roomPageForm{ID: 5, PropertyID: 3, RoomLabel: "A-01"},
 		PeriodLabel:      "2026年9月",
 		RoomLabel:        "A-01",
 		PropertyName:     "Typed property",
@@ -264,8 +264,8 @@ func TestEveryPageTemplateLinksTheSharedStylesheet(t *testing.T) {
 			t.Errorf("%s does not link a page stylesheet under /static/css/pages/", path)
 		}
 	}
-	if scanned < 9 {
-		t.Fatalf("scanned %d page templates, want at least 9", scanned)
+	if scanned < 8 {
+		t.Fatalf("scanned %d page templates, want at least 8 after removing the tenancy page", scanned)
 	}
 }
 

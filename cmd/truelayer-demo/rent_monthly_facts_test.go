@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 func TestRentFactsMaterializationPolicyKeepsFutureReadsAsPreviews(t *testing.T) {
@@ -29,7 +31,7 @@ func TestRentFactsMaterializationPolicyKeepsFutureReadsAsPreviews(t *testing.T) 
 	}
 }
 
-func TestEnsureMonthlyRentFactsGeneratesStructuredAndLegacyRowsOnceOnMySQL(t *testing.T) {
+func TestEnsureMonthlyRentFactsGeneratesRoomPlanFactsOnceOnMySQL(t *testing.T) {
 	db, sqlDB := openLedgerMySQLTestDB(t)
 	if err := runMigrations(sqlDB, "../../migrations"); err != nil {
 		t.Fatalf("run migrations: %v", err)
@@ -41,10 +43,9 @@ func TestEnsureMonthlyRentFactsGeneratesStructuredAndLegacyRowsOnceOnMySQL(t *te
 	}
 	t.Cleanup(func() { _ = db.WithContext(ctx).Delete(&user{}, owner.ID).Error })
 
-	firstTenant := repositoryTestTenant(owner.ID, "First structured tenant")
-	secondTenant := repositoryTestTenant(owner.ID, "Second structured tenant")
-	legacyTenant := repositoryTestTenant(owner.ID, "Legacy tenant")
-	for _, row := range []*tenant{&firstTenant, &secondTenant, &legacyTenant} {
+	firstTenant := repositoryTestTenant(owner.ID, "First room-plan tenant")
+	secondTenant := repositoryTestTenant(owner.ID, "Second room-plan tenant")
+	for _, row := range []*tenant{&firstTenant, &secondTenant} {
 		if err := db.WithContext(ctx).Create(row).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -55,74 +56,51 @@ func TestEnsureMonthlyRentFactsGeneratesStructuredAndLegacyRowsOnceOnMySQL(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	roomRow, err := domain.createRoom(ctx, owner.ID, roomInput{
-		PropertyID: propertyRow.ID, RoomLabel: "Room 1", MonthlyRentCents: 100000,
-		DueDay: 5, ActiveFrom: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-	})
+	roomRow, err := domain.createRoom(ctx, owner.ID, roomInput{PropertyID: propertyRow.ID, RoomLabel: "Room 1"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	period := monthStart(time.Now().UTC())
-	_, err = domain.saveRentArrangement(ctx, owner.ID, rentArrangementInput{
-		RoomID: roomRow.ID, EffectiveMonth: period, MonthlyRentCents: 100000, Currency: "EUR", DueDay: 5,
-		Responsibilities: []rentResponsibilityInput{
-			{TenantID: firstTenant.ID, AmountCents: 60000},
-			{TenantID: secondTenant.ID, AmountCents: 40000},
+	plan, _, err := newRoomRentPlanService(db).SaveRoomRentPlan(ctx, SaveRoomRentPlanCommand{
+		UserID: owner.ID, RoomID: roomRow.ID, EffectiveMonth: period,
+		MonthlyRentCents: 100000, Currency: ledgerCurrencyEUR, DueDay: 5,
+		Members: []RoomRentPlanMemberInput{
+			{TenantID: firstTenant.ID, ResponsibilityCents: 60000},
+			{TenantID: secondTenant.ID, ResponsibilityCents: 40000},
 		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	emptyRoom, err := domain.createRoom(ctx, owner.ID, roomInput{
-		PropertyID: propertyRow.ID, RoomLabel: "Empty room", MonthlyRentCents: 70000,
-		DueDay: 5, ActiveFrom: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-	})
-	if err != nil {
+
+	var charge rentCharge
+	if err := db.WithContext(ctx).Where("user_id = ? AND room_id = ? AND period_month = ?", owner.ID, roomRow.ID, period).First(&charge).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := domain.saveRentArrangement(ctx, owner.ID, rentArrangementInput{
-		RoomID: emptyRoom.ID, EffectiveMonth: period, MonthlyRentCents: 70000, Currency: "EUR", DueDay: 5,
-	}); err != nil {
+	if charge.RoomRentPlanID != plan.ID || charge.ExpectedAmountCents != 100000 {
+		t.Fatalf("room charge=%+v; want plan %d and 100000 cents", charge, plan.ID)
+	}
+	var obligations []rentObligation
+	if err := db.WithContext(ctx).Where("user_id = ? AND rent_charge_id = ?", owner.ID, charge.ID).Order("tenant_id ASC").Find(&obligations).Error; err != nil {
 		t.Fatal(err)
+	}
+	if len(obligations) != 2 || obligations[0].ExpectedAmountCents+obligations[1].ExpectedAmountCents != 100000 {
+		t.Fatalf("room obligations=%+v; want two responsibilities summing to room rent", obligations)
+	}
+	for _, obligation := range obligations {
+		if obligation.RoomRentPlanID != plan.ID || obligation.RoomRentPlanMemberID == 0 {
+			t.Fatalf("obligation is not linked to its plan member: %+v", obligation)
+		}
 	}
 
+	// Remove the first materialization so concurrent readers exercise the creation path.
+	if err := db.WithContext(ctx).Where("user_id = ? AND rent_charge_id = ?", owner.ID, charge.ID).Delete(&rentObligation{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.WithContext(ctx).Where("user_id = ? AND id = ?", owner.ID, charge.ID).Delete(&rentCharge{}).Error; err != nil {
+		t.Fatal(err)
+	}
 	service := newMonthlyRentFactsService(db)
-	if err := service.ensureMonthlyRentFacts(ctx, owner.ID, period, rentFactsIntentRead); err != nil {
-		t.Fatal(err)
-	}
-	var charges []rentCharge
-	if err := db.WithContext(ctx).Where("user_id = ? AND room_id = ? AND period_month = ?", owner.ID, roomRow.ID, period).Find(&charges).Error; err != nil {
-		t.Fatal(err)
-	}
-	if len(charges) != 1 || charges[0].ExpectedAmountCents != 100000 {
-		t.Fatalf("structured room charges = %+v; want one 100000-cent charge", charges)
-	}
-	var emptyRoomChargeCount int64
-	if err := db.WithContext(ctx).Model(&rentCharge{}).Where("user_id = ? AND room_id = ? AND period_month = ?", owner.ID, emptyRoom.ID, period).Count(&emptyRoomChargeCount).Error; err != nil {
-		t.Fatal(err)
-	}
-	if emptyRoomChargeCount != 0 {
-		t.Fatalf("empty room generated %d rent charges; want none", emptyRoomChargeCount)
-	}
-	var structured []rentObligation
-	if err := db.WithContext(ctx).Where("user_id = ? AND rent_charge_id = ?", owner.ID, charges[0].ID).Order("tenant_id ASC").Find(&structured).Error; err != nil {
-		t.Fatal(err)
-	}
-	if len(structured) != 2 || structured[0].ExpectedAmountCents+structured[1].ExpectedAmountCents != 100000 {
-		t.Fatalf("structured obligations = %+v; want two obligations summing to room rent", structured)
-	}
-	var structuredLegacyCount int64
-	if err := db.WithContext(ctx).Model(&rentObligation{}).Where("user_id = ? AND tenant_id IN ? AND period_month = ? AND rent_charge_id IS NULL", owner.ID, []uint64{firstTenant.ID, secondTenant.ID}, period).Count(&structuredLegacyCount).Error; err != nil {
-		t.Fatal(err)
-	}
-	if structuredLegacyCount != 0 {
-		t.Fatalf("structured tenants also received %d legacy obligations", structuredLegacyCount)
-	}
-	var legacy rentObligation
-	if err := db.WithContext(ctx).Where("user_id = ? AND tenant_id = ? AND period_month = ? AND rent_charge_id IS NULL", owner.ID, legacyTenant.ID, period).First(&legacy).Error; err != nil {
-		t.Fatalf("legacy tenant obligation: %v", err)
-	}
-
 	var wait sync.WaitGroup
 	errs := make(chan error, 4)
 	for index := 0; index < cap(errs); index++ {
@@ -139,15 +117,19 @@ func TestEnsureMonthlyRentFactsGeneratesStructuredAndLegacyRowsOnceOnMySQL(t *te
 			t.Fatalf("concurrent ensure: %v", err)
 		}
 	}
-	var chargeCount, structuredCount int64
+	var chargeCount, obligationCount int64
 	if err := db.WithContext(ctx).Model(&rentCharge{}).Where("user_id = ? AND room_id = ? AND period_month = ?", owner.ID, roomRow.ID, period).Count(&chargeCount).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.WithContext(ctx).Model(&rentObligation{}).Where("user_id = ? AND rent_charge_id = ?", owner.ID, charges[0].ID).Count(&structuredCount).Error; err != nil {
+	var rebuilt rentCharge
+	if err := db.WithContext(ctx).Where("user_id = ? AND room_id = ? AND period_month = ?", owner.ID, roomRow.ID, period).First(&rebuilt).Error; err != nil {
 		t.Fatal(err)
 	}
-	if chargeCount != 1 || structuredCount != 2 {
-		t.Fatalf("concurrent facts: charges=%d obligations=%d; want 1 and 2", chargeCount, structuredCount)
+	if err := db.WithContext(ctx).Model(&rentObligation{}).Where("user_id = ? AND rent_charge_id = ?", owner.ID, rebuilt.ID).Count(&obligationCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if chargeCount != 1 || obligationCount != 2 {
+		t.Fatalf("concurrent facts: charges=%d obligations=%d; want 1 and 2", chargeCount, obligationCount)
 	}
 }
 
@@ -163,7 +145,6 @@ func TestEnsureMonthlyRentFactsDoesNotPersistFutureReadButAllowsExplicitPaymentO
 	}
 	t.Cleanup(func() { _ = db.WithContext(ctx).Delete(&user{}, owner.ID).Error })
 	tenantRow := repositoryTestTenant(owner.ID, "Future tenant")
-	tenantRow.MonthlyRentCents = 0
 	if err := db.WithContext(ctx).Create(&tenantRow).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -172,19 +153,16 @@ func TestEnsureMonthlyRentFactsDoesNotPersistFutureReadButAllowsExplicitPaymentO
 	if err != nil {
 		t.Fatal(err)
 	}
-	roomRow, err := domain.createRoom(ctx, owner.ID, roomInput{
-		PropertyID: propertyRow.ID, RoomLabel: "Room 1", MonthlyRentCents: 50000,
-		DueDay: 5, ActiveFrom: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-	})
+	roomRow, err := domain.createRoom(ctx, owner.ID, roomInput{PropertyID: propertyRow.ID, RoomLabel: "Room 1"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	future := monthStart(time.Now().UTC()).AddDate(0, 1, 0)
-	_, err = domain.saveRentArrangement(ctx, owner.ID, rentArrangementInput{
-		RoomID: roomRow.ID, EffectiveMonth: future, MonthlyRentCents: 50000, Currency: "EUR", DueDay: 5,
-		Responsibilities: []rentResponsibilityInput{{TenantID: tenantRow.ID, AmountCents: 50000}},
-	})
-	if err != nil {
+	if _, _, err := newRoomRentPlanService(db).SaveRoomRentPlan(ctx, SaveRoomRentPlanCommand{
+		UserID: owner.ID, RoomID: roomRow.ID, EffectiveMonth: future,
+		MonthlyRentCents: 50000, Currency: ledgerCurrencyEUR, DueDay: 5,
+		Members: []RoomRentPlanMemberInput{{TenantID: tenantRow.ID, ResponsibilityCents: 50000}},
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -210,111 +188,113 @@ func TestEnsureMonthlyRentFactsDoesNotPersistFutureReadButAllowsExplicitPaymentO
 	}
 }
 
-func TestSaveRentArrangementRejectsExistingLegacyMonthOnMySQL(t *testing.T) {
+func TestSaveRoomRentPlanReplacesUnlockedFactsAndRejectsCashLockedFactsOnMySQL(t *testing.T) {
 	db, sqlDB := openLedgerMySQLTestDB(t)
 	if err := runMigrations(sqlDB, "../../migrations"); err != nil {
 		t.Fatalf("run migrations: %v", err)
 	}
 	ctx := context.Background()
-	owner := user{Username: fmt.Sprintf("arrangement-legacy-owner-%d", time.Now().UnixNano()), PasswordHash: "test"}
+	owner := user{Username: fmt.Sprintf("room-plan-lock-owner-%d", time.Now().UnixNano()), PasswordHash: "test"}
 	if err := db.WithContext(ctx).Create(&owner).Error; err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.WithContext(ctx).Delete(&user{}, owner.ID).Error })
-	tenantRow := repositoryTestTenant(owner.ID, "Legacy before binding")
+	tenantRow := repositoryTestTenant(owner.ID, "Room-plan lock tenant")
 	if err := db.WithContext(ctx).Create(&tenantRow).Error; err != nil {
 		t.Fatal(err)
 	}
-	period := monthStart(time.Now().UTC())
-	if err := newObligationService(db).ensureMonthlyObligations(ctx, owner.ID, period); err != nil {
-		t.Fatal(err)
-	}
 	domain := newLandlordDomainService(db)
-	propertyRow, err := domain.createProperty(ctx, owner.ID, propertyInput{Name: "Legacy binding property"})
+	propertyRow, err := domain.createProperty(ctx, owner.ID, propertyInput{Name: "Room-plan lock property"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	roomRow, err := domain.createRoom(ctx, owner.ID, roomInput{
-		PropertyID: propertyRow.ID, RoomLabel: "Room 1", MonthlyRentCents: 100000,
-		DueDay: 5, ActiveFrom: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-	})
+	roomRow, err := domain.createRoom(ctx, owner.ID, roomInput{PropertyID: propertyRow.ID, RoomLabel: "Room 1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = domain.saveRentArrangement(ctx, owner.ID, rentArrangementInput{
-		RoomID: roomRow.ID, EffectiveMonth: period, MonthlyRentCents: 100000, Currency: "EUR", DueDay: 5,
-		Responsibilities: []rentResponsibilityInput{{TenantID: tenantRow.ID, AmountCents: 100000}},
-	})
-	if !errors.Is(err, errRentFactsConflict) {
-		t.Fatalf("arrangement with a legacy obligation error=%v; want a rent facts conflict", err)
+	period := monthStart(time.Now().UTC())
+	plans := newRoomRentPlanService(db)
+	command := SaveRoomRentPlanCommand{
+		UserID: owner.ID, RoomID: roomRow.ID, EffectiveMonth: period,
+		MonthlyRentCents: 100000, Currency: ledgerCurrencyEUR, DueDay: 5,
+		Members: []RoomRentPlanMemberInput{{TenantID: tenantRow.ID, ResponsibilityCents: 100000}},
 	}
-	var agreementCount, legacyCount int64
-	if err := db.WithContext(ctx).Model(&tenancyAgreement{}).Where("user_id = ? AND room_id = ?", owner.ID, roomRow.ID).Count(&agreementCount).Error; err != nil {
+	_, version, err := plans.SaveRoomRentPlan(ctx, command)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.WithContext(ctx).Model(&rentObligation{}).Where("user_id = ? AND tenant_id = ? AND period_month = ? AND rent_charge_id IS NULL", owner.ID, tenantRow.ID, period).Count(&legacyCount).Error; err != nil {
+
+	command.ExpectedTimelineVersion = version
+	command.MonthlyRentCents = 110000
+	command.Members = []RoomRentPlanMemberInput{{TenantID: tenantRow.ID, ResponsibilityCents: 110000}}
+	updated, version, err := plans.SaveRoomRentPlan(ctx, command)
+	if err != nil {
+		t.Fatalf("rewrite unlocked current-month facts: %v", err)
+	}
+	if updated.MonthlyRentCents != 110000 || version != 2 {
+		t.Fatalf("updated plan/version=%+v/%d; want 110000 cents/version 2", updated, version)
+	}
+
+	var obligation rentObligation
+	if err := db.WithContext(ctx).Where("user_id = ? AND period_month = ? AND tenant_id = ?", owner.ID, period, tenantRow.ID).First(&obligation).Error; err != nil {
 		t.Fatal(err)
 	}
-	if agreementCount != 0 || legacyCount != 1 {
-		t.Fatalf("after rejected arrangement: agreements=%d legacy obligations=%d; want 0 and 1", agreementCount, legacyCount)
+	payerID := tenantRow.ID
+	receipt := cashReceipt{
+		UserID: owner.ID, PayerTenantID: &payerID, RentObligationID: obligation.ID,
+		ReceiptNumber: recordID("cash-test", time.Now().UTC()), AmountCents: 1000,
+		Currency: ledgerCurrencyEUR, ReceivedAt: dateOnly(time.Now()), Status: cashReceiptStatusVoided,
+		OperationID: recordID("cash-op", time.Now().UTC()), RecordedByUserID: owner.ID, RecordedAt: time.Now().UTC(),
+	}
+	if err := db.WithContext(ctx).Create(&receipt).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	command.ExpectedTimelineVersion = version
+	command.MonthlyRentCents = 120000
+	command.Members = []RoomRentPlanMemberInput{{TenantID: tenantRow.ID, ResponsibilityCents: 120000}}
+	if _, _, err := plans.SaveRoomRentPlan(ctx, command); !errors.Is(err, ErrRentPlanFactsLocked) {
+		t.Fatalf("rewrite cash-locked facts error=%v; want ErrRentPlanFactsLocked", err)
+	}
+	var finalPlan roomRentPlan
+	if err := db.WithContext(ctx).Where("user_id = ? AND room_id = ? AND effective_from_month = ?", owner.ID, roomRow.ID, period).First(&finalPlan).Error; err != nil {
+		t.Fatal(err)
+	}
+	if finalPlan.MonthlyRentCents != 110000 {
+		t.Fatalf("locked plan changed to %d cents; want 110000", finalPlan.MonthlyRentCents)
 	}
 }
 
-func TestEnsureMonthlyRentFactsRejectsLegacyStructuredConflictOnMySQL(t *testing.T) {
+func TestSaveRoomRentPlanRejectsInactiveTenantMembersOnMySQL(t *testing.T) {
 	db, sqlDB := openLedgerMySQLTestDB(t)
 	if err := runMigrations(sqlDB, "../../migrations"); err != nil {
 		t.Fatalf("run migrations: %v", err)
 	}
 	ctx := context.Background()
-	owner := user{Username: fmt.Sprintf("conflict-monthly-facts-owner-%d", time.Now().UnixNano()), PasswordHash: "test"}
+	owner := user{Username: fmt.Sprintf("room-plan-inactive-tenant-%d", time.Now().UnixNano()), PasswordHash: "test"}
 	if err := db.WithContext(ctx).Create(&owner).Error; err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.WithContext(ctx).Delete(&user{}, owner.ID).Error })
-	tenantRow := repositoryTestTenant(owner.ID, "Conflicting tenant")
-	if err := db.WithContext(ctx).Create(&tenantRow).Error; err != nil {
+	tenantRow, err := newTenantService(db).createTenant(ctx, owner.ID, tenantInput{Name: "Inactive tenant", Status: "inactive"})
+	if err != nil {
 		t.Fatal(err)
 	}
 	domain := newLandlordDomainService(db)
-	propertyRow, err := domain.createProperty(ctx, owner.ID, propertyInput{Name: "Conflict facts property"})
+	propertyRow, err := domain.createProperty(ctx, owner.ID, propertyInput{Name: "Inactive tenant property"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	roomRow, err := domain.createRoom(ctx, owner.ID, roomInput{
-		PropertyID: propertyRow.ID, RoomLabel: "Room 1", MonthlyRentCents: 100000,
-		DueDay: 5, ActiveFrom: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+	roomRow, err := domain.createRoom(ctx, owner.ID, roomInput{PropertyID: propertyRow.ID, RoomLabel: "Room 1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = newRoomRentPlanService(db).SaveRoomRentPlan(ctx, SaveRoomRentPlanCommand{
+		UserID: owner.ID, RoomID: roomRow.ID, EffectiveMonth: monthStart(time.Now().UTC()),
+		MonthlyRentCents: 50000, Currency: ledgerCurrencyEUR, DueDay: 5,
+		Members: []RoomRentPlanMemberInput{{TenantID: tenantRow.ID, ResponsibilityCents: 50000}},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	period := monthStart(time.Now().UTC())
-	if _, err := domain.saveRentArrangement(ctx, owner.ID, rentArrangementInput{
-		RoomID: roomRow.ID, EffectiveMonth: period, MonthlyRentCents: 100000, Currency: "EUR", DueDay: 5,
-		Responsibilities: []rentResponsibilityInput{{TenantID: tenantRow.ID, AmountCents: 100000}},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	legacy := rentObligation{
-		UserID: owner.ID, TenantID: tenantRow.ID, PeriodMonth: period,
-		DueDate: dueDateForMonth(period, 5), ExpectedAmountCents: 100000, Currency: "EUR",
-		Status: "open", RecordStatus: obligationRecordActive, GeneratedBy: "lazy",
-	}
-	if err := db.WithContext(ctx).Create(&legacy).Error; err != nil {
-		t.Fatal(err)
-	}
-
-	err = newMonthlyRentFactsService(db).ensureMonthlyRentFacts(ctx, owner.ID, period, rentFactsIntentRead)
-	if err == nil {
-		t.Fatal("legacy and structured facts for one tenant/month must be rejected")
-	}
-	if !errors.Is(err, errRentFactsConflict) {
-		t.Fatalf("conflict error = %v; want a rent facts conflict", err)
-	}
-	var chargeCount int64
-	if err := db.WithContext(ctx).Model(&rentCharge{}).Where("user_id = ? AND room_id = ? AND period_month = ?", owner.ID, roomRow.ID, period).Count(&chargeCount).Error; err != nil {
-		t.Fatal(err)
-	}
-	if chargeCount != 0 {
-		t.Fatalf("conflict created %d charges; want none", chargeCount)
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Fatalf("inactive tenant membership error=%v; want gorm.ErrRecordNotFound", err)
 	}
 }

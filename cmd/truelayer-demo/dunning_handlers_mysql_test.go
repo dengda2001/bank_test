@@ -26,9 +26,6 @@ func TestDunningDashboardHTTPWorkflowOnMySQL(t *testing.T) {
 	input := validTenantInputForProfile()
 	input.Name = "HTTP Tenant"
 	input.Email = "http-tenant@example.test"
-	input.MonthlyRent = 1000
-	input.RentStartDate = "2026-01-01"
-	input.BillingStartDate = "2026-01-01"
 	tenantRow, err := newTenantService(db).createTenant(ctx, owner.ID, input)
 	if err != nil {
 		t.Fatal(err)

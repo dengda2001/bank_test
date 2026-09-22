@@ -13,8 +13,9 @@ import (
 )
 
 type rentResponsibilityInput struct {
-	TenantID    uint64
-	AmountCents int64
+	RoomRentPlanMemberID uint64
+	TenantID             uint64
+	AmountCents          int64
 }
 
 type rentChargePlan struct {
@@ -23,29 +24,27 @@ type rentChargePlan struct {
 	Responsibilities    []rentResponsibilityInput
 }
 
-func buildRentChargePlan(agreement tenancyAgreement, parties []agreementParty, periodMonth time.Time) (rentChargePlan, error) {
-	if !tenancyAgreementCoversMonth(agreement, periodMonth) {
-		return rentChargePlan{}, errors.New("tenancy agreement does not cover target month")
+func buildRentChargePlan(plan roomRentPlan, members []roomRentPlanMember, periodMonth time.Time) (rentChargePlan, error) {
+	if !roomRentPlanCoversMonth(plan, periodMonth) {
+		return rentChargePlan{}, errors.New("room rent plan does not cover target month")
 	}
-	currency, err := normalizeLedgerCurrency(agreement.Currency)
+	currency, err := normalizeLedgerCurrency(plan.Currency)
 	if err != nil {
 		return rentChargePlan{}, err
 	}
-	responsibilities := make([]rentResponsibilityInput, 0, len(parties))
-	for _, party := range parties {
-		if !agreementPartyActiveInMonth(party, periodMonth) {
-			continue
-		}
+	responsibilities := make([]rentResponsibilityInput, 0, len(members))
+	for _, member := range members {
 		responsibilities = append(responsibilities, rentResponsibilityInput{
-			TenantID:    party.TenantID,
-			AmountCents: party.ResponsibilityCents,
+			RoomRentPlanMemberID: member.ID,
+			TenantID:             member.TenantID,
+			AmountCents:          member.ResponsibilityCents,
 		})
 	}
-	if err := validateRentResponsibilityPlan(agreement.MonthlyRentCents, responsibilities); err != nil {
+	if err := validateRentResponsibilityPlan(plan.MonthlyRentCents, responsibilities); err != nil {
 		return rentChargePlan{}, err
 	}
 	return rentChargePlan{
-		ExpectedAmountCents: agreement.MonthlyRentCents,
+		ExpectedAmountCents: plan.MonthlyRentCents,
 		Currency:            currency,
 		Responsibilities:    responsibilities,
 	}, nil
@@ -169,60 +168,12 @@ func validateRentResponsibilityPlan(totalCents int64, responsibilities []rentRes
 	return nil
 }
 
-func agreementPartyActiveInMonth(party agreementParty, periodMonth time.Time) bool {
-	if party.Status != "active" {
-		return false
-	}
+func roomRentPlanCoversMonth(row roomRentPlan, periodMonth time.Time) bool {
 	start := monthStart(periodMonth)
-	end := start.AddDate(0, 1, 0).Add(-time.Nanosecond)
-	if party.JoinedAt != nil && party.JoinedAt.After(end) {
+	if row.EffectiveFromMonth.IsZero() || monthStart(row.EffectiveFromMonth).After(start) {
 		return false
 	}
-	if party.LeftAt != nil && party.LeftAt.Before(start) {
-		return false
-	}
-	return true
-}
-
-func roomActiveInMonth(row room, periodMonth time.Time) bool {
-	if row.Status != "active" && row.InactiveFrom == nil {
-		return false
-	}
-	start := monthStart(periodMonth)
-	end := start.AddDate(0, 1, 0).Add(-time.Nanosecond)
-	if row.Status != "active" && row.InactiveFrom != nil && !start.Before(monthStart(*row.InactiveFrom)) {
-		return false
-	}
-	if !row.ActiveFrom.IsZero() && row.ActiveFrom.After(end) {
-		return false
-	}
-	if row.InactiveFrom != nil && row.InactiveFrom.Before(start) {
-		return false
-	}
-	return true
-}
-
-func propertyActiveInMonth(row property, periodMonth time.Time) bool {
-	if row.Status != "active" && row.InactiveFrom == nil {
-		return false
-	}
-	start := monthStart(periodMonth)
-	if row.InactiveFrom != nil && !start.Before(monthStart(*row.InactiveFrom)) {
-		return false
-	}
-	return true
-}
-
-func tenancyAgreementCoversMonth(row tenancyAgreement, periodMonth time.Time) bool {
-	if row.Status != "active" {
-		return false
-	}
-	start := monthStart(periodMonth)
-	end := start.AddDate(0, 1, 0).Add(-time.Nanosecond)
-	if !row.StartDate.IsZero() && row.StartDate.After(end) {
-		return false
-	}
-	if row.EndDate != nil && row.EndDate.Before(start) {
+	if row.EffectiveToMonth != nil && monthStart(*row.EffectiveToMonth).Before(start) {
 		return false
 	}
 	return true
@@ -250,56 +201,45 @@ func (s *rentLedgerService) ensureRentCharge(ctx context.Context, userID, proper
 	}
 	periodMonth = monthStart(periodMonth)
 	var result rentChargeLedger
-	err := s.db.WithContext(ctx).Transaction(func(txdb *gorm.DB) error {
-		var propertyRow property
-		if err := txdb.Where("id = ? AND user_id = ?", propertyID, userID).First(&propertyRow).Error; err != nil {
-			return err
-		}
-		if !propertyActiveInMonth(propertyRow, periodMonth) {
-			return errors.New("property is not active for target month")
-		}
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var roomRow room
-		if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ? AND property_id = ?", roomID, userID, propertyID).First(&roomRow).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND id = ?", userID, roomID).First(&roomRow).Error; err != nil {
 			return err
 		}
-		if !roomActiveInMonth(roomRow, periodMonth) {
-			return errors.New("room is not active for target month")
+		if roomRow.PropertyID != propertyID {
+			return gorm.ErrRecordNotFound
+		}
+		var propertyRow property
+		if err := tx.Where("user_id = ? AND id = ?", userID, propertyID).First(&propertyRow).Error; err != nil {
+			return err
 		}
 
-		var existingCharge rentCharge
-		lookupErr := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND room_id = ? AND period_month = ?", userID, roomID, periodMonth).First(&existingCharge).Error
+		var charge rentCharge
+		lookupErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND room_id = ? AND period_month = ?", userID, roomID, periodMonth).First(&charge).Error
 		if lookupErr == nil {
-			if err := loadRentChargeLedger(txdb, userID, existingCharge, &result); err != nil {
-				return err
-			}
-			tenantIDs := make([]uint64, 0, len(result.Obligations))
-			for _, obligation := range result.Obligations {
-				tenantIDs = append(tenantIDs, obligation.TenantID)
-			}
-			return rejectLegacyObligationConflict(txdb, userID, periodMonth, tenantIDs)
+			return loadRentChargeLedger(tx, userID, charge, &result)
 		}
 		if !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
 			return lookupErr
 		}
 
-		monthEnd := periodMonth.AddDate(0, 1, -1)
-		var agreements []tenancyAgreement
-		if err := txdb.Where("user_id = ? AND room_id = ? AND status = ? AND start_date <= ? AND (end_date IS NULL OR end_date >= ?)", userID, roomID, "active", monthEnd, periodMonth).
-			Order("start_date DESC, id DESC").Find(&agreements).Error; err != nil {
+		var plans []roomRentPlan
+		if err := tx.Where("user_id = ? AND room_id = ? AND effective_from_month <= ? AND (effective_to_month IS NULL OR effective_to_month >= ?)", userID, roomID, periodMonth, periodMonth).
+			Order("effective_from_month DESC, id DESC").Find(&plans).Error; err != nil {
 			return err
 		}
-		if len(agreements) == 0 {
-			return errors.New("no active tenancy agreement covers target month")
+		if len(plans) == 0 {
+			return gorm.ErrRecordNotFound
 		}
-		if len(agreements) > 1 {
-			return errors.New("multiple active tenancy agreements cover target month")
+		if len(plans) != 1 {
+			return ErrRentPlanTimelineConflict
 		}
-		agreement := agreements[0]
-		var parties []agreementParty
-		if err := txdb.Where("user_id = ? AND agreement_id = ?", userID, agreement.ID).Order("tenant_id ASC, id ASC").Find(&parties).Error; err != nil {
+		planRow := plans[0]
+		var members []roomRentPlanMember
+		if err := tx.Where("user_id = ? AND room_rent_plan_id = ?", userID, planRow.ID).Order("tenant_id ASC, id ASC").Find(&members).Error; err != nil {
 			return err
 		}
-		plan, err := buildRentChargePlan(agreement, parties, periodMonth)
+		plan, err := buildRentChargePlan(planRow, members, periodMonth)
 		if err != nil {
 			return err
 		}
@@ -307,26 +247,23 @@ func (s *rentLedgerService) ensureRentCharge(ctx context.Context, userID, proper
 		for _, responsibility := range plan.Responsibilities {
 			tenantIDs = append(tenantIDs, responsibility.TenantID)
 		}
-		if err := rejectLegacyObligationConflict(txdb, userID, periodMonth, tenantIDs); err != nil {
-			return err
-		}
 		var tenants []tenant
-		if err := txdb.Where("user_id = ? AND id IN ?", userID, tenantIDs).Find(&tenants).Error; err != nil {
+		if err := tx.Where("user_id = ? AND id IN ?", userID, tenantIDs).Find(&tenants).Error; err != nil {
 			return err
 		}
 		if len(tenants) != len(tenantIDs) {
-			return errors.New("rent agreement contains a tenant outside current user")
+			return errors.New("room rent plan contains a tenant outside current user")
 		}
 
 		propertyNameSnapshot := propertyRow.Name
 		roomLabelSnapshot := roomRow.RoomLabel
-		charge := rentCharge{
+		charge = rentCharge{
 			UserID:               userID,
 			PropertyID:           propertyID,
 			RoomID:               roomID,
-			TenancyAgreementID:   agreement.ID,
+			RoomRentPlanID:       planRow.ID,
 			PeriodMonth:          periodMonth,
-			DueDate:              dueDateForMonth(periodMonth, agreement.DueDay),
+			DueDate:              dueDateForMonth(periodMonth, planRow.DueDay),
 			ExpectedAmountCents:  plan.ExpectedAmountCents,
 			Currency:             plan.Currency,
 			RecordStatus:         obligationRecordActive,
@@ -334,69 +271,37 @@ func (s *rentLedgerService) ensureRentCharge(ctx context.Context, userID, proper
 			RoomLabelSnapshot:    &roomLabelSnapshot,
 			RoomAddressSnapshot:  propertyRow.Address,
 		}
-		createResult := txdb.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "user_id"}, {Name: "room_id"}, {Name: "period_month"}},
-			DoNothing: true,
-		}).Create(&charge)
-		if createResult.Error != nil {
-			return createResult.Error
+		if err := tx.Create(&charge).Error; err != nil {
+			return err
 		}
-		if createResult.RowsAffected == 0 {
-			if err := txdb.Where("user_id = ? AND room_id = ? AND period_month = ?", userID, roomID, periodMonth).First(&charge).Error; err != nil {
-				return err
-			}
-			return loadRentChargeLedger(txdb, userID, charge, &result)
-		}
-
-		chargeID := charge.ID
 		for _, responsibility := range plan.Responsibilities {
 			obligation := rentObligation{
-				UserID:              userID,
-				RentChargeID:        &chargeID,
-				TenantID:            responsibility.TenantID,
-				PeriodMonth:         periodMonth,
-				DueDate:             charge.DueDate,
-				ExpectedAmountCents: responsibility.AmountCents,
-				Currency:            plan.Currency,
-				Status:              "open",
-				RecordStatus:        obligationRecordActive,
-				GeneratedBy:         "rent_charge",
+				UserID:               userID,
+				RentChargeID:         charge.ID,
+				RoomRentPlanID:       planRow.ID,
+				RoomRentPlanMemberID: responsibility.RoomRentPlanMemberID,
+				TenantID:             responsibility.TenantID,
+				PeriodMonth:          periodMonth,
+				DueDate:              charge.DueDate,
+				ExpectedAmountCents:  responsibility.AmountCents,
+				Currency:             plan.Currency,
+				Status:               "open",
+				RecordStatus:         obligationRecordActive,
 			}
-			var tenantRow tenant
-			for _, candidate := range tenants {
-				if candidate.ID == responsibility.TenantID {
-					tenantRow = candidate
+			for _, tenantRow := range tenants {
+				if tenantRow.ID == responsibility.TenantID {
+					snapshot := tenantRow.Name
+					obligation.TenantNameSnapshot = &snapshot
 					break
 				}
 			}
-			if tenantRow.Name != "" {
-				snapshot := tenantRow.Name
-				obligation.TenantNameSnapshot = &snapshot
-			}
-			if err := txdb.Create(&obligation).Error; err != nil {
+			if err := tx.Create(&obligation).Error; err != nil {
 				return err
 			}
 		}
-		return loadRentChargeLedger(txdb, userID, charge, &result)
+		return loadRentChargeLedger(tx, userID, charge, &result)
 	})
 	return result, err
-}
-
-func rejectLegacyObligationConflict(db *gorm.DB, userID uint64, periodMonth time.Time, tenantIDs []uint64) error {
-	if len(tenantIDs) == 0 {
-		return nil
-	}
-	var legacy rentObligation
-	err := db.Clauses(clause.Locking{Strength: "UPDATE"}).
-		Where("user_id = ? AND tenant_id IN ? AND period_month = ? AND rent_charge_id IS NULL", userID, tenantIDs, monthStart(periodMonth)).
-		Order("tenant_id ASC, id ASC").First(&legacy).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	return fmt.Errorf("%w: tenant %d already has a legacy obligation for %s", errRentFactsConflict, legacy.TenantID, monthStart(periodMonth).Format("2006-01"))
 }
 
 func loadRentChargeLedger(db *gorm.DB, userID uint64, charge rentCharge, result *rentChargeLedger) error {

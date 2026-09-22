@@ -7,16 +7,16 @@ import (
 )
 
 func TestBuildTenantBillingHistoryGroupsPaymentsUnderMonthlyBills(t *testing.T) {
-	tenantRow := tenant{ID: 7, Currency: "EUR"}
+	tenantRow := tenant{ID: 7}
 	currentMonth := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	obligations := []rentObligation{
-		{ID: 71, TenantID: 7, PeriodMonth: currentMonth, DueDate: time.Date(2026, 9, 5, 0, 0, 0, 0, time.UTC), ExpectedAmountCents: 95000, PaidAmountCents: 95000, Currency: "EUR"},
-		{ID: 72, TenantID: 7, PeriodMonth: currentMonth.AddDate(0, -1, 0), DueDate: time.Date(2026, 8, 5, 0, 0, 0, 0, time.UTC), ExpectedAmountCents: 95000, PaidAmountCents: 0, Currency: "EUR"},
+		{ID: 71, TenantID: 7, PeriodMonth: currentMonth, DueDate: time.Date(2026, 9, 5, 0, 0, 0, 0, time.UTC), ExpectedAmountCents: 95000, PaidAmountCents: 95000},
+		{ID: 72, TenantID: 7, PeriodMonth: currentMonth.AddDate(0, -1, 0), DueDate: time.Date(2026, 8, 5, 0, 0, 0, 0, time.UTC), ExpectedAmountCents: 95000, PaidAmountCents: 0},
 	}
 	paymentRows := []tenantBillingPaymentRow{
-		{TenantID: 7, ObligationID: 71, AmountCents: 30000, Currency: "EUR", TransactionTime: ptrTime(time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC)), Description: "first transfer", Reference: "rent-2026-09", ConfirmationSource: "auto_id"},
-		{TenantID: 7, ObligationID: 71, AmountCents: 30000, Currency: "EUR", TransactionTime: ptrTime(time.Date(2026, 9, 2, 8, 0, 0, 0, time.UTC)), Description: "second transfer", Reference: "rent-2026-09", ConfirmationSource: "manual"},
-		{TenantID: 7, ObligationID: 71, AmountCents: 35000, Currency: "EUR", TransactionTime: ptrTime(time.Date(2026, 9, 3, 8, 0, 0, 0, time.UTC)), Description: "final transfer", Reference: "rent-2026-09", ConfirmationSource: "auto_name"},
+		{TenantID: 7, ObligationID: 71, AmountCents: 30000, TransactionTime: ptrTime(time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC)), Description: "first transfer", Reference: "rent-2026-09", ConfirmationSource: "auto_id"},
+		{TenantID: 7, ObligationID: 71, AmountCents: 30000, TransactionTime: ptrTime(time.Date(2026, 9, 2, 8, 0, 0, 0, time.UTC)), Description: "second transfer", Reference: "rent-2026-09", ConfirmationSource: "manual"},
+		{TenantID: 7, ObligationID: 71, AmountCents: 35000, TransactionTime: ptrTime(time.Date(2026, 9, 3, 8, 0, 0, 0, time.UTC)), Description: "final transfer", Reference: "rent-2026-09", ConfirmationSource: "auto_name"},
 	}
 
 	got := buildTenantBillingHistory([]tenant{tenantRow}, obligations, paymentRows, time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC))
@@ -35,10 +35,10 @@ func TestBuildTenantBillingHistoryGroupsPaymentsUnderMonthlyBills(t *testing.T) 
 func TestBuildTenantBillingHistoryIgnoresObligationsForOtherTenants(t *testing.T) {
 	currentMonth := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	got := buildTenantBillingHistory(
-		[]tenant{{ID: 7, Currency: "EUR"}},
+		[]tenant{{ID: 7}},
 		[]rentObligation{
-			{ID: 71, TenantID: 7, PeriodMonth: currentMonth, ExpectedAmountCents: 95000, Currency: "EUR"},
-			{ID: 81, TenantID: 8, PeriodMonth: currentMonth, ExpectedAmountCents: 120000, Currency: "EUR"},
+			{ID: 71, TenantID: 7, PeriodMonth: currentMonth, ExpectedAmountCents: 95000},
+			{ID: 81, TenantID: 8, PeriodMonth: currentMonth, ExpectedAmountCents: 120000},
 		},
 		nil,
 		time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC),
@@ -51,9 +51,9 @@ func TestBuildTenantBillingHistoryIgnoresObligationsForOtherTenants(t *testing.T
 func TestBuildTenantBillingHistoryLabelsCashReceiptRows(t *testing.T) {
 	when := ptrTime(time.Date(2026, 9, 12, 0, 0, 0, 0, time.UTC))
 	got := buildTenantBillingHistory(
-		[]tenant{{ID: 7, Currency: "EUR"}},
-		[]rentObligation{{ID: 71, TenantID: 7, PeriodMonth: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), ExpectedAmountCents: 100000, PaidAmountCents: 40000, Currency: "EUR"}},
-		[]tenantBillingPaymentRow{{TenantID: 7, ObligationID: 71, AmountCents: 40000, Currency: "EUR", Source: "cash", TransactionTime: when, Description: "现金租金补录", Reference: "cash-123", ConfirmationSource: "manual_cash"}},
+		[]tenant{{ID: 7}},
+		[]rentObligation{{ID: 71, TenantID: 7, PeriodMonth: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), ExpectedAmountCents: 100000, PaidAmountCents: 40000}},
+		[]tenantBillingPaymentRow{{TenantID: 7, ObligationID: 71, AmountCents: 40000, Source: "cash", TransactionTime: when, Description: "现金租金补录", Reference: "cash-123", ConfirmationSource: "manual_cash"}},
 		time.Date(2026, 9, 13, 0, 0, 0, 0, time.UTC),
 	)[7][0]
 	if len(got.Payments) != 1 || got.Payments[0].Source != "现金" || got.Payments[0].Reference != "cash-123" || got.Payments[0].DateDisplay != "12 Sep 2026 00:00" {

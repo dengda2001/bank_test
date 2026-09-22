@@ -42,29 +42,6 @@ func TestExternalInvoiceURLAcceptsOnlyHTTPFamily(t *testing.T) {
 	}
 }
 
-func TestRentArrangementResponsibilitiesAllowEmptyRoomButRequireExactSplit(t *testing.T) {
-	if err := validateRentResponsibilityPlanAllowEmpty(10000, nil); err != nil {
-		t.Fatalf("empty room rejected: %v", err)
-	}
-	responsibilities, err := splitRentAmountEvenly(10001, []uint64{7, 2, 9})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if responsibilities[0].TenantID != 7 || responsibilities[0].AmountCents != 3334 {
-		t.Fatalf("remainder was not deterministic: %+v", responsibilities)
-	}
-	if err := validateRentResponsibilityPlanAllowEmpty(10000, []rentResponsibilityInput{{TenantID: 1, AmountCents: 5000}, {TenantID: 2, AmountCents: 4999}}); err == nil {
-		t.Fatal("responsibility sum mismatch unexpectedly accepted")
-	}
-}
-
-func TestStructuredTenantInputCanRemainUnbound(t *testing.T) {
-	input := tenantInput{Name: "Unbound tenant", Currency: "EUR", IntervalUnit: "month", IntervalCount: 1, Status: "active", Structured: true}
-	if err := validateTenantInput(input); err != nil {
-		t.Fatalf("structured unbound tenant rejected: %v", err)
-	}
-}
-
 func TestManualBalanceReasonIsRequired(t *testing.T) {
 	if _, err := (&transactionService{}).settleRentObligation(nil, 1, 1); err != errManualBalanceReasonRequired {
 		t.Fatalf("missing reason error=%v", err)

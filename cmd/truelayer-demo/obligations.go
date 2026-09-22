@@ -9,28 +9,28 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 type rentObligation struct {
-	ID                  uint64 `gorm:"primaryKey"`
-	UserID              uint64
-	RentChargeID        *uint64
-	TenantID            uint64
-	TenantNameSnapshot  *string
-	PeriodMonth         time.Time
-	DueDate             time.Time
-	ExpectedAmountCents int64
-	PaidAmountCents     int64
-	Currency            string
-	Status              string
-	RecordStatus        string
-	VoidedAt            *time.Time
-	VoidedByUserID      *uint64
-	VoidReason          *string
-	GeneratedBy         string
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
+	ID                   uint64 `gorm:"primaryKey"`
+	UserID               uint64
+	RentChargeID         uint64
+	RoomRentPlanID       uint64
+	RoomRentPlanMemberID uint64
+	TenantID             uint64
+	TenantNameSnapshot   *string
+	PeriodMonth          time.Time
+	DueDate              time.Time
+	ExpectedAmountCents  int64
+	PaidAmountCents      int64
+	Currency             string
+	Status               string
+	RecordStatus         string
+	VoidedAt             *time.Time
+	VoidedByUserID       *uint64
+	VoidReason           *string
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
 }
 
 type obligationService struct {
@@ -39,6 +39,9 @@ type obligationService struct {
 
 type tenantBillingMonth struct {
 	ObligationID   uint64
+	RoomID         uint64
+	PropertyName   string
+	RoomLabel      string
 	Period         string
 	PeriodLabel    string
 	DueDate        string
@@ -48,6 +51,9 @@ type tenantBillingMonth struct {
 	Status         string
 	StatusLabel    string
 	Payments       []rentPaymentDetail
+	ExpectedCents  int64
+	PaidCents      int64
+	BalanceCents   int64
 }
 
 type tenantBillingPaymentRow struct {
@@ -86,11 +92,11 @@ func sortTenantBillingPaymentRows(rows []tenantBillingPaymentRow) {
 
 func (s *obligationService) listCashBillingPaymentRows(ctx context.Context, userID, tenantID uint64, fromMonth, toMonth time.Time) ([]tenantBillingPaymentRow, error) {
 	query := s.db.WithContext(ctx).Table("cash_receipts AS cr").
-		Select("cr.id AS payment_id, cr.tenant_id, cr.rent_obligation_id AS obligation_id, cr.amount_cents, cr.currency, 'cash' AS source, cr.received_at AS transaction_time, '现金租金补录' AS description, cr.receipt_number AS reference, 'manual_cash' AS confirmation_source").
+		Select("cr.id AS payment_id, ro.tenant_id, cr.rent_obligation_id AS obligation_id, cr.amount_cents, cr.currency, 'cash' AS source, cr.received_at AS transaction_time, '现金租金补录' AS description, cr.receipt_number AS reference, 'manual_cash' AS confirmation_source").
 		Joins("JOIN rent_obligations AS ro ON ro.id = cr.rent_obligation_id AND ro.user_id = cr.user_id").
 		Where("cr.user_id = ? AND cr.status = ? AND ro.period_month >= ? AND ro.period_month < ?", userID, cashReceiptStatusConfirmed, fromMonth, toMonth.AddDate(0, 1, 0))
 	if tenantID != 0 {
-		query = query.Where("cr.tenant_id = ?", tenantID)
+		query = query.Where("ro.tenant_id = ?", tenantID)
 	}
 	var rows []tenantBillingPaymentRow
 	if err := query.Scan(&rows).Error; err != nil {
@@ -127,30 +133,6 @@ func parsePeriodMonth(value string) (time.Time, error) {
 	return monthStart(t), nil
 }
 
-func tenantActiveInMonth(row tenant, periodMonth time.Time) bool {
-	start := monthStart(periodMonth)
-	end := start.AddDate(0, 1, 0).Add(-time.Nanosecond)
-	if row.Status != "active" {
-		return false
-	}
-	// Structured tenants are intentionally unbound until a room arrangement
-	// creates rent charges. Legacy tenant rows keep their monthly rent and room
-	// address, so this guard preserves their existing lazy-obligation behavior.
-	if row.MonthlyRentCents <= 0 {
-		return false
-	}
-	if row.RentStartDate.After(end) {
-		return false
-	}
-	if !row.BillingStartDate.IsZero() && row.BillingStartDate.After(end) {
-		return false
-	}
-	if row.RentEndDate != nil && row.RentEndDate.Before(start) {
-		return false
-	}
-	return true
-}
-
 func dueDateForMonth(periodMonth time.Time, dueDay int) time.Time {
 	if dueDay < 1 {
 		dueDay = 1
@@ -170,55 +152,7 @@ func obligationStatus(expected, paid int64, dueDate, now time.Time, needsReview 
 }
 
 func (s *obligationService) ensureMonthlyObligations(ctx context.Context, userID uint64, periodMonth time.Time) error {
-	if userID == 0 {
-		return errors.New("userID is required")
-	}
-	periodMonth = monthStart(periodMonth)
-	var tenants []tenant
-	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Order("id ASC").Find(&tenants).Error; err != nil {
-		return err
-	}
-	for _, candidate := range tenants {
-		if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-			var row tenant
-			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", candidate.ID, userID).First(&row).Error; err != nil {
-				return err
-			}
-			if !tenantActiveInMonth(row, periodMonth) {
-				return nil
-			}
-			structured, err := tenantHasStructuredRentFacts(tx, userID, row.ID, periodMonth)
-			if err != nil {
-				return err
-			}
-			if structured {
-				return nil
-			}
-			currency, err := normalizeLedgerCurrency(row.Currency)
-			if err != nil {
-				return fmt.Errorf("tenant %d: %w", row.ID, err)
-			}
-			obligation := rentObligation{
-				UserID:              userID,
-				TenantID:            row.ID,
-				PeriodMonth:         periodMonth,
-				DueDate:             dueDateForMonth(periodMonth, row.DueDay),
-				ExpectedAmountCents: row.MonthlyRentCents,
-				PaidAmountCents:     0,
-				Currency:            currency,
-				Status:              "open",
-				RecordStatus:        obligationRecordActive,
-				GeneratedBy:         "lazy",
-			}
-			return tx.Clauses(clause.OnConflict{
-				Columns:   []clause.Column{{Name: "user_id"}, {Name: "tenant_id"}, {Name: "period_month"}},
-				DoNothing: true,
-			}).Create(&obligation).Error
-		}); err != nil {
-			return err
-		}
-	}
-	return nil
+	return newMonthlyRentFactsService(s.db).ensureMonthlyRentFacts(ctx, userID, monthStart(periodMonth), rentFactsIntentRead)
 }
 
 func (s *obligationService) generateMonthlyObligations(ctx context.Context, userID uint64, fromMonth, toMonth time.Time) error {
@@ -271,13 +205,21 @@ func (s *obligationService) listTenantBillingHistory(ctx context.Context, userID
 	}
 	paymentRows = append(paymentRows, cashRows...)
 	sortTenantBillingPaymentRows(paymentRows)
-	return buildTenantBillingHistory(tenants, obligations, paymentRows, time.Now().UTC()), nil
+	charges, err := s.tenantRentChargeSnapshots(ctx, userID, obligations)
+	if err != nil {
+		return nil, err
+	}
+	return buildTenantBillingHistoryWithCharges(tenants, obligations, paymentRows, time.Now().UTC(), charges), nil
 }
 
 func buildTenantBillingHistory(tenants []tenant, obligations []rentObligation, paymentRows []tenantBillingPaymentRow, now time.Time) map[uint64][]tenantBillingMonth {
-	tenantCurrency := make(map[uint64]string, len(tenants))
+	return buildTenantBillingHistoryWithCharges(tenants, obligations, paymentRows, now, nil)
+}
+
+func buildTenantBillingHistoryWithCharges(tenants []tenant, obligations []rentObligation, paymentRows []tenantBillingPaymentRow, now time.Time, charges map[uint64]rentCharge) map[uint64][]tenantBillingMonth {
+	tenantIDs := make(map[uint64]struct{}, len(tenants))
 	for _, row := range tenants {
-		tenantCurrency[row.ID] = firstNonEmpty(row.Currency, "EUR")
+		tenantIDs[row.ID] = struct{}{}
 	}
 	paymentsByObligation := make(map[uint64][]rentPaymentDetail)
 	for _, row := range paymentRows {
@@ -294,17 +236,21 @@ func buildTenantBillingHistory(tenants []tenant, obligations []rentObligation, p
 	}
 	history := make(map[uint64][]tenantBillingMonth)
 	for _, obligation := range obligations {
-		if _, ok := tenantCurrency[obligation.TenantID]; !ok {
+		if _, ok := tenantIDs[obligation.TenantID]; !ok {
 			continue
 		}
-		currency := firstNonEmpty(obligation.Currency, tenantCurrency[obligation.TenantID], "EUR")
+		currency := firstNonEmpty(obligation.Currency, "EUR")
 		status := obligationStatus(obligation.ExpectedAmountCents, obligation.PaidAmountCents, obligation.DueDate, now, obligation.Status == "needs_review")
 		if obligation.RecordStatus == obligationRecordVoided {
 			status = obligationRecordVoided
 		}
 		period := monthStart(obligation.PeriodMonth)
+		charge := charges[obligation.RentChargeID]
 		history[obligation.TenantID] = append(history[obligation.TenantID], tenantBillingMonth{
 			ObligationID:   obligation.ID,
+			RoomID:         charge.RoomID,
+			PropertyName:   stringValue(charge.PropertyNameSnapshot),
+			RoomLabel:      stringValue(charge.RoomLabelSnapshot),
 			Period:         period.Format("2006-01"),
 			PeriodLabel:    formatMonthLabel(period),
 			DueDate:        obligation.DueDate.Format(dateLayout),
@@ -314,6 +260,9 @@ func buildTenantBillingHistory(tenants []tenant, obligations []rentObligation, p
 			Status:         status,
 			StatusLabel:    rentStatusLabel(status),
 			Payments:       paymentsByObligation[obligation.ID],
+			ExpectedCents:  obligation.ExpectedAmountCents,
+			PaidCents:      obligation.PaidAmountCents,
+			BalanceCents:   maxInt64(obligation.ExpectedAmountCents-obligation.PaidAmountCents, 0),
 		})
 	}
 	for tenantID := range history {
@@ -322,6 +271,72 @@ func buildTenantBillingHistory(tenants []tenant, obligations []rentObligation, p
 		})
 	}
 	return history
+}
+
+func (s *obligationService) tenantRentChargeSnapshots(ctx context.Context, userID uint64, obligations []rentObligation) (map[uint64]rentCharge, error) {
+	chargeIDs := make([]uint64, 0, len(obligations))
+	seen := make(map[uint64]struct{}, len(obligations))
+	for _, obligation := range obligations {
+		if obligation.RentChargeID == 0 {
+			continue
+		}
+		if _, exists := seen[obligation.RentChargeID]; exists {
+			continue
+		}
+		seen[obligation.RentChargeID] = struct{}{}
+		chargeIDs = append(chargeIDs, obligation.RentChargeID)
+	}
+	if len(chargeIDs) == 0 {
+		return nil, nil
+	}
+	var rows []rentCharge
+	if err := s.db.WithContext(ctx).Where("user_id = ? AND id IN ?", userID, chargeIDs).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	result := make(map[uint64]rentCharge, len(rows))
+	for _, row := range rows {
+		result[row.ID] = row
+	}
+	return result, nil
+}
+
+func aggregateTenantBillingMonth(rows []tenantBillingMonth, period string) (tenantBillingMonth, bool) {
+	var aggregate tenantBillingMonth
+	found, hasOverdue, hasReview := false, false, false
+	periodDate, _ := parsePeriodMonth(period)
+	for _, row := range rows {
+		if row.Period != period || row.Status == obligationRecordVoided {
+			continue
+		}
+		found = true
+		aggregate.ExpectedCents += row.ExpectedCents
+		aggregate.PaidCents += row.PaidCents
+		aggregate.BalanceCents += row.BalanceCents
+		aggregate.Payments = append(aggregate.Payments, row.Payments...)
+		hasOverdue = hasOverdue || row.Status == "overdue"
+		hasReview = hasReview || row.Status == "needs_review"
+	}
+	if !found {
+		return tenantBillingMonth{}, false
+	}
+	aggregate.Period, aggregate.PeriodLabel = period, formatMonthLabel(periodDate)
+	aggregate.ExpectedAmount = formatMoney(centsToMoney(aggregate.ExpectedCents), ledgerCurrencyEUR, 2)
+	aggregate.PaidAmount = formatMoney(centsToMoney(aggregate.PaidCents), ledgerCurrencyEUR, 2)
+	aggregate.BalanceAmount = formatMoney(centsToMoney(aggregate.BalanceCents), ledgerCurrencyEUR, 2)
+	switch {
+	case hasReview:
+		aggregate.Status = "needs_review"
+	case aggregate.BalanceCents == 0:
+		aggregate.Status = "paid"
+	case aggregate.PaidCents > 0:
+		aggregate.Status = "partial"
+	case hasOverdue:
+		aggregate.Status = "overdue"
+	default:
+		aggregate.Status = "open"
+	}
+	aggregate.StatusLabel = rentStatusLabel(aggregate.Status)
+	return aggregate, true
 }
 
 type rentDashboardSummary struct {
@@ -369,6 +384,22 @@ func (s *obligationService) summarizeRentDashboardWithFilters(ctx context.Contex
 	var obligations []rentObligation
 	if err := s.db.WithContext(ctx).Where("user_id = ? AND period_month = ? AND record_status = ?", userID, periodMonth, obligationRecordActive).Order("tenant_id ASC").Find(&obligations).Error; err != nil {
 		return rentDashboardSummary{}, err
+	}
+	chargeIDs := make([]uint64, 0, len(obligations))
+	for _, obligation := range obligations {
+		if obligation.RentChargeID != 0 {
+			chargeIDs = append(chargeIDs, obligation.RentChargeID)
+		}
+	}
+	chargeByID := make(map[uint64]rentCharge, len(chargeIDs))
+	if len(chargeIDs) > 0 {
+		var charges []rentCharge
+		if err := s.db.WithContext(ctx).Where("user_id = ? AND id IN ?", userID, chargeIDs).Find(&charges).Error; err != nil {
+			return rentDashboardSummary{}, err
+		}
+		for _, charge := range charges {
+			chargeByID[charge.ID] = charge
+		}
 	}
 	var tenants []tenant
 	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Find(&tenants).Error; err != nil {
@@ -420,12 +451,13 @@ func (s *obligationService) summarizeRentDashboardWithFilters(ctx context.Contex
 		if err != nil {
 			return rentDashboardSummary{}, err
 		}
+		charge := chargeByID[obligation.RentChargeID]
 		allRows = append(allRows, rentDashboardRow{
 			TenantID:       tenantRow.ID,
 			TenantName:     tenantRow.Name,
 			TenantAlias:    tenantRow.DisplayAlias,
-			RoomLabel:      tenantRow.RoomLabel,
-			RoomAddress:    tenantRow.RoomAddress,
+			RoomLabel:      stringValue(charge.RoomLabelSnapshot),
+			RoomAddress:    stringValue(charge.RoomAddressSnapshot),
 			Period:         periodMonth.Format("2006-01"),
 			DueDate:        obligation.DueDate.Format(dateLayout),
 			ExpectedAmount: formatMoney(centsToMoney(obligation.ExpectedAmountCents), currency, 2),

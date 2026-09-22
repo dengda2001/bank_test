@@ -32,9 +32,6 @@ func TestManualBalanceSettlesOnlyTheOutstandingRentOnMySQL(t *testing.T) {
 
 	input := validTenantInputForProfile()
 	input.Name = "Manual Balance Tenant"
-	input.MonthlyRent = 1000
-	input.RentStartDate = "2026-01-01"
-	input.BillingStartDate = "2026-01-01"
 	tenantRow, err := newTenantService(db).createTenant(ctx, owner.ID, input)
 	if err != nil {
 		t.Fatal(err)
@@ -137,9 +134,6 @@ func TestManualBalanceConcurrentRequestsCreateOneTransactionOnMySQL(t *testing.T
 	t.Cleanup(func() { _ = db.WithContext(ctx).Delete(&user{}, owner.ID).Error })
 
 	input := validTenantInputForProfile()
-	input.MonthlyRent = 400
-	input.RentStartDate = "2026-01-01"
-	input.BillingStartDate = "2026-01-01"
 	tenantRow, err := newTenantService(db).createTenant(ctx, owner.ID, input)
 	if err != nil {
 		t.Fatal(err)

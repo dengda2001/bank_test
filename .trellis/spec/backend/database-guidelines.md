@@ -10,9 +10,12 @@ The application uses MySQL-compatible storage through GORM. SQL files under
 `migrations/` are the schema source of truth and are applied by the startup
 migration runner; production code must not call GORM `AutoMigrate`.
 
-JSON and JSONL files remain compatibility inputs for the one-time
-`POST /import-legacy` import and for legacy fallback tests. The authenticated UI
-uses account-scoped database rows after a v2 user session is established.
+The authenticated UI uses account-scoped database rows after a signed-in user
+session is established. JSON tenant/expense ledgers and the legacy import
+route are retired; they are not an authenticated UI fallback.
+
+Some lower sections retain pre-migration-014 notes. For current landlord rent
+behavior, follow “Room Rent Plans, Asset State, and Monthly Facts” below.
 
 Every business query and write must include the current `user_id`. Bank refresh
 tokens belong to `bank_connections.user_id` and are encrypted with
@@ -36,7 +39,7 @@ development escape.
 - `MIGRATIONS_DIR`: migration directory, default `migrations`.
 - `BANK_TOKEN_ENCRYPTION_KEY`: raw or base64-encoded 32-byte AES key.
 - `ALLOW_PLAINTEXT_TOKENS=1`: sandbox/development-only escape hatch.
-- `ImportLegacyFiles(ctx, db, userID, cfg)`: idempotent JSON/JSONL import.
+- `runMigrations(db, dir)`: applies ordered SQL migrations before app startup.
 
 ### 3. Contracts
 
@@ -48,10 +51,10 @@ development escape.
   `user_id` and must be filtered by it.
 - `payment_transactions` uses `(user_id, stable_transaction_key)` for idempotent
   bank ingestion.
-- Rent obligations are monthly in phase 1, but retain interval fields and a
-  reusable batch generation service for later expansion.
-- Payer ID is preferred for matching. Exact name matches are candidates until
-  a user confirms them; confirmation may backfill the tenant payer ID.
+- Rent obligations are monthly facts generated from room rent plans; tenant
+  profiles do not carry rent amounts, due days, or rent validity dates.
+- Payment identity/matching data belongs to `tenant_payers`, not duplicated
+  fields on tenant profiles.
 
 ### 4. Validation & Error Matrix
 
@@ -61,7 +64,7 @@ development escape.
 - Live environment without token encryption key -> configuration fails.
 - Cross-account tenant, transaction, allocation, expense, or token lookup ->
   returns no row or an authorization-safe error.
-- Duplicate bank import -> no duplicate transaction rows.
+- Duplicate bank ingestion -> no duplicate transaction rows.
 
 ### 5. Good/Base/Bad Cases
 
@@ -80,7 +83,8 @@ development escape.
 - Stable transaction normalization and duplicate-key behavior.
 - Payer ID/name matching, month hint parsing, obligation status, and manual
   confirmation ownership.
-- Legacy JSON/JSONL import mapping and repeat-import idempotence.
+- Room rent-plan migration, validation, fact materialization, locking, and
+  account ownership.
 
 ## Scenario: Migration Authoring with the Flat SQL Runner
 
@@ -172,323 +176,150 @@ DELETE o FROM rent_obligations o JOIN _mig013_keep k ON ... WHERE o.id <> k.obli
 ALTER TABLE rent_obligations ADD UNIQUE KEY ...;
 ```
 
-## Scenario: Scoped Landlord Rent Repository
+## Scenario: Room Rent Plans, Asset State, and Monthly Facts
+
+This post-migration-014 contract supersedes any other sections in this file that
+describe `tenancy_agreements`, `agreement_parties`, structured tenant binding,
+tenant rent fields, JSON rent fallbacks, or `POST /import-legacy`. Those
+descriptions refer to retired behavior.
 
 ### 1. Scope / Trigger
 
-- Trigger: Any landlord rent feature that reads or writes properties, rooms,
-  tenancy agreements, agreement parties, rent charges, rent obligations,
-  payment allocations, or property/room expenses.
-- Applies to `landlordRentRepository` in
-  `cmd/truelayer-demo/landlord_rent_repository.go` and its future callers.
+- Trigger: changing property/room lifecycle, rent-plan timelines, monthly rent
+  facts, or any payment/cash/dunning write that references those facts.
+- Applies to `roomRentPlanService`, `monthlyRentFactsService`,
+  `landlordRentRepository`, migration 014, and the room/rent-workspace handlers.
 
 ### 2. Signatures
 
-- `newLandlordRentRepository(db *gorm.DB) *landlordRentRepository` creates the
-  account-scoped persistence boundary.
-- `find*` and `list*` methods always take `ctx` and `userID`; list methods take
-  typed filters such as `rentChargeQuery`, `rentObligationQuery`,
-  `paymentAllocationQuery`, or `manualExpenseQuery`.
-- `createProperty`, `createRoom`, `createTenancyAgreement`,
-  `createAgreementParty`, `createRentCharge`, `createRentObligation`, and
-  `createManualExpense` always take `ctx`, `userID`, and a typed model row.
+- `SaveRoomRentPlanCommand` carries `UserID`, `RoomID`,
+  `EffectiveMonth`, `MonthlyRentCents`, `Currency`, `DueDay`,
+  `Members`, and `ExpectedTimelineVersion`.
+- `(*roomRentPlanService).SaveRoomRentPlan(ctx, command)` replaces a room's
+  rent-plan timeline from the selected month and returns the saved plan and new
+  version.
+- `EndRoomRentPlanCommand` carries `UserID`, `RoomID`,
+  `VacantFromMonth`, and `ExpectedTimelineVersion`.
+- `(*roomRentPlanService).EndRoomRentPlan(ctx, command)` ends occupancy from
+  the selected rent-plan month.
+- `(*monthlyRentFactsService).ensureMonthlyRentFacts(ctx, userID, periodMonth,
+  intent)` is the only business entry point that generates obligations.
+  `intent` is `rentFactsIntentRead` or
+  `rentFactsIntentExplicitPayment`.
+- UI writes use `POST /rooms/{id}/rent-plan`; they do not write plans through
+  tenant, property, or physical-room profile forms.
 
 ### 3. Contracts
 
-- `userID` is the only trusted ownership input. Create methods overwrite the
-  model row's `UserID` with the explicit argument; callers cannot choose an
-  account through a posted/model field.
-- Single-row cross-user lookups return `gorm.ErrRecordNotFound`; list methods
-  return a non-nil empty slice. `userID == 0` fails before any database call.
-- Relationship creation verifies every referenced object with the same
-  `userID`. A room must belong to the property, an agreement to the room, a
-  party to both the agreement and tenant, and a charge to the matching
-  property/room/agreement chain.
-- Rent-charge and rent-obligation month filters normalize through
-  `monthStart`; expense `ToDate` is an exclusive upper bound. Active rent
-  facts and expenses exclude non-active records unless `IncludeVoided` is set.
-- Payment-allocation writes remain owned by the transaction service because
-  locking, idempotency, and projection recomputation must stay in one business
-  transaction; the repository owns their user-scoped reads.
+- Every plan, member, charge, obligation, tenant, room, and property lookup is
+  scoped by the authenticated `user_id`. Request model `UserID` is not trusted
+  in place of the session identity.
+- Properties and rooms are physical assets. Their `status` is their current
+  administrative state; neither has an effective-from/effective-to period.
+  Monthly rent and due day belong to a room rent plan, whose
+  `effective_from_month` and inclusive `effective_to_month` define occupancy
+  and responsibility over time.
+- Current asset status does not rewrite the rent-plan timeline or historical
+  facts. Rent fact selection follows the plan's month interval, not a property
+  or room validity date.
+- A saved plan requires positive EUR rent, a due day from 1 through 31, and at
+  least one distinct same-account tenant. If all member amounts are omitted,
+  the service splits cents evenly; otherwise every responsibility must be
+  positive and their sum must equal the room total.
+- Plan writes lock the room and compare `ExpectedTimelineVersion`. The
+  replacement, unlocked-fact deletion, member writes, version increment, and
+  applicable fact materialization run in one transaction. A current or past
+  effective month materializes its facts; a future plan does not.
+- A tenant may belong to at most one room in any rent month. `SaveRoomRentPlan`
+  locks the active tenant rows before checking other-room plans from the
+  effective month onward; an overlap returns `ErrTenantRoomMonthConflict`.
+  Plans that ended before the target month are excluded, and the page maps the
+  sentinel to a stable tenant-already-occupied message. MySQL coverage must
+  include current, future, inclusive end-month, ended-before-target, and
+  concurrent two-room assignments.
+- A normal read materializes the requested current or historical month. A
+  future read is preview-only. Explicit payment intent is the only path that may
+  materialize a future month.
+- Allocations, confirmed cash receipts, and dunning attempts lock a plan month.
+  A plan edit from that month onward must fail without changing the timeline or
+  deleting facts.
+- Financial writers lock their source payment transaction first where present,
+  then room rows by ascending ID, charge rows by ascending ID, and obligation
+  rows by ascending ID. After waiting, they re-read and validate the
+  room/property/charge/plan/member/tenant/month chain; a changed chain returns
+  `ErrRentFactsConflict` so the caller can ask the user to retry.
+- Migration 014 is an intentional destructive schema transition, not a data
+  migration. Before applying it, all pre-014 business tables must be empty. The
+  migration refuses non-empty databases and does not delete rows. There is no
+  data-level rollback; code rollback requires restoring a pre-014 backup or
+  rebuilding a pre-014 database.
 
 ### 4. Validation & Error Matrix
 
-- `userID == 0` -> return `errLandlordRentUserRequired`; do not dereference or
-  query the database.
-- Cross-user property, room, agreement, tenant, charge, obligation, or expense
-  target -> return `gorm.ErrRecordNotFound` for a single target and write no
-  relationship row.
-- Same-user but mismatched property/room/agreement relationship -> return
-  `gorm.ErrRecordNotFound`; do not trust individual foreign-key IDs.
-- Unknown list filter target or missing relation -> return an empty list rather
-  than falling back to room labels, addresses, or other text fields.
+| Condition | Result |
+|---|---|
+| Missing user, room, effective month, rent, or due day | `ErrInvalidRentPlan`; no writes |
+| Duplicate member, foreign-account tenant, or responsibility sum mismatch | Reject; no partial writes |
+| Timeline version differs from `rooms.rent_plan_version` | `ErrStaleRentPlanTimeline`; refresh before retry |
+| Overlapping or duplicate plan interval | `ErrRentPlanTimelineConflict`; transaction rolls back |
+| Allocation, cash receipt, or dunning history exists from edited month onward | `ErrRentPlanFactsLocked`; preserve facts and timeline |
+| Financial fact chain changed while acquiring locks | `ErrRentFactsConflict`; roll back and offer retry |
+| Future month requested by ordinary read | Return preview data; do not write facts |
+| Migration 014 sees non-empty business tables | Refuse migration; require explicit development/test database rebuild |
 
 ### 5. Good/Base/Bad Cases
 
-- Good: `repo.findRentObligation(ctx, userID, obligationID)` includes the
-  account predicate, and charge-scoped obligation queries join
-  `rent_charges` with both ID and user ownership conditions.
-- Base: A user with no room expenses receives `[]manualExpense{}` and can
-  distinguish that from a database error.
-- Bad: `db.First(&property, postedID)`, copying `row.UserID` from request data,
-  or joining `rent_charges` on ID alone and relying on a single-column foreign
-  key to enforce account ownership.
+- Good: change monthly rent from the room's rent-plan page and let the service
+  atomically replace that month onward after checking locks and timeline
+  version.
+- Base: deactivate a physical room without inventing an asset effective date;
+  its rent-plan history remains tied to plan months.
+- Bad: put `active_from`, `inactive_from`, rent, or due-day fields back on
+  property/room forms, or update tenant rent fields as a second write path.
+- Bad: materialize a future obligation during a dashboard preview or delete a
+  charge after an allocation/cash/dunning record has referenced it.
 
 ### 6. Tests Required
 
-- Opt-in MySQL tests run the real migration runner, create two users with
-  same-named facts, and assert cross-user reads are invisible.
-- Assert cross-user relationship writes fail without creating rooms,
-  agreements, parties, charges, obligations, or expenses.
-- Assert month, property, room, tenant, status, and date filters exclude
-  unrelated rows and preserve non-nil empty-list semantics.
-- Assert missing user IDs fail before database access, and run `go vet ./...`
-  plus the full backend test suite after repository changes.
+- Unit tests cover member splitting, sum validation, month normalization,
+  timeline replacement, version conflicts, lock detection, and future-read
+  previews.
+- MySQL integration tests use a disposable database to apply migrations from
+  fresh state, reapply them, and prove migration 014 refuses non-empty
+  pre-014 business tables without deleting their rows.
+- MySQL service tests cover save/end transaction boundaries, allocation/cash/
+  dunning locks, and concurrent writers returning a retryable conflict.
+- Handler/template tests assert property and room forms contain no asset
+  validity fields, tenant forms contain no rent-plan fields, `/tenancies` GET
+  and POST are 404, and desktop/mobile workspace views preserve tenant/room
+  filtering.
+- Run focused, package, and repository checks plus MySQL integration tests when
+  `RENTOPS_MYSQL_TEST_DSN` is configured. Do not mark the Trellis task complete
+  until its desktop/mobile and migration gates have evidence.
 
 ### 7. Wrong vs Correct
 
 Wrong:
 
 ```go
-db.First(&charge, postedChargeID)
+// Treat a physical room as if its existence starts in a rent month.
+roomInput.ActiveFrom = submittedMonth
+roomInput.MonthlyRentCents = submittedRent
 ```
 
 Correct:
 
 ```go
-charge, err := repo.findRentCharge(ctx, sessionUserID, postedChargeID)
+plan, version, err := newRoomRentPlanService(db).SaveRoomRentPlan(ctx,
+    SaveRoomRentPlanCommand{
+        UserID: userID, RoomID: roomID, EffectiveMonth: month,
+        MonthlyRentCents: rentCents, DueDay: dueDay, Members: members,
+        ExpectedTimelineVersion: currentVersion,
+    })
 ```
 
-The repository makes ownership part of the query contract instead of leaving
-each handler or service to remember the predicate independently.
-
-## Scenario: Legacy JSON Storage
-
-## Scenario: Structured Tenant Room Binding
-
-### 1. Scope / Trigger
-
-- Trigger: The authenticated tenant form assigns, moves, or removes a tenant
-  from a structured room arrangement.
-- Applies to `tenantInputFromForm`, `tenantService.updateTenant`, and
-  `syncTenantRoomBindingInTx` in `cmd/truelayer-demo/tenants.go` and
-  `cmd/truelayer-demo/landlord_domain_operations.go`.
-
-### 2. Signatures
-
-- `tenantInputFromForm(values formValues) (tenantInput, error)` parses the
-  submitted `room_id`; a non-zero ID marks the input as structured.
-- `(*tenantService).updateTenant(ctx, userID, tenantID, input)` persists the
-  tenant profile and requested room membership in one GORM transaction.
-- `syncTenantRoomBindingInTx(tx, userID, tenantID, roomID, effectiveMonth,
-  monthlyRentCents, currency, dueDay, tenantStatus) error` versions source and
-  destination room arrangements for the current month.
-- `saveRentArrangementInTx(tx, userID, input)` remains the only writer for
-  versioned room agreements and agreement parties.
-
-### 3. Contracts
-
-- Every tenant, room, agreement, and party query uses the session `userID`.
-- A structured edit applies room membership from `monthStart(time.Now().UTC())`;
-  the historical tenant `rent_start_date` must not backdate an edit.
-- Selecting no room removes the tenant from active current-month room
-  arrangements. Setting the tenant inactive also removes the current binding.
-- Moving rooms updates the old room's party set and destination room's party
-  set inside the same transaction as the profile update. Other source-room
-  tenants remain assigned, and the destination's existing currency and due
-  date are inherited.
-- `listTenants` derives `tenantRecord.RoomID` from the active current-month
-  agreement so `/tenants?edit={id}` displays the saved selection.
-- All agreement writes pass through `saveRentArrangementInTx`; charges for the
-  current or a later month lock the arrangement, and the entire profile/binding
-  transaction rolls back on that error.
-
-### 4. Validation & Error Matrix
-
-- Missing `userID` or `tenantID` -> fail before changing profile or relationship
-  rows.
-- Posted room outside the current user's account -> `gorm.ErrRecordNotFound`
-  from the scoped arrangement write; make no partial update.
-- Inactive tenant with a posted room -> save the profile as inactive and clear
-  its current room membership.
-- Current/future `rent_charges` on any affected room -> return
-  `errArrangementHistoryLocked`; redirect the form to
-  `/tenants?error=tenant_room_locked` and roll back all changes.
-- A destination room already occupied by other tenants -> include the tenant
-  in its next arrangement while retaining the existing room total unless the
-  form supplies a changed total.
-
-### 5. Good/Base/Bad Cases
-
-- Good: Update the tenant profile and source/destination party sets in one
-  transaction and let `saveRentArrangementInTx` enforce history locks.
-- Base: An unbound structured tenant with no room selected remains unbound.
-- Bad: Save the profile and ignore `room_id`, or update
-  `agreement_parties` directly after a rent charge has been generated.
-
-### 6. Tests Required
-
-- Opt-in MySQL test runs the real migrations, assigns an unbound tenant,
-  verifies the edit form's room ID, moves the tenant while retaining its prior
-  room member, and clears the binding.
-- Insert a current-month rent charge and assert a move returns
-  `errArrangementHistoryLocked`, leaves the original membership intact, and
-  does not partially update tenant profile fields.
-
-### 7. Wrong vs Correct
-
-Wrong:
-
-```go
-tx.Model(&tenant{}).Where("id = ?", tenantID).Updates(profileFields)
-// The posted room_id is silently ignored.
-```
-
-Correct:
-
-```go
-return db.Transaction(func(tx *gorm.DB) error {
-	if err := syncTenantRoomBindingInTx(tx, userID, tenantID, input.RoomID, monthStart(now), rent, currency, dueDay, input.Status); err != nil {
-		return err
-	}
-	return tx.Model(&tenantRow).Updates(profileFields).Error
-})
-```
-
-The tenant profile and versioned relationship either both commit or both roll
-back.
-
----
-
-## Scenario: Legacy JSON Storage
-
-### 1. Scope / Trigger
-
-- Trigger: Any feature that persists demo data outside the TrueLayer bank log or
-  token file.
-- Current examples: compatibility fallback when no v2 database session exists.
-
----
-
-### 2. Signatures
-
-- `RENTOPS_TENANT_FILE`: JSON array file for `[]tenantRecord`; default
-  `rentops-tenants.json`.
-- `RENTOPS_EXPENSE_FILE`: JSON array file for `[]expenseRecord`; default
-  `rentops-expenses.json`.
-- `loadTenants() ([]tenantRecord, error)` and `saveTenants([]tenantRecord) error`
-  own tenant persistence.
-- `loadExpenses() ([]expenseRecord, error)` and `saveExpenses([]expenseRecord) error`
-  own expense persistence.
-- `readJSONFile(path string, out any) error` treats missing or empty files as an
-  empty data set.
-- `writeJSONFile(path string, value any) error` writes indented JSON with file
-  mode `0600`.
-
----
-
-### 3. Contracts
-
-Tenant record fields:
-
-- `id`: generated local record id.
-- `name`: required, trimmed.
-- `monthly_rent`: required positive number.
-- `currency`: optional, defaults to `EUR`.
-- `room_address`: required, trimmed.
-- `created_at`: UTC RFC3339 timestamp.
-
-Expense record fields:
-
-- `id`: generated local record id.
-- `description`: required, trimmed.
-- `category`: optional, defaults to `General`.
-- `amount`: required positive number.
-- `currency`: optional, defaults to `EUR`.
-- `expense_date`: `YYYY-MM-DD`; invalid or empty input falls back to current UTC
-  date.
-- `payment_method`: optional, defaults to `Manual`.
-- `created_at`: UTC RFC3339 timestamp.
-
-These files are legacy compatibility data. They must not store bank access
-tokens or raw OAuth payloads; bank data is imported into the account-scoped
-database transaction table.
-
----
-
-### 4. Validation & Error Matrix
-
-- Missing tenant file -> render empty tenant list.
-- Empty tenant file -> render empty tenant list.
-- Missing expense file -> render empty expense list.
-- Empty expense file -> render empty expense list.
-- Tenant POST missing `name`, `monthly_rent`, or `room_address` -> redirect to
-  `/tenants?error=invalid_tenant`.
-- Expense POST missing `description` or positive `amount` -> redirect to
-  `/expenses?error=invalid_expense`.
-- Invalid expense date -> save with current UTC date rather than rejecting the
-  whole expense.
-- File read/write failure -> return HTTP 500 from the route handler.
-
----
-
-### 5. Good/Base/Bad Cases
-
-- Good: Form handlers validate once at the HTTP boundary, append a typed record,
-  then call the storage owner.
-- Base: A fresh checkout with no ledger files can open `/tenants` and
-  `/expenses` without creating files until the first POST.
-- Bad: Rendering code parses untyped JSON maps directly, or form handlers write
-  ad hoc JSON strings.
-
----
-
-### 6. Tests Required
-
-- Protected ledger routes redirect unauthenticated requests to `/`.
-- Tenant POST persists tenant name, monthly rent, and room address to a temp file.
-- Expense POST persists description, amount, category, and date to a temp file.
-- Tests must use `t.TempDir()` for ledger files; do not create
-  `rentops-tenants.json` or `rentops-expenses.json` in the repository root.
-
----
-
-### 7. Wrong vs Correct
-
-Wrong:
-
-```go
-body := fmt.Sprintf(`{"name":%q,"monthly_rent":%q}`, name, rent)
-_ = os.WriteFile("rentops-tenants.json", []byte(body), 0o644)
-```
-
-Correct:
-
-```go
-tenants, err := a.loadTenants()
-if err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-}
-tenants = append(tenants, tenantRecord{
-    Name:        name,
-    MonthlyRent: monthlyRent,
-    RoomAddress: roomAddress,
-})
-if err := a.saveTenants(tenants); err != nil {
-    http.Error(w, err.Error(), http.StatusInternalServerError)
-    return
-}
-```
-
----
-
-## Common Mistakes
-
-- Do not use default ledger paths in tests or browser automation that submits
-  forms. Use temp files through `RENTOPS_TENANT_FILE` and
-  `RENTOPS_EXPENSE_FILE` so verification does not create untracked demo data in
-  the repo.
+Keep asset identity/status in `properties` and `rooms`; keep occupancy,
+responsibility amounts, and rent timing in the room rent-plan timeline.
 
 ## Scenario: Tenant Billing History Projection
 
@@ -868,6 +699,10 @@ err := service.rematchRentAllocation(ctx, userID, transactionID, targetTenantID,
 ```
 
 ## Scenario: Tenant Profile, Name-Only Payers, and Lifecycle History
+
+> Historical pre-014 guidance below includes tenant rent dates and a separate
+> billing-history projection. Current tenant profiles contain identity/payer
+> details; rent responsibility comes from room rent plans above.
 
 ### 1. Scope / Trigger
 
@@ -1257,6 +1092,10 @@ atomically, and recomputes the ledger projection from those rows.
 
 ## Scenario: Monthly Rent Fact Materialization
 
+> Historical pre-014 guidance below describes dual structured/legacy
+> obligation generation. It is retired; use “Room Rent Plans, Asset State, and
+> Monthly Facts” above for the current materialization contract.
+
 ### 1. Scope / Trigger
 
 - Trigger: Any operation that needs persistent rent responsibilities for one
@@ -1366,9 +1205,9 @@ guarded legacy fallback so consumers cannot independently double-generate.
 - Applies to the database-backed monthly obligations, effective rent/cash
   payment projection, bank arrival transactions, allocations, and sync runs.
 
-> **Surface note (updated 2026-09-21 by `09-21-simplify-billing-tenancy`).**
-> `GET /bills` and `GET /tenancies` no longer render standalone product pages;
-> they redirect to `/rent-dashboard?view=tenants` and `/rooms` respectively.
+> **Surface note.** `GET /bills` redirects to
+> `/rent-dashboard?view=tenants`; `/tenancies` GET and POST are unregistered and
+> return 404.
 > The old bill/dunning template helpers may remain for compatibility tests and
 > server-side dunning reads, but they are not navigation destinations. Do not
 > use them as the canonical rent UI; see the frontend
@@ -1474,6 +1313,10 @@ The persisted monthly obligation remains the source of rent-period truth; bank
 arrival month is used only for pending and other-income navigation.
 
 ## Scenario: Room-Centric Rent Workspace Read Model
+
+> Historical pre-014 guidance below attributes rent through agreement parties
+> and includes a legacy fallback. It is retired; use “Room Rent Plans, Asset
+> State, and Monthly Facts” above for current room and tenant totals.
 
 ### 1. Scope / Trigger
 
@@ -1595,6 +1438,10 @@ This prevents structured/legacy double-generation while preserving the
 legacy-only fallback.
 
 ## Scenario: Local Test Data Seeding
+
+> The Rosewood SQL fixtures described below use the pre-014 tenant-rent schema.
+> They are not a valid seed path for the room-rent-plan schema until regenerated
+> for `room_rent_plans` and `room_rent_plan_members`.
 
 ### 1. Scope / Trigger
 

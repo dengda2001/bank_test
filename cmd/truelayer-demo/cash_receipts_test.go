@@ -101,8 +101,8 @@ func TestProjectRentObligationIncludesEffectiveBankAndCashRentOnly(t *testing.T)
 		{TenantID: &tenantID, AmountCents: 60000, AllocationKind: allocationKindRent, Status: allocationStatusConfirmed},
 		{TenantID: &tenantID, AmountCents: 90000, AllocationKind: allocationKindDeposit, Status: allocationStatusConfirmed},
 	}, []cashReceipt{
-		{TenantID: tenantID, AmountCents: 40000, Currency: "EUR", Status: cashReceiptStatusConfirmed},
-		{TenantID: tenantID, AmountCents: 20000, Currency: "EUR", Status: cashReceiptStatusVoided},
+		{PayerTenantID: &tenantID, AmountCents: 40000, Currency: "EUR", Status: cashReceiptStatusConfirmed},
+		{PayerTenantID: &tenantID, AmountCents: 20000, Currency: "EUR", Status: cashReceiptStatusVoided},
 	}, time.Date(2026, 9, 20, 0, 0, 0, 0, time.UTC))
 	if projected.PaidAmountCents != 100000 || projected.Status != "paid" {
 		t.Fatalf("projected paid/status=%d/%q want 100000/paid", projected.PaidAmountCents, projected.Status)

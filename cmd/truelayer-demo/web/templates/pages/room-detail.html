@@ -25,6 +25,7 @@
         </div>
         <div class="actions">
           <a class="btn" href="/rooms/{{.RoomID}}?period={{.Period}}{{if .FromList}}&amp;from=rooms&amp;return_property_id={{.ReturnPropertyID}}&amp;return_status={{.ReturnStatus}}&amp;return_search={{.ReturnSearch}}&amp;return_collection={{.ReturnCollection}}{{end}}&amp;edit=1">编辑房间</a>
+          <a class="btn primary" href="/rooms/{{.RoomID}}?period={{.Period}}{{if .FromList}}&amp;from=rooms&amp;return_property_id={{.ReturnPropertyID}}&amp;return_status={{.ReturnStatus}}&amp;return_search={{.ReturnSearch}}&amp;return_collection={{.ReturnCollection}}{{end}}&amp;rent=1">入住与租金</a>
           <a class="btn" href="/rooms/{{.RoomID}}?period={{.Period}}{{if .FromList}}&amp;from=rooms&amp;return_property_id={{.ReturnPropertyID}}&amp;return_status={{.ReturnStatus}}&amp;return_search={{.ReturnSearch}}&amp;return_collection={{.ReturnCollection}}{{end}}&amp;expense=1">新增房间支出</a>
           <a class="btn primary" href="/dunning?period={{.Period}}">提醒未付款租客</a>
         </div>
@@ -46,12 +47,36 @@
             <div class="room-edit-grid">
               <div class="form-field"><label for="room-label">房间名称</label><input id="room-label" name="room_label" value="{{.Form.RoomLabel}}" maxlength="191" required autofocus></div>
               <div class="form-field"><label for="room-property">所属房产</label><select id="room-property" name="property_id" required>{{range .Properties}}<option value="{{.ID}}"{{if eq $.Form.PropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></div>
-              <div class="form-field room-edit-desktop-only"><label for="room-monthly-rent">月度房间应收</label><input id="room-monthly-rent" name="monthly_rent" type="number" min="0.01" step="0.01" value="{{.Form.MonthlyRentValue}}" placeholder="0.00" inputmode="decimal"></div>
-              <div class="form-field room-edit-desktop-only"><label for="room-due-day">缴租日</label><input id="room-due-day" name="due_day" type="number" min="1" max="31" value="{{if .Form.DueDay}}{{.Form.DueDay}}{{else}}1{{end}}" required></div>
               <div class="form-field full"><label for="room-notes">房间备注</label><textarea id="room-notes" name="notes" maxlength="2000">{{.Form.Notes}}</textarea></div>
             </div>
             <div class="drawer-actions"><a class="btn subtle" href="/rooms/{{.RoomID}}?period={{.Period}}{{if .FromList}}&amp;from=rooms&amp;return_property_id={{.ReturnPropertyID}}&amp;return_status={{.ReturnStatus}}&amp;return_search={{.ReturnSearch}}&amp;return_collection={{.ReturnCollection}}{{end}}">取消</a><button class="btn primary" type="submit">保存更改</button></div>
           </form>
+        </section>
+      </div>
+      {{end}}
+	  {{if .PlanEditor}}
+      <div class="entity-drawer-backdrop">
+        <section class="entity-drawer rent-plan-editor" role="dialog" aria-modal="true" aria-labelledby="rent-plan-title">
+          <div class="panel-head"><div><div class="drawer-eyebrow">房间 {{.RoomLabel}}</div><h2 id="rent-plan-title">入住与租金</h2><p class="tiny">从指定月份创建完整计划版本；此前月份的账务事实保持不变。</p></div><a class="drawer-close" href="/rooms/{{.RoomID}}?period={{.Period}}" aria-label="关闭入住与租金设置">×</a></div>
+          {{if .PlanError}}<div class="notice error" role="alert">{{.PlanError}}</div>{{end}}
+          {{if not .PlanTenants}}<div class="notice error">请先添加租客档案，再设置入住与租金。</div>{{end}}
+          <form method="post" action="/rooms/{{.RoomID}}/rent-plan" data-rent-plan-form>
+            <input type="hidden" name="action" value="save"><input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="plan_version" value="{{.PlanVersion}}">
+            {{if .FromList}}<input type="hidden" name="from" value="rooms"><input type="hidden" name="return_property_id" value="{{.ReturnPropertyID}}"><input type="hidden" name="return_status" value="{{.ReturnStatus}}"><input type="hidden" name="return_search" value="{{.ReturnSearch}}"><input type="hidden" name="return_collection" value="{{.ReturnCollection}}">{{end}}
+            <div class="room-edit-grid">
+              <div class="form-field"><label for="plan-effective-month">入住生效月份</label><input id="plan-effective-month" name="effective_month" type="month" value="{{.Period}}" required></div>
+              <div class="form-field"><label for="plan-monthly-rent">房间月租（EUR）</label><input id="plan-monthly-rent" name="monthly_rent" inputmode="decimal" value="{{.PlanRentValue}}" placeholder="例如 1250.00" required></div>
+              <div class="form-field"><label for="plan-due-day">每月缴租日</label><input id="plan-due-day" name="due_day" type="number" min="1" max="31" value="{{.PlanDueDay}}" required></div>
+            </div>
+            <div class="plan-members-head"><div><h3>入住租客与个人责任</h3><p class="tiny">责任金额合计必须等于房间月租。</p></div><button class="btn subtle" type="button" data-add-plan-member>添加租客</button></div>
+            <label class="plan-split-toggle"><input type="checkbox" name="split_evenly" value="1"{{if .PlanSplitEvenly}} checked{{end}}> 保存时按人数平均分担</label>
+            <div class="plan-member-rows" data-plan-member-rows>
+              {{range .PlanMembers}}{{$member := .}}<div class="plan-member-row"><label><span class="tiny">租客</span><select name="tenant_id" required><option value="">请选择租客</option>{{range $.PlanTenants}}<option value="{{.ID}}"{{if eq $member.TenantID .ID}} selected{{end}}>{{.Name}}{{if eq .Status "inactive"}}（已停用）{{end}}</option>{{end}}</select></label><label><span class="tiny">个人责任（EUR）</span><input name="responsibility" inputmode="decimal" value="{{$member.ResponsibilityValue}}" placeholder="留空并勾选平均分担"></label><button class="btn subtle" type="button" data-remove-plan-member aria-label="移除租客">移除</button></div>{{end}}
+            </div>
+            <template data-plan-member-template><div class="plan-member-row"><label><span class="tiny">租客</span><select name="tenant_id"><option value="">请选择租客</option>{{range .PlanTenants}}<option value="{{.ID}}">{{.Name}}{{if eq .Status "inactive"}}（已停用）{{end}}</option>{{end}}</select></label><label><span class="tiny">个人责任（EUR）</span><input name="responsibility" inputmode="decimal" placeholder="留空并勾选平均分担"></label><button class="btn subtle" type="button" data-remove-plan-member aria-label="移除租客">移除</button></div></template>
+            <div class="drawer-actions"><a class="btn subtle" href="/rooms/{{.RoomID}}?period={{.Period}}">取消</a><button class="btn primary" type="submit"{{if not .PlanTenants}} disabled{{end}}>保存入住与租金</button></div>
+          </form>
+          {{if .PlanExists}}<form method="post" action="/rooms/{{.RoomID}}/rent-plan" class="end-occupancy-form"><input type="hidden" name="action" value="end"><input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="plan_version" value="{{.PlanVersion}}">{{if .FromList}}<input type="hidden" name="from" value="rooms"><input type="hidden" name="return_property_id" value="{{.ReturnPropertyID}}"><input type="hidden" name="return_status" value="{{.ReturnStatus}}"><input type="hidden" name="return_search" value="{{.ReturnSearch}}"><input type="hidden" name="return_collection" value="{{.ReturnCollection}}">{{end}}<label for="vacant-from-month">结束入住：空置生效月份</label><div class="end-occupancy-row"><input id="vacant-from-month" name="vacant_from_month" type="month" value="{{.VacantFromMonth}}" required><button class="btn danger" type="submit">结束入住</button></div><p class="tiny">所选月份及之后如有收款、平账或催收记录，将无法结束。</p></form>{{end}}
         </section>
       </div>
       {{end}}
@@ -62,6 +87,11 @@
         <article class="panel metric metric-success"><div class="label">已覆盖</div><strong>{{.Summary.PaidAmount}}</strong><span>{{if eq .Summary.Status "vacant"}}无当月应收{{else}}{{.Summary.CollectionPercent}}% 收缴率{{end}}</span></article>
         <article class="panel metric metric-warning"><div class="label">未付</div><strong>{{.Summary.BalanceAmount}}</strong><span>{{.Summary.StatusLabel}}</span></article>
         <article class="panel metric"><div class="label">付款记录</div><strong>{{.PaymentCount}} 笔</strong><span>本月关联收款</span></article>
+      </section>
+
+      <section class="panel surface room-plan-summary" aria-labelledby="room-plan-summary-title">
+        <div class="panel-head"><div><h2 id="room-plan-summary-title">{{if .PlanExists}}当前收租安排{{else}}入住与租金{{end}}</h2><p class="tiny">{{.PeriodLabel}} · 房间的月度计划</p></div><a class="btn primary" href="/rooms/{{.RoomID}}?period={{.Period}}{{if .FromList}}&amp;from=rooms&amp;return_property_id={{.ReturnPropertyID}}&amp;return_status={{.ReturnStatus}}&amp;return_search={{.ReturnSearch}}&amp;return_collection={{.ReturnCollection}}{{end}}&amp;rent=1">{{if .PlanExists}}调整安排{{else}}设置入住与租金{{end}}</a></div>
+        {{if .PlanExists}}<div class="room-plan-summary-content"><div class="room-plan-summary-metric"><span>房间月租</span><strong>{{.MonthlyRent}}</strong></div><div class="room-plan-summary-metric"><span>每月缴租日</span><strong>{{.DueDay}} 日</strong></div><div class="room-plan-summary-metric"><span>计划区间</span><strong>{{.PlanEffectiveFrom}}{{if .PlanEffectiveTo}} 至 {{.PlanEffectiveTo}}{{else}} 起持续有效{{end}}</strong></div><div class="room-plan-summary-members"><span>入住租客与责任</span><div>{{range .PlanMembers}}<span>{{.TenantName}} · {{.ResponsibilityValue}} EUR</span>{{end}}</div></div></div>{{else}}<div class="room-plan-summary-empty">所选月份没有入住与租金计划，房间按空置处理，不会生成个人责任。</div>{{end}}
       </section>
 
       <div class="room-detail-grid">
@@ -91,9 +121,7 @@
           <section class="panel surface detail-section room-facts-section room-desktop-facts"><div class="panel-head"><h2>房间信息</h2></div><dl class="room-facts">
             <div><dt>所属房产</dt><dd><a href="/properties/{{.Summary.PropertyID}}">{{.PropertyName}}</a></dd></div>
             <div><dt>房间状态</dt><dd>{{.Summary.StatusLabel}}</dd></div>
-            <div><dt>房间生效月份</dt><dd>{{.RoomActiveFrom}}</dd></div>
             <div><dt>当前月租</dt><dd>{{.MonthlyRent}}</dd></div>
-            <div><dt>入住日期</dt><dd>{{.MoveInDate}}</dd></div>
             <div><dt>当月到期日</dt><dd>{{.Summary.DueDate}}</dd></div>
             <div><dt>在住人数</dt><dd>{{.Summary.TenantCount}} 位</dd></div>
             {{if .RoomNotes}}<div><dt>房间备注</dt><dd>{{.RoomNotes}}</dd></div>{{end}}
@@ -105,8 +133,9 @@
           </section>
         </aside>
       </div>
-      <div class="room-detail-mobile-actions"><a class="btn subtle" href="{{.ReturnURL}}">返回列表</a><a class="btn primary" href="/rooms/{{.RoomID}}?period={{.Period}}{{if .FromList}}&amp;from=rooms&amp;return_property_id={{.ReturnPropertyID}}&amp;return_status={{.ReturnStatus}}&amp;return_search={{.ReturnSearch}}&amp;return_collection={{.ReturnCollection}}{{end}}&amp;edit=1">编辑资料</a><a class="btn" href="/rooms/{{.RoomID}}?period={{.Period}}{{if .FromList}}&amp;from=rooms&amp;return_property_id={{.ReturnPropertyID}}&amp;return_status={{.ReturnStatus}}&amp;return_search={{.ReturnSearch}}&amp;return_collection={{.ReturnCollection}}{{end}}&amp;expense=1">新增支出</a></div>
+      <div class="room-detail-mobile-actions"><a class="btn subtle" href="{{.ReturnURL}}">返回列表</a><a class="btn primary" href="/rooms/{{.RoomID}}?period={{.Period}}{{if .FromList}}&amp;from=rooms&amp;return_property_id={{.ReturnPropertyID}}&amp;return_status={{.ReturnStatus}}&amp;return_search={{.ReturnSearch}}&amp;return_collection={{.ReturnCollection}}{{end}}&amp;rent=1">入住与租金</a><a class="btn" href="/rooms/{{.RoomID}}?period={{.Period}}{{if .FromList}}&amp;from=rooms&amp;return_property_id={{.ReturnPropertyID}}&amp;return_status={{.ReturnStatus}}&amp;return_search={{.ReturnSearch}}&amp;return_collection={{.ReturnCollection}}{{end}}&amp;edit=1">编辑资料</a><a class="btn" href="/rooms/{{.RoomID}}?period={{.Period}}{{if .FromList}}&amp;from=rooms&amp;return_property_id={{.ReturnPropertyID}}&amp;return_status={{.ReturnStatus}}&amp;return_search={{.ReturnSearch}}&amp;return_collection={{.ReturnCollection}}{{end}}&amp;expense=1">新增支出</a></div>
     </main>
   </div>
+  <script>(function(){var form=document.querySelector('[data-rent-plan-form]');if(!form){return;}var rows=form.querySelector('[data-plan-member-rows]');var template=form.querySelector('[data-plan-member-template]');var add=form.querySelector('[data-add-plan-member]');var split=form.querySelector('input[name="split_evenly"]');function syncSplit(){var inputs=form.querySelectorAll('input[name="responsibility"]');for(var i=0;i<inputs.length;i++){inputs[i].disabled=!!split.checked;}}function bindRemove(button){button.addEventListener('click',function(){var row=button.closest('.plan-member-row');if(row&&rows.querySelectorAll('.plan-member-row').length>1){row.remove();}});}var removers=form.querySelectorAll('[data-remove-plan-member]');for(var i=0;i<removers.length;i++){bindRemove(removers[i]);}if(add){add.addEventListener('click',function(){var row=template.content.firstElementChild.cloneNode(true);row.querySelector('select').required=true;bindRemove(row.querySelector('[data-remove-plan-member]'));rows.appendChild(row);syncSplit();});}if(split){split.addEventListener('change',syncSplit);syncSplit();}})();</script>
 </body>
 </html>

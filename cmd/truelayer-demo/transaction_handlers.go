@@ -40,6 +40,13 @@ func redirectTransactionResult(w http.ResponseWriter, r *http.Request, key, valu
 	http.Redirect(w, r, parsed.Path+"?"+query.Encode(), http.StatusFound)
 }
 
+func transactionFailureCode(err error, fallback string) string {
+	if errors.Is(err, ErrRentFactsConflict) {
+		return "rent_facts_conflict"
+	}
+	return fallback
+}
+
 func (a *app) handleTransactionAllocation(w http.ResponseWriter, r *http.Request) {
 	if !a.requireAuth(w, r) {
 		return
@@ -109,16 +116,16 @@ func (a *app) handleTransactionAllocation(w http.ResponseWriter, r *http.Request
 			}
 			var tenantRow tenant
 			if err := a.db.WithContext(r.Context()).Where("id = ? AND user_id = ?", tenantID, userID).First(&tenantRow).Error; err != nil {
-				redirectTransactionResult(w, r, "error", "allocation_failed")
+				redirectTransactionResult(w, r, "error", transactionFailureCode(err, "allocation_failed"))
 				return
 			}
 			if err := newMonthlyRentFactsService(a.db).ensureMonthlyRentFacts(r.Context(), userID, period, rentFactsIntentExplicitPayment); err != nil {
-				redirectTransactionResult(w, r, "error", "allocation_failed")
+				redirectTransactionResult(w, r, "error", transactionFailureCode(err, "allocation_failed"))
 				return
 			}
 			var obligation rentObligation
 			if err := a.db.WithContext(r.Context()).Where("id > 0 AND user_id = ? AND tenant_id = ? AND period_month = ?", userID, tenantID, period).First(&obligation).Error; err != nil {
-				redirectTransactionResult(w, r, "error", "allocation_failed")
+				redirectTransactionResult(w, r, "error", transactionFailureCode(err, "allocation_failed"))
 				return
 			}
 			obligationID = obligation.ID
@@ -132,7 +139,7 @@ func (a *app) handleTransactionAllocation(w http.ResponseWriter, r *http.Request
 	service := newTransactionService(a.db)
 	_, err = service.allocateTransaction(r.Context(), userID, transactionID, drafts, strings.TrimSpace(r.Form.Get("idempotency_key")), "manual")
 	if err != nil {
-		redirectTransactionResult(w, r, "error", "allocation_failed")
+		redirectTransactionResult(w, r, "error", transactionFailureCode(err, "allocation_failed"))
 		return
 	}
 	redirectTransactionResult(w, r, "message", "allocation_saved")
@@ -178,7 +185,7 @@ func (a *app) handleTransactionAction(w http.ResponseWriter, r *http.Request, ac
 		err = errors.New("invalid transaction action")
 	}
 	if err != nil {
-		redirectTransactionResult(w, r, "error", "transaction_action_failed")
+		redirectTransactionResult(w, r, "error", transactionFailureCode(err, "transaction_action_failed"))
 		return
 	}
 	redirectTransactionResult(w, r, "message", "transaction_action_saved")
@@ -246,7 +253,7 @@ func (a *app) handleTransactionRematch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := newTransactionService(a.db).rematchRentAllocation(r.Context(), userID, transactionID, targetTenantID, targetPeriod); err != nil {
-		redirectTransactionResult(w, r, "error", "rematch_failed")
+		redirectTransactionResult(w, r, "error", transactionFailureCode(err, "rematch_failed"))
 		return
 	}
 	redirectTransactionResult(w, r, "message", "match_updated")

@@ -129,57 +129,31 @@ func (a *app) renderTransactionDetail(w http.ResponseWriter, r *http.Request, ke
 
 	var data transactionDetailPageData
 	userID, hasUser := a.currentUserID(r)
-	if a.db != nil && hasUser {
-		transactionID, err := strconv.ParseUint(key, 10, 64)
-		if err != nil || transactionID == 0 {
-			http.NotFound(w, r)
-			return
-		}
-		var source paymentTransaction
-		if err := a.db.WithContext(r.Context()).Where("id = ? AND user_id = ?", transactionID, userID).First(&source).Error; err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		detailData, err := a.transactionDetailPageData(r.Context(), r, userID, source, key, filters)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		data = detailData
-	} else {
-		index, err := demoTransactionIndex(key)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		result, loadErr := a.loadLatestDemoResult()
-		if loadErr != nil {
-			http.Error(w, loadErr.Error(), http.StatusInternalServerError)
-			return
-		}
-		rows := fallbackTransactionPageRows(result, filters)
-		if index < 0 || index >= len(rows) {
-			http.NotFound(w, r)
-			return
-		}
-		data = a.demoTransactionDetailPageData(r, rows[index], key, filters)
+	if !hasUser || a.db == nil {
+		http.Error(w, "database session required", http.StatusServiceUnavailable)
+		return
 	}
+	transactionID, err := strconv.ParseUint(key, 10, 64)
+	if err != nil || transactionID == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	var source paymentTransaction
+	if err := a.db.WithContext(r.Context()).Where("id = ? AND user_id = ?", transactionID, userID).First(&source).Error; err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	detailData, err := a.transactionDetailPageData(r.Context(), r, userID, source, key, filters)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	data = detailData
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := transactionDetailPageTemplate.Execute(w, data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-}
-
-func demoTransactionIndex(key string) (int, error) {
-	if !strings.HasPrefix(key, "demo-") {
-		return 0, fmt.Errorf("invalid demo transaction key")
-	}
-	index, err := strconv.Atoi(strings.TrimPrefix(key, "demo-"))
-	if err != nil || index < 0 {
-		return 0, fmt.Errorf("invalid demo transaction key")
-	}
-	return index, nil
 }
 
 func (a *app) transactionDetailPageData(ctx context.Context, r *http.Request, userID uint64, source paymentTransaction, key string, filters transactionFilters) (transactionDetailPageData, error) {
@@ -221,14 +195,14 @@ func (a *app) transactionDetailPageData(ctx context.Context, r *http.Request, us
 	chargeIDs := make([]uint64, 0)
 	seenChargeIDs := make(map[uint64]struct{})
 	for _, obligation := range obligations {
-		if obligation.RentChargeID == nil || *obligation.RentChargeID == 0 {
+		if obligation.RentChargeID == 0 {
 			continue
 		}
-		if _, exists := seenChargeIDs[*obligation.RentChargeID]; exists {
+		if _, exists := seenChargeIDs[obligation.RentChargeID]; exists {
 			continue
 		}
-		seenChargeIDs[*obligation.RentChargeID] = struct{}{}
-		chargeIDs = append(chargeIDs, *obligation.RentChargeID)
+		seenChargeIDs[obligation.RentChargeID] = struct{}{}
+		chargeIDs = append(chargeIDs, obligation.RentChargeID)
 	}
 	charges := make(map[uint64]rentCharge)
 	rooms := make(map[uint64]room)
@@ -314,29 +288,6 @@ func (a *app) transactionDetailPageData(ctx context.Context, r *http.Request, us
 	return data, nil
 }
 
-func (a *app) demoTransactionDetailPageData(r *http.Request, row transactionPageRow, key string, filters transactionFilters) transactionDetailPageData {
-	row.DetailKey = key
-	row.DetailURL = ""
-	backURL := transactionListURL(r.URL.Path, r.URL.Query())
-	return transactionDetailPageData{
-		workspaceShell:  a.fillWorkspaceShell(r, workspaceShell{ActivePage: pageActiveTransactionKey(r), Username: a.displayUsername(r), Environment: a.cfg.Environment, FootNote: "银行流水与租金关联", CompactTitle: "流水详情", ShowNavCounts: true}),
-		Transaction:     row,
-		Title:           row.AmountDisplay + " · " + row.DirectionLabel,
-		Subtitle:        row.AccountName + " · " + row.DateDisplay,
-		StatusClass:     row.MatchStatus,
-		BackURL:         backURL,
-		BackRowURL:      backURL + "#transaction-row-" + url.PathEscape(key),
-		ActionBase:      transactionListPath(r.URL.Path),
-		TransactionTime: formatTransactionTimestamp(nil),
-		AllocatedAmount: row.AllocatedAmountDisplay,
-		RemainingAmount: row.RemainingAmountDisplay,
-		SourceLabel:     transactionSourceLabel(row.Source),
-		ProviderID:      row.ProviderTransactionID,
-		Reference:       "—",
-		ParsedPeriod:    row.ParsedPeriodDisplay,
-	}
-}
-
 func pageActiveTransactionKey(r *http.Request) string {
 	if r.URL.Path == "/billing" {
 		return "billing"
@@ -400,8 +351,8 @@ func transactionDetailAllocationRows(allocations []paymentAllocation, currency s
 				row.BillLabel = fmt.Sprintf("责任 #%d", obligation.ID)
 				period := monthStart(obligation.PeriodMonth).Format("2006-01")
 				row.BillURL = fmt.Sprintf("/tenants/%d?from_month=%s&to_month=%s", obligation.TenantID, period, period)
-				if obligation.RentChargeID != nil {
-					if charge, ok := charges[*obligation.RentChargeID]; ok {
+				if obligation.RentChargeID != 0 {
+					if charge, ok := charges[obligation.RentChargeID]; ok {
 						row.PropertyName = firstNonEmpty(stringValue(charge.PropertyNameSnapshot), "")
 						row.RoomLabel = firstNonEmpty(stringValue(charge.RoomLabelSnapshot), "")
 						if roomRow, exists := rooms[charge.RoomID]; exists {

@@ -186,7 +186,7 @@ func TestTransactionDetailAllocationRowsIncludeRoomContextAndVoidedHistory(t *te
 			{ID: 2, TenantID: &tenantID, AmountCents: 1000, AllocationKind: allocationKindOther, Status: allocationStatusVoided, CreatedAt: createdAt},
 		},
 		"EUR",
-		map[uint64]rentObligation{obligationID: {ID: obligationID, TenantID: tenantID, RentChargeID: &chargeID, PeriodMonth: createdAt, DueDate: createdAt, ExpectedAmountCents: 128000, Currency: "EUR"}},
+		map[uint64]rentObligation{obligationID: {ID: obligationID, TenantID: tenantID, RentChargeID: chargeID, PeriodMonth: createdAt, DueDate: createdAt, ExpectedAmountCents: 128000, Currency: "EUR"}},
 		map[uint64]rentCharge{chargeID: {ID: chargeID, RoomID: roomID, PropertyID: propertyID, PropertyNameSnapshot: nullableString("Rosewood Court"), RoomLabelSnapshot: nullableString("2B")}},
 		map[uint64]room{roomID: {ID: roomID, PropertyID: propertyID, RoomLabel: "2B"}},
 		map[uint64]property{propertyID: {ID: propertyID, Name: "Rosewood Court"}},

@@ -52,9 +52,6 @@ func TestCashReceiptLifecycleOnMySQL(t *testing.T) {
 	input := validTenantInputForProfile()
 	// This scenario asserts against a 100000-cent obligation, so pin the rent
 	// rather than inheriting whatever the shared profile fixture uses.
-	input.MonthlyRent = 1000
-	input.RentStartDate = "2026-01-01"
-	input.BillingStartDate = "2026-01-01"
 	tenantRow, err := newTenantService(db).createTenant(ctx, owner.ID, input)
 	if err != nil {
 		t.Fatal(err)
@@ -227,9 +224,6 @@ func TestCashReceiptConcurrentBalanceGuardOnMySQL(t *testing.T) {
 	t.Cleanup(func() { db.WithContext(ctx).Delete(&user{}, owner.ID) })
 
 	input := validTenantInputForProfile()
-	input.MonthlyRent = 400
-	input.RentStartDate = "2026-01-01"
-	input.BillingStartDate = "2026-01-01"
 	tenantRow, err := newTenantService(db).createTenant(ctx, owner.ID, input)
 	if err != nil {
 		t.Fatal(err)

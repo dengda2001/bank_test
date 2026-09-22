@@ -20,8 +20,6 @@ func TestTransactionActionsRevokeAndRestoreOnMySQL(t *testing.T) {
 	t.Cleanup(func() { db.WithContext(ctx).Delete(&user{}, owner.ID) })
 
 	input := validTenantInputForProfile()
-	input.RentStartDate = "2026-01-01"
-	input.BillingStartDate = "2026-01-01"
 	tenantRow, err := newTenantService(db).createTenant(ctx, owner.ID, input)
 	if err != nil {
 		t.Fatal(err)
@@ -121,8 +119,6 @@ func TestTransactionActionsRematchOneRentAllocationOnMySQL(t *testing.T) {
 	t.Cleanup(func() { _ = db.WithContext(ctx).Delete(&user{}, owner.ID).Error })
 
 	input := validTenantInputForProfile()
-	input.RentStartDate = "2026-01-01"
-	input.BillingStartDate = "2026-01-01"
 	tenantRow, err := newTenantService(db).createTenant(ctx, owner.ID, input)
 	if err != nil {
 		t.Fatal(err)

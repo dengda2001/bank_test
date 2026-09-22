@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
-# Start a disposable, populated RentOps instance for the browser audit.
+# Start a disposable, populated room-rent instance for the browser audit.
 #
 # This is the audit counterpart to scripts/run-e2e-local.sh, with one crucial
 # difference: it does NOT run a destructive acceptance suite. It creates a
-# throwaway MySQL database, starts the app against it, imports the committed
-# fixtures in test-data/audit/, runs the action seeder (scripts/audit/seed.mjs),
-# and then STAYS RUNNING so a Playwright harness can attach to a live, populated
-# instance. The E2E runner cannot be reused for this because it deletes every
-# row it created before exiting (cmd/rentops-e2e/execution.go:62).
+# throwaway MySQL database, starts the app against it, runs the room-plan seeder
+# (scripts/audit/seed-workspace.mjs), and then STAYS RUNNING so a Playwright
+# harness can attach to a live, populated instance.
 #
 # Safety, mirroring the E2E precedent:
 #   * the database name is generated from the run ID and must match
@@ -34,7 +32,6 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_HOST="${APP_HOST:-127.0.0.1}"
 APP_PORT="${APP_PORT:-18090}"
 BASE_URL="http://${APP_HOST}:${APP_PORT}"
-FIXTURE_DIR="${REPO_ROOT}/test-data/audit"
 
 RUN_ID="${AUDIT_RUN_ID:-rentops-audit-$(date -u +%Y%m%d-%H%M%S)-$(openssl rand -hex 4)}"
 MYSQL_HOST="${MYSQL_HOST:-127.0.0.1}"
@@ -50,7 +47,6 @@ SECOND_PASSWORD="$(openssl rand -hex 12)"
 
 TOKEN_KEY="$(openssl rand -hex 16)"
 RUNTIME_DIR="$(mktemp -d "${TMPDIR:-/tmp}/rentops-audit-runtime-XXXXXX")"
-COOKIE_JAR="${RUNTIME_DIR}/cookies.txt"
 APP_LOG="${RUNTIME_DIR}/app.log"
 APP_PID=""
 
@@ -74,14 +70,6 @@ case "$MYSQL_HOST" in
 		exit 2
 		;;
 esac
-
-for fixture in bank-results.jsonl tenants.json expenses.json; do
-	if [[ ! -s "${FIXTURE_DIR}/${fixture}" ]]; then
-		echo "refusing to run: fixture ${FIXTURE_DIR}/${fixture} is missing or empty." >&2
-		echo "POST /import-legacy re-reads these paths and silently imports nothing when they are absent (main.go:1983-1998)." >&2
-		exit 2
-	fi
-done
 
 cleanup() {
 	if [[ -n "$APP_PID" ]] && kill -0 "$APP_PID" 2>/dev/null; then
@@ -152,9 +140,7 @@ start_app() {
 	TL_CLIENT_ID=audit-local-client \
 	TL_CLIENT_SECRET=audit-local-secret \
 	TL_REDIRECT_URI="${BASE_URL}/callback" \
-	TL_LOG_FILE="${FIXTURE_DIR}/bank-results.jsonl" \
-	RENTOPS_TENANT_FILE="${FIXTURE_DIR}/tenants.json" \
-	RENTOPS_EXPENSE_FILE="${FIXTURE_DIR}/expenses.json" \
+	TL_LOG_FILE="${RUNTIME_DIR}/bank-results.jsonl" \
 	TL_TOKEN_FILE="${RUNTIME_DIR}/token.json" \
 	MYSQL_DSN="$DSN" \
 	MIGRATIONS_DIR="${REPO_ROOT}/migrations" \
@@ -201,32 +187,9 @@ stop_app
 echo "==> starting the application with the audit account (${PRIMARY_USER})"
 start_app "$PRIMARY_USER" "$PRIMARY_PASSWORD" "$APP_LOG"
 
-login_and_import() {
-	local status
-	status="$(curl -s -o /dev/null -w '%{http_code}' -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
-		--data-urlencode "username=${PRIMARY_USER}" \
-		--data-urlencode "password=${PRIMARY_PASSWORD}" \
-		"${BASE_URL}/login-local")"
-	if [[ "$status" != "302" ]]; then
-		echo "audit login failed with status ${status}" >&2
-		exit 1
-	fi
-	local location
-	location="$(curl -s -o /dev/null -w '%{redirect_url}' -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
-		-X POST "${BASE_URL}/import-legacy")"
-	if [[ "$location" != *"message=legacy_imported"* ]]; then
-		echo "POST /import-legacy did not import the fixtures; redirect was ${location}" >&2
-		echo "the fixture paths must be set at application start (legacy_import.go:23-41)." >&2
-		exit 1
-	fi
-}
-
-echo "==> importing static fixtures through POST /import-legacy"
-login_and_import
-
-echo "==> running the action seeder (scripts/audit/seed.mjs)"
-AUDIT_BASE="$BASE_URL" AUDIT_USER="$PRIMARY_USER" AUDIT_PASS="$PRIMARY_PASSWORD" \
-	node "${REPO_ROOT}/scripts/audit/seed.mjs"
+echo "==> seeding room, tenant and rent-plan data through the app"
+AUDIT_BASE="$BASE_URL" AUDIT_USER="$PRIMARY_USER" AUDIT_PASS="$PRIMARY_PASSWORD" AUDIT_RUN_ID="$RUN_ID" \
+	node "${REPO_ROOT}/scripts/audit/seed-workspace.mjs"
 
 TEARDOWN_DB=1
 

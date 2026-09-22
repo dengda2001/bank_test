@@ -23,7 +23,7 @@ func TestPropertyAndRoomFormsRenderAsMobileObjectDrawers(t *testing.T) {
 		{
 			name: "room create",
 			render: func() (string, error) {
-				return executeTemplate(roomPageTemplate, roomPageData{workspaceShell: workspaceShell{ActivePage: "rooms"}, Period: "2026-09", PeriodLabel: "2026年9月", ShowForm: true, Form: roomPageForm{ActiveFrom: "2026-09"}, Properties: []propertyPageRow{{ID: 1, Name: "Canal House"}}})
+				return executeTemplate(roomPageTemplate, roomPageData{workspaceShell: workspaceShell{ActivePage: "rooms"}, Period: "2026-09", PeriodLabel: "2026年9月", ShowForm: true, Form: roomPageForm{}, Properties: []propertyPageRow{{ID: 1, Name: "Canal House"}}})
 			},
 			want:   []string{`class="object-tabs"`, `class="entity-drawer-backdrop"`, `name="property_id"`, "新建房间"},
 			absent: []string{`name="room_type"`, `name="capacity"`, "房间类型", "可住人数"},
@@ -53,32 +53,12 @@ func TestTenantFormUsesSharedObjectTabsAndDrawer(t *testing.T) {
 	page, err := executeTemplate(tenantTemplate, tenantPageData{
 		workspaceShell: workspaceShell{ActivePage: "tenants"},
 		ShowForm:       true,
-		Form:           tenantRecord{Name: "Aoife Murphy", Status: "active", Currency: "EUR", DueDay: 1, RentStartDate: "2026-09-01"},
+		Form:           tenantRecord{Name: "Aoife Murphy", Status: "active"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, expected := range []string{`class="object-tabs"`, `class="entity-drawer-backdrop"`, `aria-modal="true"`, "新增租客"} {
-		if !strings.Contains(page, expected) {
-			t.Fatalf("tenant form is missing %q", expected)
-		}
-	}
-}
-
-func TestTenantFormShowsRoomOccupantsAndEditableResponsibilityPlan(t *testing.T) {
-	page, err := executeTemplate(tenantTemplate, tenantPageData{
-		workspaceShell: workspaceShell{ActivePage: "tenants"},
-		ShowForm:       true,
-		Rooms: []tenantRoomOption{{
-			ID: 7, PropertyName: "Canal House", RoomLabel: "A-01", MonthlyRentValue: "1200.00", Currency: "EUR", DueDay: 5,
-			OccupantsJSON: `[{"tenant_id":12,"name":"Aoife","responsibility_cents":120000}]`,
-		}},
-		Form: tenantRecord{Name: "Mia", Status: "active", Currency: "EUR", DueDay: 5, Structured: true, ArrangementStartMonth: "2026-09"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, expected := range []string{`data-room-occupants=`, `name="room_plan"`, "同住人分担", "个人责任", "默认均分"} {
 		if !strings.Contains(page, expected) {
 			t.Fatalf("tenant form is missing %q", expected)
 		}
@@ -94,10 +74,9 @@ func TestRoomDetailEditStateRendersTheDetailsAndDrawerTogether(t *testing.T) {
 		PeriodLabel:    "2026年9月",
 		RoomID:         2,
 		RoomLabel:      "A-01",
-		RoomActiveFrom: "2026-01",
 		PropertyName:   "Canal House",
 		Editing:        true,
-		Form:           roomPageForm{ID: 2, PropertyID: 1, RoomLabel: "A-01", ActiveFrom: "2026-01"},
+		Form:           roomPageForm{ID: 2, PropertyID: 1, RoomLabel: "A-01"},
 		Properties:     []propertyPageRow{{ID: 1, Name: "Canal House"}},
 		Summary:        rentWorkspaceRoomRow{PropertyID: 1, Status: "vacant", StatusLabel: "空置", ExpectedAmount: "—", PaidAmount: "—", BalanceAmount: "—", DueDate: "—"},
 	})

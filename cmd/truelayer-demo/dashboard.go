@@ -24,6 +24,9 @@ func (a *app) handleRentDashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) renderRentDashboard(w http.ResponseWriter, r *http.Request, action *dunningDashboardAction) {
+	if _, ok := a.scopedPageUser(w, r); !ok {
+		return
+	}
 	period := r.URL.Query().Get("period")
 	filters, filtersErr := rentDashboardFiltersFromQuery(r.URL.Query())
 	if filtersErr != nil {
@@ -156,20 +159,6 @@ func (a *app) renderRentDashboard(w http.ResponseWriter, r *http.Request, action
 			return
 		}
 		data.Dunning = dunningView
-	} else {
-		tenants, _ := a.loadTenants()
-		expenses, _ := a.loadExpenses()
-		result, _ := a.loadLatestDemoResult()
-		data.TenantCount = len(tenants)
-		data.ExpenseCount = len(expenses)
-		data.PendingCount = len(fallbackTransactionPageRows(result, transactionFilters{PeriodMonth: data.Period, PendingOnly: true}))
-		data.PaidTotal = formatMoney(0, "EUR", 2)
-		data.BalanceTotal = formatMoney(0, "EUR", 2)
-		data.PendingTotal = formatMoney(0, "EUR", 2)
-		data.OtherIncomeTotal = formatMoney(0, "EUR", 2)
-		data.ExpenseTotal = formatMoney(sumExpenses(expenses), "EUR", 2)
-		data.ExpectedTotal = formatMoney(sumTenantRent(tenants), "EUR", 2)
-		data.PeriodLabel = fmt.Sprintf("%d年%d月", periodMonth.Year(), periodMonth.Month())
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	// This function renders three live workspaces through one data contract, so the

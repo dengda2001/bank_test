@@ -100,81 +100,45 @@ func TestValidateRentResponsibilityPlanRequiresExactUniquePositiveOwnership(t *t
 	}
 }
 
-func TestAgreementPartyActiveInMonthUsesStatusAndDateBoundaries(t *testing.T) {
+func TestRoomRentPlanCoverageUsesInclusiveEffectiveMonths(t *testing.T) {
 	period := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
-	joinedAfter := period.AddDate(0, 1, 0)
-	leftBefore := period.AddDate(0, 0, -1)
-	for _, tc := range []struct {
-		name  string
-		party agreementParty
-		want  bool
-	}{
-		{name: "active", party: agreementParty{Status: "active"}, want: true},
-		{name: "inactive", party: agreementParty{Status: "voided"}, want: false},
-		{name: "joined after month", party: agreementParty{Status: "active", JoinedAt: &joinedAfter}, want: false},
-		{name: "left before month", party: agreementParty{Status: "active", LeftAt: &leftBefore}, want: false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := agreementPartyActiveInMonth(tc.party, period); got != tc.want {
-				t.Fatalf("active in month = %v; want %v", got, tc.want)
-			}
-		})
+	end := period
+	plan := roomRentPlan{EffectiveFromMonth: period.AddDate(0, -1, 0), EffectiveToMonth: &end}
+	if !roomRentPlanCoversMonth(plan, period) {
+		t.Fatal("plan must include its final effective month")
+	}
+	if roomRentPlanCoversMonth(plan, period.AddDate(0, 1, 0)) {
+		t.Fatal("plan must not cover the month after its effective end")
+	}
+	plan.EffectiveToMonth = nil
+	if !roomRentPlanCoversMonth(plan, period.AddDate(0, 36, 0)) {
+		t.Fatal("open-ended plan must remain effective without a room/property validity period")
 	}
 }
 
-func TestActiveRoomAndAgreementBoundariesUseWholeTargetMonth(t *testing.T) {
-	period := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
-	room := room{Status: "active", ActiveFrom: period}
-	if !roomActiveInMonth(room, period) {
-		t.Fatal("room active on month start should be active")
-	}
-	inactiveBeforeMonth := period.AddDate(0, 0, -1)
-	room.InactiveFrom = &inactiveBeforeMonth
-	if roomActiveInMonth(room, period) {
-		t.Fatal("room inactive before month end should not be active for the month")
-	}
-
-	agreement := tenancyAgreement{Status: "active", StartDate: period}
-	if !tenancyAgreementCoversMonth(agreement, period) {
-		t.Fatal("agreement starting on month start should cover the month")
-	}
-	endBeforeMonth := period.AddDate(0, 0, -1)
-	agreement.EndDate = &endBeforeMonth
-	if tenancyAgreementCoversMonth(agreement, period) {
-		t.Fatal("agreement ending before month start should not cover the month")
-	}
-}
-
-func TestBuildRentChargePlanUsesActivePartiesAndExactResponsibilities(t *testing.T) {
+func TestBuildRentChargePlanRequiresMembersToMatchRoomRent(t *testing.T) {
 	period := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	plan, err := buildRentChargePlan(
-		tenancyAgreement{MonthlyRentCents: 100000, Currency: "eur", Status: "active", StartDate: period},
-		[]agreementParty{
-			{TenantID: 11, ResponsibilityCents: 60000, Status: "active"},
-			{TenantID: 12, ResponsibilityCents: 40000, Status: "active"},
-			{TenantID: 13, ResponsibilityCents: 10000, Status: "left"},
-		},
-		period,
+		roomRentPlan{ID: 10, MonthlyRentCents: 100000, Currency: "eur", EffectiveFromMonth: period},
+		[]roomRentPlanMember{
+			{ID: 21, TenantID: 11, ResponsibilityCents: 60000},
+			{ID: 22, TenantID: 12, ResponsibilityCents: 40000},
+		}, period,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.Currency != ledgerCurrencyEUR || plan.ExpectedAmountCents != 100000 {
-		t.Fatalf("plan facts = %+v", plan)
+	if plan.Currency != ledgerCurrencyEUR || plan.ExpectedAmountCents != 100000 || len(plan.Responsibilities) != 2 {
+		t.Fatalf("charge plan=%+v", plan)
 	}
-	want := []rentResponsibilityInput{{TenantID: 11, AmountCents: 60000}, {TenantID: 12, AmountCents: 40000}}
-	if len(plan.Responsibilities) != len(want) || plan.Responsibilities[0] != want[0] || plan.Responsibilities[1] != want[1] {
-		t.Fatalf("plan responsibilities = %+v; want %+v", plan.Responsibilities, want)
+	if plan.Responsibilities[0].RoomRentPlanMemberID != 21 || plan.Responsibilities[1].RoomRentPlanMemberID != 22 {
+		t.Fatalf("member source ids missing from obligations: %+v", plan.Responsibilities)
 	}
-}
-
-func TestBuildRentChargePlanRejectsAgreementOutsideMonthOrUnbalancedParties(t *testing.T) {
-	period := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
-	if _, err := buildRentChargePlan(tenancyAgreement{MonthlyRentCents: 100000, Currency: "EUR", Status: "active", StartDate: period.AddDate(0, 1, 0)}, []agreementParty{{TenantID: 11, ResponsibilityCents: 100000, Status: "active"}}, period); err == nil || !strings.Contains(err.Error(), "cover") {
-		t.Fatalf("agreement outside month error = %v; want coverage error", err)
-	}
-	if _, err := buildRentChargePlan(tenancyAgreement{MonthlyRentCents: 100000, Currency: "EUR", Status: "active", StartDate: period}, []agreementParty{{TenantID: 11, ResponsibilityCents: 90000, Status: "active"}}, period); err == nil || !strings.Contains(err.Error(), "sum") {
-		t.Fatalf("unbalanced party error = %v; want sum error", err)
+	if _, err := buildRentChargePlan(
+		roomRentPlan{MonthlyRentCents: 100000, Currency: "EUR", EffectiveFromMonth: period},
+		[]roomRentPlanMember{{TenantID: 11, ResponsibilityCents: 90000}}, period,
+	); err == nil || !strings.Contains(err.Error(), "sum") {
+		t.Fatalf("unbalanced plan error=%v", err)
 	}
 }
 
@@ -203,20 +167,20 @@ func TestRentLedgerServiceCreatesOneChargeAndStableObligationsOnMySQL(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	ownerRoom, err := repo.createRoom(ctx, owner.ID, room{PropertyID: ownerProperty.ID, RoomLabel: "Room 1", ActiveFrom: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)})
+	ownerRoom, err := repo.createRoom(ctx, owner.ID, room{PropertyID: ownerProperty.ID, RoomLabel: "Room 1"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	period := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
-	agreement, err := repo.createTenancyAgreement(ctx, owner.ID, tenancyAgreement{RoomID: ownerRoom.ID, StartDate: period.AddDate(0, -3, 0), MonthlyRentCents: 100000, Currency: "EUR", DueDay: 5})
+	plan, err := repo.createRoomRentPlan(ctx, owner.ID, roomRentPlan{RoomID: ownerRoom.ID, EffectiveFromMonth: period.AddDate(0, -3, 0), MonthlyRentCents: 100000, Currency: "EUR", DueDay: 5})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, party := range []agreementParty{
-		{AgreementID: agreement.ID, TenantID: ownerTenant.ID, ResponsibilityCents: 60000},
-		{AgreementID: agreement.ID, TenantID: secondTenant.ID, ResponsibilityCents: 40000},
+	for _, party := range []roomRentPlanMember{
+		{RoomRentPlanID: plan.ID, TenantID: ownerTenant.ID, ResponsibilityCents: 60000},
+		{RoomRentPlanID: plan.ID, TenantID: secondTenant.ID, ResponsibilityCents: 40000},
 	} {
-		if _, err := repo.createAgreementParty(ctx, owner.ID, party); err != nil {
+		if _, err := repo.createRoomRentPlanMember(ctx, owner.ID, party); err != nil {
 			t.Fatal(err)
 		}
 	}

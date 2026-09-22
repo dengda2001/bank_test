@@ -49,8 +49,6 @@ type config struct {
 	From                   string
 	LogFile                string
 	TokenFile              string
-	TenantFile             string
-	ExpenseFile            string
 	MySQLDSN               string
 	DatabaseURL            string
 	MigrationsDir          string
@@ -191,45 +189,16 @@ type billingRentMatchOption struct {
 }
 
 type tenantRecord struct {
-	ID               string  `json:"id"`
-	Name             string  `json:"name"`
-	DisplayAlias     string  `json:"display_alias,omitempty"`
-	Email            string  `json:"email,omitempty"`
-	PayerID          string  `json:"payer_id,omitempty"`
-	PayerNameHint    string  `json:"payer_name_hint,omitempty"`
-	MonthlyRent      float64 `json:"monthly_rent"`
-	Currency         string  `json:"currency"`
-	IntervalUnit     string  `json:"interval_unit,omitempty"`
-	IntervalCount    int     `json:"interval_count,omitempty"`
-	BillingStartDate string  `json:"billing_start_date,omitempty"`
-	DueDay           int     `json:"due_day,omitempty"`
-	RentStartDate    string  `json:"rent_start_date,omitempty"`
-	RentEndDate      string  `json:"rent_end_date,omitempty"`
-	Status           string  `json:"status,omitempty"`
-	RoomLabel        string  `json:"room_label,omitempty"`
-	RoomAddress      string  `json:"room_address"`
-	PropertyHint     string  `json:"property_hint,omitempty"`
-	CreatedAt        string  `json:"created_at"`
-
-	RentDisplay string `json:"-"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	DisplayAlias  string `json:"display_alias,omitempty"`
+	Email         string `json:"email,omitempty"`
+	PayerID       string `json:"payer_id,omitempty"`
+	PayerNameHint string `json:"payer_name_hint,omitempty"`
+	Status        string `json:"status,omitempty"`
+	CreatedAt     string `json:"created_at"`
 
 	BillingHistory []tenantBillingMonth `json:"-"`
-	// RoomID is only used by the structured tenant form. Existing tenant rows
-	// remain compatible with the legacy denormalized room fields.
-	RoomID                uint64 `json:"-"`
-	Structured            bool   `json:"-"`
-	ArrangementStartMonth string `json:"-"`
-}
-
-type tenantRoomOption struct {
-	ID               uint64
-	PropertyName     string
-	RoomLabel        string
-	MonthlyRentValue string
-	Currency         string
-	DueDay           int
-	OccupantsJSON    string
-	PlansJSON        string
 }
 
 type expenseRecord struct {
@@ -270,11 +239,10 @@ type tenantPageData struct {
 	Rows          []tenantRecord
 	Search        string
 	FilteredCount int
-	RentTotal     string
+	ActiveCount   int
 	ShowForm      bool
 	Editing       bool
 	Form          tenantRecord
-	Rooms         []tenantRoomOption
 	ReturnURL     string
 	PostReturnURL string
 }
@@ -498,7 +466,6 @@ func newAppMux(a *app) *http.ServeMux {
 	mux.HandleFunc("/rooms/", a.handleRoomRoute)
 	mux.HandleFunc("/properties", a.handleProperties)
 	mux.HandleFunc("/properties/", a.handlePropertyRoute)
-	mux.HandleFunc("/tenancies", a.handleTenancies)
 	mux.HandleFunc("/more", a.handleMore)
 	mux.HandleFunc("/dunning", a.handleDunningPage)
 	mux.HandleFunc("/dunning/config", a.handleDunningConfig)
@@ -515,7 +482,6 @@ func newAppMux(a *app) *http.ServeMux {
 	mux.HandleFunc("/billing/revoke", a.handleTransactionRevoke)
 	mux.HandleFunc("/billing/payer/preview", a.handlePayerPreview)
 	mux.HandleFunc("/billing/payer/confirm", a.handlePayerConfirm)
-	mux.HandleFunc("/import-legacy", a.handleLegacyImport)
 	mux.HandleFunc("/tenants", a.handleTenants)
 	mux.HandleFunc("/tenants/", a.handleTenantSubroute)
 	mux.HandleFunc("/cash-receipts/new", a.handleCashReceiptNew)
@@ -557,9 +523,7 @@ func loadConfig() (config, error) {
 		From:                   strings.TrimSpace(os.Getenv("TL_FROM")),
 		LogFile:                strings.TrimSpace(getenv("TL_LOG_FILE", "bank-data.jsonl")),
 		TokenFile:              strings.TrimSpace(getenv("TL_TOKEN_FILE", "truelayer-token.json")),
-		TenantFile:             strings.TrimSpace(getenv("RENTOPS_TENANT_FILE", "rentops-tenants.json")),
-		ExpenseFile:            strings.TrimSpace(getenv("RENTOPS_EXPENSE_FILE", "rentops-expenses.json")),
-		MySQLDSN:               strings.TrimSpace(os.Getenv("MYSQL_DSN")),
+	MySQLDSN:               strings.TrimSpace(os.Getenv("MYSQL_DSN")),
 		DatabaseURL:            strings.TrimSpace(os.Getenv("DATABASE_URL")),
 		MigrationsDir:          strings.TrimSpace(getenv("MIGRATIONS_DIR", "migrations")),
 		BankTokenEncryptionKey: strings.TrimSpace(os.Getenv("BANK_TOKEN_ENCRYPTION_KEY")),
@@ -747,6 +711,9 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 	if !a.requireAuth(w, r) {
 		return
 	}
+	if _, ok := a.scopedPageUser(w, r); !ok {
+		return
+	}
 	if detailKey := strings.TrimSpace(r.URL.Query().Get("detail")); detailKey != "" {
 		a.renderTransactionDetail(w, r, detailKey)
 		return
@@ -819,20 +786,6 @@ func (a *app) handleBilling(w http.ResponseWriter, r *http.Request) {
 		} else {
 			pendingCount = int(pendingCount64)
 		}
-	} else {
-		result, _ := a.loadLatestDemoResult()
-		lastSync = result.FetchedAt
-		rows = fallbackTransactionPageRows(result, filters)
-		totalTransactions = int64(len(rows))
-		for _, row := range rows {
-			if row.Direction == "income" && isPendingMatchStatus(row.MatchStatus) {
-				pendingCount++
-			}
-		}
-		tenants, _ := a.loadTenants()
-		expenses, _ := a.loadExpenses()
-		tenantCount = len(tenants)
-		expenseCount = len(expenses)
 	}
 	setTransactionDetailLinks(r.URL.Path, r.URL.Query(), rows)
 	transactionReturnURL := transactionListURL(r.URL.Path, r.URL.Query())
@@ -1086,31 +1039,23 @@ func (a *app) handleRentMatchConfirmation(w http.ResponseWriter, r *http.Request
 }
 
 func (a *app) requestCounts(ctx context.Context, r *http.Request) (tenantCount, transactionCount, expenseCount int, err error) {
-	if userID, ok := a.currentUserID(r); ok && a.db != nil {
-		var count int64
-		if err := a.db.WithContext(ctx).Model(&tenant{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
-			return 0, 0, 0, err
-		}
-		tenantCount = int(count)
-		if err := a.db.WithContext(ctx).Model(&paymentTransaction{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
-			return 0, 0, 0, err
-		}
-		transactionCount = int(count)
-		if err := a.db.WithContext(ctx).Model(&manualExpense{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
-			return 0, 0, 0, err
-		}
-		return tenantCount, transactionCount, int(count), nil
+	userID, ok := a.currentUserID(r)
+	if !ok || a.db == nil {
+		return 0, 0, 0, errors.New("database session required")
 	}
-	tenants, tenantsErr := a.loadTenants()
-	if tenantsErr != nil {
-		return 0, 0, 0, tenantsErr
+	var count int64
+	if err := a.db.WithContext(ctx).Model(&tenant{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
+		return 0, 0, 0, err
 	}
-	expenses, expensesErr := a.loadExpenses()
-	if expensesErr != nil {
-		return 0, 0, 0, expensesErr
+	tenantCount = int(count)
+	if err := a.db.WithContext(ctx).Model(&paymentTransaction{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
+		return 0, 0, 0, err
 	}
-	result, _ := a.loadLatestDemoResult()
-	return len(tenants), len(normalizePaymentTransactions(result)), len(expenses), nil
+	transactionCount = int(count)
+	if err := a.db.WithContext(ctx).Model(&manualExpense{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
+		return 0, 0, 0, err
+	}
+	return tenantCount, transactionCount, int(count), nil
 }
 
 // tenantHistoryMonths is how far back the row expansion on the tenant list
@@ -1120,6 +1065,9 @@ const tenantHistoryMonths = 6
 
 func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 	if !a.requireAuth(w, r) {
+		return
+	}
+	if _, ok := a.scopedPageUser(w, r); !ok {
 		return
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodPost {
@@ -1135,9 +1083,13 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	prepareTenants(tenants)
 	tenantCount := len(tenants)
-	rentTotal := sumTenantRent(tenants)
+	activeCount := 0
+	for _, record := range tenants {
+		if record.Status == "active" {
+			activeCount++
+		}
+	}
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
 	tenants = filterTenantRecords(tenants, search)
 	if userID, ok := a.currentUserID(r); ok && a.db != nil {
@@ -1153,17 +1105,12 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	roomOptions, err := a.listTenantRoomOptions(r.Context(), r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 	_, incomeCount, expenseCount, err := a.requestCounts(r.Context(), r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	formRecord := tenantRecord{Currency: "EUR", IntervalUnit: "month", IntervalCount: 1, Status: "active", DueDay: 1, Structured: true, ArrangementStartMonth: monthStart(time.Now().UTC()).Format("2006-01")}
+	formRecord := tenantRecord{Status: "active"}
 	editing := false
 	if editID := strings.TrimSpace(r.URL.Query().Get("edit")); editID != "" {
 		for _, record := range tenants {
@@ -1172,13 +1119,6 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 				editing = true
 				break
 			}
-		}
-	}
-	if editing {
-		formRecord = tenantEditFormRecordWithRoomDefaults(formRecord, roomOptions)
-		formRecord.Structured = formRecord.RoomID != 0 || formRecord.MonthlyRent <= 0
-		if formRecord.Structured {
-			formRecord.ArrangementStartMonth = monthStart(time.Now().UTC()).Format("2006-01")
 		}
 	}
 	showForm := editing || r.URL.Query().Get("add") == "1" || r.URL.Query().Get("error") != ""
@@ -1205,7 +1145,7 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 			ActivePage:    "tenants",
 			Username:      a.displayUsername(r),
 			Environment:   a.cfg.Environment,
-			FootNote:      "租客资料：" + a.cfg.TenantFile,
+			FootNote:      "租客资料",
 			CompactTitle:  "对象管理",
 			ShowNavCounts: true,
 			TenantCount:   tenantCount,
@@ -1219,11 +1159,10 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 		Rows:          tenants,
 		Search:        search,
 		FilteredCount: len(tenants),
-		RentTotal:     formatMoney(rentTotal, "EUR", 2),
+		ActiveCount:   activeCount,
 		ShowForm:      showForm,
 		Editing:       editing,
 		Form:          formRecord,
-		Rooms:         roomOptions,
 		ReturnURL:     returnURL,
 		PostReturnURL: postReturnURL,
 	}
@@ -1247,18 +1186,6 @@ func (a *app) createTenant(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := a.persistTenantRecord(r.Context(), r, r.Form); err != nil {
-		if errors.Is(err, errTenantLifecycleConflict) {
-			http.Redirect(w, r, tenantFormRedirectURL(returnTo, "", "tenant_has_payments"), http.StatusFound)
-			return
-		}
-		if errors.Is(err, errArrangementHistoryLocked) {
-			http.Redirect(w, r, tenantFormRedirectURL(returnTo, "", "tenant_room_locked"), http.StatusFound)
-			return
-		}
-		if errors.Is(err, errRentFactsConflict) || errors.Is(err, errTenantRoomConflict) {
-			http.Redirect(w, r, tenantFormRedirectURL(returnTo, "", "tenant_room_conflict"), http.StatusFound)
-			return
-		}
 		if errors.Is(err, errInvalidTenantInput) {
 			http.Redirect(w, r, tenantFormRedirectURL(returnTo, "", "invalid_tenant"), http.StatusFound)
 			return
@@ -1319,7 +1246,7 @@ func filterTenantRecords(rows []tenantRecord, search string) []tenantRecord {
 	}
 	filtered := make([]tenantRecord, 0, len(rows))
 	for _, row := range rows {
-		fields := []string{row.Name, row.DisplayAlias, row.Email, row.PayerNameHint, row.PayerID, row.RoomLabel, row.RoomAddress, row.PropertyHint}
+		fields := []string{row.Name, row.DisplayAlias, row.Email, row.PayerNameHint, row.PayerID}
 		for _, field := range fields {
 			if strings.Contains(strings.ToLower(field), search) {
 				filtered = append(filtered, row)
@@ -1333,174 +1260,47 @@ func filterTenantRecords(rows []tenantRecord, search string) []tenantRecord {
 var errInvalidTenantInput = errors.New("invalid tenant input")
 
 func (a *app) listTenantRecords(ctx context.Context, r *http.Request) ([]tenantRecord, error) {
-	if userID, ok := a.currentUserID(r); ok && a.db != nil {
-		return newTenantService(a.db).listTenants(ctx, userID)
-	}
-	return a.loadTenants()
-}
-
-func (a *app) listTenantRoomOptions(ctx context.Context, r *http.Request) ([]tenantRoomOption, error) {
 	userID, ok := a.currentUserID(r)
 	if !ok || a.db == nil {
-		return nil, nil
+		return nil, errors.New("database session required")
 	}
-	rows, err := a.loadRoomRows(ctx, userID, monthStart(time.Now().UTC()), 0)
-	if err != nil {
-		return nil, err
-	}
-	period := monthStart(time.Now().UTC())
-	repo := newLandlordRentRepository(a.db)
-	agreements, err := repo.listTenancyAgreements(ctx, userID, agreementQuery{Status: "active"})
-	if err != nil {
-		return nil, err
-	}
-	agreementsByRoom := make(map[uint64][]tenancyAgreement, len(agreements))
-	for _, agreement := range agreements {
-		agreementsByRoom[agreement.RoomID] = append(agreementsByRoom[agreement.RoomID], agreement)
-	}
-	partiesByAgreement := make(map[uint64][]agreementParty, len(agreements))
-	tenantNames := make(map[uint64]string)
-	for _, agreement := range agreements {
-		parties, listErr := repo.listAgreementParties(ctx, userID, agreementPartyQuery{AgreementID: agreement.ID, Status: "active"})
-		if listErr != nil {
-			return nil, listErr
-		}
-		partiesByAgreement[agreement.ID] = parties
-		for _, party := range parties {
-			if _, loaded := tenantNames[party.TenantID]; loaded {
-				continue
-			}
-			var tenantRow tenant
-			if findErr := a.db.WithContext(ctx).Where("id = ? AND user_id = ?", party.TenantID, userID).First(&tenantRow).Error; findErr != nil {
-				return nil, findErr
-			}
-			tenantNames[party.TenantID] = firstNonEmpty(tenantRow.DisplayAlias, tenantRow.Name)
-		}
-	}
-	options := make([]tenantRoomOption, 0, len(rows))
-	for _, row := range rows {
-		if row.Status != "active" {
-			continue
-		}
-		value := ""
-		if row.MonthlyRentCents > 0 {
-			value = strconv.FormatFloat(float64(row.MonthlyRentCents)/100, 'f', 2, 64)
-		}
-		plans := make([]tenantRoomArrangementOption, 0, len(agreementsByRoom[row.ID]))
-		currentOccupants := make([]tenantRoomOccupantOption, 0)
-		for _, agreement := range agreementsByRoom[row.ID] {
-			arrangementMonth := monthStart(agreement.StartDate)
-			arrangementMonthEnd := arrangementMonth.AddDate(0, 1, 0).Add(-time.Nanosecond)
-			occupants := make([]tenantRoomOccupantOption, 0)
-			for _, party := range partiesByAgreement[agreement.ID] {
-				if party.JoinedAt != nil && party.JoinedAt.After(arrangementMonthEnd) || party.LeftAt != nil && party.LeftAt.Before(arrangementMonth) {
-					continue
-				}
-				occupants = append(occupants, tenantRoomOccupantOption{TenantID: party.TenantID, Name: tenantNames[party.TenantID], ResponsibilityCents: party.ResponsibilityCents})
-			}
-			plan := tenantRoomArrangementOption{
-				StartMonth: arrangementMonth.Format("2006-01"), MonthlyRentValue: strconv.FormatFloat(float64(agreement.MonthlyRentCents)/100, 'f', 2, 64),
-				Currency: firstNonEmpty(agreement.Currency, ledgerCurrencyEUR), DueDay: agreement.DueDay, Occupants: occupants,
-			}
-			if agreement.EndDate != nil {
-				plan.EndMonth = monthStart(*agreement.EndDate).Format("2006-01")
-			}
-			plans = append(plans, plan)
-			if !period.Before(arrangementMonth) && (agreement.EndDate == nil || !period.After(monthStart(*agreement.EndDate))) {
-				currentOccupants = occupants
-			}
-		}
-		occupantsJSON, marshalErr := json.Marshal(currentOccupants)
-		if marshalErr != nil {
-			return nil, marshalErr
-		}
-		plansJSON, marshalErr := json.Marshal(plans)
-		if marshalErr != nil {
-			return nil, marshalErr
-		}
-		options = append(options, tenantRoomOption{ID: row.ID, PropertyName: row.PropertyName, RoomLabel: row.RoomLabel, MonthlyRentValue: value, Currency: firstNonEmpty(row.Currency, ledgerCurrencyEUR), DueDay: row.DueDay, OccupantsJSON: string(occupantsJSON), PlansJSON: string(plansJSON)})
-	}
-	return options, nil
+	return newTenantService(a.db).listTenants(ctx, userID)
 }
 
 func (a *app) persistTenantRecord(ctx context.Context, r *http.Request, values formValues) error {
-	if userID, ok := a.currentUserID(r); ok && a.db != nil {
-		input, parseErr := tenantInputFromForm(values)
-		if parseErr != nil {
+	userID, ok := a.currentUserID(r)
+	if !ok || a.db == nil {
+		return errors.New("database session required")
+	}
+	input, parseErr := tenantInputFromForm(values)
+	if parseErr != nil {
+		return errInvalidTenantInput
+	}
+	service := newTenantService(a.db)
+	var err error
+	if rawID := strings.TrimSpace(values.Get("tenant_id")); rawID != "" {
+		var tenantID uint64
+		tenantID, err = strconv.ParseUint(rawID, 10, 64)
+		if err == nil {
+			_, err = service.updateTenant(ctx, userID, tenantID, input)
+		}
+	} else {
+		_, err = service.createTenant(ctx, userID, input)
+	}
+	if err != nil {
+		if isValidationError(err) {
 			return errInvalidTenantInput
 		}
-		service := newTenantService(a.db)
-		var err error
-		if rawID := strings.TrimSpace(values.Get("tenant_id")); rawID != "" {
-			var tenantID uint64
-			tenantID, err = strconv.ParseUint(rawID, 10, 64)
-			if err == nil {
-				_, err = service.updateTenant(ctx, userID, tenantID, input)
-			}
-		} else {
-			_, err = service.createTenant(ctx, userID, input)
-		}
-		if err != nil {
-			if isValidationError(err) {
-				return errInvalidTenantInput
-			}
-			return err
-		}
-		return nil
-	}
-	name := strings.TrimSpace(values.Get("name"))
-	roomAddress := strings.TrimSpace(values.Get("room_address"))
-	monthlyRent := float64(0)
-	var err error
-	if strings.TrimSpace(values.Get("monthly_rent")) != "" {
-		monthlyRent, err = parsePositiveAmount(values.Get("monthly_rent"))
-	}
-	if name == "" || err != nil {
-		return errInvalidTenantInput
-	}
-	tenants, err := a.loadTenants()
-	if err != nil {
 		return err
 	}
-	now := time.Now().UTC()
-	updatedID := strings.TrimSpace(values.Get("tenant_id"))
-	if updatedID != "" {
-		for i := range tenants {
-			if tenants[i].ID == updatedID {
-				tenants[i].Name = name
-				if strings.TrimSpace(values.Get("monthly_rent")) != "" {
-					tenants[i].MonthlyRent = monthlyRent
-				}
-				tenants[i].DisplayAlias = strings.TrimSpace(values.Get("display_alias"))
-				tenants[i].Email = strings.TrimSpace(values.Get("email"))
-				tenants[i].PayerID = strings.TrimSpace(values.Get("payer_id"))
-				tenants[i].PayerNameHint = strings.TrimSpace(values.Get("payer_name_hint"))
-				tenants[i].Currency = firstNonEmpty(strings.ToUpper(strings.TrimSpace(values.Get("currency"))), "EUR")
-				if roomAddress != "" {
-					tenants[i].RoomAddress = roomAddress
-				}
-				return a.saveTenants(tenants)
-			}
-		}
-		return errInvalidTenantInput
-	}
-	tenants = append(tenants, tenantRecord{
-		ID:            recordID("tenant", now),
-		Name:          name,
-		DisplayAlias:  strings.TrimSpace(values.Get("display_alias")),
-		Email:         strings.TrimSpace(values.Get("email")),
-		PayerID:       strings.TrimSpace(values.Get("payer_id")),
-		PayerNameHint: strings.TrimSpace(values.Get("payer_name_hint")),
-		MonthlyRent:   monthlyRent,
-		Currency:      firstNonEmpty(strings.ToUpper(strings.TrimSpace(values.Get("currency"))), "EUR"),
-		RoomAddress:   roomAddress,
-		CreatedAt:     now.Format(time.RFC3339),
-	})
-	return a.saveTenants(tenants)
+	return nil
 }
 
 func (a *app) handleExpenses(w http.ResponseWriter, r *http.Request) {
 	if !a.requireAuth(w, r) {
+		return
+	}
+	if _, ok := a.scopedPageUser(w, r); !ok {
 		return
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodPost {
@@ -1650,7 +1450,7 @@ func (a *app) handleExpenses(w http.ResponseWriter, r *http.Request) {
 			ActivePage:    "expenses",
 			Username:      a.displayUsername(r),
 			Environment:   a.cfg.Environment,
-			FootNote:      "支出资料：" + a.cfg.ExpenseFile,
+			FootNote:      "支出资料",
 			CompactTitle:  "费用支出",
 			ShowNavCounts: true,
 			TenantCount:   tenantCount,
@@ -1738,57 +1538,29 @@ func expensePageURL(values url.Values, message, errorCode string, showForm bool)
 var errInvalidExpenseInput = errors.New("invalid expense input")
 
 func (a *app) listExpenseRecords(ctx context.Context, r *http.Request) ([]expenseRecord, error) {
-	if userID, ok := a.currentUserID(r); ok && a.db != nil {
-		return newExpenseService(a.db).listExpenses(ctx, userID)
+	userID, ok := a.currentUserID(r)
+	if !ok || a.db == nil {
+		return nil, errors.New("database session required")
 	}
-	return a.loadExpenses()
+	return newExpenseService(a.db).listExpenses(ctx, userID)
 }
 
 func (a *app) persistExpenseRecord(ctx context.Context, r *http.Request, values formValues) error {
-	if userID, ok := a.currentUserID(r); ok && a.db != nil {
-		input, err := expenseInputFromForm(values, time.Now())
-		if err != nil {
-			return errInvalidExpenseInput
-		}
-		if input.PropertyID == nil {
-			return errInvalidExpenseInput
-		}
-		if _, err := newExpenseService(a.db).createExpense(ctx, userID, input); err != nil {
-			if isValidationError(err) {
-				return errInvalidExpenseInput
-			}
-			return err
-		}
-		return nil
+	userID, ok := a.currentUserID(r)
+	if !ok || a.db == nil {
+		return errors.New("database session required")
 	}
-	description := strings.TrimSpace(values.Get("description"))
-	amount, err := parsePositiveAmount(values.Get("amount"))
-	if description == "" || err != nil {
+	input, err := expenseInputFromForm(values, time.Now())
+	if err != nil || input.PropertyID == nil {
 		return errInvalidExpenseInput
 	}
-	expenseDate := strings.TrimSpace(values.Get("expense_date"))
-	if _, err := time.Parse(dateLayout, expenseDate); expenseDate == "" || err != nil {
-		expenseDate = time.Now().UTC().Format(dateLayout)
-	}
-	expenses, err := a.loadExpenses()
-	if err != nil {
+	if _, err := newExpenseService(a.db).createExpense(ctx, userID, input); err != nil {
+		if isValidationError(err) {
+			return errInvalidExpenseInput
+		}
 		return err
 	}
-	now := time.Now().UTC()
-	expenses = append(expenses, expenseRecord{
-		ID:            recordID("expense", now),
-		Description:   description,
-		Category:      firstNonEmpty(values.Get("category"), "General"),
-		Amount:        amount,
-		Currency:      firstNonEmpty(strings.ToUpper(strings.TrimSpace(values.Get("currency"))), "EUR"),
-		ExpenseDate:   expenseDate,
-		PaymentMethod: firstNonEmpty(values.Get("payment_method"), "Manual"),
-		RoomHint:      strings.TrimSpace(values.Get("room_hint")),
-		TenantHint:    strings.TrimSpace(values.Get("tenant_hint")),
-		InvoiceURL:    strings.TrimSpace(values.Get("invoice_url")),
-		CreatedAt:     now.Format(time.RFC3339),
-	})
-	return a.saveExpenses(expenses)
+	return nil
 }
 
 func (a *app) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -2310,29 +2082,6 @@ func (a *app) loadStoredToken() (storedToken, error) {
 	return stored, nil
 }
 
-func (a *app) loadLatestDemoResult() (demoResult, error) {
-	if a.cfg.LogFile == "" {
-		return demoResult{}, errors.New("TL_LOG_FILE is empty")
-	}
-	body, err := os.ReadFile(a.cfg.LogFile)
-	if err != nil {
-		return demoResult{}, err
-	}
-	lines := strings.Split(strings.TrimSpace(string(body)), "\n")
-	for i := len(lines) - 1; i >= 0; i-- {
-		line := strings.TrimSpace(lines[i])
-		if line == "" {
-			continue
-		}
-		var result demoResult
-		if err := json.Unmarshal([]byte(line), &result); err != nil {
-			return demoResult{}, err
-		}
-		return result, nil
-	}
-	return demoResult{}, errors.New("no logged bank data")
-}
-
 type rawTransaction struct {
 	TransactionID                   string         `json:"transaction_id"`
 	NormalisedProviderTransactionID string         `json:"normalised_provider_transaction_id"`
@@ -2534,35 +2283,6 @@ func recordID(prefix string, now time.Time) string {
 	return prefix + "-" + now.Format("20060102150405") + "-" + suffix
 }
 
-func prepareTenants(rows []tenantRecord) {
-	for i := range rows {
-		rows[i].Currency = firstNonEmpty(rows[i].Currency, "EUR")
-		rows[i].RentDisplay = formatMoney(rows[i].MonthlyRent, rows[i].Currency, 2)
-	}
-}
-
-func tenantEditFormRecordWithRoomDefaults(record tenantRecord, rooms []tenantRoomOption) tenantRecord {
-	if record.RoomID == 0 {
-		return record
-	}
-	for _, option := range rooms {
-		if option.ID != record.RoomID {
-			continue
-		}
-		if record.MonthlyRent <= 0 {
-			if rent, err := strconv.ParseFloat(option.MonthlyRentValue, 64); err == nil {
-				record.MonthlyRent = rent
-			}
-		}
-		record.Currency = firstNonEmpty(option.Currency, record.Currency, "EUR")
-		if option.DueDay > 0 {
-			record.DueDay = option.DueDay
-		}
-		break
-	}
-	return record
-}
-
 func prepareExpenses(rows []expenseRecord) {
 	for i := range rows {
 		rows[i].Currency = firstNonEmpty(rows[i].Currency, "EUR")
@@ -2611,82 +2331,12 @@ func formatDate(value string) string {
 	return value
 }
 
-func sumTenantRent(rows []tenantRecord) float64 {
-	var total float64
-	for _, row := range rows {
-		total += row.MonthlyRent
-	}
-	return total
-}
-
 func sumExpenses(rows []expenseRecord) float64 {
 	var total float64
 	for _, row := range rows {
 		total += row.Amount
 	}
 	return total
-}
-
-func (a *app) loadTenants() ([]tenantRecord, error) {
-	var rows []tenantRecord
-	if err := readJSONFile(a.cfg.TenantFile, &rows); err != nil {
-		return nil, err
-	}
-	return rows, nil
-}
-
-func (a *app) saveTenants(rows []tenantRecord) error {
-	return writeJSONFile(a.cfg.TenantFile, rows)
-}
-
-func (a *app) loadExpenses() ([]expenseRecord, error) {
-	var rows []expenseRecord
-	if err := readJSONFile(a.cfg.ExpenseFile, &rows); err != nil {
-		return nil, err
-	}
-	return rows, nil
-}
-
-func (a *app) saveExpenses(rows []expenseRecord) error {
-	return writeJSONFile(a.cfg.ExpenseFile, rows)
-}
-
-func readJSONFile(path string, out any) error {
-	if path == "" {
-		return nil
-	}
-	body, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	if len(strings.TrimSpace(string(body))) == 0 {
-		return nil
-	}
-	return json.Unmarshal(body, out)
-}
-
-func writeJSONFile(path string, value any) error {
-	if path == "" {
-		return nil
-	}
-	dir := filepath.Dir(path)
-	if dir != "." {
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			return err
-		}
-	}
-	body, err := json.MarshalIndent(value, "", "  ")
-	if err != nil {
-		return err
-	}
-	body = append(body, '\n')
-	if err := os.WriteFile(path, body, 0o600); err != nil {
-		return err
-	}
-	return os.Chmod(path, 0o600)
 }
 
 func (a *app) appendDemoResultLog(result demoResult) error {
@@ -2914,37 +2564,35 @@ var tenantTemplate = newWorkspacePageTemplate("tenants", nil, `<!doctype html>
 
       {{if eq .Message "tenant_added"}}<div class="notice ok" data-toast>租客资料已保存。</div>{{end}}
       {{if eq .Message "tenant_updated"}}<div class="notice ok" data-toast>租客资料已更新。</div>{{end}}
-		{{if and .Error (not .ShowForm)}}<div class="notice error">{{if eq .Error "tenant_has_payments"}}无法提前结束租期：结束月之后的账单已有有效收款，请先更正或撤销相关收款。{{else if eq .Error "tenant_room_locked"}}当前月或之后已有房间账单，无法更改租客的房间绑定。{{else}}请检查租客姓名、邮箱格式、日期关系、月租金额和房间地址。{{end}}</div>{{end}}
+		{{if and .Error (not .ShowForm)}}<div class="notice error">请检查租客姓名、邮箱、付款人名称及状态。</div>{{end}}
 
       <section class="summary" aria-label="Tenant summary">
         <div class="panel metric"><div class="label">租客数量</div><strong>{{.TenantCount}}</strong><span>当前保存的租客</span></div>
-        <div class="panel metric"><div class="label">月租合计</div><strong>{{.RentTotal}}</strong><span>租客资料中的预期月租</span></div>
+        <div class="panel metric"><div class="label">有效档案</div><strong>{{.ActiveCount}}</strong><span>可用于入住与租金安排</span></div>
       </section>
 
 	  {{if .ShowForm}}{{template "tenant-form-drawer" .}}{{end}}
       <section class="panel surface" aria-labelledby="tenant-list-title">
-        <form class="tenant-search collection-filters" method="get" action="/tenants"><label class="bills-search" for="tenant-search"><span class="sr-only">搜索</span><input id="tenant-search" type="search" name="search" value="{{.Search}}" placeholder="姓名、付款人、房间或地址" aria-label="搜索租客"></label><button class="btn" type="submit">搜索</button>{{if .Search}}<a class="btn subtle" href="/tenants">清除</a>{{end}}</form>
+        <form class="tenant-search collection-filters" method="get" action="/tenants"><label class="bills-search" for="tenant-search"><span class="sr-only">搜索</span><input id="tenant-search" type="search" name="search" value="{{.Search}}" placeholder="姓名、邮箱或付款人" aria-label="搜索租客"></label><button class="btn" type="submit">搜索</button>{{if .Search}}<a class="btn subtle" href="/tenants">清除</a>{{end}}</form>
         <div class="panel-head"><h2 id="tenant-list-title">租客列表</h2><span class="tiny">{{.FilteredCount}} / {{.TenantCount}} 条记录</span></div>
         {{if .Rows}}
         <div class="tenant-mobile-list" aria-label="移动端租客列表">
-          {{range .Rows}}<article class="tenant-mobile-card panel"><div class="tenant-mobile-head"><div><h3>{{if .DisplayAlias}}{{.DisplayAlias}}{{else}}{{.Name}}{{end}}</h3>{{if .DisplayAlias}}<p>{{.Name}}</p>{{end}}<p>{{if .RoomLabel}}{{.RoomLabel}} · {{end}}{{.RoomAddress}}</p></div><span class="status {{.Status}}">{{if eq .Status "active"}}有效{{else}}已停用{{end}}</span></div><div class="tenant-mobile-rent"><span>月租 · 每月 {{.DueDay}} 日</span><strong>{{.RentDisplay}}</strong></div><div class="tenant-mobile-actions"><a class="btn subtle" href="/tenants/{{.ID}}{{if $.Search}}?search={{urlquery $.Search}}{{end}}">查看详情</a><a class="btn subtle" href="/tenants?edit={{.ID}}{{if $.Search}}&amp;search={{urlquery $.Search}}{{end}}">编辑</a></div>{{if .BillingHistory}}<details class="tenant-mobile-history"><summary>查看最近六个月缴费</summary>{{range .BillingHistory}}<div class="tenant-mobile-history-row"><span>{{.PeriodLabel}} · {{.StatusLabel}}</span><strong>{{.BalanceAmount}}</strong></div>{{end}}</details>{{end}}</article>{{end}}
+          {{range .Rows}}<article class="tenant-mobile-card panel"><div class="tenant-mobile-head"><div><h3>{{if .DisplayAlias}}{{.DisplayAlias}}{{else}}{{.Name}}{{end}}</h3>{{if .DisplayAlias}}<p>{{.Name}}</p>{{end}}<p>{{if .Email}}{{.Email}}{{else}}未填写邮箱{{end}}</p><p>{{if .PayerNameHint}}{{.PayerNameHint}}{{else}}暂无付款识别{{end}}</p></div><span class="status {{.Status}}">{{if eq .Status "active"}}有效{{else}}已停用{{end}}</span></div><div class="tenant-mobile-actions"><a class="btn subtle" href="/tenants/{{.ID}}{{if $.Search}}?search={{urlquery $.Search}}{{end}}">查看责任</a><a class="btn subtle" href="/tenants?edit={{.ID}}{{if $.Search}}&amp;search={{urlquery $.Search}}{{end}}">编辑档案</a></div>{{if .BillingHistory}}<details class="tenant-mobile-history"><summary>查看最近六个月责任</summary>{{range .BillingHistory}}<div class="tenant-mobile-history-row"><span>{{.PeriodLabel}} · {{.StatusLabel}}</span><strong>{{.BalanceAmount}}</strong></div>{{end}}</details>{{end}}</article>{{end}}
         </div>
         <div class="tenant-table-wrap table-wrap">
           <table>
-            <thead><tr><th>租客</th><th>付款人</th><th>租金</th><th>账单安排</th><th>房间</th><th>创建时间</th><th>操作</th></tr></thead>
+            <thead><tr><th>租客</th><th>付款识别</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
             <tbody>
               {{range .Rows}}
               <tr class="tenant-row" tabindex="0" role="button" aria-expanded="false" aria-controls="tenant-billing-{{.ID}}" data-tenant-target="tenant-billing-{{.ID}}">
                 <td><strong>{{if .DisplayAlias}}{{.DisplayAlias}}{{else}}{{.Name}}{{end}}</strong><br>{{if .DisplayAlias}}<span class="tiny">{{.Name}}</span><br>{{end}}<span class="mono">{{.ID}}</span></td>
-                <td>{{if .PayerNameHint}}{{.PayerNameHint}}{{else}}暂无付款人别名{{end}}<br><span class="mono">编号：{{if .PayerID}}{{.PayerID}}{{else}}暂无{{end}}</span></td>
-                <td class="amount">{{.RentDisplay}}</td>
-                <td>每月 {{.DueDay}} 日<br><span class="mono">{{.RentStartDate}}{{if .RentEndDate}} 至 {{.RentEndDate}}{{end}}</span></td>
-                <td>{{if .RoomLabel}}{{.RoomLabel}}<br>{{end}}{{.RoomAddress}}{{if .PropertyHint}}<br><span class="mono">{{.PropertyHint}}</span>{{end}}</td>
+                <td>{{if .PayerNameHint}}{{.PayerNameHint}}{{else}}暂无付款人名称{{end}}<br><span class="mono">付款人 ID：{{if .PayerID}}{{.PayerID}}{{else}}暂无{{end}}</span></td>
+                <td><span class="status {{.Status}}">{{if eq .Status "active"}}有效{{else}}已停用{{end}}</span></td>
                 <td class="mono">{{.CreatedAt}}</td>
-                <td><div class="row-actions"><a class="btn subtle" href="/tenants/{{.ID}}{{if $.Search}}?search={{urlquery $.Search}}{{end}}">查看详情</a><a class="btn subtle" href="/tenants?edit={{.ID}}{{if $.Search}}&amp;search={{urlquery $.Search}}{{end}}">编辑</a></div></td>
+                <td><div class="row-actions"><a class="btn subtle" href="/tenants/{{.ID}}{{if $.Search}}?search={{urlquery $.Search}}{{end}}">查看责任</a><a class="btn subtle" href="/tenants?edit={{.ID}}{{if $.Search}}&amp;search={{urlquery $.Search}}{{end}}">编辑档案</a></div></td>
               </tr>
-              <tr id="tenant-billing-{{.ID}}" class="tenant-history-row" hidden><td colspan="7"><div class="tenant-history">
-                <div class="tenant-history-head"><h3>最近六个月缴费</h3><span class="tiny">应收账单 → 已确认流水</span></div>
+              <tr id="tenant-billing-{{.ID}}" class="tenant-history-row" hidden><td colspan="5"><div class="tenant-history">
+                <div class="tenant-history-head"><h3>最近六个月个人责任</h3><span class="tiny">责任行按月份、房间分别保留</span></div>
                 {{if .BillingHistory}}
                 <div class="table-wrap"><table class="tenant-history-table">
                   <thead><tr><th>月份</th><th>应收</th><th>实际收</th><th>未收</th><th>状态</th></tr></thead>

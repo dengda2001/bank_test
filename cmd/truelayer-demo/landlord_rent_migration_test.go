@@ -113,8 +113,8 @@ func TestLandlordRentModelsUseMigrationTableNames(t *testing.T) {
 	}{
 		{name: "property", got: (property{}).TableName(), want: "properties"},
 		{name: "room", got: (room{}).TableName(), want: "rooms"},
-		{name: "tenancy agreement", got: (tenancyAgreement{}).TableName(), want: "tenancy_agreements"},
-		{name: "agreement party", got: (agreementParty{}).TableName(), want: "agreement_parties"},
+		{name: "room rent plan", got: (roomRentPlan{}).TableName(), want: "room_rent_plans"},
+		{name: "room rent plan member", got: (roomRentPlanMember{}).TableName(), want: "room_rent_plan_members"},
 		{name: "rent charge", got: (rentCharge{}).TableName(), want: "rent_charges"},
 	}
 	for _, tc := range cases {

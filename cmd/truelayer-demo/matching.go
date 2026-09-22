@@ -22,30 +22,11 @@ func decideRentMatch(tx paymentTransactionInput, tenants []tenant, obligations [
 	if tx.Direction != "income" {
 		return matchDecision{Status: "unmatched", Reason: "not income"}
 	}
-	if tx.PayerID != "" {
-		matches := tenantsByPayerID(tenants, tx.PayerID)
-		if len(matches) == 1 {
-			return decideForTenant(tx, matches[0], obligations, "auto_id")
-		}
-		if len(matches) > 1 {
-			return matchDecision{Status: "needs_review", Reason: "multiple tenants for payer id"}
-		}
-	}
-	trustedNameMatches := tenantsByTrustedPayerName(tenants, tx.PayerName)
-	if len(trustedNameMatches) == 1 {
-		decision := decideForTenant(tx, trustedNameMatches[0], obligations, "auto_name")
-		decision.Reason = "remembered payer name"
-		return decision
-	}
-	if len(trustedNameMatches) > 1 {
-		return matchDecision{Status: "needs_review", Reason: "multiple remembered payer names"}
-	}
 	nameMatches := tenantsByName(tenants, tx.PayerName)
 	if len(nameMatches) == 1 {
 		decision := decideForTenant(tx, nameMatches[0], obligations, "manual_name")
 		if decision.Status == "matched" || decision.Status == "partial" {
 			decision.Status = "candidate"
-			decision.BackfillPayerID = tx.PayerID != "" && stringValue(nameMatches[0].PayerID) == ""
 			decision.Reason = "single name candidate"
 		}
 		return decision
@@ -222,14 +203,7 @@ func absInt(value int) int {
 }
 
 func tenantsByPayerID(tenants []tenant, payerID string) []tenant {
-	payerID = normalizeMatchText(payerID)
-	var matches []tenant
-	for _, row := range tenants {
-		if normalizeMatchText(stringValue(row.PayerID)) == payerID {
-			matches = append(matches, row)
-		}
-	}
-	return matches
+	return nil // Payer identities live in tenant_payers and use decideStrictRentMatch.
 }
 
 func tenantsByName(tenants []tenant, payerName string) []tenant {
@@ -239,7 +213,7 @@ func tenantsByName(tenants []tenant, payerName string) []tenant {
 	}
 	var matches []tenant
 	for _, row := range tenants {
-		if normalizeMatchText(row.Name) == payerName || normalizeMatchText(stringValue(row.PayerNameHint)) == payerName {
+		if normalizeMatchText(row.Name) == payerName {
 			matches = append(matches, row)
 		}
 	}
@@ -251,13 +225,7 @@ func tenantsByTrustedPayerName(tenants []tenant, payerName string) []tenant {
 	if payerName == "" {
 		return nil
 	}
-	var matches []tenant
-	for _, row := range tenants {
-		if hint := normalizeMatchText(stringValue(row.PayerNameHint)); hint != "" && hint == payerName {
-			matches = append(matches, row)
-		}
-	}
-	return matches
+	return nil // Remembered payer names are resolved from tenant_payers.
 }
 
 func normalizeMatchText(value string) string {

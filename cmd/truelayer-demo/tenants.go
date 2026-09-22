@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"math"
 	"net/mail"
 	"strconv"
@@ -16,32 +14,17 @@ import (
 )
 
 type tenant struct {
-	ID               uint64 `gorm:"primaryKey"`
-	UserID           uint64
-	Name             string
-	DisplayAlias     string
-	Email            string
-	PayerID          *string
-	PayerNameHint    *string
-	MonthlyRentCents int64
-	Currency         string
-	IntervalUnit     string
-	IntervalCount    int
-	BillingStartDate time.Time
-	DueDay           int
-	RentStartDate    time.Time
-	RentEndDate      *time.Time
-	Status           string
-	RoomLabel        string
-	RoomAddress      string
-	PropertyHint     *string
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID           uint64 `gorm:"primaryKey"`
+	UserID       uint64
+	Name         string
+	DisplayAlias string
+	Email        string
+	Status       string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
-type tenantService struct {
-	db *gorm.DB
-}
+type tenantService struct{ db *gorm.DB }
 
 type tenantPayer struct {
 	ID                  uint64 `gorm:"primaryKey"`
@@ -58,80 +41,32 @@ type tenantPayer struct {
 	UpdatedAt           time.Time
 }
 
-type tenantPayerInput struct {
-	PayerID string
-	Name    string
-}
+type tenantPayerInput struct{ PayerID, Name string }
 
 type tenantPayerRecord struct {
-	ID            string
-	PayerID       string
-	Name          string
-	Shared        bool
-	Source        string
-	LastMatchedAt string
-	RemovedAt     string
+	ID, PayerID, Name string
+	Shared            bool
+	Source            string
+	LastMatchedAt     string
+	RemovedAt         string
 }
 
+// Tenant edits contain person/contact data only. Rent and room configuration
+// is written through room rent plans on the room detail page.
 type tenantInput struct {
-	Name                  string
-	DisplayAlias          string
-	Email                 string
-	PayerID               string
-	PayerNameHint         string
-	MonthlyRent           float64
-	Currency              string
-	IntervalUnit          string
-	IntervalCount         int
-	BillingStartDate      string
-	DueDay                int
-	RentStartDate         string
-	RentEndDate           string
-	Status                string
-	RoomLabel             string
-	RoomAddress           string
-	PropertyHint          string
-	Structured            bool
-	RoomID                uint64
-	ArrangementStartMonth string
-	RoomTenantIDs         []uint64
-	Responsibilities      []rentResponsibilityInput
-	RoomPlanProvided      bool
+	Name, DisplayAlias, Email string
+	PayerID, PayerNameHint    string
+	Status                    string
 }
 
-type tenantRoomOccupantOption struct {
-	TenantID            uint64 `json:"tenant_id"`
-	Name                string `json:"name"`
-	ResponsibilityCents int64  `json:"responsibility_cents"`
-}
-
-type tenantRoomArrangementOption struct {
-	StartMonth       string                     `json:"start_month"`
-	EndMonth         string                     `json:"end_month,omitempty"`
-	MonthlyRentValue string                     `json:"monthly_rent"`
-	Currency         string                     `json:"currency"`
-	DueDay           int                        `json:"due_day"`
-	Occupants        []tenantRoomOccupantOption `json:"occupants"`
-}
-
-type tenantRoomPlanEntry struct {
-	TenantID    uint64 `json:"tenant_id"`
-	AmountCents int64  `json:"amount_cents"`
-}
-
-func newTenantService(db *gorm.DB) *tenantService {
-	return &tenantService{db: db}
-}
+func newTenantService(db *gorm.DB) *tenantService { return &tenantService{db: db} }
 
 func validateTenantPayerInput(input tenantPayerInput) error {
 	if strings.TrimSpace(input.Name) == "" {
 		return errors.New("payer name is required")
 	}
-	if len([]rune(strings.TrimSpace(input.Name))) > 191 {
-		return errors.New("payer name is too long")
-	}
-	if len([]rune(strings.TrimSpace(input.PayerID))) > 191 {
-		return errors.New("payer id is too long")
+	if len([]rune(strings.TrimSpace(input.Name))) > 191 || len([]rune(strings.TrimSpace(input.PayerID))) > 191 {
+		return errors.New("payer name or id is too long")
 	}
 	return nil
 }
@@ -143,28 +78,26 @@ func classifyTenantPayerSharing(rows []tenantPayer) []tenantPayerRecord {
 		if row.RemovedAt != nil {
 			continue
 		}
-		if row.PayerNameNormalized != "" && activeNameTenants[row.PayerNameNormalized] == nil {
-			activeNameTenants[row.PayerNameNormalized] = make(map[uint64]struct{})
-		}
 		if row.PayerNameNormalized != "" {
+			if activeNameTenants[row.PayerNameNormalized] == nil {
+				activeNameTenants[row.PayerNameNormalized] = make(map[uint64]struct{})
+			}
 			activeNameTenants[row.PayerNameNormalized][row.TenantID] = struct{}{}
 		}
 		payerID := stringValue(row.PayerID)
-		if payerID != "" && activeIDTenants[payerID] == nil {
-			activeIDTenants[payerID] = make(map[uint64]struct{})
-		}
 		if payerID != "" {
+			if activeIDTenants[payerID] == nil {
+				activeIDTenants[payerID] = make(map[uint64]struct{})
+			}
 			activeIDTenants[payerID][row.TenantID] = struct{}{}
 		}
 	}
 	result := make([]tenantPayerRecord, 0, len(rows))
 	for _, row := range rows {
 		record := tenantPayerRecord{
-			ID:      strconv.FormatUint(row.ID, 10),
-			PayerID: stringValue(row.PayerID),
-			Name:    row.PayerNameOriginal,
-			Source:  row.Source,
-			Shared:  len(activeNameTenants[row.PayerNameNormalized]) > 1 || len(activeIDTenants[stringValue(row.PayerID)]) > 1,
+			ID: strconv.FormatUint(row.ID, 10), PayerID: stringValue(row.PayerID), Name: row.PayerNameOriginal,
+			Source: row.Source,
+			Shared: len(activeNameTenants[row.PayerNameNormalized]) > 1 || len(activeIDTenants[stringValue(row.PayerID)]) > 1,
 		}
 		if row.LastMatchedAt != nil {
 			record.LastMatchedAt = row.LastMatchedAt.Format(time.RFC3339)
@@ -177,130 +110,27 @@ func classifyTenantPayerSharing(rows []tenantPayer) []tenantPayerRecord {
 	return result
 }
 
+type formValues interface{ Get(string) string }
+
 func tenantInputFromForm(values formValues) (tenantInput, error) {
-	monthlyRent := float64(0)
-	var err error
-	if strings.TrimSpace(values.Get("monthly_rent")) != "" {
-		monthlyRent, err = parsePositiveAmount(values.Get("monthly_rent"))
-		if err != nil {
-			return tenantInput{}, err
-		}
-	}
-	dueDay := 1
-	if raw := strings.TrimSpace(values.Get("due_day")); raw != "" {
-		dueDay, err = strconv.Atoi(raw)
-		if err != nil {
-			return tenantInput{}, err
-		}
-	}
-	intervalCount := 1
-	if raw := strings.TrimSpace(values.Get("interval_count")); raw != "" {
-		intervalCount, err = strconv.Atoi(raw)
-		if err != nil {
-			return tenantInput{}, err
-		}
-	}
-	roomID := uint64(0)
-	if raw := strings.TrimSpace(values.Get("room_id")); raw != "" {
-		roomID, err = strconv.ParseUint(raw, 10, 64)
-		if err != nil {
-			return tenantInput{}, err
-		}
-	}
-	rentStartDate := strings.TrimSpace(values.Get("rent_start_date"))
-	billingStartDate := strings.TrimSpace(values.Get("billing_start_date"))
-	if billingStartDate == "" {
-		billingStartDate = rentStartDate
-	}
 	input := tenantInput{
-		Name:                  strings.TrimSpace(values.Get("name")),
-		DisplayAlias:          strings.TrimSpace(values.Get("display_alias")),
-		Email:                 strings.TrimSpace(values.Get("email")),
-		PayerID:               strings.TrimSpace(values.Get("payer_id")),
-		PayerNameHint:         strings.TrimSpace(values.Get("payer_name_hint")),
-		MonthlyRent:           monthlyRent,
-		Currency:              firstNonEmpty(strings.ToUpper(strings.TrimSpace(values.Get("currency"))), "EUR"),
-		IntervalUnit:          firstNonEmpty(strings.ToLower(strings.TrimSpace(values.Get("interval_unit"))), "month"),
-		IntervalCount:         intervalCount,
-		BillingStartDate:      billingStartDate,
-		DueDay:                dueDay,
-		RentStartDate:         rentStartDate,
-		RentEndDate:           strings.TrimSpace(values.Get("rent_end_date")),
-		Status:                firstNonEmpty(strings.ToLower(strings.TrimSpace(values.Get("status"))), "active"),
-		RoomLabel:             strings.TrimSpace(values.Get("room_label")),
-		RoomAddress:           strings.TrimSpace(values.Get("room_address")),
-		PropertyHint:          strings.TrimSpace(values.Get("property_hint")),
-		Structured:            strings.TrimSpace(values.Get("structured")) == "1" || roomID != 0 || strings.TrimSpace(values.Get("arrangement_start_month")) != "",
-		RoomID:                roomID,
-		ArrangementStartMonth: strings.TrimSpace(values.Get("arrangement_start_month")),
+		Name: strings.TrimSpace(values.Get("name")), DisplayAlias: strings.TrimSpace(values.Get("display_alias")),
+		Email: strings.TrimSpace(values.Get("email")), PayerID: strings.TrimSpace(values.Get("payer_id")),
+		PayerNameHint: strings.TrimSpace(values.Get("payer_name_hint")),
+		Status:        firstNonEmpty(strings.ToLower(strings.TrimSpace(values.Get("status"))), "active"),
 	}
-	if input.Structured && input.ArrangementStartMonth != "" {
-		if _, err := parsePeriodMonth(input.ArrangementStartMonth); err != nil {
-			return tenantInput{}, errors.New("arrangement effective month is invalid")
-		}
-	}
-	if rawPlan := strings.TrimSpace(values.Get("room_plan")); rawPlan != "" {
-		if len(rawPlan) > 64*1024 {
-			return tenantInput{}, errors.New("room responsibility plan is too large")
-		}
-		var entries []tenantRoomPlanEntry
-		if err := json.Unmarshal([]byte(rawPlan), &entries); err != nil || len(entries) == 0 {
-			return tenantInput{}, errors.New("room responsibility plan is invalid")
-		}
-		input.RoomPlanProvided = true
-		seen := make(map[uint64]struct{}, len(entries))
-		const maxCents = int64(^uint64(0) >> 1)
-		var total int64
-		newTenantCount := 0
-		for _, entry := range entries {
-			if entry.AmountCents <= 0 || total > maxCents-entry.AmountCents {
-				return tenantInput{}, errors.New("room responsibility amount must be positive")
-			}
-			if entry.TenantID == 0 {
-				newTenantCount++
-				if newTenantCount > 1 {
-					return tenantInput{}, errors.New("room responsibility plan has duplicate new tenant")
-				}
-			} else {
-				if _, exists := seen[entry.TenantID]; exists {
-					return tenantInput{}, errors.New("room responsibility plan has duplicate tenant")
-				}
-				seen[entry.TenantID] = struct{}{}
-				input.RoomTenantIDs = append(input.RoomTenantIDs, entry.TenantID)
-			}
-			input.Responsibilities = append(input.Responsibilities, rentResponsibilityInput{TenantID: entry.TenantID, AmountCents: entry.AmountCents})
-			total += entry.AmountCents
-		}
-		if input.RoomID == 0 || !input.Structured || moneyToCents(input.MonthlyRent) <= 0 {
-			return tenantInput{}, errors.New("room and positive rent are required for a responsibility plan")
-		}
-		if total != moneyToCents(input.MonthlyRent) {
-			return tenantInput{}, fmt.Errorf("room responsibility sum %d does not equal room rent %d", total, moneyToCents(input.MonthlyRent))
-		}
-		currentTenantRaw := strings.TrimSpace(values.Get("tenant_id"))
-		if currentTenantRaw == "" && newTenantCount != 1 {
-			return tenantInput{}, errors.New("new tenant must be included in room responsibilities")
-		}
-		if currentTenantRaw != "" {
-			currentTenantID, parseErr := strconv.ParseUint(currentTenantRaw, 10, 64)
-			if parseErr != nil || currentTenantID == 0 {
-				return tenantInput{}, errors.New("current tenant id is invalid")
-			}
-			if _, exists := seen[currentTenantID]; !exists {
-				return tenantInput{}, errors.New("current tenant must remain in room responsibilities")
-			}
-		}
+	if err := validateTenantInput(input); err != nil {
+		return tenantInput{}, err
 	}
 	return input, nil
 }
 
-type formValues interface {
-	Get(string) string
-}
-
 func validateTenantInput(input tenantInput) error {
-	if input.Name == "" {
+	if strings.TrimSpace(input.Name) == "" {
 		return errors.New("tenant name is required")
+	}
+	if len([]rune(input.Name)) > 191 || len([]rune(input.DisplayAlias)) > 191 {
+		return errors.New("tenant name is too long")
 	}
 	if input.Email != "" {
 		parsed, err := mail.ParseAddress(input.Email)
@@ -308,79 +138,14 @@ func validateTenantInput(input tenantInput) error {
 			return errors.New("email must be a valid email address")
 		}
 	}
-	if _, err := normalizeLedgerCurrency(firstNonEmpty(input.Currency, ledgerCurrencyEUR)); err != nil {
-		return err
-	}
-	if input.Structured {
-		if input.MonthlyRent < 0 {
-			return errors.New("monthly rent cannot be negative")
-		}
-		if input.Status != "active" && input.Status != "inactive" {
-			return errors.New("status must be active or inactive")
-		}
-		if input.RoomID == 0 && input.ArrangementStartMonth != "" {
-			if _, err := parsePeriodMonth(input.ArrangementStartMonth); err != nil {
-				return fmt.Errorf("invalid arrangement start month: %w", err)
-			}
-		}
-		if input.RentStartDate != "" {
-			if _, err := parseDate(input.RentStartDate); err != nil {
-				return fmt.Errorf("invalid rent start date: %w", err)
-			}
-		}
-		if input.RentEndDate != "" {
-			if _, err := parseDate(input.RentEndDate); err != nil {
-				return fmt.Errorf("invalid rent end date: %w", err)
-			}
-		}
-		return nil
-	}
-	if input.MonthlyRent <= 0 {
-		return errors.New("monthly rent must be positive")
-	}
-	if input.IntervalUnit != "month" {
-		return errors.New("only monthly rent interval is supported in phase 1")
-	}
-	if input.IntervalCount != 1 {
-		return errors.New("only interval_count=1 is supported in phase 1")
-	}
-	if input.DueDay < 1 || input.DueDay > 31 {
-		return errors.New("due day must be between 1 and 31")
-	}
-	if input.RoomAddress == "" {
-		return errors.New("room address is required")
-	}
-	if input.RentStartDate == "" {
-		return errors.New("rent start date is required")
-	}
-	if input.BillingStartDate == "" {
-		return errors.New("billing start date is required")
-	}
-	rentStart, err := parseDate(input.RentStartDate)
-	if err != nil {
-		return fmt.Errorf("invalid rent start date: %w", err)
-	}
-	billingStart, err := parseDate(input.BillingStartDate)
-	if err != nil {
-		return fmt.Errorf("invalid billing start date: %w", err)
-	}
-	if billingStart.Before(rentStart) {
-		return errors.New("billing start date cannot be before rent start date")
-	}
-	if input.RentEndDate != "" {
-		rentEnd, err := parseDate(input.RentEndDate)
-		if err != nil {
-			return fmt.Errorf("invalid rent end date: %w", err)
-		}
-		if rentEnd.Before(rentStart) {
-			return errors.New("rent end date cannot be before rent start date")
-		}
-		if billingStart.After(rentEnd) {
-			return errors.New("billing start date must be within rent period")
-		}
-	}
 	if input.Status != "active" && input.Status != "inactive" {
 		return errors.New("status must be active or inactive")
+	}
+	if input.PayerNameHint != "" {
+		return validateTenantPayerInput(tenantPayerInput{Name: input.PayerNameHint, PayerID: input.PayerID})
+	}
+	if input.PayerID != "" {
+		return errors.New("payer name is required with payer id")
 	}
 	return nil
 }
@@ -390,15 +155,8 @@ func isValidationError(err error) bool {
 		return false
 	}
 	text := err.Error()
-	return strings.Contains(text, "required") ||
-		strings.Contains(text, "must be") ||
-		strings.Contains(text, "invalid") ||
-		strings.Contains(text, "supported") ||
-		strings.Contains(text, "too long") ||
-		strings.Contains(text, "effective rent payments")
+	return strings.Contains(text, "required") || strings.Contains(text, "must be") || strings.Contains(text, "invalid") || strings.Contains(text, "too long")
 }
-
-var errTenantLifecycleConflict = errors.New("tenant has effective rent payments in future obligations")
 
 func (s *tenantService) createTenant(ctx context.Context, userID uint64, input tenantInput) (tenant, error) {
 	if userID == 0 {
@@ -407,121 +165,17 @@ func (s *tenantService) createTenant(ctx context.Context, userID uint64, input t
 	if err := validateTenantInput(input); err != nil {
 		return tenant{}, err
 	}
-	currency, _ := normalizeLedgerCurrency(firstNonEmpty(input.Currency, ledgerCurrencyEUR))
-	intervalUnit := firstNonEmpty(input.IntervalUnit, "month")
-	intervalCount := input.IntervalCount
-	if intervalCount == 0 {
-		intervalCount = 1
-	}
-	dueDay := input.DueDay
-	if dueDay == 0 {
-		dueDay = 1
-	}
-	billingStart, _ := parseDate(input.BillingStartDate)
-	rentStart, _ := parseDate(input.RentStartDate)
-	effectiveMonth := monthStart(time.Now().UTC())
-	if input.Structured {
-		if input.ArrangementStartMonth != "" {
-			parsedMonth, parseErr := parsePeriodMonth(input.ArrangementStartMonth)
-			if parseErr != nil {
-				return tenant{}, errors.New("arrangement effective month is invalid")
-			}
-			effectiveMonth = parsedMonth
-		} else if !rentStart.IsZero() {
-			effectiveMonth = monthStart(rentStart)
-		}
-		billingStart, rentStart = effectiveMonth, effectiveMonth
-	}
-	var rentEnd *time.Time
-	if input.RentEndDate != "" {
-		d, _ := parseDate(input.RentEndDate)
-		rentEnd = &d
-	}
-	monthlyRentCents := moneyToCents(input.MonthlyRent)
-	if input.Structured {
-		monthlyRentCents = 0
-	}
-	var row tenant
-	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		row = tenant{
-			UserID:           userID,
-			Name:             input.Name,
-			DisplayAlias:     input.DisplayAlias,
-			Email:            input.Email,
-			PayerID:          nullableString(input.PayerID),
-			PayerNameHint:    nullableString(input.PayerNameHint),
-			MonthlyRentCents: monthlyRentCents,
-			Currency:         currency,
-			IntervalUnit:     intervalUnit,
-			IntervalCount:    intervalCount,
-			BillingStartDate: billingStart,
-			DueDay:           dueDay,
-			RentStartDate:    rentStart,
-			RentEndDate:      rentEnd,
-			Status:           input.Status,
-			RoomLabel:        input.RoomLabel,
-			RoomAddress:      input.RoomAddress,
-			PropertyHint:     nullableString(input.PropertyHint),
-		}
-		if err := tx.WithContext(ctx).Create(&row).Error; err != nil {
+	row := tenant{UserID: userID, Name: input.Name, DisplayAlias: input.DisplayAlias, Email: input.Email, Status: input.Status}
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&row).Error; err != nil {
 			return err
 		}
-		if strings.TrimSpace(input.PayerNameHint) != "" {
-			payer := tenantPayer{
-				UserID:              userID,
-				TenantID:            row.ID,
-				PayerID:             nullableString(input.PayerID),
-				PayerNameOriginal:   strings.TrimSpace(input.PayerNameHint),
-				PayerNameNormalized: normalizeTenantPayerName(input.PayerNameHint),
-				Source:              "tenant_profile",
-			}
-			if err := tx.WithContext(ctx).Create(&payer).Error; err != nil {
-				return err
-			}
-		}
-		if input.Structured && input.RoomID != 0 {
-			if input.Status != "active" {
-				return errors.New("inactive tenant cannot be bound to a room")
-			}
-			tenantIDs := make([]uint64, 0, len(input.RoomTenantIDs)+1)
-			responsibilities := append([]rentResponsibilityInput(nil), input.Responsibilities...)
-			if input.RoomPlanProvided {
-				tenantIDs = append(tenantIDs, input.RoomTenantIDs...)
-				for index := range responsibilities {
-					if responsibilities[index].TenantID == 0 {
-						responsibilities[index].TenantID = row.ID
-					}
-				}
-			} else {
-				var existing tenancyAgreement
-				lookupErr := tx.Where("user_id = ? AND room_id = ? AND status = ? AND start_date <= ? AND (end_date IS NULL OR end_date >= ?)", userID, input.RoomID, "active", effectiveMonth.AddDate(0, 1, -1), effectiveMonth).Order("start_date DESC, id DESC").First(&existing).Error
-				if lookupErr == nil {
-					var parties []agreementParty
-					if err := tx.Where("user_id = ? AND agreement_id = ? AND status = ?", userID, existing.ID, "active").Find(&parties).Error; err != nil {
-						return err
-					}
-					for _, party := range parties {
-						tenantIDs = append(tenantIDs, party.TenantID)
-					}
-				} else if !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
-					return lookupErr
-				}
-			}
-			tenantIDs = append(tenantIDs, row.ID)
-			_, err := saveRentArrangementInTx(tx, userID, rentArrangementInput{
-				RoomID: input.RoomID, EffectiveMonth: effectiveMonth,
-				MonthlyRentCents: moneyToCents(input.MonthlyRent), Currency: currency,
-				DueDay: dueDay, TenantIDs: tenantIDs, Responsibilities: responsibilities,
-			})
-			if err != nil {
-				return err
-			}
+		if input.PayerNameHint != "" {
+			return addTenantPayerInTx(tx, userID, row.ID, tenantPayerInput{PayerID: input.PayerID, Name: input.PayerNameHint}, "tenant_profile")
 		}
 		return nil
-	}); err != nil {
-		return tenant{}, err
-	}
-	return row, nil
+	})
+	return row, err
 }
 
 func (s *tenantService) updateTenant(ctx context.Context, userID, tenantID uint64, input tenantInput) (tenant, error) {
@@ -531,68 +185,20 @@ func (s *tenantService) updateTenant(ctx context.Context, userID, tenantID uint6
 	if err := validateTenantInput(input); err != nil {
 		return tenant{}, err
 	}
-	currency, _ := normalizeLedgerCurrency(input.Currency)
-	billingStart, _ := parseDate(input.BillingStartDate)
-	rentStart, _ := parseDate(input.RentStartDate)
-	var rentEnd *time.Time
-	if input.RentEndDate != "" {
-		d, _ := parseDate(input.RentEndDate)
-		rentEnd = &d
-	}
-	monthlyRentCents := moneyToCents(input.MonthlyRent)
-	if input.Structured {
-		monthlyRentCents = 0
-	}
-	effectiveMonth := monthStart(time.Now().UTC())
-	if input.Structured && input.ArrangementStartMonth != "" {
-		parsedMonth, parseErr := parsePeriodMonth(input.ArrangementStartMonth)
-		if parseErr != nil {
-			return tenant{}, errors.New("arrangement effective month is invalid")
-		}
-		effectiveMonth = parsedMonth
-	}
 	var row tenant
-	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", tenantID, userID).First(&row).Error; err != nil {
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", tenantID, userID).First(&row).Error; err != nil {
 			return err
 		}
-		if err := voidFutureTenantObligations(tx.WithContext(ctx), userID, tenantID, row.RentEndDate, rentEnd, userID); err != nil {
+		if err := tx.Model(&row).Updates(map[string]any{"name": input.Name, "display_alias": input.DisplayAlias, "email": input.Email, "status": input.Status}).Error; err != nil {
 			return err
 		}
-		if input.Structured {
-			dueDay := input.DueDay
-			if dueDay == 0 {
-				dueDay = 1
-			}
-			if err := syncTenantRoomBindingInTx(
-				tx.WithContext(ctx), userID, tenantID, input.RoomID,
-				effectiveMonth, moneyToCents(input.MonthlyRent), currency, dueDay, input.Status,
-				input.RoomTenantIDs, input.Responsibilities,
-			); err != nil {
-				return err
-			}
+		if input.PayerNameHint != "" {
+			return addTenantPayerInTx(tx, userID, tenantID, tenantPayerInput{PayerID: input.PayerID, Name: input.PayerNameHint}, "tenant_profile")
 		}
-		updates := map[string]any{
-			"name":               input.Name,
-			"display_alias":      input.DisplayAlias,
-			"email":              input.Email,
-			"payer_id":           nullableString(input.PayerID),
-			"payer_name_hint":    nullableString(input.PayerNameHint),
-			"monthly_rent_cents": monthlyRentCents,
-			"currency":           currency,
-			"interval_unit":      input.IntervalUnit,
-			"interval_count":     input.IntervalCount,
-			"billing_start_date": billingStart,
-			"due_day":            input.DueDay,
-			"rent_start_date":    rentStart,
-			"rent_end_date":      rentEnd,
-			"status":             input.Status,
-			"room_label":         input.RoomLabel,
-			"room_address":       input.RoomAddress,
-			"property_hint":      nullableString(input.PropertyHint),
-		}
-		return tx.WithContext(ctx).Model(&row).Updates(updates).Error
-	}); err != nil {
+		return nil
+	})
+	if err != nil {
 		return tenant{}, err
 	}
 	if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", tenantID, userID).First(&row).Error; err != nil {
@@ -601,75 +207,31 @@ func (s *tenantService) updateTenant(ctx context.Context, userID, tenantID uint6
 	return row, nil
 }
 
-func obligationIsAfterRentEnd(periodMonth time.Time, rentEnd *time.Time) bool {
-	return rentEnd != nil && monthStart(periodMonth).After(monthStart(*rentEnd))
-}
-
-func voidFutureTenantObligations(tx *gorm.DB, userID, tenantID uint64, previousEnd, newEnd *time.Time, voidedBy uint64) error {
-	shortened := newEnd != nil && (previousEnd == nil || newEnd.Before(*previousEnd))
-	if !shortened {
-		return nil
-	}
-	cutoff := monthStart(*newEnd).AddDate(0, 1, 0)
-	var obligations []rentObligation
-	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND tenant_id = ? AND period_month >= ? AND record_status = ?", userID, tenantID, cutoff, obligationRecordActive).Find(&obligations).Error; err != nil {
-		return err
-	}
-	for _, obligation := range obligations {
-		var count int64
-		if err := tx.Model(&paymentAllocation{}).
-			Where("user_id = ? AND rent_obligation_id = ? AND status = ?", userID, obligation.ID, allocationStatusConfirmed).
-			Where("(allocation_kind = ? OR allocation_kind IS NULL OR allocation_kind = '')", allocationKindRent).
-			Count(&count).Error; err != nil {
-			return err
-		}
-		if count > 0 {
-			return errTenantLifecycleConflict
-		}
-	}
-	now := time.Now().UTC()
-	return tx.Model(&rentObligation{}).
-		Where("user_id = ? AND tenant_id = ? AND period_month >= ? AND record_status = ?", userID, tenantID, cutoff, obligationRecordActive).
-		Updates(map[string]any{
-			"status":            obligationRecordVoided,
-			"record_status":     obligationRecordVoided,
-			"voided_at":         now,
-			"voided_by_user_id": voidedBy,
-			"void_reason":       "tenant rent ended early",
-		}).Error
-}
-
 func (s *tenantService) listTenants(ctx context.Context, userID uint64) ([]tenantRecord, error) {
 	var rows []tenant
-	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Order("name ASC").Find(&rows).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Order("name ASC, id ASC").Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	type tenantRoomBinding struct {
-		TenantID uint64
-		RoomID   uint64
-	}
-	currentMonth := monthStart(time.Now().UTC())
-	periodEnd := currentMonth.AddDate(0, 1, 0).Add(-time.Nanosecond)
-	var bindings []tenantRoomBinding
-	if err := s.db.WithContext(ctx).Table("tenancy_agreements AS ta").
-		Joins("JOIN agreement_parties AS ap ON ap.agreement_id = ta.id AND ap.user_id = ta.user_id").
-		Where("ta.user_id = ? AND ta.status = ? AND ap.status = ? AND ta.start_date <= ? AND (ta.end_date IS NULL OR ta.end_date >= ?) AND (ap.joined_at IS NULL OR ap.joined_at <= ?) AND (ap.left_at IS NULL OR ap.left_at >= ?)", userID, "active", "active", periodEnd, currentMonth, periodEnd, currentMonth).
-		Select("ap.tenant_id, ta.room_id").Order("ap.tenant_id ASC, ta.start_date DESC, ta.id DESC").Find(&bindings).Error; err != nil {
+	var payers []tenantPayer
+	if err := s.db.WithContext(ctx).Where("user_id = ? AND removed_at IS NULL", userID).Order("created_at ASC, id ASC").Find(&payers).Error; err != nil {
 		return nil, err
 	}
-	roomByTenant := make(map[uint64]uint64, len(bindings))
-	for _, binding := range bindings {
-		if _, exists := roomByTenant[binding.TenantID]; !exists {
-			roomByTenant[binding.TenantID] = binding.RoomID
+	firstPayer := make(map[uint64]tenantPayer)
+	for _, payer := range payers {
+		if _, ok := firstPayer[payer.TenantID]; !ok {
+			firstPayer[payer.TenantID] = payer
 		}
 	}
-	records := make([]tenantRecord, 0, len(rows))
+	result := make([]tenantRecord, 0, len(rows))
 	for _, row := range rows {
 		record := tenantRecordFromModel(row)
-		record.RoomID = roomByTenant[row.ID]
-		records = append(records, record)
+		if payer, ok := firstPayer[row.ID]; ok {
+			record.PayerID = stringValue(payer.PayerID)
+			record.PayerNameHint = payer.PayerNameOriginal
+		}
+		result = append(result, record)
 	}
-	return records, nil
+	return result, nil
 }
 
 func (s *tenantService) listTenantPayers(ctx context.Context, userID, tenantID uint64, includeRemoved bool) ([]tenantPayer, error) {
@@ -681,63 +243,51 @@ func (s *tenantService) listTenantPayers(ctx context.Context, userID, tenantID u
 		query = query.Where("removed_at IS NULL")
 	}
 	var rows []tenantPayer
-	if err := query.Order("created_at ASC, id ASC").Find(&rows).Error; err != nil {
-		return nil, err
-	}
-	return rows, nil
+	err := query.Order("created_at ASC, id ASC").Find(&rows).Error
+	return rows, err
 }
 
 func (s *tenantService) addTenantPayer(ctx context.Context, userID, tenantID uint64, input tenantPayerInput) (tenantPayer, error) {
 	if userID == 0 || tenantID == 0 {
 		return tenantPayer{}, errors.New("userID and tenantID are required")
 	}
-	input.Name = strings.TrimSpace(input.Name)
-	input.PayerID = strings.TrimSpace(input.PayerID)
+	input.Name, input.PayerID = strings.TrimSpace(input.Name), strings.TrimSpace(input.PayerID)
 	if err := validateTenantPayerInput(input); err != nil {
 		return tenantPayer{}, err
 	}
-	var payerRow tenantPayer
+	var result tenantPayer
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var row tenant
-		if err := tx.WithContext(ctx).Where("id = ? AND user_id = ?", tenantID, userID).First(&row).Error; err != nil {
+		if err := tx.Where("id = ? AND user_id = ?", tenantID, userID).First(&tenant{}).Error; err != nil {
 			return err
 		}
-		name := normalizeTenantPayerName(input.Name)
-		var existing []tenantPayer
-		if err := tx.WithContext(ctx).Where("user_id = ? AND tenant_id = ? AND payer_name_normalized = ? AND removed_at IS NULL", userID, tenantID, name).Find(&existing).Error; err != nil {
-			return err
-		}
-		for _, candidate := range existing {
-			if stringValue(candidate.PayerID) == input.PayerID {
-				payerRow = candidate
-				return syncLegacyPayerFields(tx.WithContext(ctx), userID, tenantID)
-			}
-		}
-		payerRow = tenantPayer{
-			UserID:              userID,
-			TenantID:            tenantID,
-			PayerID:             nullableString(input.PayerID),
-			PayerNameOriginal:   input.Name,
-			PayerNameNormalized: name,
-			Source:              "manual",
-		}
-		if err := tx.WithContext(ctx).Create(&payerRow).Error; err != nil {
-			return err
-		}
-		return syncLegacyPayerFields(tx.WithContext(ctx), userID, tenantID)
+		result = tenantPayer{UserID: userID, TenantID: tenantID, PayerID: nullableString(input.PayerID), PayerNameOriginal: input.Name, PayerNameNormalized: normalizeTenantPayerName(input.Name), Source: "manual"}
+		return addTenantPayerInTx(tx, userID, tenantID, input, "manual")
 	})
 	if err != nil {
 		return tenantPayer{}, err
 	}
-	return payerRow, nil
+	_ = s.db.WithContext(ctx).Where("user_id = ? AND tenant_id = ? AND payer_name_normalized = ? AND removed_at IS NULL", userID, tenantID, result.PayerNameNormalized).Order("id DESC").First(&result).Error
+	return result, nil
 }
 
-// rememberTenantPayer records the payer only after a manual allocation has
-// committed. A missing bank name is not enough to create a tenant_payers row;
-// the original transaction remains available for later manual review.
+func addTenantPayerInTx(tx *gorm.DB, userID, tenantID uint64, input tenantPayerInput, source string) error {
+	name := normalizeTenantPayerName(input.Name)
+	var existing tenantPayer
+	err := tx.Where("user_id = ? AND tenant_id = ? AND payer_name_normalized = ? AND removed_at IS NULL", userID, tenantID, name).Order("id DESC").First(&existing).Error
+	if err == nil {
+		if stringValue(existing.PayerID) == input.PayerID {
+			return nil
+		}
+		return tx.Model(&existing).Update("payer_id", nullableString(input.PayerID)).Error
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	return tx.Create(&tenantPayer{UserID: userID, TenantID: tenantID, PayerID: nullableString(input.PayerID), PayerNameOriginal: strings.TrimSpace(input.Name), PayerNameNormalized: name, Source: source}).Error
+}
+
 func (s *tenantService) rememberTenantPayer(ctx context.Context, userID, tenantID uint64, payerID, payerName string) error {
-	payerName = strings.TrimSpace(payerName)
-	payerID = strings.TrimSpace(payerID)
+	payerName, payerID = strings.TrimSpace(payerName), strings.TrimSpace(payerID)
 	if payerName == "" {
 		return nil
 	}
@@ -745,38 +295,11 @@ func (s *tenantService) rememberTenantPayer(ctx context.Context, userID, tenantI
 		return err
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var tenantRow tenant
-		if err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", tenantID, userID).First(&tenantRow).Error; err != nil {
+		var row tenant
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", tenantID, userID).First(&row).Error; err != nil {
 			return err
 		}
-		normalized := normalizeTenantPayerName(payerName)
-		var rows []tenantPayer
-		if err := tx.WithContext(ctx).Where("user_id = ? AND tenant_id = ? AND payer_name_normalized = ? AND removed_at IS NULL", userID, tenantID, normalized).Find(&rows).Error; err != nil {
-			return err
-		}
-		now := time.Now().UTC()
-		for _, row := range rows {
-			if stringValue(row.PayerID) != payerID {
-				continue
-			}
-			return tx.WithContext(ctx).Model(&tenantPayer{}).Where("id = ? AND user_id = ?", row.ID, userID).Updates(map[string]any{
-				"last_matched_at":     now,
-				"payer_name_original": payerName,
-			}).Error
-		}
-		payerRow := tenantPayer{
-			UserID:              userID,
-			TenantID:            tenantID,
-			PayerID:             nullableString(payerID),
-			PayerNameOriginal:   payerName,
-			PayerNameNormalized: normalized,
-			Source:              "matched_transaction",
-			LastMatchedAt:       &now,
-		}
-		if err := tx.WithContext(ctx).Create(&payerRow).Error; err != nil {
-			return err
-		}
-		return syncLegacyPayerFields(tx.WithContext(ctx), userID, tenantID)
+		return addTenantPayerInTx(tx, userID, tenantID, tenantPayerInput{Name: payerName, PayerID: payerID}, "matched_transaction")
 	})
 }
 
@@ -784,77 +307,30 @@ func (s *tenantService) removeTenantPayer(ctx context.Context, userID, tenantID,
 	if userID == 0 || tenantID == 0 || payerID == 0 || removedBy == 0 {
 		return errors.New("userID, tenantID, payerID, and removedBy are required")
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		now := time.Now().UTC()
-		result := tx.Model(&tenantPayer{}).
-			Where("id = ? AND user_id = ? AND tenant_id = ? AND removed_at IS NULL", payerID, userID, tenantID).
-			Updates(map[string]any{"removed_at": now, "removed_by_user_id": removedBy})
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected == 0 {
-			return gorm.ErrRecordNotFound
-		}
-		return syncLegacyPayerFields(tx, userID, tenantID)
-	})
-}
-
-func syncLegacyPayerFields(tx *gorm.DB, userID, tenantID uint64) error {
-	var rows []tenantPayer
-	if err := tx.Where("user_id = ? AND tenant_id = ? AND removed_at IS NULL", userID, tenantID).Order("created_at ASC, id ASC").Find(&rows).Error; err != nil {
-		return err
+	result := s.db.WithContext(ctx).Model(&tenantPayer{}).Where("id = ? AND user_id = ? AND tenant_id = ? AND removed_at IS NULL", payerID, userID, tenantID).Updates(map[string]any{"removed_at": time.Now().UTC(), "removed_by_user_id": removedBy})
+	if result.Error != nil {
+		return result.Error
 	}
-	updates := map[string]any{"payer_id": nil, "payer_name_hint": nil}
-	if len(rows) > 0 {
-		updates["payer_id"] = rows[0].PayerID
-		updates["payer_name_hint"] = rows[0].PayerNameOriginal
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
 	}
-	return tx.Model(&tenant{}).Where("id = ? AND user_id = ?", tenantID, userID).Updates(updates).Error
+	return nil
 }
 
 func tenantRecordFromModel(row tenant) tenantRecord {
-	record := tenantRecord{
-		ID:               strconv.FormatUint(row.ID, 10),
-		Name:             row.Name,
-		DisplayAlias:     row.DisplayAlias,
-		Email:            row.Email,
-		PayerID:          stringValue(row.PayerID),
-		PayerNameHint:    stringValue(row.PayerNameHint),
-		MonthlyRent:      centsToMoney(row.MonthlyRentCents),
-		Currency:         row.Currency,
-		IntervalUnit:     row.IntervalUnit,
-		IntervalCount:    row.IntervalCount,
-		BillingStartDate: row.BillingStartDate.Format(dateLayout),
-		DueDay:           row.DueDay,
-		RentStartDate:    row.RentStartDate.Format(dateLayout),
-		Status:           row.Status,
-		RoomLabel:        row.RoomLabel,
-		RoomAddress:      row.RoomAddress,
-		PropertyHint:     stringValue(row.PropertyHint),
-		CreatedAt:        row.CreatedAt.Format(time.RFC3339),
-	}
-	if row.RentEndDate != nil {
-		record.RentEndDate = row.RentEndDate.Format(dateLayout)
-	}
-	record.RentDisplay = formatMoney(record.MonthlyRent, record.Currency, 2)
-	return record
+	return tenantRecord{ID: strconv.FormatUint(row.ID, 10), Name: row.Name, DisplayAlias: row.DisplayAlias, Email: row.Email, Status: row.Status, CreatedAt: row.CreatedAt.Format(time.RFC3339)}
 }
 
 func normalizeTenantPayerName(value string) string {
-	return normalizeMatchText(value)
+	return strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(value))), " ")
 }
 
 func parseDate(value string) (time.Time, error) {
 	return time.Parse(dateLayout, strings.TrimSpace(value))
 }
 
-func moneyToCents(amount float64) int64 {
-	return int64(math.Round(amount * 100))
-}
-
-func centsToMoney(cents int64) float64 {
-	return float64(cents) / 100
-}
+func moneyToCents(amount float64) int64 { return int64(math.Round(amount * 100)) }
+func centsToMoney(cents int64) float64  { return float64(cents) / 100 }
 
 func nullableString(value string) *string {
 	value = strings.TrimSpace(value)

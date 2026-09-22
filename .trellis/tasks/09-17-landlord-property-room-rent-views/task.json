@@ -1,0 +1,33 @@
+{
+  "id": "landlord-property-room-rent-views",
+  "name": "landlord-property-room-rent-views",
+  "title": "房间入住与租金计划（方案 A）",
+  "description": "前台不引入租约入口，以房间详情作为入住成员、月租、缴租日与责任金额的唯一写入口；租客详情与首页按月份展示房间级租金责任。",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": "cmd/truelayer-demo,migrations,cmd/rentops-e2e",
+  "package": "rentops",
+  "priority": "P2",
+  "creator": "dengda.dd",
+  "assignee": "dengda.dd",
+  "createdAt": "2026-09-17",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "migrations/014_room_rent_plan_reset.sql",
+    "cmd/truelayer-demo/room_rent_plans.go",
+    "cmd/truelayer-demo/monthly_rent_facts.go",
+    "cmd/truelayer-demo/rent_workspace.go",
+    "cmd/truelayer-demo/tenant_detail.go",
+    "cmd/truelayer-demo/web/templates/pages/room-detail.html"
+  ],
+  "notes": "",
+  "meta": {}
+}

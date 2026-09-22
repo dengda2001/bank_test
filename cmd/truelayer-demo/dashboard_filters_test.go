@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -175,11 +174,7 @@ func TestBillsPageDistinguishesNoMatchesFromNoBills(t *testing.T) {
 // loudly instead of silently degrading to demo data. Mirrors the analogous
 // dunning guard (TestDunningPOSTRejectsLegacySessionWithoutDatabase).
 func TestRentDashboardWithoutDatabaseReturnsServiceUnavailable(t *testing.T) {
-	dir := t.TempDir()
 	a := testApp()
-	a.cfg.TenantFile = filepath.Join(dir, "tenants.json")
-	a.cfg.ExpenseFile = filepath.Join(dir, "expenses.json")
-	a.cfg.LogFile = filepath.Join(dir, "bank-data.jsonl")
 	req := httptest.NewRequest(http.MethodGet, "/rent-dashboard?period=2026-09", nil)
 	req.AddCookie(sessionCookie(a.cfg, time.Now().Add(sessionTTL)))
 	rec := httptest.NewRecorder()

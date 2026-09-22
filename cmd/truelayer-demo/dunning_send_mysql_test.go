@@ -52,9 +52,6 @@ func TestDunningSendWorkflowOnMySQL(t *testing.T) {
 		input := validTenantInputForProfile()
 		input.Name = name
 		input.Email = email
-		input.MonthlyRent = 1000
-		input.RentStartDate = "2026-01-01"
-		input.BillingStartDate = "2026-01-01"
 		created, err := newTenantService(db).createTenant(ctx, userID, input)
 		if err != nil {
 			t.Fatal(err)

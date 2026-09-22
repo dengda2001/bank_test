@@ -1,223 +1,26 @@
 {{define "tenant-form-drawer"}}
 <div class="entity-drawer-backdrop"><section class="entity-drawer tenant-drawer" role="dialog" aria-modal="true" aria-labelledby="tenant-form-title">
-  <div class="panel-head"><div><h2 id="tenant-form-title">{{if .Editing}}编辑租客资料{{else}}新增租客{{end}}</h2><p class="tiny">先保存人员与付款识别；房间是可选的，租金以房间资料为准。</p></div><a class="drawer-close" href="{{.ReturnURL}}" aria-label="关闭租客表单">×</a></div>
-  {{if .Error}}<div class="notice error" role="alert">{{if eq .Error "tenant_has_payments"}}无法提前结束入住：结束月份之后的租金责任已有有效收款，请先更正或撤销相关收款。{{else if eq .Error "tenant_room_locked"}}当前月或之后已有已生成的租金责任，无法更改该月的入住分担。{{else if eq .Error "tenant_room_conflict"}}无法完成入住：所选月份的责任已存在或租客已绑定其他房间，请选择可调整月份并检查分担成员。{{else}}请检查姓名、邮箱和所选房间的入住信息。{{end}}</div>{{end}}
+  <div class="panel-head"><div><h2 id="tenant-form-title">{{if .Editing}}编辑租客资料{{else}}新增租客{{end}}</h2><p class="tiny">租客资料用于识别人和联系信息；入住与租金在房间详情中维护。</p></div><a class="drawer-close" href="{{.ReturnURL}}" aria-label="关闭租客表单">×</a></div>
+  {{if .Error}}<div class="notice error" role="alert">请检查租客姓名、邮箱和付款人资料。</div>{{end}}
   <form method="post" action="/tenants">
     <input type="hidden" name="return_to" value="{{.PostReturnURL}}">
     {{if .Editing}}<input type="hidden" name="tenant_id" value="{{.Form.ID}}">{{end}}
-    <fieldset class="tenant-form-section"><legend>租客资料</legend>
+    <fieldset class="tenant-form-section"><legend>人员资料</legend>
       <label for="name">租客姓名</label>
-      <input id="name" name="name" autocomplete="name" value="{{.Form.Name}}" required>
+      <input id="name" name="name" autocomplete="name" value="{{.Form.Name}}" maxlength="191" required>
       <label for="display_alias">显示别名</label>
-      <input id="display_alias" name="display_alias" value="{{.Form.DisplayAlias}}" placeholder="列表优先显示的称呼">
+      <input id="display_alias" name="display_alias" value="{{.Form.DisplayAlias}}" maxlength="191" placeholder="列表优先显示的称呼">
       <label for="email">邮箱</label>
       <input id="email" name="email" type="email" autocomplete="email" value="{{.Form.Email}}" placeholder="tenant@example.com">
     </fieldset>
-    <fieldset class="tenant-form-section"><legend>付款识别</legend>
+    <fieldset class="tenant-form-section"><legend>付款人识别（可选）</legend>
       <label for="payer_id">银行付款人编号</label>
-      <input id="payer_id" name="payer_id" value="{{.Form.PayerID}}">
-      <label for="payer_name_hint">付款人名称提示</label>
-      <input id="payer_name_hint" name="payer_name_hint" value="{{.Form.PayerNameHint}}">
+      <input id="payer_id" name="payer_id" value="{{.Form.PayerID}}" maxlength="191">
+      <label for="payer_name_hint">付款人名称</label>
+      <input id="payer_name_hint" name="payer_name_hint" value="{{.Form.PayerNameHint}}" maxlength="191">
     </fieldset>
-    <fieldset class="tenant-form-section"><legend>入住与分担</legend>
-      <label for="room_id">绑定房间（可选）</label>
-      <select id="room_id" name="room_id" aria-describedby="room-binding-hint">
-        <option value="">暂不绑定房间</option>
-        {{range .Rooms}}<option value="{{.ID}}" data-room-rent="{{.MonthlyRentValue}}" data-room-currency="{{.Currency}}" data-room-due-day="{{.DueDay}}" data-room-occupants="{{.OccupantsJSON}}" data-room-plans="{{.PlansJSON}}"{{if eq $.Form.RoomID .ID}} selected{{end}}>{{.PropertyName}} · {{.RoomLabel}}{{if .MonthlyRentValue}} · {{.MonthlyRentValue}} {{.Currency}}{{end}}</option>{{end}}
-      </select>
-      <span id="room-binding-hint" class="tiny">未绑定前不会产生房间租金责任；绑定后默认按当前入住人数均分。</span>
-      <div class="tenant-room-rent-preview" id="room-rent-preview" role="status" aria-live="polite"><span>房间月租总额</span><strong id="room-rent-display">{{if .Form.RoomID}}{{.Form.Currency}} {{printf "%.2f" .Form.MonthlyRent}}{{else}}未绑定房间{{end}}</strong><small id="room-due-day-display">{{if .Form.RoomID}}每月 {{.Form.DueDay}} 日{{else}}可先只保存租客资料{{end}}</small></div>
-      <div id="room-effective-month"{{if not .Form.RoomID}} hidden{{end}}><label for="arrangement_start_month">入住生效月份</label><input id="arrangement_start_month" name="arrangement_start_month" type="month" value="{{.Form.ArrangementStartMonth}}"><span class="tiny">按整月生效；已有收款的月份不能覆盖。</span></div>
-      <div id="room-responsibility-plan" class="tenant-responsibility-plan"{{if not .Form.RoomID}} hidden{{end}}>
-        <div><strong>同住人分担</strong><span class="tiny">默认均分，可按人调整；合计必须等于房间月租。</span></div>
-        <div id="room-responsibility-rows" class="tenant-responsibility-rows"></div>
-        <small id="room-responsibility-total" class="tiny" aria-live="polite"></small>
-      </div>
-    </fieldset>
-    <input id="room-plan-input" type="hidden" name="room_plan" value="">
-    <input id="monthly_rent" type="hidden" name="monthly_rent" value="{{if gt .Form.MonthlyRent 0.0}}{{printf "%.2f" .Form.MonthlyRent}}{{end}}">
-    <input id="currency" type="hidden" name="currency" value="{{.Form.Currency}}">
-    <input id="tenant-structured" type="hidden" name="structured" value="{{if .Form.Structured}}1{{end}}">
-    <input type="hidden" name="interval_unit" value="{{.Form.IntervalUnit}}">
-    <input type="hidden" name="interval_count" value="{{.Form.IntervalCount}}">
-    <input type="hidden" name="billing_start_date" value="{{.Form.BillingStartDate}}">
-    <input type="hidden" name="due_day" value="{{.Form.DueDay}}">
-    <input type="hidden" name="rent_start_date" value="{{.Form.RentStartDate}}">
-    <input type="hidden" name="rent_end_date" value="{{.Form.RentEndDate}}">
-    <input type="hidden" name="status" value="{{.Form.Status}}">
-    <input type="hidden" name="room_label" value="{{.Form.RoomLabel}}">
-    <input type="hidden" name="room_address" value="{{.Form.RoomAddress}}">
-    <input type="hidden" name="property_hint" value="{{.Form.PropertyHint}}">
+    <input type="hidden" name="status" value="{{if .Form.Status}}{{.Form.Status}}{{else}}active{{end}}">
     <div class="drawer-actions"><a class="btn subtle" href="{{.ReturnURL}}">取消</a><button class="btn primary" type="submit">{{if .Editing}}保存更改{{else}}保存租客{{end}}</button></div>
   </form>
 </section></div>
-<script>
-(() => {
-  const roomSelect = document.getElementById("room_id");
-  const rentInput = document.getElementById("monthly_rent");
-  const currencyInput = document.getElementById("currency");
-  const dueDayInput = document.getElementById("due_day");
-  const structuredInput = document.getElementById("tenant-structured");
-  const effectiveMonth = document.getElementById("room-effective-month");
-  const responsibilityPlan = document.getElementById("room-responsibility-plan");
-  const responsibilityRows = document.getElementById("room-responsibility-rows");
-  const responsibilityTotal = document.getElementById("room-responsibility-total");
-  const roomPlanInput = document.getElementById("room-plan-input");
-  const nameInput = document.getElementById("name");
-  const rentDisplay = document.getElementById("room-rent-display");
-  const dueDayDisplay = document.getElementById("room-due-day-display");
-  const wasStructured = structuredInput?.value === "1";
-  const currentTenantId = document.querySelector('input[name="tenant_id"]')?.value || "";
-  const originalRoomId = roomSelect?.value || "";
-  const effectiveMonthInput = document.getElementById("arrangement_start_month");
-  const centsText = cents => (cents / 100).toFixed(2);
-  const distribute = (total, count) => {
-    if (!count) return [];
-    const each = Math.floor(total / count);
-    const remainder = total - each * count;
-    return Array.from({length: count}, (_, index) => each + (index < remainder ? 1 : 0));
-  };
-  const selectedOccupants = () => [...(responsibilityRows?.querySelectorAll("[data-tenant-id]") || [])]
-    .filter(row => row.dataset.tenantId === "0" || row.querySelector("input[type=checkbox]")?.checked);
-  const updateRoomPlan = () => {
-    const entries = selectedOccupants().map(row => ({
-      tenant_id: Number(row.dataset.tenantId),
-      amount_cents: Math.round(Number(row.querySelector("input[type=number]")?.value || 0) * 100)
-    }));
-    if (roomPlanInput) roomPlanInput.value = roomSelect?.value ? JSON.stringify(entries) : "";
-    const total = entries.reduce((sum, entry) => sum + entry.amount_cents, 0);
-    const expected = Math.round(Number(rentInput?.value || 0) * 100);
-    if (responsibilityTotal) responsibilityTotal.textContent = entries.length ? "分担合计 " + centsText(total) + " / " + centsText(expected) + " " + (currencyInput?.value || "EUR") : "暂无同住人";
-  };
-  const renderRoomPlan = keepSaved => {
-    if (!roomSelect || !responsibilityRows || !responsibilityPlan) return;
-    const option = roomSelect.options[roomSelect.selectedIndex];
-    if (!roomSelect.value || !option) {
-      responsibilityPlan.hidden = true;
-      responsibilityRows.replaceChildren();
-      if (roomPlanInput) roomPlanInput.value = "";
-      return;
-    }
-    responsibilityPlan.hidden = false;
-    const selectedMonth = effectiveMonthInput?.value || "";
-    let plans = [];
-    try { plans = JSON.parse(option.dataset.roomPlans || "[]"); } catch (_) { plans = []; }
-    const monthPlan = plans.find(plan => plan.start_month <= selectedMonth && (!plan.end_month || plan.end_month >= selectedMonth));
-    let occupants = monthPlan?.occupants || [];
-    if (monthPlan) {
-      if (rentInput) rentInput.value = monthPlan.monthly_rent;
-      if (currencyInput) currencyInput.value = monthPlan.currency || "EUR";
-      if (dueDayInput) dueDayInput.value = String(monthPlan.due_day || 1);
-      if (rentDisplay) rentDisplay.textContent = (monthPlan.currency || "EUR") + " " + monthPlan.monthly_rent;
-      if (dueDayDisplay) dueDayDisplay.textContent = "每月 " + (monthPlan.due_day || 1) + " 日";
-    } else {
-      occupants = [];
-      if (!plans.length) {
-        try { occupants = JSON.parse(option.dataset.roomOccupants || "[]"); } catch (_) { occupants = []; }
-      }
-      if (rentInput) rentInput.value = option.dataset.roomRent || "";
-      if (currencyInput) currencyInput.value = option.dataset.roomCurrency || "EUR";
-      if (dueDayInput) dueDayInput.value = option.dataset.roomDueDay || "1";
-      if (rentDisplay) rentDisplay.textContent = (option.dataset.roomCurrency || "EUR") + " " + (option.dataset.roomRent || "—");
-      if (dueDayDisplay) dueDayDisplay.textContent = option.dataset.roomDueDay ? "每月 " + option.dataset.roomDueDay + " 日" : "请先在房间资料中设置缴租日";
-    }
-    occupants.sort((a, b) => Number(a.tenant_id) - Number(b.tenant_id));
-    const existingSelf = currentTenantId && occupants.some(person => String(person.tenant_id) === currentTenantId);
-    const people = occupants.filter(person => String(person.tenant_id) !== currentTenantId);
-    const self = {tenant_id: currentTenantId ? Number(currentTenantId) : 0, name: "", responsibility_cents: 0, isSelf: true};
-    people.push(self);
-    const totalCents = Math.round(Number(monthPlan?.monthly_rent || option.dataset.roomRent || 0) * 100);
-    const oldPlan = new Map(occupants.map(person => [String(person.tenant_id), Number(person.responsibility_cents || 0)]));
-    const equalShares = distribute(totalCents, people.length);
-    responsibilityRows.replaceChildren();
-    people.forEach((person, index) => {
-      const id = String(person.tenant_id);
-      const savedAmount = id !== "0" ? oldPlan.get(id) : 0;
-      const amount = keepSaved && savedAmount > 0 ? savedAmount : equalShares[index];
-      const row = document.createElement("div");
-      row.className = "tenant-responsibility-person";
-      row.dataset.tenantId = id;
-      if (!person.isSelf) {
-        const checkboxLabel = document.createElement("label");
-        checkboxLabel.className = "tenant-responsibility-member";
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.checked = true;
-        checkbox.addEventListener("change", () => {
-          const amountInput = row.querySelector("input[type=number]");
-          amountInput.disabled = !checkbox.checked;
-          amountInput.required = checkbox.checked;
-          updateRoomPlan();
-        });
-        const name = document.createElement("span");
-        name.textContent = person.name || "同住租客";
-        checkboxLabel.append(checkbox, name);
-        row.append(checkboxLabel);
-      } else {
-        const selfLabel = document.createElement("span");
-        selfLabel.className = "tenant-responsibility-member current";
-        selfLabel.textContent = currentTenantId ? "当前租客" : "新租客";
-        row.append(selfLabel);
-      }
-      const amountLabel = document.createElement("label");
-      amountLabel.className = "tenant-responsibility-amount";
-      const amountCaption = document.createElement("span");
-      amountCaption.textContent = "个人责任";
-      const amountInput = document.createElement("input");
-      amountInput.type = "number";
-      amountInput.min = "0.01";
-      amountInput.step = "0.01";
-      amountInput.inputMode = "decimal";
-      amountInput.required = true;
-      amountInput.value = centsText(amount);
-      amountInput.addEventListener("input", updateRoomPlan);
-      amountLabel.append(amountCaption, amountInput);
-      row.append(amountLabel);
-      responsibilityRows.append(row);
-    });
-    updateRoomPlan();
-  };
-  nameInput?.addEventListener("input", () => {
-    const selfLabel = responsibilityRows?.querySelector(".tenant-responsibility-member.current");
-    if (selfLabel) selfLabel.textContent = nameInput.value.trim() || "新租客";
-  });
-  roomSelect?.addEventListener("change", () => {
-    const option = roomSelect.options[roomSelect.selectedIndex];
-    const rent = option?.dataset.roomRent || "";
-    if (roomSelect.value) {
-      if (rentInput) rentInput.value = rent;
-      if (option?.dataset.roomCurrency && currencyInput) currencyInput.value = option.dataset.roomCurrency;
-      if (option?.dataset.roomDueDay && dueDayInput) dueDayInput.value = option.dataset.roomDueDay;
-      if (structuredInput) structuredInput.value = "1";
-      if (effectiveMonth) effectiveMonth.hidden = false;
-      if (rentDisplay) rentDisplay.textContent = (currencyInput?.value || "EUR") + " " + (rent || "—");
-      if (dueDayDisplay) dueDayDisplay.textContent = option?.dataset.roomDueDay ? "每月 " + option.dataset.roomDueDay + " 日" : "请先在房间资料中设置缴租日";
-      renderRoomPlan(currentTenantId !== "" && roomSelect.value === originalRoomId);
-      return;
-    }
-    if (structuredInput) structuredInput.value = wasStructured ? "1" : "";
-    if (rentInput && wasStructured) rentInput.value = "";
-    if (effectiveMonth) effectiveMonth.hidden = true;
-    if (rentDisplay) rentDisplay.textContent = "未绑定房间";
-    if (dueDayDisplay) dueDayDisplay.textContent = "可先只保存租客资料";
-    renderRoomPlan(false);
-  });
-  effectiveMonthInput?.addEventListener("change", () => {
-    const option = roomSelect?.options[roomSelect.selectedIndex];
-    let plans = [];
-    try { plans = JSON.parse(option?.dataset.roomPlans || "[]"); } catch (_) { plans = []; }
-    const targetPlan = plans.find(plan => plan.start_month <= effectiveMonthInput.value && (!plan.end_month || plan.end_month >= effectiveMonthInput.value));
-    const existingMember = targetPlan?.occupants?.some(person => String(person.tenant_id) === currentTenantId);
-    if (!targetPlan && option) {
-      if (rentInput) rentInput.value = option.dataset.roomRent || "";
-      if (currencyInput) currencyInput.value = option.dataset.roomCurrency || "EUR";
-      if (dueDayInput) dueDayInput.value = option.dataset.roomDueDay || "1";
-      if (rentDisplay) rentDisplay.textContent = (option.dataset.roomCurrency || "EUR") + " " + (option.dataset.roomRent || "—");
-      if (dueDayDisplay) dueDayDisplay.textContent = option.dataset.roomDueDay ? "每月 " + option.dataset.roomDueDay + " 日" : "请先在房间资料中设置缴租日";
-    }
-    renderRoomPlan(Boolean(currentTenantId && roomSelect?.value === originalRoomId && existingMember));
-  });
-  if (roomSelect?.value) renderRoomPlan(currentTenantId !== "" && roomSelect.value === originalRoomId);
-})();
-</script>
 {{end}}

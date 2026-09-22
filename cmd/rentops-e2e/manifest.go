@@ -3,213 +3,77 @@ package main
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 )
 
-type e2eMoney struct {
-	Cents    int64  `json:"cents"`
-	Currency string `json:"currency"`
-}
-
-type e2eTenantFixture struct {
-	Name             string   `json:"name"`
-	DisplayAlias     string   `json:"display_alias"`
-	Email            string   `json:"email"`
-	PayerID          string   `json:"payer_id"`
-	PayerNameHint    string   `json:"payer_name_hint"`
-	MonthlyRent      e2eMoney `json:"monthly_rent"`
-	IntervalUnit     string   `json:"interval_unit"`
-	IntervalCount    int      `json:"interval_count"`
-	BillingStartDate string   `json:"billing_start_date"`
-	DueDay           int      `json:"due_day"`
-	RentStartDate    string   `json:"rent_start_date"`
-	Status           string   `json:"status"`
-	RoomLabel        string   `json:"room_label"`
-	RoomAddress      string   `json:"room_address"`
-}
-
-type e2ePayerFixture struct {
-	Name    string `json:"name"`
-	PayerID string `json:"payer_id"`
-}
-
-type e2eBankTransactionFixture struct {
-	TransactionID                   string   `json:"transaction_id"`
-	NormalisedProviderTransactionID string   `json:"normalised_provider_transaction_id"`
-	ProviderTransactionID           string   `json:"provider_transaction_id"`
-	Timestamp                       string   `json:"timestamp"`
-	Description                     string   `json:"description"`
-	Amount                          e2eMoney `json:"amount"`
-	Direction                       string   `json:"direction"`
-	TransactionType                 string   `json:"transaction_type"`
-	Reference                       string   `json:"reference"`
-	PayerID                         string   `json:"payer_id,omitempty"`
-	PayerName                       string   `json:"payer_name,omitempty"`
-}
-
-// StoredProviderTransactionID is the identifier the application persists in
-// payment_transactions.provider_transaction_id and renders as the bank
-// statement number on /billing. The ingest path prefers the normalised provider
-// id over the raw one (cmd/truelayer-demo/transactions.go), so read-back
-// assertions must use this value rather than ProviderTransactionID.
-func (f e2eBankTransactionFixture) StoredProviderTransactionID() string {
-	return f.NormalisedProviderTransactionID
-}
-
-type e2EBankFixture struct {
-	AccountID    string                      `json:"account_id"`
-	AccountName  string                      `json:"account_name"`
-	Currency     string                      `json:"currency"`
-	BatchID      string                      `json:"batch_id"`
-	Transactions []e2eBankTransactionFixture `json:"transactions"`
-}
-
-type e2EExpectedSnapshot struct {
-	TenantCount          int   `json:"tenant_count"`
-	PayerCount           int   `json:"payer_count"`
-	BankTransactionCount int   `json:"bank_transaction_count"`
-	EURIncomeCents       int64 `json:"eur_income_cents"`
-	GBPIncomeCents       int64 `json:"gbp_income_cents"`
-	RentAllocationCents  int64 `json:"rent_allocation_cents"`
-	PartialRentCents     int64 `json:"partial_rent_cents"`
-	PendingIncomeCount   int   `json:"pending_income_count"`
-}
+var e2eRunIDPattern = regexp.MustCompile(`^rentops-e2e-[0-9]{8}-[0-9]{6}-[a-f0-9]{8}$`)
 
 type e2eFixtureManifest struct {
 	SchemaVersion int                 `json:"schema_version"`
 	RunID         string              `json:"run_id"`
 	GeneratedAt   time.Time           `json:"generated_at"`
-	Tenant        e2eTenantFixture    `json:"tenant"`
-	DunningTenant e2eTenantFixture    `json:"dunning_tenant"`
-	Payer         e2ePayerFixture     `json:"payer"`
-	Bank          e2EBankFixture      `json:"bank"`
+	Period        string              `json:"period"`
+	FuturePeriod  string              `json:"future_period"`
+	OverdueDueDay int                 `json:"overdue_due_day"`
+	TenantA       e2eTenantFixture    `json:"tenant_a"`
+	TenantB       e2eTenantFixture    `json:"tenant_b"`
+	TenantC       e2eTenantFixture    `json:"tenant_c"`
+	TenantD       e2eTenantFixture    `json:"tenant_d"`
 	Expected      e2EExpectedSnapshot `json:"expected"`
+}
+
+type e2eTenantFixture struct {
+	Name      string `json:"name"`
+	Alias     string `json:"alias"`
+	Email     string `json:"email"`
+	PayerID   string `json:"payer_id"`
+	PayerName string `json:"payer_name"`
+}
+
+type e2EExpectedSnapshot struct {
+	SharedRoomRentCents int64 `json:"shared_room_rent_cents"`
+	TenantAAmountCents  int64 `json:"tenant_a_amount_cents"`
+	TenantBAmountCents  int64 `json:"tenant_b_amount_cents"`
+	TenantCCents        int64 `json:"tenant_c_cents"`
+	TenantCPaidCents    int64 `json:"tenant_c_paid_cents"`
+}
+
+func validateE2ERunID(value string) error {
+	if !e2eRunIDPattern.MatchString(strings.TrimSpace(value)) {
+		return errors.New("run ID must match rentops-e2e-YYYYMMDD-HHMMSS-xxxxxxxx")
+	}
+	return nil
 }
 
 func newE2EFixtureManifest(runID string, now time.Time) (e2eFixtureManifest, error) {
 	if err := validateE2ERunID(runID); err != nil {
 		return e2eFixtureManifest{}, err
 	}
-	marker := strings.TrimSpace(runID)
-	tenant := e2eTenantFixture{
-		Name:             marker + " tenant",
-		DisplayAlias:     marker + " alias",
-		Email:            marker + "@invalid.test",
-		PayerID:          marker + "-payer-1",
-		PayerNameHint:    marker + " payer 1",
-		MonthlyRent:      e2eMoney{Cents: 95000, Currency: "EUR"},
-		IntervalUnit:     "month",
-		IntervalCount:    1,
-		BillingStartDate: "2026-08-01",
-		DueDay:           5,
-		RentStartDate:    "2026-08-01",
-		Status:           "active",
-		RoomLabel:        marker + " room",
-		RoomAddress:      marker + " address",
+	location, err := time.LoadLocation("Europe/Dublin")
+	if err != nil {
+		return e2eFixtureManifest{}, fmt.Errorf("load Dublin timezone: %w", err)
 	}
-	payer := e2ePayerFixture{Name: marker + " payer 1", PayerID: marker + "-payer-1"}
-	dunningTenant := e2eTenantFixture{
-		Name:             marker + " dunning tenant",
-		DisplayAlias:     marker + " dunning alias",
-		Email:            marker + "-dunning@invalid.test",
-		PayerID:          marker + "-dunning-payer-1",
-		PayerNameHint:    marker + " dunning payer 1",
-		MonthlyRent:      e2eMoney{Cents: 50000, Currency: "EUR"},
-		IntervalUnit:     "month",
-		IntervalCount:    1,
-		BillingStartDate: "2026-09-01",
-		DueDay:           5,
-		RentStartDate:    "2026-09-01",
-		Status:           "active",
-		RoomLabel:        marker + " dunning room",
-		RoomAddress:      marker + " dunning address",
-	}
-	bank := e2EBankFixture{
-		AccountID:   marker + "-account-eur",
-		AccountName: marker + " EUR account",
-		Currency:    "EUR",
-		BatchID:     marker + "-bank-batch-1",
-		Transactions: []e2eBankTransactionFixture{
-			{
-				TransactionID:                   marker + "-tx-eur-full",
-				NormalisedProviderTransactionID: marker + "-stable-eur-full",
-				ProviderTransactionID:           marker + "-provider-eur-full",
-				Timestamp:                       "2026-09-03T10:00:00Z",
-				Description:                     marker + " rent full payment",
-				Amount:                          e2eMoney{Cents: 95000, Currency: "EUR"},
-				Direction:                       "income",
-				TransactionType:                 "CREDIT",
-				Reference:                       marker + "-reference-eur-full",
-				PayerID:                         payer.PayerID,
-				PayerName:                       payer.Name,
-			},
-			{
-				TransactionID:                   marker + "-tx-eur-partial",
-				NormalisedProviderTransactionID: marker + "-stable-eur-partial",
-				ProviderTransactionID:           marker + "-provider-eur-partial",
-				Timestamp:                       "2026-09-04T10:00:00Z",
-				Description:                     marker + " rent partial payment",
-				Amount:                          e2eMoney{Cents: 40000, Currency: "EUR"},
-				Direction:                       "income",
-				TransactionType:                 "CREDIT",
-				Reference:                       marker + "-reference-eur-partial",
-				PayerID:                         payer.PayerID,
-				PayerName:                       payer.Name,
-			},
-			{
-				TransactionID:                   marker + "-tx-gbp",
-				NormalisedProviderTransactionID: marker + "-stable-gbp",
-				ProviderTransactionID:           marker + "-provider-gbp",
-				Timestamp:                       "2026-09-05T10:00:00Z",
-				Description:                     marker + " foreign currency 2026-09",
-				Amount:                          e2eMoney{Cents: 2500, Currency: "GBP"},
-				Direction:                       "income",
-				TransactionType:                 "CREDIT",
-				Reference:                       marker + "-reference-gbp",
-			},
-			{
-				TransactionID:                   marker + "-tx-eur-cross-month",
-				NormalisedProviderTransactionID: marker + "-stable-eur-cross-month",
-				ProviderTransactionID:           marker + "-provider-eur-cross-month",
-				Timestamp:                       "2026-09-01T10:00:00Z",
-				Description:                     marker + " rent 2026-08 cross-month",
-				Amount:                          e2eMoney{Cents: 30000, Currency: "EUR"},
-				Direction:                       "income",
-				TransactionType:                 "CREDIT",
-				Reference:                       marker + "-reference-eur-cross-month",
-			},
-			{
-				TransactionID:                   marker + "-tx-eur-pending",
-				NormalisedProviderTransactionID: marker + "-stable-eur-pending",
-				ProviderTransactionID:           marker + "-provider-eur-pending",
-				Timestamp:                       "2026-09-06T10:00:00Z",
-				Description:                     marker + " pending income",
-				Amount:                          e2eMoney{Cents: 5000, Currency: "EUR"},
-				Direction:                       "income",
-				TransactionType:                 "CREDIT",
-				Reference:                       marker + "-reference-eur-pending",
-			},
-		},
+	local := now.In(location)
+	current := time.Date(local.Year(), local.Month(), 1, 0, 0, 0, 0, location)
+	future := current.AddDate(0, 1, 0)
+	dueDay := local.Day() - 1
+	if dueDay < 1 {
+		dueDay = 1
 	}
 	manifest := e2eFixtureManifest{
 		SchemaVersion: 1,
-		RunID:         marker,
+		RunID:         runID,
 		GeneratedAt:   now.UTC(),
-		Tenant:        tenant,
-		DunningTenant: dunningTenant,
-		Payer:         payer,
-		Bank:          bank,
-		Expected: e2EExpectedSnapshot{
-			TenantCount:          2,
-			PayerCount:           2,
-			BankTransactionCount: len(bank.Transactions),
-			EURIncomeCents:       95000 + 40000 + 30000 + 5000,
-			GBPIncomeCents:       2500,
-			RentAllocationCents:  95000,
-			PartialRentCents:     40000,
-			PendingIncomeCount:   3,
-		},
+		Period:        current.Format("2006-01"),
+		FuturePeriod:  future.Format("2006-01"),
+		OverdueDueDay: dueDay,
+		TenantA:       e2eTenantFixture{Name: runID + " Aoife Murphy", Alias: "Aoife", Email: runID + "-a@example.test", PayerID: runID + "-payer-a", PayerName: runID + " Aoife Murphy"},
+		TenantB:       e2eTenantFixture{Name: runID + " Brian Doyle", Alias: "Brian", Email: runID + "-b@example.test", PayerID: runID + "-payer-b", PayerName: runID + " Brian Doyle"},
+		TenantC:       e2eTenantFixture{Name: runID + " Chen Xi", Alias: "Chen", Email: runID + "-c@example.test", PayerID: runID + "-payer-c", PayerName: runID + " Chen Xi"},
+		TenantD:       e2eTenantFixture{Name: runID + " Dara Wu", Alias: "Dara", Email: runID + "-d@example.test", PayerID: runID + "-payer-d", PayerName: runID + " Dara Wu"},
+		Expected:      e2EExpectedSnapshot{SharedRoomRentCents: 120000, TenantAAmountCents: 70000, TenantBAmountCents: 50000, TenantCCents: 90000, TenantCPaidCents: 10000},
 	}
 	if err := manifest.validate(); err != nil {
 		return e2eFixtureManifest{}, err
@@ -224,74 +88,27 @@ func (manifest e2eFixtureManifest) validate() error {
 	if manifest.SchemaVersion != 1 {
 		return errors.New("unsupported E2E fixture schema version")
 	}
-	if manifest.Tenant.PayerID != manifest.Payer.PayerID || manifest.Tenant.PayerNameHint != manifest.Payer.Name {
-		return errors.New("tenant and payer fixture identity mismatch")
+	period, err := time.Parse("2006-01", manifest.Period)
+	if err != nil || period.Format("2006-01") != manifest.Period {
+		return errors.New("current E2E period is invalid")
 	}
-	for _, tenant := range []e2eTenantFixture{manifest.Tenant, manifest.DunningTenant} {
-		for _, value := range []string{
-			tenant.Name,
-			tenant.DisplayAlias,
-			tenant.Email,
-			tenant.PayerID,
-			tenant.PayerNameHint,
-			tenant.RoomLabel,
-			tenant.RoomAddress,
-		} {
+	future, err := time.Parse("2006-01", manifest.FuturePeriod)
+	if err != nil || !future.Equal(period.AddDate(0, 1, 0)) {
+		return errors.New("future E2E period must immediately follow current period")
+	}
+	if manifest.OverdueDueDay < 1 || manifest.OverdueDueDay > 31 {
+		return errors.New("overdue fixture due day is invalid")
+	}
+	for _, tenant := range []e2eTenantFixture{manifest.TenantA, manifest.TenantB, manifest.TenantC, manifest.TenantD} {
+		for _, value := range []string{tenant.Name, tenant.Email, tenant.PayerID, tenant.PayerName} {
 			if !strings.HasPrefix(value, manifest.RunID) {
-				return fmt.Errorf("fixture value %q is missing run ID prefix", value)
+				return errors.New("tenant fixtures must be run-ID scoped")
 			}
 		}
 	}
-	for _, value := range []string{
-		manifest.Payer.Name,
-		manifest.Payer.PayerID,
-		manifest.Bank.AccountID,
-		manifest.Bank.AccountName,
-		manifest.Bank.BatchID,
-	} {
-		if !strings.HasPrefix(value, manifest.RunID) {
-			return fmt.Errorf("fixture value %q is missing run ID prefix", value)
-		}
-	}
-	if len(manifest.Bank.Transactions) != manifest.Expected.BankTransactionCount {
-		return errors.New("bank fixture count does not match expected snapshot")
-	}
-	seen := make(map[string]struct{}, len(manifest.Bank.Transactions))
-	var eurIncomeCents, gbpIncomeCents int64
-	pendingIncomeCount := 0
-	for _, transaction := range manifest.Bank.Transactions {
-		if transaction.TransactionID == "" || transaction.NormalisedProviderTransactionID == "" || transaction.ProviderTransactionID == "" || transaction.Reference == "" {
-			return errors.New("bank fixture stable identifiers are required")
-		}
-		for _, key := range []string{transaction.TransactionID, transaction.NormalisedProviderTransactionID, transaction.ProviderTransactionID, transaction.Reference} {
-			if !strings.HasPrefix(key, manifest.RunID) {
-				return fmt.Errorf("fixture identifier %q is missing run ID prefix", key)
-			}
-			if _, exists := seen[key]; exists {
-				return fmt.Errorf("fixture identifier %q is not unique", key)
-			}
-			seen[key] = struct{}{}
-		}
-		if transaction.Amount.Cents <= 0 || transaction.Amount.Currency == "" {
-			return errors.New("bank fixture amounts must be positive and have a currency")
-		}
-		if !strings.HasPrefix(transaction.Description, manifest.RunID) {
-			return fmt.Errorf("transaction description %q is missing run ID prefix", transaction.Description)
-		}
-		if transaction.Direction == "income" {
-			switch transaction.Amount.Currency {
-			case "EUR":
-				eurIncomeCents += transaction.Amount.Cents
-			case "GBP":
-				gbpIncomeCents += transaction.Amount.Cents
-			}
-			if transaction.PayerID == "" && transaction.PayerName == "" {
-				pendingIncomeCount++
-			}
-		}
-	}
-	if eurIncomeCents != manifest.Expected.EURIncomeCents || gbpIncomeCents != manifest.Expected.GBPIncomeCents || pendingIncomeCount != manifest.Expected.PendingIncomeCount {
-		return errors.New("bank fixture totals do not match expected snapshot")
+	if manifest.Expected.TenantAAmountCents+manifest.Expected.TenantBAmountCents != manifest.Expected.SharedRoomRentCents ||
+		manifest.Expected.TenantCCents <= manifest.Expected.TenantCPaidCents {
+		return errors.New("rent fixture amounts are inconsistent")
 	}
 	return nil
 }

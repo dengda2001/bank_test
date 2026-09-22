@@ -41,9 +41,43 @@ func (s *transactionService) settleRentObligation(ctx context.Context, userID, o
 
 	var created paymentTransaction
 	err := s.db.WithContext(ctx).Transaction(func(txdb *gorm.DB) error {
-		var obligation rentObligation
-		if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", obligationID, userID).First(&obligation).Error; err != nil {
+		now := time.Now().UTC()
+		periodPlaceholder := monthStart(now)
+		created = paymentTransaction{
+			UserID:                 userID,
+			Source:                 manualBalanceTransactionSource,
+			SourceBatchID:          nullableString(manualBalanceTransactionSource),
+			StableTransactionKey:   recordID("manual-balance", now),
+			Direction:              "income",
+			AmountCents:            1,
+			Currency:               ledgerCurrencyEUR,
+			TransactionTime:        &now,
+			Description:            manualBalanceTransactionDescription,
+			Reference:              "rent-balance-" + periodPlaceholder.Format("2006-01"),
+			PayerNameKind:          "manual",
+			ParsedPeriodMonth:      &periodPlaceholder,
+			ParsedPeriodSource:     manualBalanceTransactionSource,
+			ParsedPeriodNote:       "dashboard manual balance",
+			MatchReason:            "manual balance adjustment",
+			ManualAdjustmentReason: reason,
+			MatchStatus:            "unmatched",
+		}
+		if err := txdb.Create(&created).Error; err != nil {
 			return err
+		}
+		// This transaction is new and local to this write. Lock it before the
+		// room/charge/obligation chain to keep the bank allocation lock order.
+		var source paymentTransaction
+		if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", created.ID, userID).First(&source).Error; err != nil {
+			return err
+		}
+		lockedObligations, err := lockRentObligationRoomsInTx(txdb, userID, []uint64{obligationID})
+		if err != nil {
+			return err
+		}
+		obligation, ok := lockedObligations[obligationID]
+		if !ok {
+			return ErrRentFactsConflict
 		}
 		if obligation.RecordStatus == obligationRecordVoided {
 			return errors.New("cannot settle a voided rent obligation")
@@ -73,31 +107,21 @@ func (s *transactionService) settleRentObligation(ctx context.Context, userID, o
 			return errManualBalanceNotNeeded
 		}
 
-		now := time.Now().UTC()
 		period := monthStart(obligation.PeriodMonth)
-		created = paymentTransaction{
-			UserID:                 userID,
-			Source:                 manualBalanceTransactionSource,
-			SourceBatchID:          nullableString(manualBalanceTransactionSource),
-			StableTransactionKey:   recordID("manual-balance", now),
-			Direction:              "income",
-			AmountCents:            remainingCents,
-			Currency:               currency,
-			TransactionTime:        &now,
-			Description:            manualBalanceTransactionDescription,
-			Reference:              "rent-balance-" + period.Format("2006-01"),
-			PayerName:              nullableString(tenantRow.Name),
-			PayerNameKind:          "manual",
-			ParsedPeriodMonth:      &period,
-			ParsedPeriodSource:     manualBalanceTransactionSource,
-			ParsedPeriodNote:       "dashboard manual balance",
-			MatchReason:            "manual balance adjustment",
-			ManualAdjustmentReason: reason,
-			MatchStatus:            "unmatched",
-		}
-		if err := txdb.Create(&created).Error; err != nil {
+		if err := txdb.Model(&paymentTransaction{}).Where("id = ? AND user_id = ?", created.ID, userID).Updates(map[string]any{
+			"amount_cents":        remainingCents,
+			"currency":            currency,
+			"payer_name":          nullableString(tenantRow.Name),
+			"reference":           "rent-balance-" + period.Format("2006-01"),
+			"parsed_period_month": period,
+		}).Error; err != nil {
 			return err
 		}
+		created.AmountCents = remainingCents
+		created.Currency = currency
+		created.PayerName = nullableString(tenantRow.Name)
+		created.Reference = "rent-balance-" + period.Format("2006-01")
+		created.ParsedPeriodMonth = &period
 		summary, err := s.allocateTransactionInTx(txdb, userID, created.ID, []transactionAllocationDraft{{
 			TenantID:         obligation.TenantID,
 			RentObligationID: obligation.ID,
@@ -159,6 +183,8 @@ func (a *app) handleDashboardManualBalance(w http.ResponseWriter, r *http.Reques
 		redirect("manual_balance_saved", "")
 	case errors.Is(err, errManualBalanceNotNeeded):
 		redirect("manual_balance_not_needed", "")
+	case errors.Is(err, ErrRentFactsConflict):
+		redirect("", "rent_facts_conflict")
 	default:
 		redirect("", "manual_balance_failed")
 	}
@@ -172,6 +198,14 @@ func manualBalanceRedirectURL(values url.Values, requestPath, message, actionErr
 			returnValues = target.Query()
 			legacyBillsRequest = false
 		}
+	}
+	if legacyBillsRequest && returnValues.Get("status") == "unpaid" {
+		copied := make(url.Values, len(returnValues))
+		for key, items := range returnValues {
+			copied[key] = append([]string(nil), items...)
+		}
+		returnValues = copied
+		returnValues.Set("status", "outstanding")
 	}
 	filters, err := rentWorkspaceFiltersFromQuery(returnValues)
 	if err != nil {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -8,9 +9,22 @@ import (
 	"time"
 )
 
+func TestCashReceiptErrorCodeUsesSentinelErrors(t *testing.T) {
+	if got := cashReceiptErrorCode(errCashReceiptOverbalance); got != "cash_overbalance" {
+		t.Fatalf("overbalance error code=%q", got)
+	}
+	if got := cashReceiptErrorCode(ErrRentFactsConflict); got != "rent_facts_conflict" {
+		t.Fatalf("rent facts conflict error code=%q", got)
+	}
+	if got := cashReceiptErrorCode(errors.New("unrelated balance note")); got != "cash_receipt_failed" {
+		t.Fatalf("untyped balance error code=%q", got)
+	}
+}
+
 func TestParseCashReceiptFormNormalizesCentsCurrencyAndDate(t *testing.T) {
 	draft, err := parseCashReceiptForm(testFormValues{
 		"tenant_id":       "7",
+		"payer_tenant_id": "8",
 		"period":          "2026-09",
 		"amount":          "400.00",
 		"currency":        "eur",
@@ -21,8 +35,19 @@ func TestParseCashReceiptFormNormalizesCentsCurrencyAndDate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if draft.TenantID != 7 || draft.Period != time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC) || draft.AmountCents != 40000 || draft.Currency != "EUR" || draft.ReceivedAt != time.Date(2026, 9, 12, 0, 0, 0, 0, time.UTC) || draft.Note != "hand delivered" {
+	if draft.TenantID != 7 || draft.PayerTenantID != 8 || draft.Period != time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC) || draft.AmountCents != 40000 || draft.Currency != "EUR" || draft.ReceivedAt != time.Date(2026, 9, 12, 0, 0, 0, 0, time.UTC) || draft.Note != "hand delivered" {
 		t.Fatalf("cash form draft=%+v", draft)
+	}
+}
+
+func TestParseCashReceiptFormRejectsAmbiguousPayer(t *testing.T) {
+	_, err := parseCashReceiptForm(testFormValues{
+		"tenant_id": "7", "payer_tenant_id": "8", "payer_name": "External payer",
+		"period": "2026-09", "amount": "400.00", "currency": "EUR",
+		"received_at": "2026-09-12", "idempotency_key": "cash-request-1",
+	}, 42)
+	if err == nil || !strings.Contains(err.Error(), "not both") {
+		t.Fatalf("ambiguous payer error=%v", err)
 	}
 }
 
@@ -78,7 +103,7 @@ func TestCashReceiptTemplateRendersPreviewAndCorrectionActions(t *testing.T) {
 		t.Fatal(err)
 	}
 	page := body.String()
-	for _, expected := range []string{"确认现金入账", "EUR 1,000.00", "EUR 600.00", "cash-request-1", `action="/cash-receipts"`, "/cash-receipts/new?tenant_id=7"} {
+	for _, expected := range []string{"确认现金入账", "EUR 1,000.00", "EUR 600.00", "cash-request-1", `action="/cash-receipts"`, "payer_tenant_id", "/cash-receipts/new?period=2026-09&amp;tenant_id=7"} {
 		if !strings.Contains(page, expected) {
 			t.Fatalf("cash preview missing %q: %s", expected, page)
 		}

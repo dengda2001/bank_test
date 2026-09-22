@@ -259,7 +259,6 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
         <div class="actions">
           {{if .Connected}}<a class="btn primary" href="/refresh">刷新银行数据</a>{{else}}<a class="btn primary" href="/login">连接银行账户</a>{{end}}
           <form method="post" action="/billing/payer/preview"><button class="btn" type="submit">历史付款人预览</button></form>
-          <form method="post" action="/import-legacy"><button class="btn" type="submit">导入旧数据</button></form>
           <form method="post" action="/logout"><button class="btn danger" type="submit">退出登录</button></form>
         </div>
       </header>
@@ -270,6 +269,8 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
       {{if eq .Error "invalid_confirmation"}}<div class="notice error">关联请求无效。</div>{{end}}
       {{if eq .Error "invalid_allocation"}}<div class="notice error">归类请求无效。</div>{{end}}
       {{if eq .Error "allocation_failed"}}<div class="notice error">归类失败，请检查余额、币种、租客和租金月份。</div>{{end}}
+      {{if eq .Error "rent_facts_conflict"}}<div class="notice error">该租金月份的计划刚刚更新，请刷新后重新分配流水。</div>{{end}}
+      {{if eq .Error "rematch_failed"}}<div class="notice error">匹配调整失败，请刷新账期后重试。</div>{{end}}
       {{if eq .Error "invalid_transaction_action"}}<div class="notice error">流水操作请求无效。</div>{{end}}
       {{if eq .Error "transaction_action_failed"}}<div class="notice error">流水操作失败，请检查当前状态和操作原因。</div>{{end}}
       {{if eq .Error "invalid_payer_confirmation"}}<div class="notice error">付款人确认请求无效。</div>{{end}}
@@ -281,10 +282,8 @@ var billingTemplate = newWorkspacePageTemplate("billing", nil, `<!doctype html>
       {{if eq .Message "allocation_saved"}}<div class="notice ok" data-toast>流水归类已保存。</div>{{end}}
       {{if eq .Message "transaction_action_saved"}}<div class="notice ok" data-toast>流水操作已保存。</div>{{end}}
       {{if eq .Message "payer_confirmed"}}<div class="notice ok" data-toast>历史流水已逐笔确认。</div>{{end}}
-      {{if eq .Message "legacy_imported"}}<div class="notice ok" data-toast>旧版 JSON 和 JSONL 数据已导入。</div>{{end}}
       {{if eq .Message "cash_receipt_saved"}}<div class="notice ok" data-toast>现金收款已登记。</div>{{end}}
       {{if eq .Message "expense_added"}}<div class="notice ok" data-toast>支出记录已保存。</div>{{end}}
-      {{if eq .Error "legacy_import_failed"}}<div class="notice error">旧数据导入失败，请检查源文件。</div>{{end}}
       {{if .CashReceiptDrawer}}{{template "cash-receipt-drawer" .CashReceiptDrawer}}{{end}}
       {{if .ExpenseDrawer}}{{template "expense-form-drawer" .ExpenseDrawer}}{{end}}
       {{if eq .PageKey "transactions"}}

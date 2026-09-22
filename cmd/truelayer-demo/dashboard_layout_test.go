@@ -68,12 +68,9 @@ func TestNormalisedSortFallsBackToTheDefaultColumn(t *testing.T) {
 	}
 }
 
-// The E2E runner reads the summary cards on /rent-dashboard with a regex
-// requiring the label and the value to be adjacent inside one element
-// (cmd/rentops-e2e/dashboard_scenario.go), so the live room workspace must not
-// insert whitespace or a wrapper between them. This used to be pinned on the
-// removed legacy template; the runner never reads 待处理 as a metric, so the
-// assertion is the three it does read plus the filtered-count text.
+// The room workspace uses selected-month and outstanding-responsibility labels
+// in its summary cards; keep each label adjacent to its value for stable page
+// extraction.
 func TestRentWorkspaceMetricsKeepTheE2EShape(t *testing.T) {
 	page, err := executeTemplate(rentWorkspaceTemplate, rentWorkspacePageData{
 		Period:      "2026-09",
@@ -84,7 +81,7 @@ func TestRentWorkspaceMetricsKeepTheE2EShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, metric := range []string{"本月应收", "已收租金", "剩余未收"} {
+	for _, metric := range []string{"所选月份应收", "已收租金", "未结清责任"} {
 		if !strings.Contains(page, `<div class="label">`+metric+`</div><strong>`) {
 			t.Fatalf("metric %q does not match the E2E extraction pattern", metric)
 		}

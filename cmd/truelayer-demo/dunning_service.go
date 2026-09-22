@@ -49,7 +49,36 @@ func (s *dunningService) reserveDunningAttempt(ctx context.Context, attempt dunn
 	if found {
 		return existing, true, nil
 	}
-	if err := s.db.WithContext(ctx).Create(&attempt).Error; err != nil {
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		_, charge, err := lockRoomForRentObligation(tx, attempt.UserID, attempt.RentObligationID)
+		if err != nil {
+			return err
+		}
+		var obligation rentObligation
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND id = ?", attempt.UserID, attempt.RentObligationID).First(&obligation).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errDunningFactsChanged
+			}
+			return err
+		}
+		if obligation.RecordStatus != obligationRecordActive || obligation.RentChargeID != charge.ID || obligation.RoomRentPlanID != charge.RoomRentPlanID || monthStart(obligation.PeriodMonth) != monthStart(attempt.PeriodMonth) {
+			return errDunningFactsChanged
+		}
+		var allocations []paymentAllocation
+		if err := tx.Where("user_id = ? AND rent_obligation_id = ?", attempt.UserID, obligation.ID).Find(&allocations).Error; err != nil {
+			return err
+		}
+		var receipts []cashReceipt
+		if err := tx.Where("user_id = ? AND rent_obligation_id = ?", attempt.UserID, obligation.ID).Find(&receipts).Error; err != nil {
+			return err
+		}
+		projected := projectRentObligation(obligation, allocations, receipts, time.Now().UTC())
+		if projected.ExpectedAmountCents != attempt.ExpectedAmountCents || projected.PaidAmountCents != attempt.PaidAmountCents || maxInt64(projected.ExpectedAmountCents-projected.PaidAmountCents, 0) != attempt.BalanceAmountCents {
+			return errDunningFactsChanged
+		}
+		return tx.Create(&attempt).Error
+	})
+	if err != nil {
 		existing, found, lookupErr := s.findDunningAttemptByRequest(ctx, attempt.UserID, attempt.RentObligationID, attempt.RequestKey)
 		if lookupErr != nil {
 			return dunningSendAttempt{}, false, err
@@ -61,6 +90,8 @@ func (s *dunningService) reserveDunningAttempt(ctx context.Context, attempt dunn
 	}
 	return attempt, false, nil
 }
+
+var errDunningFactsChanged = errors.New("rent facts changed after dunning preview")
 
 func dunningAttemptSnapshot(userID uint64, candidate dunningCandidate, message *dunningMessage, sender dunningSenderConfig, serviceFrom, requestKey, status, reason string, retryOfAttemptID uint64, now time.Time) dunningSendAttempt {
 	subject := "Dunning not sent"
@@ -161,6 +192,12 @@ func (s *dunningService) loadDunningCandidate(ctx context.Context, userID, oblig
 	if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", obligation.TenantID, userID).First(&tenantRow).Error; err != nil {
 		return dunningCandidate{}, nil, false, err
 	}
+	var charge rentCharge
+	if obligation.RentChargeID != 0 {
+		if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", obligation.RentChargeID, userID).First(&charge).Error; err != nil {
+			return dunningCandidate{}, nil, false, err
+		}
+	}
 	var allocations []paymentAllocation
 	if err := s.db.WithContext(ctx).Where("rent_obligation_id = ? AND user_id = ?", obligation.ID, userID).Find(&allocations).Error; err != nil {
 		return dunningCandidate{}, nil, false, err
@@ -185,7 +222,7 @@ func (s *dunningService) loadDunningCandidate(ctx context.Context, userID, oblig
 			sentToday = true
 		}
 	}
-	candidate := buildDunningCandidate(obligation, tenantRow, now, latest)
+	candidate := buildDunningCandidate(obligation, tenantRow, now, latest, charge)
 	candidate.SentToday = sentToday
 	candidate.DefaultSelected = candidate.Selectable && !candidate.SentToday
 	return candidate, latest, true, nil
@@ -314,6 +351,11 @@ func (s *dunningService) send(ctx context.Context, userID uint64, periodMonth ti
 			attempt := dunningAttemptSnapshot(userID, candidate, nil, sender, serviceFrom, requestKey, dunningDeliverySkipped, result.Error, retryOfAttemptID, now)
 			reserved, _, err := s.reserveDunningAttempt(ctx, attempt)
 			if err != nil {
+				if errors.Is(err, errDunningFactsChanged) {
+					result.Error, result.Skipped = "账单责任已更新，请刷新后重试", true
+					results = append(results, result)
+					continue
+				}
 				return nil, err
 			}
 			result.Attempt = &reserved
@@ -326,6 +368,11 @@ func (s *dunningService) send(ctx context.Context, userID uint64, periodMonth ti
 			attempt := dunningAttemptSnapshot(userID, candidate, nil, sender, serviceFrom, requestKey, dunningDeliveryFailed, result.Error, retryOfAttemptID, now)
 			reserved, _, err := s.reserveDunningAttempt(ctx, attempt)
 			if err != nil {
+				if errors.Is(err, errDunningFactsChanged) {
+					result.Error, result.Skipped = "账单责任已更新，请刷新后重试", true
+					results = append(results, result)
+					continue
+				}
 				return nil, err
 			}
 			result.Attempt = &reserved
@@ -337,6 +384,11 @@ func (s *dunningService) send(ctx context.Context, userID uint64, periodMonth ti
 			attempt := dunningAttemptSnapshot(userID, candidate, nil, sender, serviceFrom, requestKey, dunningDeliverySkipped, result.Error, retryOfAttemptID, now)
 			reserved, _, err := s.reserveDunningAttempt(ctx, attempt)
 			if err != nil {
+				if errors.Is(err, errDunningFactsChanged) {
+					result.Error, result.Skipped = "账单责任已更新，请刷新后重试", true
+					results = append(results, result)
+					continue
+				}
 				return nil, err
 			}
 			result.Attempt = &reserved
@@ -350,6 +402,11 @@ func (s *dunningService) send(ctx context.Context, userID uint64, periodMonth ti
 			attempt := dunningAttemptSnapshot(userID, candidate, nil, sender, serviceFrom, requestKey, dunningDeliveryFailed, result.Error, retryOfAttemptID, now)
 			reserved, _, err := s.reserveDunningAttempt(ctx, attempt)
 			if err != nil {
+				if errors.Is(err, errDunningFactsChanged) {
+					result.Error, result.Skipped = "账单责任已更新，请刷新后重试", true
+					results = append(results, result)
+					continue
+				}
 				return nil, err
 			}
 			result.Attempt = &reserved
@@ -359,6 +416,11 @@ func (s *dunningService) send(ctx context.Context, userID uint64, periodMonth ti
 		attempt := dunningAttemptSnapshot(userID, candidate, &message, sender, serviceFrom, requestKey, dunningDeliveryAccepted, "", retryOfAttemptID, now)
 		reserved, existing, err := s.reserveDunningAttempt(ctx, attempt)
 		if err != nil {
+			if errors.Is(err, errDunningFactsChanged) {
+				result.Error, result.Skipped = "账单责任已更新，请刷新后重试", true
+				results = append(results, result)
+				continue
+			}
 			return nil, err
 		}
 		if existing {

@@ -160,24 +160,36 @@ for (const vp of VIEWPORTS) {
 }
 
 // Hidden layouts the default screenshot never reaches: an expanded tenant row
-// and the dunning drawer both add tables/forms that only exist once opened.
+// and the pending-payment process panel add tables/forms that only exist once
+// opened. A fixture may not contain pending payments; record that state as
+// skipped instead of failing the whole geometry audit on a missing control.
 await page.setViewportSize({ width: 390, height: 844 });
-for (const [name, url, action] of [
-  ['tenants-row-expanded', '/tenants', async () => { await page.locator('.tenant-row').first().click(); }],
-  ['dashboard-dunning-drawer', '/rent-dashboard', async () => { await page.locator('[data-dunning-open]').first().click(); }],
+for (const [name, url, selector, action] of [
+  ['tenants-row-expanded', '/tenants', '.tenant-row', async (target) => {
+    await target.focus();
+    await target.press('Enter');
+  }],
+  ['dashboard-pending-payment-panel', '/rent-dashboard', '.workspace-queue-process-trigger', async (target) => {
+    await target.click();
+  }],
 ]) {
   const entry = { state: name, viewport: '390x844', url };
   try {
     await page.goto(BASE + url, { waitUntil: 'networkidle', timeout: 30000 });
-    await action();
-    await page.waitForTimeout(700);
-    entry.result = await page.evaluate(probe);
-    await page.screenshot({ path: path.join(OUT, `${name}__390x844.png`), fullPage: true });
+    const target = page.locator(selector).first();
+    if (await target.count() === 0) {
+      entry.skipped = `fixture has no ${selector}`;
+    } else {
+      await action(target);
+      await page.waitForTimeout(700);
+      entry.result = await page.evaluate(probe);
+      await page.screenshot({ path: path.join(OUT, `${name}__390x844.png`), fullPage: true });
+    }
   } catch (err) {
     entry.error = String(err).slice(0, 300);
   }
   report.states.push(entry);
-  console.log(`state ${name.padEnd(28)} ${entry.result ? 'overflow=' + entry.result.horizontalOverflow : 'ERROR ' + entry.error}`);
+  console.log(`state ${name.padEnd(34)} ${entry.result ? 'overflow=' + entry.result.horizontalOverflow : entry.skipped ? 'SKIPPED ' + entry.skipped : 'ERROR ' + entry.error}`);
 }
 
 // The login page can only be seen logged out: any other visit redirects to the

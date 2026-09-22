@@ -17,11 +17,14 @@ const (
 	cashReceiptStatusVoided    = "voided"
 )
 
+var errCashReceiptOverbalance = errors.New("cash receipt exceeds rent obligation balance")
+
 type cashReceipt struct {
 	ID                   uint64 `gorm:"primaryKey"`
 	UserID               uint64
 	PaymentTransactionID *uint64
-	TenantID             uint64
+	PayerTenantID        *uint64
+	PayerNameSnapshot    *string
 	RentObligationID     uint64
 	ReceiptNumber        string
 	AmountCents          int64
@@ -44,6 +47,8 @@ type cashReceipt struct {
 type cashReceiptInput struct {
 	UserID           uint64
 	TenantID         uint64
+	PayerTenantID    *uint64
+	PayerName        string
 	RentObligationID uint64
 	AmountCents      int64
 	Currency         string
@@ -89,6 +94,15 @@ func validateCashReceiptInput(input cashReceiptInput) error {
 	if len([]rune(strings.TrimSpace(input.Note))) > 512 {
 		return errors.New("cash receipt note is too long")
 	}
+	if len([]rune(strings.TrimSpace(input.PayerName))) > 191 {
+		return errors.New("cash payer name is too long")
+	}
+	if input.PayerTenantID != nil && *input.PayerTenantID == 0 {
+		return errors.New("cash payer tenant is invalid")
+	}
+	if input.PayerTenantID != nil && strings.TrimSpace(input.PayerName) != "" {
+		return errors.New("choose a tenant payer or enter a payer name, not both")
+	}
 	if strings.TrimSpace(input.IdempotencyKey) == "" {
 		return errors.New("cash receipt idempotency key is required")
 	}
@@ -122,9 +136,6 @@ func projectRentObligation(obligation rentObligation, bankAllocations []paymentA
 	bankPaid := ledgerPaidAmount(bankAllocations)
 	cashPaid := int64(0)
 	for _, receipt := range cashReceipts {
-		if receipt.TenantID != obligation.TenantID {
-			continue
-		}
 		if !strings.EqualFold(strings.TrimSpace(receipt.Currency), strings.TrimSpace(obligation.Currency)) {
 			continue
 		}
@@ -171,6 +182,12 @@ func (s *cashReceiptService) previewCashReceipt(ctx context.Context, input cashR
 	if obligation.TenantID != input.TenantID {
 		return cashReceiptPreview{}, errors.New("cash receipt tenant does not match rent obligation")
 	}
+	if input.PayerTenantID != nil {
+		var payer tenant
+		if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", *input.PayerTenantID, input.UserID).First(&payer).Error; err != nil {
+			return cashReceiptPreview{}, err
+		}
+	}
 	if obligation.RecordStatus == obligationRecordVoided {
 		return cashReceiptPreview{}, errors.New("rent obligation is voided")
 	}
@@ -179,11 +196,11 @@ func (s *cashReceiptService) previewCashReceipt(ctx context.Context, input cashR
 	}
 	projected := projectRentObligation(obligation, bankAllocations, cashReceipts, time.Now().UTC())
 	if projected.PaidAmountCents > obligation.ExpectedAmountCents {
-		return cashReceiptPreview{}, errors.New("rent obligation paid projection exceeds expected amount")
+		return cashReceiptPreview{}, errCashReceiptOverbalance
 	}
 	remaining := maxInt64(obligation.ExpectedAmountCents-projected.PaidAmountCents, 0)
 	if input.AmountCents > remaining {
-		return cashReceiptPreview{}, errors.New("cash receipt exceeds rent obligation balance")
+		return cashReceiptPreview{}, errCashReceiptOverbalance
 	}
 	return cashReceiptPreview{
 		Tenant:                tenantRow,
@@ -205,12 +222,21 @@ func (s *cashReceiptService) recordCashReceipt(ctx context.Context, input cashRe
 	}
 	var receipt cashReceipt
 	err := s.db.WithContext(ctx).Transaction(func(txdb *gorm.DB) error {
+		if _, _, err := lockRoomForRentObligation(txdb, input.UserID, input.RentObligationID); err != nil {
+			return err
+		}
 		var obligation rentObligation
 		if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ? AND tenant_id = ?", input.RentObligationID, input.UserID, input.TenantID).First(&obligation).Error; err != nil {
 			return err
 		}
 		if obligation.RecordStatus == obligationRecordVoided {
 			return errors.New("rent obligation is voided")
+		}
+		if input.PayerTenantID != nil {
+			var payer tenant
+			if err := txdb.Where("id = ? AND user_id = ?", *input.PayerTenantID, input.UserID).First(&payer).Error; err != nil {
+				return errors.New("cash payer tenant does not belong to current user")
+			}
 		}
 		if _, err := normalizeLedgerCurrency(obligation.Currency); err != nil {
 			return err
@@ -222,7 +248,8 @@ func (s *cashReceiptService) recordCashReceipt(ctx context.Context, input cashRe
 		key := strings.TrimSpace(input.IdempotencyKey)
 		var previous cashReceipt
 		if err := txdb.Where("user_id = ? AND idempotency_key = ?", input.UserID, key).First(&previous).Error; err == nil {
-			if previous.TenantID != input.TenantID || previous.RentObligationID != input.RentObligationID || previous.AmountCents != input.AmountCents || !strings.EqualFold(previous.Currency, input.Currency) || !sameDate(previous.ReceivedAt, input.ReceivedAt) || strings.TrimSpace(previous.Note) != strings.TrimSpace(input.Note) {
+			payerTenantID, payerNameSnapshot := cashReceiptPayerFacts(input)
+			if previous.RentObligationID != input.RentObligationID || previous.AmountCents != input.AmountCents || !strings.EqualFold(previous.Currency, input.Currency) || !sameDate(previous.ReceivedAt, input.ReceivedAt) || strings.TrimSpace(previous.Note) != strings.TrimSpace(input.Note) || !sameOptionalUint64(previous.PayerTenantID, payerTenantID) || stringValue(previous.PayerNameSnapshot) != stringValue(payerNameSnapshot) {
 				return errors.New("cash receipt idempotency key was already used for different facts")
 			}
 			receipt = previous
@@ -242,24 +269,26 @@ func (s *cashReceiptService) recordCashReceipt(ctx context.Context, input cashRe
 		projected := projectRentObligation(obligation, bankAllocations, cashReceipts, time.Now().UTC())
 		remaining := maxInt64(obligation.ExpectedAmountCents-projected.PaidAmountCents, 0)
 		if projected.PaidAmountCents > obligation.ExpectedAmountCents || input.AmountCents > remaining {
-			return errors.New("cash receipt exceeds rent obligation balance")
+			return errCashReceiptOverbalance
 		}
 		now := time.Now().UTC()
 		receivedAt := dateOnly(input.ReceivedAt)
+		payerTenantID, payerNameSnapshot := cashReceiptPayerFacts(input)
 		receipt = cashReceipt{
-			UserID:           input.UserID,
-			TenantID:         input.TenantID,
-			RentObligationID: input.RentObligationID,
-			ReceiptNumber:    recordID("cash", now),
-			AmountCents:      input.AmountCents,
-			Currency:         ledgerCurrencyEUR,
-			ReceivedAt:       receivedAt,
-			Note:             strings.TrimSpace(input.Note),
-			Status:           cashReceiptStatusConfirmed,
-			OperationID:      recordID("cash-receipt", now),
-			IdempotencyKey:   nullableString(key),
-			RecordedByUserID: input.UserID,
-			RecordedAt:       now,
+			UserID:            input.UserID,
+			PayerTenantID:     payerTenantID,
+			PayerNameSnapshot: payerNameSnapshot,
+			RentObligationID:  input.RentObligationID,
+			ReceiptNumber:     recordID("cash", now),
+			AmountCents:       input.AmountCents,
+			Currency:          ledgerCurrencyEUR,
+			ReceivedAt:        receivedAt,
+			Note:              strings.TrimSpace(input.Note),
+			Status:            cashReceiptStatusConfirmed,
+			OperationID:       recordID("cash-receipt", now),
+			IdempotencyKey:    nullableString(key),
+			RecordedByUserID:  input.UserID,
+			RecordedAt:        now,
 		}
 		if err := txdb.Create(&receipt).Error; err != nil {
 			return err
@@ -275,6 +304,25 @@ func (s *cashReceiptService) recordCashReceipt(ctx context.Context, input cashRe
 		return nil
 	})
 	return receipt, err
+}
+
+func cashReceiptPayerFacts(input cashReceiptInput) (*uint64, *string) {
+	if input.PayerTenantID != nil {
+		payerTenantID := *input.PayerTenantID
+		return &payerTenantID, nil
+	}
+	if payerName := strings.TrimSpace(input.PayerName); payerName != "" {
+		return nil, nullableString(payerName)
+	}
+	payerTenantID := input.TenantID
+	return &payerTenantID, nil
+}
+
+func sameOptionalUint64(left, right *uint64) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
 }
 
 func (s *cashReceiptService) voidCashReceipt(ctx context.Context, userID, receiptID uint64, reason string) (cashReceipt, error) {
@@ -294,8 +342,12 @@ func (s *cashReceiptService) voidCashReceipt(ctx context.Context, userID, receip
 		if err := txdb.Where("id = ? AND user_id = ?", receiptID, userID).First(&receiptRef).Error; err != nil {
 			return err
 		}
+		obligationRef, _, err := lockRoomForRentObligation(txdb, userID, receiptRef.RentObligationID)
+		if err != nil {
+			return err
+		}
 		var obligation rentObligation
-		if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ? AND tenant_id = ?", receiptRef.RentObligationID, userID, receiptRef.TenantID).First(&obligation).Error; err != nil {
+		if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ? AND tenant_id = ?", receiptRef.RentObligationID, userID, obligationRef.TenantID).First(&obligation).Error; err != nil {
 			return err
 		}
 		if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", receiptID, userID).First(&receipt).Error; err != nil {

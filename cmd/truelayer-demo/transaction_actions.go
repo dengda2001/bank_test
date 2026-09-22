@@ -315,13 +315,28 @@ func (s *transactionService) revokeTransactionAllocationsInTx(txdb *gorm.DB, use
 
 	now := time.Now().UTC()
 	operationID := recordID("transaction-revoke", now)
-	obligationIDs := make(map[uint64]struct{})
+	obligationIDSet := make(map[uint64]struct{})
 	for _, allocation := range allocations {
 		if !ledgerAllocationIsEffective(allocation) {
 			continue
 		}
 		if allocation.RentObligationID != nil && *allocation.RentObligationID != 0 && ledgerAllocationKind(allocation) == allocationKindRent {
-			obligationIDs[*allocation.RentObligationID] = struct{}{}
+			obligationIDSet[*allocation.RentObligationID] = struct{}{}
+		}
+	}
+	obligationIDs := make([]uint64, 0, len(obligationIDSet))
+	for obligationID := range obligationIDSet {
+		obligationIDs = append(obligationIDs, obligationID)
+	}
+	sort.Slice(obligationIDs, func(i, j int) bool { return obligationIDs[i] < obligationIDs[j] })
+	lockedObligations, err := lockRentObligationRoomsInTx(txdb, userID, obligationIDs)
+	if err != nil {
+		return paymentTransaction{}, nil, transactionAllocationSummary{}, err
+	}
+
+	for _, allocation := range allocations {
+		if !ledgerAllocationIsEffective(allocation) {
+			continue
 		}
 		if err := txdb.Model(&paymentAllocation{}).Where("id = ? AND user_id = ? AND payment_transaction_id = ? AND status = ?", allocation.ID, userID, transactionID, allocationStatusConfirmed).Updates(map[string]any{
 			"status":            allocationStatusVoided,
@@ -334,10 +349,10 @@ func (s *transactionService) revokeTransactionAllocationsInTx(txdb *gorm.DB, use
 		}
 	}
 
-	for obligationID := range obligationIDs {
-		var obligation rentObligation
-		if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", obligationID, userID).First(&obligation).Error; err != nil {
-			return paymentTransaction{}, nil, transactionAllocationSummary{}, err
+	for _, obligationID := range obligationIDs {
+		obligation, ok := lockedObligations[obligationID]
+		if !ok {
+			return paymentTransaction{}, nil, transactionAllocationSummary{}, ErrRentFactsConflict
 		}
 		var current []paymentAllocation
 		if err := txdb.Where("rent_obligation_id = ? AND user_id = ?", obligationID, userID).Find(&current).Error; err != nil {
@@ -403,11 +418,15 @@ func (s *transactionService) rematchRentAllocation(ctx context.Context, userID, 
 			return errors.New("selected rent obligation is already matched")
 		}
 
-		obligations, err := lockRentObligations(txdb, userID, previous.RentObligationIDValue(), target.ID)
+		obligations, err := lockRentObligationRoomsInTx(txdb, userID, []uint64{previous.RentObligationIDValue(), target.ID})
 		if err != nil {
 			return err
 		}
-		target = obligations[target.ID]
+		lockedTarget, ok := obligations[target.ID]
+		if !ok {
+			return ErrRentFactsConflict
+		}
+		target = lockedTarget
 		if _, _, _, err := s.revokeTransactionAllocationsInTx(txdb, userID, transactionID, "修改匹配", ""); err != nil {
 			return err
 		}
@@ -419,34 +438,6 @@ func (s *transactionService) rematchRentAllocation(ctx context.Context, userID, 
 		}}, "", "manual_rematch")
 		return err
 	})
-}
-
-// lockRentObligations acquires all affected obligation rows in ascending ID
-// order. Rematching can touch both an old and a new rent month, so a stable
-// order prevents two inverse rematch requests from waiting on each other.
-func lockRentObligations(txdb *gorm.DB, userID uint64, obligationIDs ...uint64) (map[uint64]rentObligation, error) {
-	ids := make([]uint64, 0, len(obligationIDs))
-	seen := make(map[uint64]struct{}, len(obligationIDs))
-	for _, obligationID := range obligationIDs {
-		if obligationID == 0 {
-			return nil, errors.New("rent obligation ID is required")
-		}
-		if _, ok := seen[obligationID]; ok {
-			continue
-		}
-		seen[obligationID] = struct{}{}
-		ids = append(ids, obligationID)
-	}
-	sort.Slice(ids, func(left, right int) bool { return ids[left] < ids[right] })
-	obligations := make(map[uint64]rentObligation, len(ids))
-	for _, obligationID := range ids {
-		var obligation rentObligation
-		if err := txdb.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", obligationID, userID).First(&obligation).Error; err != nil {
-			return nil, err
-		}
-		obligations[obligationID] = obligation
-	}
-	return obligations, nil
 }
 
 func updateTransactionProjection(txdb *gorm.DB, userID, transactionID uint64, projection transactionMatchProjection) error {

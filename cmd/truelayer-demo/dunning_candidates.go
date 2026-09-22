@@ -48,6 +48,18 @@ func (s *dunningService) listCandidatesForRows(ctx context.Context, userID uint6
 	if err := s.db.WithContext(ctx).Where("user_id = ? AND id IN ?", userID, obligationIDs).Find(&obligations).Error; err != nil {
 		return nil, err
 	}
+	chargeIDs := make([]uint64, 0, len(obligations))
+	for _, obligation := range obligations {
+		if obligation.RentChargeID != 0 {
+			chargeIDs = append(chargeIDs, obligation.RentChargeID)
+		}
+	}
+	var charges []rentCharge
+	if len(chargeIDs) > 0 {
+		if err := s.db.WithContext(ctx).Where("user_id = ? AND id IN ?", userID, chargeIDs).Find(&charges).Error; err != nil {
+			return nil, err
+		}
+	}
 	var allocations []paymentAllocation
 	if err := s.db.WithContext(ctx).Where("user_id = ? AND rent_obligation_id IN ?", userID, obligationIDs).Find(&allocations).Error; err != nil {
 		return nil, err
@@ -69,6 +81,10 @@ func (s *dunningService) listCandidatesForRows(ctx context.Context, userID uint6
 	obligationByID := make(map[uint64]rentObligation, len(obligations))
 	for _, row := range obligations {
 		obligationByID[row.ID] = row
+	}
+	chargeByID := make(map[uint64]rentCharge, len(charges))
+	for _, row := range charges {
+		chargeByID[row.ID] = row
 	}
 	allocationsByObligation := make(map[uint64][]paymentAllocation, len(obligationIDs))
 	for _, allocation := range allocations {
@@ -99,7 +115,7 @@ func (s *dunningService) listCandidatesForRows(ctx context.Context, userID uint6
 			continue
 		}
 		obligation = projectRentObligation(obligation, allocationsByObligation[obligation.ID], cashReceiptsByObligation[obligation.ID], now)
-		candidate := buildDunningCandidate(obligation, tenantRow, now, latestByObligation[obligation.ID])
+		candidate := buildDunningCandidate(obligation, tenantRow, now, latestByObligation[obligation.ID], chargeByID[obligation.RentChargeID])
 		candidate.SentToday = sentTodayByObligation[obligation.ID]
 		candidate.DefaultSelected = candidate.Selectable && !candidate.SentToday
 		candidates = append(candidates, candidate)

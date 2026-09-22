@@ -170,6 +170,8 @@ func (a *app) cashReceiptDraftFormData(ctx context.Context, r *http.Request, use
 	}
 	data.Period = period.Format("2006-01")
 	data.Amount = strings.TrimSpace(values.Get("amount"))
+	data.PayerName = strings.TrimSpace(values.Get("payer_name"))
+	data.PayerTenantID = strings.TrimSpace(values.Get("payer_tenant_id"))
 	data.ReceivedAt = firstNonEmpty(strings.TrimSpace(values.Get("received_at")), data.ReceivedAt)
 	data.Note = strings.TrimSpace(values.Get("note"))
 	data.Currency = ledgerCurrencyEUR
@@ -185,6 +187,20 @@ func (a *app) cashReceiptDraftFormData(ctx context.Context, r *http.Request, use
 			}
 		}
 		data.TenantID = raw
+	}
+	if data.PayerTenantID != "" {
+		if payerID, err := parsePositiveUint(data.PayerTenantID); err == nil {
+			for _, candidate := range data.Tenants {
+				if candidate.ID == payerID {
+					data.PayerDisplay = firstNonEmpty(candidate.DisplayAlias, candidate.Name)
+					break
+				}
+			}
+		}
+	} else if data.PayerName != "" {
+		data.PayerDisplay = data.PayerName
+	} else if data.Tenant.ID != 0 {
+		data.PayerDisplay = firstNonEmpty(data.Tenant.DisplayAlias, data.Tenant.Name)
 	}
 	return data, nil
 }
@@ -299,10 +315,23 @@ func (a *app) loadCashReceiptListPage(ctx context.Context, r *http.Request, user
 		if statusFilter != "all" && receipt.Status != statusFilter {
 			continue
 		}
-		tenantRow := tenantByID[receipt.TenantID]
+		var obligation rentObligation
+		if err := a.db.WithContext(ctx).Where("id = ? AND user_id = ?", receipt.RentObligationID, userID).First(&obligation).Error; err != nil {
+			continue
+		}
+		tenantRow := tenantByID[obligation.TenantID]
+		payerName := stringValue(receipt.PayerNameSnapshot)
+		if payerName == "" && receipt.PayerTenantID != nil {
+			payer := tenantByID[*receipt.PayerTenantID]
+			payerName = firstNonEmpty(payer.DisplayAlias, payer.Name)
+		}
+		if payerName == "" {
+			payerName = "未记录"
+		}
 		row := cashReceiptPageRow{
-			ID: receipt.ID, ReceiptNumber: receipt.ReceiptNumber, TenantID: receipt.TenantID,
+			ID: receipt.ID, ReceiptNumber: receipt.ReceiptNumber, TenantID: obligation.TenantID,
 			TenantName:   firstNonEmpty(tenantRow.DisplayAlias, tenantRow.Name, "未绑定租客"),
+			PayerName:    payerName,
 			ObligationID: receipt.RentObligationID, AmountCents: receipt.AmountCents,
 			Amount: pageCurrencyAmount(receipt.AmountCents, receipt.Currency), Currency: receipt.Currency,
 			ReceivedAt: receipt.ReceivedAt.Format(dateLayout), Status: receipt.Status,
@@ -310,20 +339,17 @@ func (a *app) loadCashReceiptListPage(ctx context.Context, r *http.Request, user
 			VoidReason: stringValue(receipt.VoidReason),
 			VoidURL:    "/cash-receipts/void?receipt_id=" + strconv.FormatUint(receipt.ID, 10),
 		}
-		var obligation rentObligation
-		if err := a.db.WithContext(ctx).Where("id = ? AND user_id = ?", receipt.RentObligationID, userID).First(&obligation).Error; err == nil {
-			row.Period = obligation.PeriodMonth.Format("2006-01")
-			if obligation.RentChargeID != nil {
-				var charge rentCharge
-				if err := a.db.WithContext(ctx).Where("id = ? AND user_id = ?", *obligation.RentChargeID, userID).First(&charge).Error; err == nil {
-					row.RoomLabel = stringValue(charge.RoomLabelSnapshot)
-				}
+		row.Period = obligation.PeriodMonth.Format("2006-01")
+		if obligation.RentChargeID != 0 {
+			var charge rentCharge
+			if err := a.db.WithContext(ctx).Where("id = ? AND user_id = ?", obligation.RentChargeID, userID).First(&charge).Error; err == nil {
+				row.RoomLabel = stringValue(charge.RoomLabelSnapshot)
 			}
 		}
 		if row.Period != periodValue {
 			continue
 		}
-		if needle != "" && !strings.Contains(strings.ToLower(row.ReceiptNumber+" "+row.TenantName+" "+row.Period+" "+row.Note+" "+row.StatusLabel), needle) {
+		if needle != "" && !strings.Contains(strings.ToLower(row.ReceiptNumber+" "+row.TenantName+" "+row.PayerName+" "+row.Period+" "+row.Note+" "+row.StatusLabel), needle) {
 			continue
 		}
 		rows = append(rows, row)

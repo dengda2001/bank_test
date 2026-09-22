@@ -218,9 +218,6 @@ func decorateTransactionPageRow(row *transactionPageRow, transaction paymentTran
 	}
 	if contextTenant, ok := tenantByID[contextTenantID]; ok {
 		row.ObjectLabel = transactionTenantObjectLabel(contextTenant)
-		if strings.TrimSpace(contextTenant.RoomLabel) != "" {
-			row.RoomOnlyLabel = "房间 " + strings.TrimSpace(contextTenant.RoomLabel)
-		}
 	}
 	if transaction.Direction == "income" && summary.RemainingCents > 0 && transaction.MatchStatus != "ignored" {
 		row.ManualMatchOptions = availableRentManualMatchOptions(transaction, obligations, tenantNames, summary.RemainingCents)
@@ -238,21 +235,7 @@ func decorateTransactionPageRow(row *transactionPageRow, transaction paymentTran
 }
 
 func transactionTenantObjectLabel(row tenant) string {
-	property := strings.TrimSpace(row.RoomAddress)
-	if property == "" {
-		property = strings.TrimSpace(stringValue(row.PropertyHint))
-	}
-	room := strings.TrimSpace(row.RoomLabel)
-	if room != "" {
-		room = "房间 " + room
-	}
-	if property == "" {
-		return room
-	}
-	if room == "" {
-		return property
-	}
-	return property + " · " + room
+	return ""
 }
 
 func availableRentMatchOptions(source paymentTransaction, obligations []rentObligation, tenantNames map[uint64]string, amountCents int64, excludedObligationID uint64) []billingRentMatchOption {

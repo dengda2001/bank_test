@@ -1,315 +1,73 @@
 package main
 
 import (
-	"net/http"
-	"net/http/httptest"
-	"os"
+	"net/url"
 	"strings"
 	"testing"
-	"time"
 )
 
-func TestNormalizeTenantPayerNameKeepsNameOnlyBankIdentity(t *testing.T) {
-	if got := normalizeTenantPayerName("  Mike   "); got != "mike" {
-		t.Fatalf("normalized payer name=%q want %q", got, "mike")
-	}
-	if got := normalizeTenantPayerName("ZR Institute"); got != "zr institute" {
-		t.Fatalf("normalized payer name=%q want %q", got, "zr institute")
-	}
+type testFormValues map[string]string
+
+func (values testFormValues) Get(name string) string { return values[name] }
+
+func validTenantInputForProfile() tenantInput {
+	return tenantInput{Name: "Aoife Murphy", Email: "aoife@example.test", Status: "active"}
 }
 
-func TestTenantInputDefaultsBillingStartToRentStart(t *testing.T) {
-	input, err := tenantInputFromForm(testFormValues{
-		"name": "Aoife Murphy", "monthly_rent": "950", "currency": "EUR",
-		"rent_start_date": "2026-09-20", "room_address": "Dublin", "status": "active",
+func repositoryTestTenant(userID uint64, name string) tenant {
+	return tenant{UserID: userID, Name: name, Status: "active"}
+}
+
+func TestTenantInputParsesOnlyPersonAndPayerFields(t *testing.T) {
+	input, err := tenantInputFromForm(url.Values{
+		"name": {"Aoife Murphy"}, "display_alias": {"Aoife"}, "email": {"aoife@example.test"},
+		"payer_id": {"payer-1"}, "payer_name_hint": {"AOIFE MURPHY"}, "status": {"active"},
+		"monthly_rent": {"950.00"}, "room_id": {"9"}, "active_from": {"2026-09"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if input.BillingStartDate != "2026-09-20" {
-		t.Fatalf("billing start=%q want rent start date", input.BillingStartDate)
+	if input.Name != "Aoife Murphy" || input.DisplayAlias != "Aoife" || input.Email != "aoife@example.test" || input.PayerID != "payer-1" || input.PayerNameHint != "AOIFE MURPHY" {
+		t.Fatalf("profile input=%+v", input)
 	}
 }
 
-func TestTenantInputParsesRoomResponsibilityPlanAndEffectiveMonth(t *testing.T) {
-	input, err := tenantInputFromForm(testFormValues{
-		"name": "Aoife Murphy", "monthly_rent": "1200.00", "currency": "EUR", "room_id": "7",
-		"structured": "1", "arrangement_start_month": "2026-10",
-		"room_plan": `[{"tenant_id":12,"amount_cents":70000},{"tenant_id":0,"amount_cents":50000}]`,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !input.RoomPlanProvided || input.ArrangementStartMonth != "2026-10" || len(input.RoomTenantIDs) != 1 || input.RoomTenantIDs[0] != 12 {
-		t.Fatalf("room plan metadata = %+v", input)
-	}
-	if len(input.Responsibilities) != 2 || input.Responsibilities[0].AmountCents != 70000 || input.Responsibilities[1].TenantID != 0 || input.Responsibilities[1].AmountCents != 50000 {
-		t.Fatalf("room responsibilities = %+v", input.Responsibilities)
-	}
-}
-
-func TestTenantInputRejectsUnbalancedRoomResponsibilityPlan(t *testing.T) {
-	_, err := tenantInputFromForm(testFormValues{
-		"name": "Aoife Murphy", "monthly_rent": "1200.00", "room_id": "7", "structured": "1",
-		"arrangement_start_month": "2026-10",
-		"room_plan":               `[{"tenant_id":12,"amount_cents":70000},{"tenant_id":0,"amount_cents":40000}]`,
-	})
-	if err == nil || !strings.Contains(err.Error(), "sum") {
-		t.Fatalf("unbalanced plan error = %v, want sum validation", err)
-	}
-}
-
-func TestTenantEditFormDefaultsRentFromBoundRoomWhenProfileRentIsEmpty(t *testing.T) {
-	record := tenantRecord{RoomID: 11, Currency: "EUR"}
-	got := tenantEditFormRecordWithRoomDefaults(record, []tenantRoomOption{{
-		ID: 11, MonthlyRentValue: "1200.00", Currency: "GBP",
-	}})
-	if got.MonthlyRent != 1200 || got.Currency != "GBP" || got.RoomID != 11 {
-		t.Fatalf("tenant edit defaults=%+v, want room rent 1200 GBP and room 11", got)
-	}
-}
-
-func TestValidateTenantInputRejectsBillingOutsideRentPeriod(t *testing.T) {
-	input := validTenantInputForProfile()
-	input.RentStartDate = "2026-09-20"
-	input.RentEndDate = "2026-10-02"
-	input.BillingStartDate = "2026-10-03"
-
-	if err := validateTenantInput(input); err == nil || !strings.Contains(err.Error(), "billing start") {
-		t.Fatalf("validation error=%v want billing start boundary error", err)
+func TestTenantInputRequiresPayerNameWhenPayerIDIsSet(t *testing.T) {
+	_, err := tenantInputFromForm(url.Values{"name": {"Aoife Murphy"}, "payer_id": {"payer-1"}})
+	if err == nil || !strings.Contains(err.Error(), "payer name is required") {
+		t.Fatalf("payer-only input error=%v", err)
 	}
 }
 
 func TestValidateTenantInputRejectsInvalidEmail(t *testing.T) {
-	input := validTenantInputForProfile()
-	input.Email = "not-an-email"
-
-	if err := validateTenantInput(input); err == nil || !strings.Contains(err.Error(), "email") {
-		t.Fatalf("validation error=%v want email error", err)
+	err := validateTenantInput(tenantInput{Name: "Aoife Murphy", Email: "not-an-email", Status: "active"})
+	if err == nil || !strings.Contains(err.Error(), "email") {
+		t.Fatalf("invalid email error=%v", err)
 	}
 }
 
-func TestTenantPayerMigrationSupportsNameOnlyRelationsAndLegacyBackfill(t *testing.T) {
-	body, err := os.ReadFile("../../migrations/004_tenant_profile_and_payers.sql")
-	if err != nil {
-		t.Fatal(err)
+func TestTenantPayerNormalizationAndSharing(t *testing.T) {
+	if got := normalizeTenantPayerName("  AOIFE   MURPHY "); got != "aoife murphy" {
+		t.Fatalf("normalized payer=%q", got)
 	}
-	sql := string(body)
-	for _, fragment := range []string{
-		"ADD COLUMN display_alias",
-		"ADD COLUMN email",
-		"DROP INDEX idx_tenants_user_payer_id",
-		"CREATE TABLE IF NOT EXISTS tenant_payers",
-		"payer_name_original varchar(191) NOT NULL",
-		"payer_name_normalized varchar(191) NOT NULL",
-		"payer_id varchar(191) NULL",
-		"removed_at timestamp NULL",
-		"INSERT INTO tenant_payers",
-		"NOT EXISTS",
-	} {
-		if !strings.Contains(sql, fragment) {
-			t.Fatalf("migration missing %q", fragment)
-		}
-	}
-}
-
-func TestValidateTenantPayerInputAllowsNameOnlyIdentity(t *testing.T) {
-	if err := validateTenantPayerInput(tenantPayerInput{Name: " Mike "}); err != nil {
-		t.Fatalf("name-only payer rejected: %v", err)
-	}
-}
-
-func TestValidateTenantPayerInputRequiresName(t *testing.T) {
-	if err := validateTenantPayerInput(tenantPayerInput{PayerID: "payer-123"}); err == nil {
-		t.Fatal("expected payer name to be required when payer id is present")
-	}
-}
-
-func TestClassifyTenantPayersMarksSharedNameWithoutStableID(t *testing.T) {
+	payerID := "shared-id"
 	rows := classifyTenantPayerSharing([]tenantPayer{
-		{ID: 1, TenantID: 10, PayerNameNormalized: "mike"},
-		{ID: 2, TenantID: 11, PayerNameNormalized: "mike"},
-		{ID: 3, TenantID: 10, PayerID: ptrString("payer-3"), PayerNameNormalized: "other"},
+		{ID: 1, TenantID: 7, PayerID: &payerID, PayerNameOriginal: "Aoife", PayerNameNormalized: "aoife"},
+		{ID: 2, TenantID: 8, PayerID: &payerID, PayerNameOriginal: "Other", PayerNameNormalized: "other"},
 	})
-	if !rows[0].Shared || !rows[1].Shared {
-		t.Fatalf("shared payer rows=%+v want both mike rows shared", rows)
-	}
-	if rows[2].Shared {
-		t.Fatalf("unshared payer row=%+v unexpectedly shared", rows[2])
+	if len(rows) != 2 || !rows[0].Shared || !rows[1].Shared {
+		t.Fatalf("shared payer classification=%+v", rows)
 	}
 }
 
-func TestClassifyTenantPayersMarksSharedStableIDAcrossDifferentNames(t *testing.T) {
-	rows := classifyTenantPayerSharing([]tenantPayer{
-		{ID: 1, TenantID: 10, PayerID: ptrString("payer-1"), PayerNameNormalized: "parent"},
-		{ID: 2, TenantID: 11, PayerID: ptrString("payer-1"), PayerNameNormalized: "guardian"},
-	})
-	if !rows[0].Shared || !rows[1].Shared {
-		t.Fatalf("shared stable id rows=%+v want both shared", rows)
-	}
-}
-
-func TestRentEndChangeOnlyAffectsMonthsAfterEndMonth(t *testing.T) {
-	end := time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC)
-	if !obligationIsAfterRentEnd(time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), &end) {
-		t.Fatal("November obligation should be affected")
-	}
-	if obligationIsAfterRentEnd(time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), &end) {
-		t.Fatal("end month obligation should remain applicable")
-	}
-}
-
-func TestPaginateTenantBillingMonthsReturnsStablePageAndTotal(t *testing.T) {
-	rows := []tenantBillingMonth{
-		{Period: "2026-05"}, {Period: "2026-04"}, {Period: "2026-03"},
-		{Period: "2026-02"}, {Period: "2026-01"},
-	}
-	page, totalPages, err := paginateTenantBillingMonths(rows, 2, 2)
+func TestTenantFormDoesNotExposeRentPlanFields(t *testing.T) {
+	page, err := executeTemplate(tenantTemplate, tenantPageData{ShowForm: true, Form: tenantRecord{Status: "active"}, ReturnURL: "/tenants", PostReturnURL: "/tenants?add=1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(page) != 2 || page[0].Period != "2026-03" || page[1].Period != "2026-02" || totalPages != 3 {
-		t.Fatalf("page=%+v totalPages=%d want March/February and 3 pages", page, totalPages)
-	}
-}
-
-func TestPaginateTenantBillingMonthsDoesNotOverflowOnLargePage(t *testing.T) {
-	rows, totalPages, err := paginateTenantBillingMonths([]tenantBillingMonth{{Period: "2026-05"}}, int(^uint(0)>>1), 12)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(rows) != 0 || totalPages != 1 {
-		t.Fatalf("rows=%+v totalPages=%d want empty page and one total page", rows, totalPages)
-	}
-}
-
-func TestParseTenantHistoryRangeDefaultsToTwelveMonths(t *testing.T) {
-	from, to, page, pageSize, err := parseTenantHistoryRange(testQueryValues{}, time.Date(2026, 9, 16, 0, 0, 0, 0, time.UTC))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if from.Format("2006-01") != "2025-10" || to.Format("2006-01") != "2026-09" || page != 1 || pageSize != 12 {
-		t.Fatalf("range=%s..%s page=%d size=%d", from.Format("2006-01"), to.Format("2006-01"), page, pageSize)
-	}
-}
-
-func TestTenantDetailTemplateShowsNameOnlyPayerAndHistoryControls(t *testing.T) {
-	var body strings.Builder
-	err := tenantDetailTemplate.Execute(&body, tenantDetailPageData{
-		Tenant:       tenantRecord{ID: "7", Name: "Aoife Murphy", DisplayAlias: "Aoife", Email: "aoife@example.test"},
-		Payers:       []tenantPayerRecord{{ID: "8", Name: "Mike", Shared: true}},
-		HistoryRange: "12",
-		History: tenantBillingHistoryPage{
-			FromPeriod: "2025-10", ToPeriod: "2026-09", Page: 1, PageSize: 12, TotalRows: 1, Reference: "RENT-2B-T018",
-			Rows: []tenantBillingMonth{{PeriodLabel: "2026年9月", StatusLabel: "已缴清"}},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	page := body.String()
-	for _, expected := range []string{
-		"aoife@example.test", "Mike", "共享／冲突候选", "/tenants/7/payers",
-		"2026年9月", "租客详情",
-		// 缴费历史范围改成「近 12 / 24 个月」预设下拉，默认近 12；起止月份输入框退役。
-		`name="range"`, `value="12" selected`, "近 12 个月", "近 24 个月",
-		// 付款识别渲染参考码与复制按钮。
-		"付款识别", "付款参考码", "RENT-2B-T018", `data-copy-value="RENT-2B-T018"`,
-		// 代付与被代付表存在（数据为空时给空态而非占位行）。
-		"代付与被代付",
-	} {
-		if !strings.Contains(page, expected) {
-			t.Fatalf("tenant detail template missing %q", expected)
+	for _, field := range []string{"monthly_rent", "room_id", "due_day", "rent_effective_from_month", "arrangement_start_month", "room_plan"} {
+		if strings.Contains(page, `name="`+field+`"`) {
+			t.Errorf("tenant form still posts rent-plan field %q", field)
 		}
-	}
-	for _, retired := range []string{"from_month", "to_month", "付款人关系"} {
-		if strings.Contains(page, retired) {
-			t.Fatalf("tenant detail template still renders retired markup %q", retired)
-		}
-	}
-}
-
-// The 代付与被代付 table renders one row per payer/owner mismatch, with the
-// payer badge only when this tenant is the one being paid for.
-func TestTenantDetailTemplateRendersPaidByOtherRows(t *testing.T) {
-	var body strings.Builder
-	err := tenantDetailTemplate.Execute(&body, tenantDetailPageData{
-		Tenant:  tenantRecord{ID: "7", Name: "Aoife Murphy"},
-		History: tenantBillingHistoryPage{Page: 1, PageSize: 12},
-		PaidByOtherRows: []tenantPaidByOtherRow{
-			{PeriodLabel: "2026年9月", PayerName: "Mike", OwnerName: "Aoife Murphy", Amount: "€640.00", Result: "本人被代付"},
-			{PeriodLabel: "2026年9月", PayerName: "Aoife Murphy", OwnerName: "Mike", Amount: "€640.00", Result: "代付他人"},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	page := body.String()
-	for _, expected := range []string{
-		"代付与被代付", "责任月份", "实际付款人", "责任所有者", "分配金额", "结果",
-		"本人被代付", "代付他人", "€640.00", `<span class="payer-badge">代付</span>`,
-	} {
-		if !strings.Contains(page, expected) {
-			t.Fatalf("tenant detail paid-by-other table missing %q", expected)
-		}
-	}
-}
-
-func TestTenantHistoryRangePresetWinsOverExplicitMonths(t *testing.T) {
-	now := time.Date(2026, 9, 16, 0, 0, 0, 0, time.UTC)
-	from, to, page, pageSize, err := parseTenantHistoryRange(testQueryValues{"range": "24", "from_month": "2026-09", "to_month": "2026-09", "page": "2"}, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if from.Format("2006-01") != "2024-10" || to.Format("2006-01") != "2026-09" || page != 2 || pageSize != 12 {
-		t.Fatalf("range=%s..%s page=%d size=%d want 2024-10..2026-09 page 2 size 12", from.Format("2006-01"), to.Format("2006-01"), page, pageSize)
-	}
-	if _, _, _, _, err := parseTenantHistoryRange(testQueryValues{"range": "13"}, now); err == nil {
-		t.Fatal("range=13 should be rejected; only 12 and 24 are offered")
-	}
-	if got := tenantHistoryRangeValue(from, to); got != "24" {
-		t.Fatalf("history range value = %q want 24", got)
-	}
-	twelveFrom, twelveTo, _, _, err := parseTenantHistoryRange(testQueryValues{}, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := tenantHistoryRangeValue(twelveFrom, twelveTo); got != "12" {
-		t.Fatalf("default history range value = %q want 12", got)
-	}
-}
-
-func TestTenantDetailRequiresAuthenticatedDatabaseSession(t *testing.T) {
-	a := testApp()
-	rec := httptest.NewRecorder()
-	a.handleTenantSubroute(rec, httptest.NewRequest(http.MethodGet, "/tenants/7", nil))
-	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/" {
-		t.Fatalf("status=%d location=%q want unauthenticated redirect", rec.Code, rec.Header().Get("Location"))
-	}
-}
-
-func TestPaymentSourceLabelDistinguishesBankAndCash(t *testing.T) {
-	if got := paymentSourceLabel("truelayer"); got != "银行" {
-		t.Fatalf("truelayer source=%q want 银行", got)
-	}
-	if got := paymentSourceLabel("cash"); got != "现金" {
-		t.Fatalf("cash source=%q want 现金", got)
-	}
-}
-
-type testQueryValues map[string]string
-
-func (v testQueryValues) Get(key string) string { return v[key] }
-
-type testFormValues map[string]string
-
-func (v testFormValues) Get(key string) string { return v[key] }
-
-func validTenantInputForProfile() tenantInput {
-	return tenantInput{
-		Name: "Aoife Murphy", MonthlyRent: 950, Currency: "EUR",
-		IntervalUnit: "month", IntervalCount: 1, BillingStartDate: "2026-09-01",
-		DueDay: 5, RentStartDate: "2026-09-01", Status: "active",
-		RoomAddress: "14 Harcourt Street, Dublin",
 	}
 }

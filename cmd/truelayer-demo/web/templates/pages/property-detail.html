@@ -51,7 +51,7 @@
         <article class="panel metric metric-primary"><div class="label">本月应收</div><strong>{{.Property.ExpectedAmount}}</strong><span>{{.Property.RoomCount}} 间房 · {{.Property.ActiveRoomCount}} 间有效</span></article>
         <article class="panel metric metric-success"><div class="label">已收租金</div><strong>{{.Property.PaidAmount}}</strong><span>收缴率 {{.Property.CollectionPercent}}%</span></article>
         <article class="panel metric property-mobile-unpaid"><div class="label">未收</div><strong>{{.Property.BalanceAmount}}</strong><span>本月尚未覆盖</span></article>
-        <article class="panel metric"><div class="label">本月支出</div><strong>{{.Property.ExpenseAmount}}</strong><span>有效房产与房间支出</span></article>
+        <article class="panel metric"><div class="label">本月支出</div><strong>{{.Property.ExpenseAmount}}</strong><span>本房产与房间的支出</span></article>
         <article class="panel metric"><div class="label">经营净额</div><strong>{{.Property.NetAmount}}</strong><span>已确认收入 − 有效支出</span></article>
       </section>
 
@@ -82,7 +82,7 @@
             <div><dt>城市 / 区域</dt><dd>{{.Property.CityRegion}}</dd></div>
             <div><dt>时区</dt><dd>{{.Property.Timezone}}</dd></div>
             <div><dt>状态</dt><dd><span class="detail-status {{.Property.Status}}">{{.Property.StatusLabel}}</span></dd></div>
-            <div><dt>房间数</dt><dd>{{.Property.ActiveRoomCount}} 间有效 / {{.Property.RoomCount}} 间全部</dd></div>
+            <div><dt>房间数</dt><dd>{{.Property.ActiveRoomCount}} 间在用 / {{.Property.RoomCount}} 间全部</dd></div>
             <div><dt>统计月份</dt><dd>{{.PeriodLabel}}</dd></div>
             <div><dt>收缴率</dt><dd>{{.Property.CollectionPercent}}%</dd></div>
             {{if .Property.Notes}}<div><dt>房产备注</dt><dd>{{.Property.Notes}}</dd></div>{{end}}

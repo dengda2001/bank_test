@@ -286,12 +286,7 @@ func TestMobileTenantListUsesCards(t *testing.T) {
 			ID:           "7",
 			Name:         "陈先生",
 			DisplayAlias: "陈先生",
-			RoomLabel:    "2B",
-			RoomAddress:  "Rosewood Court",
-			RentDisplay:  "EUR 1280.00",
-			Currency:     "EUR",
 			Status:       "active",
-			DueDay:       1,
 			BillingHistory: []tenantBillingMonth{{
 				PeriodLabel:   "2026年9月",
 				StatusLabel:   "部分缴纳",

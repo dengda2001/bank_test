@@ -36,8 +36,6 @@ Optional:
 - Transaction start date with `TL_FROM=YYYY-MM-DD`. The transaction end bound is always the current UTC time.
 - Local JSONL log path with `TL_LOG_FILE`. Defaults to `bank-data.jsonl`.
 - Local refresh token path with `TL_TOKEN_FILE`. Defaults to `truelayer-token.json`.
-- Local tenant ledger path with `RENTOPS_TENANT_FILE`. Defaults to `rentops-tenants.json`.
-- Local expense ledger path with `RENTOPS_EXPENSE_FILE`. Defaults to `rentops-expenses.json`.
 - Demo admin username with `APP_ADMIN_USERNAME`. Defaults to `ddrzh`.
 - Demo admin password with `APP_ADMIN_PASSWORD`. Defaults to `ddrzh512`.
 - Session signing secret with `APP_SESSION_SECRET`. If omitted, the server generates one on startup and sessions expire after restart.
@@ -81,7 +79,7 @@ http://localhost:8080
 
 Sign in with the configured demo admin credentials. The app redirects to `/billing`, the transaction-only statement page. The sidebar also contains `/rent-dashboard`, `/tenants`, and `/expenses`.
 
-`/tenants` stores tenant name, payer ID/name hint, monthly rent, due day, rent validity dates, and room address. `/rent-dashboard` lazily creates monthly obligations and shows expected, paid, partial, overdue, review, and expense totals. `/expenses` stores manual outgoing records and projects them into the unified transaction table.
+`/tenants` stores tenant identity and payer details. Room occupancy, responsible tenants, monthly rent, and due day are maintained as a rent plan from the room page; property and room records do not have effective-date fields. `/rent-dashboard` shows expected, paid, partial, overdue, review, and expense totals. `/expenses` stores manual outgoing records and projects them into the unified transaction table.
 
 Click **Bind bank account** to start the TrueLayer authorization flow. After consent, the callback checks the local app session, fetches bank data, appends it to the JSONL log, and redirects back to the billing page.
 
@@ -97,11 +95,17 @@ The MySQL integration tests are opt-in through `RENTOPS_MYSQL_TEST_DSN`. Use the
 
 By default the script uses the project credentials from `MYSQL_DSN` and a local `root` administrator on `127.0.0.1:3306`. Override `MYSQL_ADMIN_USER`, `MYSQL_ADMIN_PASSWORD`, `MYSQL_ADMIN_HOST`, or `MYSQL_ADMIN_PORT` when needed. Pass normal `go test` arguments to run a narrower set, for example `./scripts/run-mysql-test-clean.sh ./cmd/truelayer-demo -run TestManualBalanceSettlesOnlyTheOutstandingRentOnMySQL -count=1`.
 
+### Room rent-plan schema reset
+
+Migration `014_room_rent_plan_reset.sql` replaces the old tenancy-agreement and tenant rent fields with room rent plans. It intentionally has no data migration or data-level rollback. Before applying it to an existing local development or test database, preserve any data you need and explicitly drop and recreate that disposable database. The migration refuses to proceed when it finds existing business rows; it does not delete them automatically. Do not use this reset procedure on production data.
+
+Rolling the application code back across migration 014 also requires restoring a pre-014 database backup or rebuilding a database with the pre-014 schema. Do not roll back only the application binary while keeping the post-014 schema.
+
 Refresh tokens are reusable, but they are not permanent. TrueLayer connections and user consent commonly expire on a 90-day cycle, and access can also fail if the user revokes consent or the bank requires re-authorization. When that happens, bind the bank account again.
 
 `TL_FROM` is used as the transaction start date for the first bank authorization callback, so a fresh consent can fetch as much historical data as the bank permits. Manual refreshes intentionally cap the transaction start date to the later of `TL_FROM` and the last 90 days because many banks reject older transaction ranges after the initial strong-customer-authentication window.
 
-The same callback result is still appended to `TL_LOG_FILE` as a compatibility log, and is also upserted into the current user's `payment_transactions` table. The database is the UI source of truth. Use the protected `POST /import-legacy` endpoint once after configuring MySQL to import existing JSON/JSONL bank, tenant, and expense files; the import is idempotent.
+The callback result is appended to `TL_LOG_FILE` as a compatibility log and upserted into the signed-in user's `payment_transactions` table. The database is the UI source of truth; JSON tenant and expense files are not a runtime fallback or an import path.
 
 The transaction page filters income, expenses, month, and matching status from the database. It treats `transaction_type == "CREDIT"` or positive amounts as income and `DEBIT` or negative amounts as expenses. Payer ID is preferred for matching; an exact name match is shown as a candidate and can be confirmed manually, which then backfills the payer ID on the tenant. Descriptions and references containing a month such as `2026-09`, `09/2026`, `Sep 2026`, or `9月` are used to select the corresponding unpaid monthly obligation.
 

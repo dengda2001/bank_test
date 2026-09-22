@@ -87,7 +87,7 @@ func TestListManualBalanceRedirectRetargetsTheSubmittingList(t *testing.T) {
 	for key, want := range map[string]string{
 		"period":    "2026-09",
 		"search":    "Aoife Murphy",
-		"status":    "unpaid",
+		"status":    "outstanding",
 		"sort":      "due_desc",
 		"page":      "2",
 		"page_size": "24",
@@ -236,23 +236,18 @@ func TestBankPageExposesAddAccountAndAccountActions(t *testing.T) {
 	}
 }
 
-func TestRoomsPageOmitsTheIsolatedActiveFromMarker(t *testing.T) {
-	render := func(activeFrom string) string {
-		t.Helper()
-		page, err := executeTemplate(roomPageTemplate, roomPageData{
-			Period: "2026-09",
-			Rows:   []roomPageRow{{ID: 3, PropertyID: 1, PropertyName: "Rosewood", RoomLabel: "A-01", ActiveFrom: activeFrom}},
-		})
-		if err != nil {
-			t.Fatal(err)
+func TestRoomsPageDoesNotRenderAssetValidityDates(t *testing.T) {
+	page, err := executeTemplate(roomPageTemplate, roomPageData{
+		Period: "2026-09",
+		Rows:   []roomPageRow{{ID: 3, PropertyID: 1, PropertyName: "Rosewood", RoomLabel: "A-01"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, marker := range []string{"active_from", "inactive_from", "<small>自 2026-09</small>"} {
+		if strings.Contains(page, marker) {
+			t.Fatalf("room list contains asset validity marker %q", marker)
 		}
-		return page
-	}
-	if page := render(""); strings.Contains(page, "<small>自") {
-		t.Fatalf("empty ActiveFrom still renders the isolated 自 marker: %s", page)
-	}
-	if page := render("2026-09"); !strings.Contains(page, "<small>自 2026-09</small>") {
-		t.Fatalf("ActiveFrom value is no longer rendered: %s", page)
 	}
 }
 
@@ -271,12 +266,9 @@ func TestListPageTemplatesKeepHeadActionAndActionColumn(t *testing.T) {
 		{"rooms", func() (string, error) {
 			return executeTemplate(roomPageTemplate, roomPageData{Rows: []roomPageRow{{ID: 1, RoomLabel: "A-01"}}})
 		}, []string{`href="/rooms?add=1`, `>新增房间<`, `>操作</th>`, `>查看详情</a>`}},
-		{"tenancies", func() (string, error) {
-			return executeTemplate(tenancyPageTemplate, tenancyPageData{TableRows: []tenancyPageRow{{ID: 3, RoomID: 2, RoomLabel: "A-01"}}})
-		}, []string{`href="/tenancies?period=`, `>新建租约<`, `>操作</th>`, `>查看详情</a>`}},
 		{"tenants", func() (string, error) {
 			return executeTemplate(tenantTemplate, tenantPageData{Rows: []tenantRecord{{ID: "7", Name: "Aoife Murphy"}}})
-		}, []string{`href="/tenants?add=1">添加租客</a>`, `>操作</th>`, `>查看详情</a>`}},
+		}, []string{`href="/tenants?add=1">添加租客</a>`, `>操作</th>`, `>查看责任</a>`}},
 		{"expenses", func() (string, error) {
 			return executeTemplate(expenseTemplate, expensePageData{Rows: []expenseRecord{{ID: "1", Description: "维修"}}})
 		}, []string{`href="/expenses?period=`, `>新增支出<`, `>操作</th>`, `>绑定发票</a>`}},
@@ -313,7 +305,7 @@ func TestTransactionRouteActionColumnSaysViewDetails(t *testing.T) {
 	})
 	// html/template escapes the & in the href to &amp;, so pin the two halves
 	// rather than the literal URL the row was handed.
-	for _, marker := range []string{`>状态 / 操作</th>`, `>查看详情</a>`, `/transactions?detail=7`} {
+	for _, marker := range []string{`<th>状态</th><th>操作</th>`, `>查看详情</a>`, `/transactions?detail=7`} {
 		if !strings.Contains(page, marker) {
 			t.Fatalf("transactions action column missing %q", marker)
 		}
@@ -341,9 +333,6 @@ func TestBillsSettleDispositionBranchesOnMySQL(t *testing.T) {
 
 	input := validTenantInputForProfile()
 	input.Name = "Disposition Tenant"
-	input.MonthlyRent = 1000
-	input.RentStartDate = "2026-01-01"
-	input.BillingStartDate = "2026-01-01"
 	tenantRow, err := newTenantService(db).createTenant(ctx, owner.ID, input)
 	if err != nil {
 		t.Fatal(err)

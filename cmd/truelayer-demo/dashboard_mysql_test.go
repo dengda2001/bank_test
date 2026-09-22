@@ -28,12 +28,8 @@ func TestRentDashboardSummaryFiltersAndArrivalMetricsOnMySQL(t *testing.T) {
 
 	period := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	ownerTenantInput := validTenantInputForProfile()
-	ownerTenantInput.MonthlyRent = 1000
 	ownerTenantInput.Name = "Aoife Murphy"
 	ownerTenantInput.DisplayAlias = "Aoife A"
-	ownerTenantInput.RoomLabel = "A-01"
-	ownerTenantInput.RentStartDate = "2026-01-01"
-	ownerTenantInput.BillingStartDate = "2026-01-01"
 	ownerTenant, err := newTenantService(db).createTenant(ctx, owner.ID, ownerTenantInput)
 	if err != nil {
 		t.Fatal(err)
@@ -41,7 +37,6 @@ func TestRentDashboardSummaryFiltersAndArrivalMetricsOnMySQL(t *testing.T) {
 	secondTenantInput := ownerTenantInput
 	secondTenantInput.Name = "Zoe Byrne"
 	secondTenantInput.DisplayAlias = "Zoe Z"
-	secondTenantInput.RoomLabel = "B-02"
 	secondTenant, err := newTenantService(db).createTenant(ctx, owner.ID, secondTenantInput)
 	if err != nil {
 		t.Fatal(err)
@@ -49,7 +44,6 @@ func TestRentDashboardSummaryFiltersAndArrivalMetricsOnMySQL(t *testing.T) {
 	thirdTenantInput := ownerTenantInput
 	thirdTenantInput.Name = "Mia Chen"
 	thirdTenantInput.DisplayAlias = "Mia M"
-	thirdTenantInput.RoomLabel = "C-03"
 	if _, err := newTenantService(db).createTenant(ctx, owner.ID, thirdTenantInput); err != nil {
 		t.Fatal(err)
 	}

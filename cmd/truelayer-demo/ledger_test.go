@@ -15,21 +15,9 @@ func TestNormalizeLedgerCurrencyIsEUROnlyButKeepsExtensionBoundary(t *testing.T)
 	}
 }
 
-func TestTenantValidationRejectsNonEURLedgerCurrency(t *testing.T) {
-	input := tenantInput{
-		Name:             "Tenant",
-		MonthlyRent:      1000,
-		Currency:         "GBP",
-		IntervalUnit:     "month",
-		IntervalCount:    1,
-		BillingStartDate: "2026-09-01",
-		DueDay:           5,
-		RentStartDate:    "2026-09-01",
-		RoomAddress:      "Dublin",
-		Status:           "active",
-	}
-	if err := validateTenantInput(input); err == nil || !strings.Contains(err.Error(), "EUR") {
-		t.Fatalf("validate GBP tenant error = %v; want EUR-only error", err)
+func TestTenantValidationDoesNotStoreRentCurrencyOnPersonProfile(t *testing.T) {
+	if err := validateTenantInput(tenantInput{Name: "Tenant", Email: "tenant@example.test", Status: "active"}); err != nil {
+		t.Fatalf("valid person profile rejected: %v", err)
 	}
 }
 

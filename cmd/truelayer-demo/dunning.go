@@ -211,8 +211,13 @@ func sanitizeMailHeaderText(value string) string {
 	return strings.NewReplacer("\r", " ", "\n", " ").Replace(strings.TrimSpace(value))
 }
 
-func buildDunningCandidate(obligation rentObligation, tenantRow tenant, now time.Time, last *dunningSendAttempt) dunningCandidate {
-	currency := firstNonEmpty(obligation.Currency, tenantRow.Currency, ledgerCurrencyEUR)
+func buildDunningCandidate(obligation rentObligation, tenantRow tenant, now time.Time, last *dunningSendAttempt, charges ...rentCharge) dunningCandidate {
+	currency := firstNonEmpty(obligation.Currency, ledgerCurrencyEUR)
+	roomLabel, roomAddress := "", ""
+	if len(charges) > 0 {
+		roomLabel = stringValue(charges[0].RoomLabelSnapshot)
+		roomAddress = stringValue(charges[0].RoomAddressSnapshot)
+	}
 	balance := maxInt64(obligation.ExpectedAmountCents-obligation.PaidAmountCents, 0)
 	status := obligationStatus(obligation.ExpectedAmountCents, obligation.PaidAmountCents, obligation.DueDate, now, obligation.Status == "needs_review")
 	if obligation.RecordStatus == obligationRecordVoided {
@@ -225,8 +230,8 @@ func buildDunningCandidate(obligation rentObligation, tenantRow tenant, now time
 		ObligationID:   obligation.ID,
 		TenantName:     tenantRow.Name,
 		TenantAlias:    tenantRow.DisplayAlias,
-		RoomLabel:      tenantRow.RoomLabel,
-		RoomAddress:    tenantRow.RoomAddress,
+		RoomLabel:      roomLabel,
+		RoomAddress:    roomAddress,
 		Period:         monthStart(obligation.PeriodMonth).Format("2006-01"),
 		DueDate:        dunningStoredDate(obligation.DueDate).Format(dateLayout),
 		DueDateValue:   obligation.DueDate,

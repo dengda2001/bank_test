@@ -22,7 +22,7 @@
       {{if eq .Message "cash_receipt_voided"}}<div class="notice ok" data-toast>现金收款已撤销，原始收据仍保留。</div>{{end}}
 
       <form class="cash-receipt-filters" method="get" action="/cash-receipts">
-        <label class="cash-receipt-search"><span>搜索当前列表</span><input type="search" name="search" value="{{.Search}}" placeholder="租客、收据号或备注"></label>
+        <label class="cash-receipt-search"><span>搜索当前列表</span><input type="search" name="search" value="{{.Search}}" placeholder="责任租客、付款人、收据号或备注"></label>
         <label><span>状态</span><select name="status"><option value="all"{{if eq .StatusFilter "all"}} selected{{end}}>全部状态</option><option value="confirmed"{{if eq .StatusFilter "confirmed"}} selected{{end}}>已确认</option><option value="voided"{{if eq .StatusFilter "voided"}} selected{{end}}>已作废</option></select></label>
         <label><span>月份</span><input type="month" name="period" value="{{.Period}}"></label>
         <button class="btn subtle" type="submit">搜索</button>
@@ -30,12 +30,12 @@
 
       <section class="panel surface cash-receipt-list" aria-label="现金补录列表">
         {{if .Rows}}
-        <div class="cash-receipt-table-wrap table-wrap"><table class="cash-receipt-table"><thead><tr><th>日期</th><th>租客</th><th>房间</th><th class="amount">金额</th><th>对应月份</th><th>数据说明</th><th>状态</th><th>操作</th></tr></thead><tbody>
-          {{range .Rows}}<tr data-page="cash-receipts" data-receipt-id="{{.ID}}"><td class="mono">{{.ReceivedAt}}</td><td><a href="/tenants/{{.TenantID}}">{{.TenantName}}</a><small>{{.ReceiptNumber}}</small></td><td>{{if .RoomLabel}}{{.RoomLabel}}{{else}}—{{end}}</td><td class="amount">{{.Amount}}</td><td class="mono">{{.Period}}</td><td>{{if .Note}}{{.Note}}{{else}}线下现金收款{{end}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span></td><td>{{if eq .Status "confirmed"}}<a class="btn subtle" href="{{.VoidURL}}">撤销</a>{{else if .VoidReason}}<small>{{.VoidReason}}</small>{{else}}—{{end}}</td></tr>{{end}}
+        <div class="cash-receipt-table-wrap table-wrap"><table class="cash-receipt-table"><thead><tr><th>日期</th><th>责任租客</th><th>实际付款人</th><th>房间</th><th class="amount">金额</th><th>对应月份</th><th>数据说明</th><th>状态</th><th>操作</th></tr></thead><tbody>
+          {{range .Rows}}<tr data-page="cash-receipts" data-receipt-id="{{.ID}}"><td class="mono">{{.ReceivedAt}}</td><td><a href="/tenants/{{.TenantID}}">{{.TenantName}}</a><small>{{.ReceiptNumber}}</small></td><td>{{.PayerName}}</td><td>{{if .RoomLabel}}{{.RoomLabel}}{{else}}—{{end}}</td><td class="amount">{{.Amount}}</td><td class="mono">{{.Period}}</td><td>{{if .Note}}{{.Note}}{{else}}线下现金收款{{end}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span></td><td>{{if eq .Status "confirmed"}}<a class="btn subtle" href="{{.VoidURL}}">撤销</a>{{else if .VoidReason}}<small>{{.VoidReason}}</small>{{else}}—{{end}}</td></tr>{{end}}
         </tbody></table></div>
         <div class="cash-receipt-mobile-list">{{range .Rows}}<article class="cash-receipt-mobile-card" data-page="cash-receipts" data-receipt-id="{{.ID}}">
           <div class="cash-receipt-mobile-head"><div><h3>{{.TenantName}}</h3><p>{{.ReceivedAt}} · {{.ReceiptNumber}}</p></div><strong class="amount">{{.Amount}}</strong></div>
-          <div class="cash-receipt-mobile-meta"><div><span>对应月份</span><strong>{{.Period}}</strong></div><div><span>房间</span><strong>{{if .RoomLabel}}{{.RoomLabel}}{{else}}—{{end}}</strong></div></div>
+          <div class="cash-receipt-mobile-meta"><div><span>实际付款人</span><strong>{{.PayerName}}</strong></div><div><span>对应月份 / 房间</span><strong>{{.Period}} · {{if .RoomLabel}}{{.RoomLabel}}{{else}}—{{end}}</strong></div></div>
           <p class="cash-receipt-mobile-note">{{if .Note}}{{.Note}}{{else}}现金收款已关联至租客个人责任。{{end}}</p>
           <div class="cash-receipt-mobile-actions"><span class="status {{.Status}}">{{.StatusLabel}}</span>{{if eq .Status "confirmed"}}<a class="btn subtle" href="{{.VoidURL}}">撤销</a>{{else if .VoidReason}}<span class="tiny">{{.VoidReason}}</span>{{end}}</div>
         </article>{{end}}</div>

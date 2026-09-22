@@ -23,25 +23,23 @@ type roomQuery struct {
 	Status     string
 }
 
-type agreementQuery struct {
-	RoomID              uint64
-	Status              string
-	StartDateOnOrBefore *time.Time
-	EndDateOnOrAfter    *time.Time
+type roomRentPlanQuery struct {
+	RoomID                       uint64
+	EffectiveFromMonthOnOrBefore *time.Time
+	EffectiveToMonthOnOrAfter    *time.Time
 }
 
-type agreementPartyQuery struct {
-	AgreementID uint64
-	TenantID    uint64
-	Status      string
+type roomRentPlanMemberQuery struct {
+	RoomRentPlanID uint64
+	TenantID       uint64
 }
 
 type rentChargeQuery struct {
-	PropertyID         uint64
-	RoomID             uint64
-	TenancyAgreementID uint64
-	PeriodMonth        *time.Time
-	IncludeVoided      bool
+	PropertyID     uint64
+	RoomID         uint64
+	RoomRentPlanID uint64
+	PeriodMonth    *time.Time
+	IncludeVoided  bool
 }
 
 type rentObligationQuery struct {
@@ -163,19 +161,19 @@ func (r *landlordRentRepository) createRoom(ctx context.Context, userID uint64, 
 	return row, nil
 }
 
-func (r *landlordRentRepository) findTenancyAgreement(ctx context.Context, userID, agreementID uint64) (tenancyAgreement, error) {
+func (r *landlordRentRepository) findRoomRentPlan(ctx context.Context, userID, planID uint64) (roomRentPlan, error) {
 	query, err := r.scoped(ctx, userID)
 	if err != nil {
-		return tenancyAgreement{}, err
+		return roomRentPlan{}, err
 	}
-	var row tenancyAgreement
-	if err := query.Where("id = ?", agreementID).First(&row).Error; err != nil {
-		return tenancyAgreement{}, err
+	var row roomRentPlan
+	if err := query.Where("id = ?", planID).First(&row).Error; err != nil {
+		return roomRentPlan{}, err
 	}
 	return row, nil
 }
 
-func (r *landlordRentRepository) listTenancyAgreements(ctx context.Context, userID uint64, filters agreementQuery) ([]tenancyAgreement, error) {
+func (r *landlordRentRepository) listRoomRentPlans(ctx context.Context, userID uint64, filters roomRentPlanQuery) ([]roomRentPlan, error) {
 	query, err := r.scoped(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -183,71 +181,65 @@ func (r *landlordRentRepository) listTenancyAgreements(ctx context.Context, user
 	if filters.RoomID != 0 {
 		query = query.Where("room_id = ?", filters.RoomID)
 	}
-	if filters.Status != "" {
-		query = query.Where("status = ?", filters.Status)
+	if filters.EffectiveFromMonthOnOrBefore != nil {
+		query = query.Where("effective_from_month <= ?", *filters.EffectiveFromMonthOnOrBefore)
 	}
-	if filters.StartDateOnOrBefore != nil {
-		query = query.Where("start_date <= ?", *filters.StartDateOnOrBefore)
+	if filters.EffectiveToMonthOnOrAfter != nil {
+		query = query.Where("(effective_to_month IS NULL OR effective_to_month >= ?)", *filters.EffectiveToMonthOnOrAfter)
 	}
-	if filters.EndDateOnOrAfter != nil {
-		query = query.Where("(end_date IS NULL OR end_date >= ?)", *filters.EndDateOnOrAfter)
-	}
-	rows := make([]tenancyAgreement, 0)
-	if err := query.Order("room_id ASC, start_date DESC, id DESC").Find(&rows).Error; err != nil {
+	rows := make([]roomRentPlan, 0)
+	if err := query.Order("room_id ASC, effective_from_month DESC, id DESC").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	return rows, nil
 }
 
-func (r *landlordRentRepository) createTenancyAgreement(ctx context.Context, userID uint64, row tenancyAgreement) (tenancyAgreement, error) {
+func (r *landlordRentRepository) createRoomRentPlan(ctx context.Context, userID uint64, row roomRentPlan) (roomRentPlan, error) {
 	if _, err := r.findRoom(ctx, userID, row.RoomID); err != nil {
-		return tenancyAgreement{}, err
+		return roomRentPlan{}, err
 	}
 	row.ID = 0
 	row.UserID = userID
 	if err := r.db.WithContext(ctx).Create(&row).Error; err != nil {
-		return tenancyAgreement{}, err
+		return roomRentPlan{}, err
 	}
 	return row, nil
 }
 
-func (r *landlordRentRepository) listAgreementParties(ctx context.Context, userID uint64, filters agreementPartyQuery) ([]agreementParty, error) {
+func (r *landlordRentRepository) listRoomRentPlanMembers(ctx context.Context, userID uint64, filters roomRentPlanMemberQuery) ([]roomRentPlanMember, error) {
 	query, err := r.scoped(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	if filters.AgreementID != 0 {
-		query = query.Where("agreement_id = ?", filters.AgreementID)
+	if filters.RoomRentPlanID != 0 {
+		query = query.Where("room_rent_plan_id = ?", filters.RoomRentPlanID)
 	}
 	if filters.TenantID != 0 {
 		query = query.Where("tenant_id = ?", filters.TenantID)
 	}
-	if filters.Status != "" {
-		query = query.Where("status = ?", filters.Status)
-	}
-	rows := make([]agreementParty, 0)
-	if err := query.Order("agreement_id ASC, joined_at ASC, id ASC").Find(&rows).Error; err != nil {
+	rows := make([]roomRentPlanMember, 0)
+	if err := query.Order("room_rent_plan_id ASC, tenant_id ASC, id ASC").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	return rows, nil
 }
 
-func (r *landlordRentRepository) createAgreementParty(ctx context.Context, userID uint64, row agreementParty) (agreementParty, error) {
-	if _, err := r.findTenancyAgreement(ctx, userID, row.AgreementID); err != nil {
-		return agreementParty{}, err
+func (r *landlordRentRepository) createRoomRentPlanMember(ctx context.Context, userID uint64, row roomRentPlanMember) (roomRentPlanMember, error) {
+	if _, err := r.findRoomRentPlan(ctx, userID, row.RoomRentPlanID); err != nil {
+		return roomRentPlanMember{}, err
 	}
 	var tenantRow tenant
 	query, err := r.scoped(ctx, userID)
 	if err != nil {
-		return agreementParty{}, err
+		return roomRentPlanMember{}, err
 	}
 	if err := query.Where("id = ?", row.TenantID).First(&tenantRow).Error; err != nil {
-		return agreementParty{}, err
+		return roomRentPlanMember{}, err
 	}
 	row.ID = 0
 	row.UserID = userID
 	if err := r.db.WithContext(ctx).Create(&row).Error; err != nil {
-		return agreementParty{}, err
+		return roomRentPlanMember{}, err
 	}
 	return row, nil
 }
@@ -275,8 +267,8 @@ func (r *landlordRentRepository) listRentCharges(ctx context.Context, userID uin
 	if filters.RoomID != 0 {
 		query = query.Where("room_id = ?", filters.RoomID)
 	}
-	if filters.TenancyAgreementID != 0 {
-		query = query.Where("tenancy_agreement_id = ?", filters.TenancyAgreementID)
+	if filters.RoomRentPlanID != 0 {
+		query = query.Where("room_rent_plan_id = ?", filters.RoomRentPlanID)
 	}
 	if filters.PeriodMonth != nil {
 		query = query.Where("period_month = ?", monthStart(*filters.PeriodMonth))
@@ -303,11 +295,11 @@ func (r *landlordRentRepository) createRentCharge(ctx context.Context, userID ui
 	if roomRow.PropertyID != propertyRow.ID {
 		return rentCharge{}, gorm.ErrRecordNotFound
 	}
-	agreementRow, err := r.findTenancyAgreement(ctx, userID, row.TenancyAgreementID)
+	planRow, err := r.findRoomRentPlan(ctx, userID, row.RoomRentPlanID)
 	if err != nil {
 		return rentCharge{}, err
 	}
-	if agreementRow.RoomID != roomRow.ID {
+	if planRow.RoomID != roomRow.ID {
 		return rentCharge{}, gorm.ErrRecordNotFound
 	}
 	row.ID = 0
@@ -376,8 +368,8 @@ func (r *landlordRentRepository) createRentObligation(ctx context.Context, userI
 	if err := query.Where("id = ?", row.TenantID).First(&tenantRow).Error; err != nil {
 		return rentObligation{}, err
 	}
-	if row.RentChargeID != nil {
-		if _, err := r.findRentCharge(ctx, userID, *row.RentChargeID); err != nil {
+	if row.RentChargeID != 0 {
+		if _, err := r.findRentCharge(ctx, userID, row.RentChargeID); err != nil {
 			return rentObligation{}, err
 		}
 	}

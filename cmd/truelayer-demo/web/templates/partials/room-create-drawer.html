@@ -1,20 +1,17 @@
 {{define "room-create-drawer"}}
 <div class="entity-drawer-backdrop">
   <section class="entity-drawer" role="dialog" aria-modal="true" aria-labelledby="room-create-title">
-    <div class="panel-head"><div><h2 id="room-create-title">新建房间</h2><p class="tiny">房间必须绑定一个有效房产。</p></div><a class="drawer-close" href="{{.ReturnURL}}" aria-label="关闭新增房间">×</a></div>
+    <div class="panel-head"><div><h2 id="room-create-title">新建房间</h2><p class="tiny">房间必须绑定一个房产。</p></div><a class="drawer-close" href="{{.ReturnURL}}" aria-label="关闭新增房间">×</a></div>
     {{if .ErrorMessage}}<div class="notice error" role="alert">{{.ErrorMessage}}</div>{{end}}
     <form method="post" action="/rooms">
-      <input type="hidden" name="action" value="save"><input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="filter_status" value="{{.StatusFilter}}"><input type="hidden" name="search" value="{{.Search}}"><input type="hidden" name="filter_property_id" value="{{.PropertyID}}"><input type="hidden" name="collection" value="{{.CollectionFilter}}">
+      <input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="filter_status" value="{{.StatusFilter}}"><input type="hidden" name="search" value="{{.Search}}"><input type="hidden" name="filter_property_id" value="{{.PropertyID}}"><input type="hidden" name="collection" value="{{.CollectionFilter}}">
       {{if eq .ReturnContext "property"}}<input type="hidden" name="return_context" value="property"><input type="hidden" name="return_property_id" value="{{.ReturnPropertyID}}"><input type="hidden" name="return_period" value="{{.ReturnPeriod}}"><input type="hidden" name="return_list_status" value="{{.ReturnListStatus}}"><input type="hidden" name="return_list_search" value="{{.ReturnListSearch}}"><input type="hidden" name="return_list_collection" value="{{.ReturnListCollection}}">{{end}}
       <div class="room-meta-form-grid">
         <div class="form-field"><label for="room-label">房间名称</label><input id="room-label" name="room_label" maxlength="191" required autofocus></div>
         <div class="form-field"><label for="room-property">所属房产</label><select id="room-property" name="property_id" required><option value="">请选择房产</option>{{range .Properties}}<option value="{{.ID}}"{{if eq $.Form.PropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></div>
-        <div class="form-field"><label for="room-monthly-rent">月度房间应收</label><input id="room-monthly-rent" name="monthly_rent" type="number" min="0.01" step="0.01" value="{{.Form.MonthlyRentValue}}" placeholder="0.00" inputmode="decimal"></div>
-        <div class="form-field"><label for="room-due-day">缴租日</label><input id="room-due-day" name="due_day" type="number" min="1" max="31" value="{{if .Form.DueDay}}{{.Form.DueDay}}{{else}}1{{end}}" required></div>
       </div>
-      <div class="form-field"><label for="room-active-from">生效月份</label><input id="room-active-from" name="active_from" type="month" value="{{.Form.ActiveFrom}}" required></div>
       <div class="form-field"><label for="room-notes">房间备注</label><textarea id="room-notes" name="notes" maxlength="2000">{{.Form.Notes}}</textarea></div>
-      <div class="drawer-actions"><a class="btn subtle" href="{{.ReturnURL}}">取消</a><button class="btn primary" type="submit">保存房间</button></div>
+      <div class="drawer-actions"><a class="btn subtle" href="{{.ReturnURL}}">取消</a><button class="btn" type="submit" name="action" value="save">仅保存空房间</button><button class="btn primary" type="submit" name="action" value="save_and_setup">保存并设置入住与租金</button></div>
     </form>
   </section>
 </div>

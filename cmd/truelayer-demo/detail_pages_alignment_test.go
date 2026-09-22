@@ -32,9 +32,8 @@ func TestRoomDetailMobileFactsOwnTheirWrapper(t *testing.T) {
 	for _, expected := range []string{
 		`<section class="panel surface detail-section room-facts-section room-desktop-facts">`,
 		`<section class="panel surface detail-section room-mobile-facts">`,
-		// The desktop panel keeps all ten facts; the mobile panel keeps only the
-		// narrow-screen subset.
-		`<dt>房间生效月份</dt>`,
+		// Rent timing belongs to the plan summary, never to the physical room.
+		`<dt>当前月租</dt>`,
 		`<dt>在住人数</dt>`,
 		`<dt>缴租日</dt>`,
 	} {

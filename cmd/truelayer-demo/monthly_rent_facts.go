@@ -9,8 +9,6 @@ import (
 	"gorm.io/gorm"
 )
 
-var errRentFactsConflict = errors.New("rent facts conflict")
-
 type rentFactsIntent uint8
 
 const (
@@ -64,12 +62,11 @@ func (s *monthlyRentFactsService) ensureMonthlyRentFacts(ctx context.Context, us
 	}
 
 	targets := make(map[uint64]rentMonthlyFactTarget)
-	monthEnd := periodMonth.AddDate(0, 1, -1)
 	var arrangements []rentMonthlyFactTarget
-	if err := s.db.WithContext(ctx).Table("tenancy_agreements AS ta").
+	if err := s.db.WithContext(ctx).Table("room_rent_plans AS ta").
 		Select("ta.room_id AS room_id, r.property_id AS property_id").
 		Joins("JOIN rooms AS r ON r.id = ta.room_id AND r.user_id = ta.user_id").
-		Where("ta.user_id = ? AND ta.status = ? AND ta.start_date <= ? AND (ta.end_date IS NULL OR ta.end_date >= ?)", userID, "active", monthEnd, periodMonth).
+		Where("ta.user_id = ? AND ta.effective_from_month <= ? AND (ta.effective_to_month IS NULL OR ta.effective_to_month >= ?)", userID, periodMonth, periodMonth).
 		Order("ta.room_id ASC").Scan(&arrangements).Error; err != nil {
 		return err
 	}
@@ -78,6 +75,7 @@ func (s *monthlyRentFactsService) ensureMonthlyRentFacts(ctx context.Context, us
 			targets[target.RoomID] = target
 		}
 	}
+	planRoomIDs := targetPlanRoomIDs(arrangements)
 	var existingCharges []rentCharge
 	if err := s.db.WithContext(ctx).Where("user_id = ? AND period_month = ?", userID, periodMonth).Order("room_id ASC, id ASC").Find(&existingCharges).Error; err != nil {
 		return err
@@ -93,7 +91,6 @@ func (s *monthlyRentFactsService) ensureMonthlyRentFacts(ctx context.Context, us
 	}
 	sort.Slice(roomIDs, func(i, j int) bool { return roomIDs[i] < roomIDs[j] })
 
-	ledger := newRentLedgerService(s.db)
 	for _, roomID := range roomIDs {
 		target := targets[roomID]
 		var chargeCount int64
@@ -101,45 +98,40 @@ func (s *monthlyRentFactsService) ensureMonthlyRentFacts(ctx context.Context, us
 			return err
 		}
 		if chargeCount == 0 {
-			var activePartyCount int64
-			if err := s.db.WithContext(ctx).Table("agreement_parties AS ap").
-				Joins("JOIN tenancy_agreements AS ta ON ta.id = ap.agreement_id AND ta.user_id = ap.user_id").
-				Where("ap.user_id = ? AND ta.room_id = ? AND ta.status = ? AND ta.start_date <= ? AND (ta.end_date IS NULL OR ta.end_date >= ?) AND ap.status = ? AND (ap.joined_at IS NULL OR ap.joined_at <= ?) AND (ap.left_at IS NULL OR ap.left_at >= ?)", userID, roomID, "active", monthEnd, periodMonth, "active", monthEnd, periodMonth).
-				Count(&activePartyCount).Error; err != nil {
-				return err
-			}
-			if activePartyCount == 0 {
+			if _, hasMatchingPlan := planRoomIDs[roomID]; !hasMatchingPlan {
 				continue
 			}
+			if err := materializeRoomRentFactsInTx(s.db.WithContext(ctx), userID, target.RoomID, periodMonth); errors.Is(err, gorm.ErrRecordNotFound) {
+				continue
+			} else if err != nil {
+				return err
+			}
+			continue
 		}
-		if _, err := ledger.ensureRentCharge(ctx, userID, target.PropertyID, target.RoomID, periodMonth); err != nil {
-			return err
-		}
-	}
-
-	// The legacy generator is intentionally a fallback. It skips tenants whose
-	// month is already represented by a structured room arrangement or charge.
-	if err := newObligationService(s.db).ensureMonthlyObligations(ctx, userID, periodMonth); err != nil {
-		return err
 	}
 	return nil
 }
 
-func tenantHasStructuredRentFacts(db *gorm.DB, userID, tenantID uint64, periodMonth time.Time) (bool, error) {
-	var obligationCount int64
-	if err := db.Model(&rentObligation{}).
-		Where("user_id = ? AND tenant_id = ? AND period_month = ? AND rent_charge_id IS NOT NULL", userID, tenantID, monthStart(periodMonth)).
-		Count(&obligationCount).Error; err != nil {
-		return false, err
+func materializeRoomRentFactsInTx(tx *gorm.DB, userID, roomID uint64, periodMonth time.Time) error {
+	if tx == nil || userID == 0 || roomID == 0 || periodMonth.IsZero() {
+		return errors.New("transaction, user, room, and month are required")
 	}
-	if obligationCount > 0 {
-		return true, nil
+	var roomRow room
+	if err := tx.Where("user_id = ? AND id = ?", userID, roomID).First(&roomRow).Error; err != nil {
+		return err
 	}
-	monthEnd := monthStart(periodMonth).AddDate(0, 1, -1)
-	var partyCount int64
-	err := db.Table("agreement_parties AS ap").
-		Joins("JOIN tenancy_agreements AS ta ON ta.id = ap.agreement_id AND ta.user_id = ap.user_id").
-		Where("ap.user_id = ? AND ap.tenant_id = ? AND ap.status = ? AND ta.status = ? AND ta.start_date <= ? AND (ta.end_date IS NULL OR ta.end_date >= ?) AND (ap.joined_at IS NULL OR ap.joined_at <= ?) AND (ap.left_at IS NULL OR ap.left_at >= ?)", userID, tenantID, "active", "active", monthEnd, monthStart(periodMonth), monthEnd, monthStart(periodMonth)).
-		Count(&partyCount).Error
-	return partyCount > 0, err
+	returnedContext := tx.Statement.Context
+	if returnedContext == nil {
+		returnedContext = context.Background()
+	}
+	_, err := newRentLedgerService(tx).ensureRentCharge(returnedContext, userID, roomRow.PropertyID, roomID, monthStart(periodMonth))
+	return err
+}
+
+func targetPlanRoomIDs(targets []rentMonthlyFactTarget) map[uint64]struct{} {
+	ids := make(map[uint64]struct{}, len(targets))
+	for _, target := range targets {
+		ids[target.RoomID] = struct{}{}
+	}
+	return ids
 }

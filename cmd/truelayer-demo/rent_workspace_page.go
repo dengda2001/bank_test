@@ -133,7 +133,7 @@ func rentWorkspacePageFromData(a *app, r *http.Request, data rentWorkspaceData, 
 			Username:      a.displayUsername(r),
 			Environment:   a.cfg.Environment,
 			FootNote:      "月度收租工作台",
-			CompactTitle:  "本月收租",
+			CompactTitle:  "所选月份收租",
 			ShowNavCounts: true,
 			TenantCount:   len(data.TenantRows),
 		}),
@@ -187,6 +187,7 @@ func (a *app) renderRentWorkspaceDashboard(w http.ResponseWriter, r *http.Reques
 	}
 	page := rentWorkspacePageFromData(a, r, data, "")
 	page.Message = r.URL.Query().Get("message")
+	page.Error = r.URL.Query().Get("error")
 	var pendingTransactions int64
 	if err := rentWorkspacePendingTransactions(a.db, r.Context(), userID, filters.PeriodMonth).Count(&pendingTransactions).Error; err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -263,12 +264,20 @@ type rentRoomDetailPageData struct {
 	RoomType          string
 	Capacity          int
 	RoomNotes         string
-	ContractDate      string
-	MoveInDate        string
 	MonthlyRent       string
 	MonthlyRentValue  string
 	DueDay            int
-	RoomActiveFrom    string
+	PlanEditor        bool
+	PlanExists        bool
+	PlanVersion       uint64
+	PlanEffectiveFrom string
+	PlanEffectiveTo   string
+	PlanRentValue     string
+	PlanDueDay        int
+	PlanMembers       []roomRentPlanMemberForm
+	PlanTenants       []roomRentPlanTenantOption
+	PlanSplitEvenly   bool
+	VacantFromMonth   string
 	PropertyName      string
 	PropertyAddress   string
 	Editing           bool
@@ -282,6 +291,19 @@ type rentRoomDetailPageData struct {
 	ExpenseDrawer     *expenseDrawerData
 	Message           string
 	Error             string
+	PlanError         string
+}
+
+type roomRentPlanTenantOption struct {
+	ID     uint64
+	Name   string
+	Status string
+}
+
+type roomRentPlanMemberForm struct {
+	TenantID            uint64
+	TenantName          string
+	ResponsibilityValue string
 }
 
 type rentWorkspaceExpenseView struct {
@@ -304,30 +326,53 @@ func (s *rentWorkspaceService) loadRoomDetail(ctx context.Context, userID, roomI
 		return rentRoomDetailPageData{}, err
 	}
 	period = monthStart(period)
-	var activeAgreement tenancyAgreement
-	agreementQuery := s.db.WithContext(ctx).Where("user_id = ? AND room_id = ? AND status = ? AND start_date <= ? AND (end_date IS NULL OR end_date >= ?)", userID, roomID, "active", period.AddDate(0, 1, 0).Add(-time.Nanosecond), period)
-	agreementErr := agreementQuery.Order("start_date DESC, id DESC").First(&activeAgreement).Error
-	if agreementErr != nil && !errors.Is(agreementErr, gorm.ErrRecordNotFound) {
-		return rentRoomDetailPageData{}, agreementErr
+	var activePlan roomRentPlan
+	planQuery := s.db.WithContext(ctx).Where("user_id = ? AND room_id = ? AND effective_from_month <= ? AND (effective_to_month IS NULL OR effective_to_month >= ?)", userID, roomID, period, period)
+	planErr := planQuery.Order("effective_from_month DESC, id DESC").First(&activePlan).Error
+	if planErr != nil && !errors.Is(planErr, gorm.ErrRecordNotFound) {
+		return rentRoomDetailPageData{}, planErr
 	}
-	contractDate, moveInDate, monthlyRent, monthlyRentValue, dueDay := "未录入", "未录入", "—", "", roomRow.DueDay
-	if dueDay < 1 || dueDay > 31 {
-		dueDay = 1
-	}
-	if roomRow.MonthlyRentCents > 0 {
-		monthlyRent = pageCurrencyAmount(roomRow.MonthlyRentCents, ledgerCurrencyEUR)
-		monthlyRentValue = strconv.FormatFloat(float64(roomRow.MonthlyRentCents)/100, 'f', 2, 64)
-	}
-	if agreementErr == nil {
-		if activeAgreement.ContractDate != nil {
-			contractDate = activeAgreement.ContractDate.Format(dateLayout)
+	monthlyRent, monthlyRentValue, dueDay := "—", "", 1
+	planMembers := []roomRentPlanMemberForm{{}}
+	planExists := planErr == nil
+	planEffectiveFrom, planEffectiveTo, planRentValue := "", "", ""
+	planDueDay := 1
+	if planErr == nil {
+		monthlyRent = pageCurrencyAmount(activePlan.MonthlyRentCents, activePlan.Currency)
+		monthlyRentValue = strconv.FormatFloat(float64(activePlan.MonthlyRentCents)/100, 'f', 2, 64)
+		dueDay = activePlan.DueDay
+		planEffectiveFrom = activePlan.EffectiveFromMonth.Format("2006-01")
+		if activePlan.EffectiveToMonth != nil {
+			planEffectiveTo = activePlan.EffectiveToMonth.Format("2006-01")
 		}
-		if activeAgreement.MoveInDate != nil {
-			moveInDate = activeAgreement.MoveInDate.Format(dateLayout)
+		planRentValue = monthlyRentValue
+		planDueDay = activePlan.DueDay
+		members, membersErr := newLandlordRentRepository(s.db).listRoomRentPlanMembers(ctx, userID, roomRentPlanMemberQuery{RoomRentPlanID: activePlan.ID})
+		if membersErr != nil {
+			return rentRoomDetailPageData{}, membersErr
 		}
-		monthlyRent = pageCurrencyAmount(activeAgreement.MonthlyRentCents, activeAgreement.Currency)
-		monthlyRentValue = strconv.FormatFloat(float64(activeAgreement.MonthlyRentCents)/100, 'f', 2, 64)
-		dueDay = activeAgreement.DueDay
+		planMembers = make([]roomRentPlanMemberForm, 0, len(members))
+		for _, member := range members {
+			planMembers = append(planMembers, roomRentPlanMemberForm{
+				TenantID:            member.TenantID,
+				ResponsibilityValue: strconv.FormatFloat(float64(member.ResponsibilityCents)/100, 'f', 2, 64),
+			})
+		}
+	}
+	var tenantRows []tenant
+	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Order("name ASC, id ASC").Find(&tenantRows).Error; err != nil {
+		return rentRoomDetailPageData{}, err
+	}
+	tenantOptions := make([]roomRentPlanTenantOption, 0, len(tenantRows))
+	for _, row := range tenantRows {
+		tenantOptions = append(tenantOptions, roomRentPlanTenantOption{ID: row.ID, Name: firstNonEmpty(row.DisplayAlias, row.Name), Status: row.Status})
+	}
+	tenantNameByID := make(map[uint64]string, len(tenantOptions))
+	for _, option := range tenantOptions {
+		tenantNameByID[option.ID] = option.Name
+	}
+	for i := range planMembers {
+		planMembers[i].TenantName = tenantNameByID[planMembers[i].TenantID]
 	}
 	filters := defaultRentWorkspaceFilters(period)
 	filters.View = rentWorkspaceViewRooms
@@ -384,12 +429,19 @@ func (s *rentWorkspaceService) loadRoomDetail(ctx context.Context, userID, roomI
 		RoomType:          firstNonEmpty(roomRow.RoomType, "未设置"),
 		Capacity:          roomRow.Capacity,
 		RoomNotes:         stringValue(roomRow.Notes),
-		ContractDate:      contractDate,
-		MoveInDate:        moveInDate,
 		MonthlyRent:       monthlyRent,
 		MonthlyRentValue:  monthlyRentValue,
 		DueDay:            dueDay,
-		RoomActiveFrom:    roomRow.ActiveFrom.Format("2006-01"),
+		PlanExists:        planExists,
+		PlanVersion:       roomRow.RentPlanVersion,
+		PlanEffectiveFrom: planEffectiveFrom,
+		PlanEffectiveTo:   planEffectiveTo,
+		PlanRentValue:     planRentValue,
+		PlanDueDay:        planDueDay,
+		PlanMembers:       planMembers,
+		PlanTenants:       tenantOptions,
+		PlanSplitEvenly:   !planExists,
+		VacantFromMonth:   period.Format("2006-01"),
 		PropertyName:      propertyRow.Name,
 		PropertyAddress:   propertyAddress(propertyRow),
 		Summary:           summary,
@@ -476,6 +528,8 @@ func (a *app) handleRoomDetail(w http.ResponseWriter, r *http.Request) {
 	data.workspaceShell = a.fillWorkspaceShell(r, workspaceShell{ActivePage: "rooms", Username: a.displayUsername(r), Environment: a.cfg.Environment, FootNote: "房间详情", CompactTitle: data.PropertyName + " · 房间 " + data.RoomLabel, ShowNavCounts: true})
 	data.Message, data.Error = r.URL.Query().Get("message"), roomMutationErrorMessage(r.URL.Query().Get("error"))
 	data.Editing = r.URL.Query().Get("edit") == "1"
+	data.PlanEditor = r.URL.Query().Get("rent") == "1"
+	data.PlanError = rentPlanErrorMessage(r.URL.Query().Get("rent_error"))
 	data.ReturnURL = rentWorkspaceURL(data.Filters, 1)
 	if r.URL.Query().Get("from") == "rooms" {
 		data.FromList = true
@@ -491,7 +545,7 @@ func (a *app) handleRoomDetail(w http.ResponseWriter, r *http.Request) {
 		}
 		data.ReturnURL = roomListURL(data.Period, data.ReturnPropertyID, data.ReturnStatus, data.ReturnSearch, data.ReturnCollection)
 	}
-	data.Form = roomPageForm{ID: data.RoomID, PropertyID: data.Summary.PropertyID, RoomLabel: data.RoomLabel, RoomType: data.RoomType, Capacity: data.Capacity, MonthlyRentValue: data.MonthlyRentValue, DueDay: data.DueDay, Notes: data.RoomNotes, ActiveFrom: data.RoomActiveFrom}
+	data.Form = roomPageForm{ID: data.RoomID, PropertyID: data.Summary.PropertyID, RoomLabel: data.RoomLabel, RoomType: data.RoomType, Capacity: data.Capacity, Notes: data.RoomNotes}
 	if r.URL.Query().Get("expense") == "1" || isExpenseFormError(r.URL.Query().Get("error")) {
 		returnURL := expenseFormReturnURL(r)
 		expenseDrawer, drawerErr := a.loadExpenseDrawerData(r.Context(), userID, data.Period, data.Summary.PropertyID, data.RoomID, returnURL, r.URL.Query().Get("error"))
@@ -509,7 +563,7 @@ func (a *app) handleRoomDetail(w http.ResponseWriter, r *http.Request) {
 		}
 		data.Properties = make([]propertyPageRow, 0, len(properties))
 		for _, propertyRow := range properties {
-			data.Properties = append(data.Properties, propertyPageRow{ID: propertyRow.ID, Name: propertyRow.Name, Address: propertyAddress(propertyRow), Status: propertyRow.Status, StatusLabel: pageStatusLabel(propertyRow.Status)})
+			data.Properties = append(data.Properties, propertyPageRow{ID: propertyRow.ID, Name: propertyRow.Name, Address: propertyAddress(propertyRow), Status: propertyRow.Status, StatusLabel: assetStatusLabel(propertyRow.Status)})
 		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

@@ -335,6 +335,17 @@ func TestBillingRequiresSession(t *testing.T) {
 	}
 }
 
+func TestBillingWithoutDatabaseReturnsServiceUnavailable(t *testing.T) {
+	a := testApp()
+	req := httptest.NewRequest(http.MethodGet, "/billing", nil)
+	req.AddCookie(sessionCookie(a.cfg, time.Now().Add(sessionTTL)))
+	rec := httptest.NewRecorder()
+	a.handleBilling(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d want %d body=%s", rec.Code, http.StatusServiceUnavailable, rec.Body.String())
+	}
+}
+
 func TestBankLoginRequiresSession(t *testing.T) {
 	a := testApp()
 	rec := httptest.NewRecorder()
@@ -397,119 +408,36 @@ func TestTenantsRequiresSession(t *testing.T) {
 	}
 }
 
-func TestCreateTenantPersistsManualRecord(t *testing.T) {
-	tenantPath := filepath.Join(t.TempDir(), "tenants.json")
-	a := testApp()
-	a.cfg.TenantFile = tenantPath
-
-	form := url.Values{}
-	form.Set("name", "Aoife Murphy")
-	form.Set("monthly_rent", "950")
-	form.Set("currency", "EUR")
-	form.Set("room_address", "Room A12, 14 Harcourt Street, Dublin")
-	req := httptest.NewRequest(http.MethodPost, "/tenants", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(sessionCookie(a.cfg, time.Now().Add(sessionTTL)))
-	rec := httptest.NewRecorder()
-
-	a.handleTenants(rec, req)
-
-	if rec.Code != http.StatusFound {
-		t.Fatalf("status=%d want %d", rec.Code, http.StatusFound)
-	}
-	if loc := rec.Header().Get("Location"); loc != "/tenants?message=tenant_added" {
-		t.Fatalf("Location=%q want /tenants?message=tenant_added", loc)
-	}
-	rows, err := a.loadTenants()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(rows) != 1 {
-		t.Fatalf("tenant count=%d want 1", len(rows))
-	}
-	if rows[0].Name != "Aoife Murphy" || rows[0].MonthlyRent != 950 || rows[0].RoomAddress != "Room A12, 14 Harcourt Street, Dublin" {
-		t.Fatalf("unexpected tenant row: %+v", rows[0])
+func TestTenantAndExpensePagesRequireDatabaseBackedSessions(t *testing.T) {
+	for _, route := range []struct {
+		path    string
+		handler func(*app, http.ResponseWriter, *http.Request)
+	}{
+		{path: "/tenants", handler: (*app).handleTenants},
+		{path: "/expenses", handler: (*app).handleExpenses},
+	} {
+		for _, method := range []string{http.MethodGet, http.MethodPost} {
+			t.Run(route.path+"/"+method, func(t *testing.T) {
+				a := testApp()
+				req := httptest.NewRequest(method, route.path, nil)
+				req.AddCookie(sessionCookie(a.cfg, time.Now().Add(sessionTTL)))
+				rec := httptest.NewRecorder()
+				route.handler(&a, rec, req)
+				if rec.Code != http.StatusServiceUnavailable {
+					t.Fatalf("status=%d want %d body=%s", rec.Code, http.StatusServiceUnavailable, rec.Body.String())
+				}
+			})
+		}
 	}
 }
 
-func TestValidateTenantInputAcceptsMonthlyExtensibleFields(t *testing.T) {
-	input := tenantInput{
-		Name:             "Aoife Murphy",
-		PayerID:          "payer-123",
-		PayerNameHint:    "AOIFE MURPHY",
-		MonthlyRent:      950,
-		Currency:         "EUR",
-		IntervalUnit:     "month",
-		IntervalCount:    1,
-		BillingStartDate: "2026-09-01",
-		DueDay:           5,
-		RentStartDate:    "2026-09-01",
-		Status:           "active",
-		RoomLabel:        "A12",
-		RoomAddress:      "14 Harcourt Street, Dublin",
-		PropertyHint:     "Dublin House",
-	}
-
+func TestValidateTenantInputAcceptsOnlyPersonAndPayerIdentity(t *testing.T) {
+	input := tenantInput{Name: "Aoife Murphy", PayerID: "payer-123", PayerNameHint: "AOIFE MURPHY", Status: "active"}
 	if err := validateTenantInput(input); err != nil {
-		t.Fatalf("valid tenant input rejected: %v", err)
+		t.Fatalf("valid tenant profile rejected: %v", err)
 	}
 }
 
-func TestValidateTenantInputRejectsUnsupportedIntervalForPhaseOne(t *testing.T) {
-	input := tenantInput{
-		Name:             "Aoife Murphy",
-		MonthlyRent:      950,
-		Currency:         "EUR",
-		IntervalUnit:     "week",
-		IntervalCount:    1,
-		BillingStartDate: "2026-09-01",
-		DueDay:           5,
-		RentStartDate:    "2026-09-01",
-		Status:           "active",
-		RoomAddress:      "14 Harcourt Street, Dublin",
-	}
-
-	if err := validateTenantInput(input); err == nil {
-		t.Fatal("expected weekly interval to be rejected in phase one")
-	}
-}
-
-func TestCreateExpensePersistsManualRecord(t *testing.T) {
-	expensePath := filepath.Join(t.TempDir(), "expenses.json")
-	a := testApp()
-	a.cfg.ExpenseFile = expensePath
-
-	form := url.Values{}
-	form.Set("description", "Boiler repair")
-	form.Set("category", "Maintenance")
-	form.Set("amount", "125.50")
-	form.Set("expense_date", "2026-09-09")
-	form.Set("payment_method", "Card")
-	form.Set("currency", "EUR")
-	req := httptest.NewRequest(http.MethodPost, "/expenses", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(sessionCookie(a.cfg, time.Now().Add(sessionTTL)))
-	rec := httptest.NewRecorder()
-
-	a.handleExpenses(rec, req)
-
-	if rec.Code != http.StatusFound {
-		t.Fatalf("status=%d want %d", rec.Code, http.StatusFound)
-	}
-	if loc := rec.Header().Get("Location"); loc != "/expenses?message=expense_added" {
-		t.Fatalf("Location=%q want /expenses?message=expense_added", loc)
-	}
-	rows, err := a.loadExpenses()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(rows) != 1 {
-		t.Fatalf("expense count=%d want 1", len(rows))
-	}
-	if rows[0].Description != "Boiler repair" || rows[0].Category != "Maintenance" || rows[0].Amount != 125.50 || rows[0].ExpenseDate != "2026-09-09" {
-		t.Fatalf("unexpected expense row: %+v", rows[0])
-	}
-}
 
 func TestExpenseInputFromFormKeepsRoomAndTenantHints(t *testing.T) {
 	form := url.Values{}
@@ -779,7 +707,7 @@ func TestBillingTemplateShowsMonthChoiceForRememberedTenant(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"分别选择要匹配的租客和月份", "选择租客", "选择月份", "2026年8月", "Aoife", "EUR 950.00", "确认匹配"} {
+	for _, expected := range []string{"已识别租客，请确认租金月份", "选择租客", "选择月份", "2026年8月", "Aoife", "EUR 950.00", "确认匹配"} {
 		if !strings.Contains(body.String(), expected) {
 			t.Fatalf("billing page missing month-choice text %q: %s", expected, body.String())
 		}
@@ -1149,22 +1077,6 @@ func TestTransactionPageRowDisplaysInternalAndProviderIdentifiers(t *testing.T) 
 	}
 }
 
-func TestFallbackTransactionPageRowsFiltersPendingTransactionsByPeriod(t *testing.T) {
-	result := demoResult{Accounts: []demoAccount{{
-		Account: account{AccountID: "acct-1", DisplayName: "Rent account", Currency: "EUR"},
-		Transactions: json.RawMessage(`{"results":[
-			{"transaction_id":"sept-income","provider_transaction_id":"sept-income","timestamp":"2026-09-09T00:00:00Z","amount":950,"transaction_type":"CREDIT"},
-			{"transaction_id":"oct-income","provider_transaction_id":"oct-income","timestamp":"2026-10-09T00:00:00Z","amount":950,"transaction_type":"CREDIT"},
-			{"transaction_id":"sept-expense","provider_transaction_id":"sept-expense","timestamp":"2026-09-10T00:00:00Z","amount":-25,"transaction_type":"DEBIT"}
-		]}`),
-	}}}
-
-	rows := fallbackTransactionPageRows(result, transactionFilters{PeriodMonth: "2026-09", PendingOnly: true})
-	if len(rows) != 1 || rows[0].TransactionID != "sept-income" {
-		t.Fatalf("unexpected pending rows: %+v", rows)
-	}
-}
-
 // The pending-transactions entry point must carry the selected month, so acting
 // on it keeps the user on the month they were reviewing. This used to be asserted
 // on the removed legacy dashboard template; the live carrier is the room
@@ -1382,44 +1294,6 @@ func TestStableTransactionKeyFallsBackToDeterministicHash(t *testing.T) {
 	}
 }
 
-func TestTenantActiveInMonthUsesRentDatesWithoutProration(t *testing.T) {
-	rentStart := time.Date(2026, 9, 20, 0, 0, 0, 0, time.UTC)
-	rentEnd := time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC)
-	row := tenant{
-		Status:           "active",
-		MonthlyRentCents: 100000,
-		Currency:         "EUR",
-		RentStartDate:    rentStart,
-		RentEndDate:      &rentEnd,
-	}
-
-	if !tenantActiveInMonth(row, time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)) {
-		t.Fatal("tenant should be active for September because the dates overlap")
-	}
-	if !tenantActiveInMonth(row, time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)) {
-		t.Fatal("tenant should be active for October because the dates overlap")
-	}
-	if tenantActiveInMonth(row, time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)) {
-		t.Fatal("tenant should not be active after rent end month")
-	}
-}
-
-func TestTenantActiveInMonthRespectsBillingStartDate(t *testing.T) {
-	row := tenant{
-		Status:           "active",
-		MonthlyRentCents: 100000,
-		Currency:         "EUR",
-		RentStartDate:    time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-		BillingStartDate: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC),
-	}
-	if tenantActiveInMonth(row, time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)) {
-		t.Fatal("tenant should not have an obligation before billing start")
-	}
-	if !tenantActiveInMonth(row, time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)) {
-		t.Fatal("tenant should have an obligation from billing start")
-	}
-}
-
 func TestDueDateForMonthClampsInvalidMonthDay(t *testing.T) {
 	period := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
 
@@ -1501,75 +1375,6 @@ func TestParseReferencedPeriodUsesYearFromCompactEnglishMonthYear(t *testing.T) 
 				t.Fatalf("period=%s want %s", got.Format(dateLayout), wantText)
 			}
 		})
-	}
-}
-
-func TestDecideRentMatchUsesPayerIDForExactPayment(t *testing.T) {
-	payerID := "payer-123"
-	tenantRow := tenant{ID: 7, PayerID: &payerID}
-	period := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
-	obligation := rentObligation{ID: 11, TenantID: 7, PeriodMonth: period, ExpectedAmountCents: 95000}
-	tx := paymentTransactionInput{
-		Direction:       "income",
-		AmountCents:     95000,
-		PayerID:         "payer-123",
-		Description:     "rent 2026-09",
-		TransactionTime: ptrTime(time.Date(2026, 10, 2, 8, 0, 0, 0, time.UTC)),
-	}
-
-	decision := decideRentMatch(tx, []tenant{tenantRow}, []rentObligation{obligation})
-	if decision.Status != "matched" || decision.RentObligationID != 11 || decision.ConfirmationSource != "auto_id" {
-		t.Fatalf("unexpected decision: %+v", decision)
-	}
-}
-
-func TestDecideRentMatchTreatsNameMatchAsCandidateWithBackfill(t *testing.T) {
-	tenantRow := tenant{ID: 7, Name: "Aoife Murphy"}
-	obligation := rentObligation{ID: 11, TenantID: 7, PeriodMonth: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), ExpectedAmountCents: 95000}
-	tx := paymentTransactionInput{
-		Direction:       "income",
-		AmountCents:     95000,
-		PayerID:         "payer-123",
-		PayerName:       "Aoife Murphy",
-		TransactionTime: ptrTime(time.Date(2026, 9, 4, 8, 0, 0, 0, time.UTC)),
-	}
-
-	decision := decideRentMatch(tx, []tenant{tenantRow}, []rentObligation{obligation})
-	if decision.Status != "candidate" || !decision.BackfillPayerID {
-		t.Fatalf("unexpected name candidate decision: %+v", decision)
-	}
-}
-
-func TestDecideRentMatchUsesRememberedPayerNameAutomatically(t *testing.T) {
-	tenantRow := tenant{ID: 7, Name: "张三", PayerNameHint: ptrString("ZHANG SAN")}
-	obligation := rentObligation{ID: 11, TenantID: 7, PeriodMonth: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), ExpectedAmountCents: 95000}
-	tx := paymentTransactionInput{
-		Direction:       "income",
-		AmountCents:     95000,
-		PayerName:       " zhang   san ",
-		TransactionTime: ptrTime(time.Date(2026, 9, 4, 8, 0, 0, 0, time.UTC)),
-	}
-
-	decision := decideRentMatch(tx, []tenant{tenantRow}, []rentObligation{obligation})
-	if decision.Status != "matched" || decision.ConfirmationSource != "auto_name" {
-		t.Fatalf("unexpected remembered-name decision: %+v", decision)
-	}
-}
-
-func TestDecideRentMatchOverpaymentCapsAtTenantResponsibility(t *testing.T) {
-	payerID := "payer-123"
-	tenantRow := tenant{ID: 7, PayerID: &payerID}
-	obligation := rentObligation{ID: 11, TenantID: 7, PeriodMonth: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), ExpectedAmountCents: 95000}
-	tx := paymentTransactionInput{
-		Direction:       "income",
-		AmountCents:     120000,
-		PayerID:         "payer-123",
-		TransactionTime: ptrTime(time.Date(2026, 9, 4, 8, 0, 0, 0, time.UTC)),
-	}
-
-	decision := decideRentMatch(tx, []tenant{tenantRow}, []rentObligation{obligation})
-	if decision.Status != "partial" || decision.AllocationAmountCents != 95000 || decision.Reason == "" {
-		t.Fatalf("unexpected overpayment decision: %+v", decision)
 	}
 }
 
