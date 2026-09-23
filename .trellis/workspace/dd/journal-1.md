@@ -1224,3 +1224,36 @@ Added vacant room rent plans, atomic room and tenant composite writes, tenant ro
 ### Next Steps
 
 - None - task complete
+
+
+## Session 34: 流水匹配核对抽屉
+
+**Date**: 2026-09-23
+**Task**: 流水匹配核对抽屉
+**Branch**: `main`
+
+### Summary
+
+实现宽版流水核对抽屉、已缴月份凭据与付款人历史分页；修复租客搜索和列表入账用途文案，完成 Go 与浏览器验证。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `890761f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
