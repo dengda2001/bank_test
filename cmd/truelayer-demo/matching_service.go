@@ -52,6 +52,103 @@ func rentMatchRequestKey(transactionID, obligationID uint64, amountCents int64) 
 	return fmt.Sprintf("rent-match:%d:%d:%d", transactionID, obligationID, amountCents)
 }
 
+func isReconcilableMatchStatus(status string) bool {
+	switch status {
+	case "unmatched", "candidate", "needs_review":
+		return true
+	default:
+		return false
+	}
+}
+
+func pendingMatchProjection(decision matchDecision) transactionMatchProjection {
+	projection := transactionMatchProjection{Status: decision.Status, Reason: decision.Reason}
+	if decision.TenantID != 0 {
+		tenantID := decision.TenantID
+		projection.MatchedTenantID = &tenantID
+	}
+	return projection
+}
+
+// reconcilePendingRentTransactions applies remembered payer relations to
+// unallocated income transactions. An exact/open rent responsibility can be
+// allocated automatically; a recognized payer whose referenced month is
+// already covered remains a candidate for human confirmation.
+func (s *transactionService) reconcilePendingRentTransactions(ctx context.Context, userID uint64) error {
+	if userID == 0 {
+		return errors.New("userID is required")
+	}
+	var transactions []paymentTransaction
+	if err := s.db.WithContext(ctx).
+		Where("user_id = ? AND direction = ? AND match_status IN ?", userID, "income", []string{"unmatched", "candidate", "needs_review"}).
+		Order("transaction_time ASC, id ASC").Find(&transactions).Error; err != nil {
+		return err
+	}
+	if len(transactions) == 0 {
+		return nil
+	}
+	var tenants []tenant
+	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Find(&tenants).Error; err != nil {
+		return err
+	}
+	var payers []tenantPayer
+	if err := s.db.WithContext(ctx).Where("user_id = ? AND removed_at IS NULL", userID).Find(&payers).Error; err != nil {
+		return err
+	}
+	facts := newMonthlyRentFactsService(s.db)
+	for _, transaction := range transactions {
+		if !isReconcilableMatchStatus(transaction.MatchStatus) {
+			continue
+		}
+		deferred, err := transactionDeferredState(ctx, s.db, userID, transaction.ID)
+		if err != nil {
+			return err
+		}
+		if deferred {
+			continue
+		}
+		if transaction.ParsedPeriodMonth != nil && !transaction.ParsedPeriodMonth.IsZero() {
+			if err := facts.ensureMonthlyRentFacts(ctx, userID, *transaction.ParsedPeriodMonth, rentFactsIntentRead); err != nil {
+				return err
+			}
+		}
+		var allocations []paymentAllocation
+		if err := s.db.WithContext(ctx).Where("user_id = ? AND payment_transaction_id = ?", userID, transaction.ID).Find(&allocations).Error; err != nil {
+			return err
+		}
+		if summarizeTransactionAllocations(transaction, allocations).AllocatedCents > 0 {
+			continue
+		}
+		var obligations []rentObligation
+		if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Find(&obligations).Error; err != nil {
+			return err
+		}
+		decision := decideStrictRentMatch(paymentTransactionInputFromModel(transaction), payers, tenants, obligations)
+		switch decision.Status {
+		case "matched", "partial":
+			if decision.RentObligationID == 0 || decision.AllocationAmountCents <= 0 {
+				decision.Status = "candidate"
+				decision.Reason = "recognized payer requires confirmation"
+				if err := updateTransactionProjection(s.db.WithContext(ctx), userID, transaction.ID, pendingMatchProjection(decision)); err != nil {
+					return err
+				}
+				continue
+			}
+			if err := s.applyAllocation(ctx, userID, transaction, decision, decision.ConfirmationSource); err != nil {
+				return err
+			}
+			if err := s.db.WithContext(ctx).Model(&paymentTransaction{}).Where("id = ? AND user_id = ?", transaction.ID, userID).Update("match_reason", nullableString(decision.Reason)).Error; err != nil {
+				return err
+			}
+		default:
+			if err := updateTransactionProjection(s.db.WithContext(ctx), userID, transaction.ID, pendingMatchProjection(decision)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (s *transactionService) confirmRentMatch(ctx context.Context, userID, transactionID, tenantID uint64, period *time.Time, rememberPayer bool) error {
 	if userID == 0 || transactionID == 0 || tenantID == 0 {
 		return errors.New("transaction, tenant, and user are required")
@@ -96,6 +193,9 @@ func (s *transactionService) confirmRentMatch(ctx context.Context, userID, trans
 	}
 	if rememberPayer {
 		if err := newTenantService(s.db).rememberTenantPayer(ctx, userID, tenantID, stringValue(transaction.PayerID), stringValue(transaction.PayerName)); err != nil {
+			return err
+		}
+		if err := s.reconcilePendingRentTransactions(ctx, userID); err != nil {
 			return err
 		}
 	}
@@ -206,6 +306,10 @@ func decorateTransactionPageRow(row *transactionPageRow, transaction paymentTran
 			row.TenantID = decision.TenantID
 			row.CandidateTenantID = decision.TenantID
 			row.CandidateTenantName = tenantNames[decision.TenantID]
+			row.CandidateRentObligationID = decision.RentObligationID
+			if !decision.PeriodMonth.IsZero() {
+				row.CandidatePeriod = monthStart(decision.PeriodMonth).Format("2006-01")
+			}
 			row.NeedsMonthChoice = decision.TenantID != 0
 		}
 	}

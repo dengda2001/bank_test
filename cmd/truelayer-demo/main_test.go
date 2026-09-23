@@ -1038,11 +1038,29 @@ func TestValidateTransactionFilters(t *testing.T) {
 	if err := validateTransactionFilters(transactionFilters{Direction: "income", MatchStatus: "candidate", PeriodMonth: "2026-09"}); err != nil {
 		t.Fatalf("valid filters rejected: %v", err)
 	}
+	if err := validateTransactionFilters(transactionFilters{Sort: "status_desc"}); err != nil {
+		t.Fatalf("valid transaction status sort rejected: %v", err)
+	}
+	if err := validateTransactionFilters(transactionFilters{Sort: "rent_period_asc"}); err != nil {
+		t.Fatalf("valid transaction period sort rejected: %v", err)
+	}
+	if err := validateTransactionFilters(transactionFilters{Sort: "status_by_request"}); err == nil {
+		t.Fatal("unsupported transaction sort should be rejected")
+	}
 	if err := validateTransactionFilters(transactionFilters{Direction: "transfer"}); err == nil {
 		t.Fatal("unsupported direction should be rejected")
 	}
 	if err := validateTransactionFilters(transactionFilters{PeriodMonth: "2026-13"}); err == nil {
 		t.Fatal("invalid period should be rejected")
+	}
+}
+
+func TestTransactionPageOrderUsesAClosedWhitelist(t *testing.T) {
+	if got, want := transactionPageOrder("rent_period_asc"), "payment_transactions.parsed_period_month ASC, payment_transactions.id DESC"; got != want {
+		t.Fatalf("rent-period sort order = %q, want %q", got, want)
+	}
+	if got, want := transactionPageOrder("match_status DESC; DROP TABLE payment_transactions"), "payment_transactions.transaction_time DESC, payment_transactions.id DESC"; got != want {
+		t.Fatalf("unknown sort escaped the SQL order whitelist: %q", got)
 	}
 }
 

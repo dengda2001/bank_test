@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -30,7 +31,8 @@ func markupBetween(t *testing.T, page, start, end string) string {
 // with their own tests; the legacy structure has no surviving carrier.
 
 // A heading click flips its own column and adopts the primary direction for any
-// other, so the arrow always describes what the next click will do.
+// other. The arrow is an indicator of the current sort rather than a preview of
+// the next click, so a reader can tell the active order without activating it.
 func TestSortLinkTogglesDirections(t *testing.T) {
 	baseURL := func(sortValue string) string { return "/x?sort=" + sortValue }
 
@@ -43,9 +45,9 @@ func TestSortLinkTogglesDirections(t *testing.T) {
 		wantArrow string
 		wantOn    bool
 	}{
-		{"unsorted column previews its primary direction", "due_desc", "tenant_asc", "tenant_desc", "/x?sort=tenant_asc", "▲", false},
-		{"primary click flips to the secondary direction", "tenant_asc", "tenant_asc", "tenant_desc", "/x?sort=tenant_desc", "▼", true},
-		{"secondary click flips back to the primary direction", "tenant_desc", "tenant_asc", "tenant_desc", "/x?sort=tenant_asc", "▲", true},
+		{"inactive column has no current-order arrow", "due_desc", "tenant_asc", "tenant_desc", "/x?sort=tenant_asc", "", false},
+		{"ascending active column points at its current order", "tenant_asc", "tenant_asc", "tenant_desc", "/x?sort=tenant_desc", "▲", true},
+		{"descending active column points at its current order", "tenant_desc", "tenant_asc", "tenant_desc", "/x?sort=tenant_asc", "▼", true},
 		{"single-direction column offers no arrow", "status", "status", "", "/x?sort=status", "", true},
 		{"inactive single-direction column stays plain", "tenant_asc", "status", "", "/x?sort=status", "", false},
 	}
@@ -65,6 +67,78 @@ func TestNormalisedSortFallsBackToTheDefaultColumn(t *testing.T) {
 	}
 	if got := normalisedSort("amount_asc", dashboardDefaultSort); got != "amount_asc" {
 		t.Fatalf("explicit sort was rewritten to %q", got)
+	}
+}
+
+func TestTableSortHeadingExposesTheActiveDirection(t *testing.T) {
+	page := newWorkspacePageTemplate("sort-heading-test", nil, `<table><thead><tr>{{template "table-sort-heading" (tableSortHeading "租客" .Link)}}</tr></thead></table>`)
+	markup, err := executeTemplate(page, struct{ Link tableSortLink }{
+		Link: tableSortLink{URL: "/x?sort=tenant_asc", Active: true, Arrow: "▲"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		`aria-sort="ascending"`,
+		`class="table-sort-link is-active"`,
+		`href="/x?sort=tenant_asc"`,
+		`<span class="table-sort-arrow" aria-hidden="true">▲</span>`,
+	} {
+		if !strings.Contains(markup, expected) {
+			t.Fatalf("sortable heading is missing %q: %s", expected, markup)
+		}
+	}
+}
+
+func TestTableSortHeadingMarksOneWaySortAsOther(t *testing.T) {
+	page := newWorkspacePageTemplate("one-way-sort-heading-test", nil, `<table><thead><tr>{{template "table-sort-heading" (tableSortHeading "状态" .Link)}}</tr></thead></table>`)
+	markup, err := executeTemplate(page, struct{ Link tableSortLink }{
+		Link: tableSortLink{URL: "/x?sort=status", Active: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(markup, `aria-sort="other"`) || strings.Contains(markup, `table-sort-arrow`) {
+		t.Fatalf("one-way sort heading has an invalid accessible direction: %s", markup)
+	}
+}
+
+func TestTransactionSortLinksResetPaginationAndRetainFilters(t *testing.T) {
+	links := transactionSortLinks(url.Values{"payer": {"Aoife"}, "page": {"3"}, "page_size": {"24"}}, "status_asc")
+	status := links["status"]
+	if !status.Active || status.Arrow != "▲" || status.URL != "/transactions?page=1&page_size=24&payer=Aoife&sort=status_desc" {
+		t.Fatalf("unexpected status sort link: %+v", status)
+	}
+	object := links["object"]
+	if object.Active || object.Arrow != "" || object.URL != "/transactions?page=1&page_size=24&payer=Aoife&sort=object_asc" {
+		t.Fatalf("unexpected object sort link: %+v", object)
+	}
+}
+
+func TestWorkspaceTenantTableRendersSortHeadings(t *testing.T) {
+	page, err := executeTemplate(rentWorkspaceTemplate, rentWorkspacePageData{
+		View:   rentWorkspaceViewTenants,
+		Period: "2026-09",
+		TenantRows: []rentWorkspaceTenantRow{
+			{TenantName: "Aoife Murphy", ExpectedAmount: "EUR 800.00", PaidAmount: "EUR 0.00", BalanceAmount: "EUR 800.00"},
+		},
+		SortLinks: map[string]tableSortLink{
+			"tenant": {URL: "/rent-dashboard?sort=name_asc", Active: true, Arrow: "▲"},
+			"room":   {URL: "/rent-dashboard?sort=room_asc"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		`aria-sort="ascending"`,
+		`href="/rent-dashboard?sort=name_asc"`,
+		`href="/rent-dashboard?sort=room_asc"`,
+		`>租客 <span class="table-sort-arrow" aria-hidden="true">▲</span>`,
+	} {
+		if !strings.Contains(page, expected) {
+			t.Fatalf("workspace table is missing sortable header %q: %s", expected, page)
+		}
 	}
 }
 

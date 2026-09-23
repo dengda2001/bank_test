@@ -18,6 +18,23 @@ type matchDecision struct {
 	BackfillPayerID       bool
 }
 
+// AIB provider references such as IE26090266821225 identify one bank
+// transaction. They are not stable payer identities and must never create an
+// identity match, even if an upstream payload places one in a payer-id field.
+var aibTransactionReferencePattern = regexp.MustCompile(`(?i)^IE[0-9]{14}$`)
+
+func isBankTransactionReference(value string) bool {
+	return aibTransactionReferencePattern.MatchString(strings.TrimSpace(value))
+}
+
+func stablePayerID(value string) string {
+	value = strings.TrimSpace(value)
+	if isBankTransactionReference(value) {
+		return ""
+	}
+	return value
+}
+
 func decideRentMatch(tx paymentTransactionInput, tenants []tenant, obligations []rentObligation) matchDecision {
 	if tx.Direction != "income" {
 		return matchDecision{Status: "unmatched", Reason: "not income"}
@@ -51,7 +68,7 @@ func decideStrictRentMatch(tx paymentTransactionInput, payers []tenantPayer, ten
 	}
 	var payerMatches []tenant
 	matchSource := "auto_name"
-	if payerID := normalizeMatchText(tx.PayerID); payerID != "" {
+	if payerID := normalizeMatchText(stablePayerID(tx.PayerID)); payerID != "" {
 		payerMatches = strictTenantsByPayerID(payers, tenantByID, payerID)
 		matchSource = "auto_id"
 		if len(payerMatches) > 1 {
@@ -75,14 +92,21 @@ func decideStrictRentMatch(tx paymentTransactionInput, payers []tenantPayer, ten
 	if tx.ParsedPeriodMonth == nil || tx.ParsedPeriodMonth.IsZero() {
 		return matchDecision{Status: "candidate", TenantID: tenantRow.ID, ConfirmationSource: matchSource, Reason: "explicit rent period is missing"}
 	}
+	if obligation, ok := obligationForTenantPeriod(tenantRow.ID, *tx.ParsedPeriodMonth, obligations); ok && obligation.PaidAmountCents >= obligation.ExpectedAmountCents {
+		return decideForTenantWithObligation(tx, tenantRow, obligation, true, matchSource)
+	}
 	return decideForTenantInPeriod(tx, tenantRow, obligations, *tx.ParsedPeriodMonth, matchSource)
 }
 
 func strictTenantsByPayerID(payers []tenantPayer, tenants map[uint64]tenant, payerID string) []tenant {
+	payerID = normalizeMatchText(stablePayerID(payerID))
+	if payerID == "" {
+		return nil
+	}
 	seen := make(map[uint64]struct{})
 	result := make([]tenant, 0)
 	for _, payer := range payers {
-		if payer.RemovedAt != nil || normalizeMatchText(stringValue(payer.PayerID)) != payerID {
+		if payer.RemovedAt != nil || normalizeMatchText(stablePayerID(stringValue(payer.PayerID))) != payerID {
 			continue
 		}
 		row, ok := tenants[payer.TenantID]
@@ -146,6 +170,12 @@ func decideForTenantWithObligation(tx paymentTransactionInput, row tenant, oblig
 		decision.Reason = "currency mismatch"
 		return decision
 	}
+	if remaining <= 0 {
+		decision.Status = "candidate"
+		decision.AllocationAmountCents = 0
+		decision.Reason = "referenced rent period is already covered; confirmation required"
+		return decision
+	}
 	if tx.AmountCents > remaining {
 		decision.Status = "partial"
 		decision.AllocationAmountCents = remaining
@@ -176,12 +206,19 @@ func selectObligationForTransaction(tx paymentTransactionInput, tenantID uint64,
 }
 
 func selectObligationForPeriod(tenantID uint64, targetPeriod time.Time, obligations []rentObligation) (rentObligation, bool) {
+	obligation, ok := obligationForTenantPeriod(tenantID, targetPeriod, obligations)
+	if !ok || obligation.PaidAmountCents >= obligation.ExpectedAmountCents {
+		return rentObligation{}, false
+	}
+	return obligation, true
+}
+
+func obligationForTenantPeriod(tenantID uint64, targetPeriod time.Time, obligations []rentObligation) (rentObligation, bool) {
 	targetPeriod = monthStart(targetPeriod)
 	for _, obligation := range obligations {
 		if obligation.TenantID == tenantID &&
 			monthStart(obligation.PeriodMonth).Equal(targetPeriod) &&
-			obligation.RecordStatus != obligationRecordVoided &&
-			obligation.PaidAmountCents < obligation.ExpectedAmountCents {
+			obligation.RecordStatus != obligationRecordVoided {
 			return obligation, true
 		}
 	}

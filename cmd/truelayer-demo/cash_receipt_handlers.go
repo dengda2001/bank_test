@@ -60,6 +60,8 @@ type cashReceiptVoidPageData struct {
 	DateDisplay   string
 	Error         string
 	AlreadyVoided bool
+	ReturnURL     string
+	PostURL       string
 }
 
 func parseCashReceiptForm(values formValues, userID uint64) (cashReceiptFormInput, error) {
@@ -347,7 +349,7 @@ var cashReceiptVoidTemplate = newWorkspacePageTemplate("cash-receipt-void", nil,
   .facts{grid-template-columns:1fr;gap:4px 0}
   .facts dt{font-size:12px}
 }
-</style></head><body><div class="app">{{template "workspace-nav" .}}<main class="content void-shell"><header class="topbar"><div><div class="brand-title">收款纠正</div><h1>撤销现金收款</h1></div><a class="btn" href="/tenants/{{.Tenant.ID}}">返回租客详情</a></header>{{if eq .Error "cash_void_failed"}}<div class="notice error">撤销失败，请检查撤销原因后重试。</div>{{end}}<section class="panel surface"><p class="muted">撤销只会停止这笔现金收款对租金余额的贡献，原始收据与撤销原因会保留。需要更正时，请撤销后重新补录正确金额。</p><dl class="facts"><dt>责任租客</dt><dd>{{.Tenant.Name}}</dd><dt>实际付款人</dt><dd>{{.PayerName}}</dd><dt>金额</dt><dd>{{.AmountDisplay}}</dd><dt>收款日期</dt><dd>{{.DateDisplay}}</dd><dt>收据号</dt><dd class="mono">{{.Receipt.ReceiptNumber}}</dd><dt>备注</dt><dd>{{if .Receipt.Note}}{{.Receipt.Note}}{{else}}无{{end}}</dd><dt>状态</dt><dd>{{.Receipt.Status}}</dd></dl>{{if .AlreadyVoided}}<div class="notice ok">这笔现金收款已经撤销，不会重复扣减。</div>{{else}}<div class="void-actions"><form method="post" action="/cash-receipts/void"><input type="hidden" name="receipt_id" value="{{.Receipt.ID}}"><label for="void_reason">撤销原因（必填）</label><textarea id="void_reason" name="reason" maxlength="512" required placeholder="例如 实收金额录入错误"></textarea><button class="btn danger" type="submit">确认撤销</button></form></div>{{end}}</section></main></div></body></html>`)
+</style></head><body><div class="app">{{template "workspace-nav" .}}<main class="content void-shell"><header class="topbar"><div><div class="brand-title">收款纠正</div><h1>撤销现金收款</h1></div><a class="btn" href="{{if .ReturnURL}}{{.ReturnURL}}{{else}}/tenants/{{.Tenant.ID}}{{end}}">返回{{if .ReturnURL}}现金收款{{else}}租客详情{{end}}</a></header>{{if eq .Error "cash_void_failed"}}<div class="notice error">撤销失败，请检查撤销原因后重试。</div>{{end}}<section class="panel surface"><p class="muted">撤销只会停止这笔现金收款对租金余额的贡献，原始收据与撤销原因会保留。需要更正时，请撤销后重新补录正确金额。</p><dl class="facts"><dt>责任租客</dt><dd>{{.Tenant.Name}}</dd><dt>实际付款人</dt><dd>{{.PayerName}}</dd><dt>金额</dt><dd>{{.AmountDisplay}}</dd><dt>收款日期</dt><dd>{{.DateDisplay}}</dd><dt>收据号</dt><dd class="mono">{{.Receipt.ReceiptNumber}}</dd><dt>备注</dt><dd>{{if .Receipt.Note}}{{.Receipt.Note}}{{else}}无{{end}}</dd><dt>状态</dt><dd>{{.Receipt.Status}}</dd></dl>{{if .AlreadyVoided}}<div class="notice ok">这笔现金收款已经撤销，不会重复扣减。</div>{{else}}<div class="void-actions"><form method="post" action="{{if .PostURL}}{{.PostURL}}{{else}}/cash-receipts/void{{end}}"><input type="hidden" name="receipt_id" value="{{.Receipt.ID}}"><label for="void_reason">撤销原因（必填）</label><textarea id="void_reason" name="reason" maxlength="512" required placeholder="例如 实收金额录入错误"></textarea><button class="btn danger" type="submit">确认撤销</button></form></div>{{end}}</section></main></div></body></html>`)
 
 func (a *app) handleCashReceiptNew(w http.ResponseWriter, r *http.Request) {
 	if !a.requireAuth(w, r) {
@@ -595,7 +597,12 @@ func (a *app) handleCashReceiptVoid(w http.ResponseWriter, r *http.Request) {
 		if payerName == "" {
 			payerName = firstNonEmpty(tenantRow.DisplayAlias, tenantRow.Name)
 		}
-		data := cashReceiptVoidPageData{workspaceShell: a.fillWorkspaceShell(r, workspaceShell{ActivePage: "tenants", Username: a.displayUsername(r), Environment: a.cfg.Environment, FootNote: "现金收款纠正"}), Receipt: receipt, Tenant: tenantRow, PayerName: payerName, AmountDisplay: formatMoney(centsToMoney(receipt.AmountCents), receipt.Currency, 2), DateDisplay: receipt.ReceivedAt.Format(dateLayout), Error: r.URL.Query().Get("error"), AlreadyVoided: receipt.Status == cashReceiptStatusVoided}
+		returnURL, returnToList := cashReceiptVoidListReturnURL(r.URL.Query(), "", "")
+		postURL := "/cash-receipts/void"
+		if returnToList {
+			postURL = cashReceiptVoidURL(receipt.ID, r.URL.Query().Get("list_period"), r.URL.Query().Get("list_status"), r.URL.Query().Get("list_search"), r.URL.Query().Get("list_sort"))
+		}
+		data := cashReceiptVoidPageData{workspaceShell: a.fillWorkspaceShell(r, workspaceShell{ActivePage: "tenants", Username: a.displayUsername(r), Environment: a.cfg.Environment, FootNote: "现金收款纠正"}), Receipt: receipt, Tenant: tenantRow, PayerName: payerName, AmountDisplay: formatMoney(centsToMoney(receipt.AmountCents), receipt.Currency, 2), DateDisplay: receipt.ReceivedAt.Format(dateLayout), Error: r.URL.Query().Get("error"), AlreadyVoided: receipt.Status == cashReceiptStatusVoided, ReturnURL: returnURL, PostURL: postURL}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := cashReceiptVoidTemplate.Execute(w, data); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -607,22 +614,38 @@ func (a *app) handleCashReceiptVoid(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
+		if returnURL, ok := cashReceiptVoidListReturnURL(r.URL.Query(), "cash_void_failed", ""); ok {
+			http.Redirect(w, r, returnURL, http.StatusFound)
+			return
+		}
 		http.Redirect(w, r, "/cash-receipts/void?error=cash_void_failed", http.StatusFound)
 		return
 	}
 	receiptID, err := parsePositiveUint(r.Form.Get("receipt_id"))
 	if err != nil {
+		if returnURL, ok := cashReceiptVoidListReturnURL(r.Form, "cash_void_failed", ""); ok {
+			http.Redirect(w, r, returnURL, http.StatusFound)
+			return
+		}
 		http.Redirect(w, r, "/cash-receipts/void?error=cash_void_failed", http.StatusFound)
 		return
 	}
 	receipt, err := newCashReceiptService(a.db).voidCashReceipt(r.Context(), userID, receiptID, r.Form.Get("reason"))
 	if err != nil {
+		if returnURL, ok := cashReceiptVoidListReturnURL(r.Form, "cash_void_failed", ""); ok {
+			http.Redirect(w, r, returnURL, http.StatusFound)
+			return
+		}
 		http.Redirect(w, r, fmt.Sprintf("/cash-receipts/void?receipt_id=%d&error=cash_void_failed", receiptID), http.StatusFound)
 		return
 	}
 	var obligation rentObligation
 	if err := a.db.WithContext(r.Context()).Where("id = ? AND user_id = ?", receipt.RentObligationID, userID).First(&obligation).Error; err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if returnURL, ok := cashReceiptVoidListReturnURL(r.Form, "", "cash_receipt_voided"); ok {
+		http.Redirect(w, r, returnURL, http.StatusFound)
 		return
 	}
 	http.Redirect(w, r, fmt.Sprintf("/tenants/%d?message=cash_receipt_voided&from_month=%s&to_month=%s", obligation.TenantID, obligation.PeriodMonth.Format("2006-01"), obligation.PeriodMonth.Format("2006-01")), http.StatusFound)

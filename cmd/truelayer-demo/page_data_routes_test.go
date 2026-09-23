@@ -195,38 +195,38 @@ func TestObjectListCollectionStatesMatchPrototypeLabelsAndFilters(t *testing.T) 
 
 func TestObjectListMutationRedirectsPreservePeriodAndFilters(t *testing.T) {
 	propertyRequest := httptest.NewRequest(http.MethodPost, "/properties", nil)
-	propertyRequest.Form = url.Values{"period": {"2026-08"}, "status": {"all"}, "search": {"Canal & Park"}, "collection": {"unpaid"}}
+	propertyRequest.Form = url.Values{"period": {"2026-08"}, "status": {"all"}, "search": {"Canal & Park"}, "collection": {"unpaid"}, "sort": {"expected_desc"}}
 	propertyRecorder := httptest.NewRecorder()
 	redirectPropertyList(propertyRecorder, propertyRequest, "property_saved", "", false)
 	propertyTarget, err := url.Parse(propertyRecorder.Header().Get("Location"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if propertyTarget.Path != "/properties" || propertyTarget.Query().Get("period") != "2026-08" || propertyTarget.Query().Get("status") != "all" || propertyTarget.Query().Get("search") != "Canal & Park" || propertyTarget.Query().Get("collection") != "unpaid" {
+	if propertyTarget.Path != "/properties" || propertyTarget.Query().Get("period") != "2026-08" || propertyTarget.Query().Get("status") != "all" || propertyTarget.Query().Get("search") != "Canal & Park" || propertyTarget.Query().Get("collection") != "unpaid" || propertyTarget.Query().Get("sort") != "expected_desc" {
 		t.Fatalf("property redirect lost context: %s", propertyTarget)
 	}
 
 	roomRequest := httptest.NewRequest(http.MethodPost, "/rooms", nil)
-	roomRequest.Form = url.Values{"period": {"2026-07"}, "filter_status": {"active"}, "filter_property_id": {"4"}, "search": {"A-01"}, "collection": {"paid"}}
+	roomRequest.Form = url.Values{"period": {"2026-07"}, "filter_status": {"active"}, "filter_property_id": {"4"}, "search": {"A-01"}, "collection": {"paid"}, "sort": {"count_desc"}}
 	roomRecorder := httptest.NewRecorder()
 	redirectRoomList(roomRecorder, roomRequest, "room_saved", "", false)
 	roomTarget, err := url.Parse(roomRecorder.Header().Get("Location"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if roomTarget.Path != "/rooms" || roomTarget.Query().Get("period") != "2026-07" || roomTarget.Query().Get("status") != "active" || roomTarget.Query().Get("property_id") != "4" || roomTarget.Query().Get("search") != "A-01" || roomTarget.Query().Get("collection") != "paid" {
+	if roomTarget.Path != "/rooms" || roomTarget.Query().Get("period") != "2026-07" || roomTarget.Query().Get("status") != "active" || roomTarget.Query().Get("property_id") != "4" || roomTarget.Query().Get("search") != "A-01" || roomTarget.Query().Get("collection") != "paid" || roomTarget.Query().Get("sort") != "count_desc" {
 		t.Fatalf("room redirect lost context: %s", roomTarget)
 	}
 
 	propertyDetailRequest := httptest.NewRequest(http.MethodPost, "/properties/3", nil)
-	propertyDetailRequest.Form = url.Values{"period": {"2026-06"}, "list_status": {"all"}, "list_search": {"Canal House"}, "list_collection": {"paid"}}
+	propertyDetailRequest.Form = url.Values{"period": {"2026-06"}, "list_status": {"all"}, "list_search": {"Canal House"}, "list_collection": {"paid"}, "list_sort": {"paid_desc"}}
 	propertyDetailRecorder := httptest.NewRecorder()
 	redirectPropertyMutation(propertyDetailRecorder, propertyDetailRequest, 3, "", "", true)
 	propertyDetailTarget, err := url.Parse(propertyDetailRecorder.Header().Get("Location"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if propertyDetailTarget.Path != "/properties/3" || propertyDetailTarget.Query().Get("period") != "2026-06" || propertyDetailTarget.Query().Get("list_status") != "all" || propertyDetailTarget.Query().Get("list_search") != "Canal House" || propertyDetailTarget.Query().Get("list_collection") != "paid" || propertyDetailTarget.Query().Get("edit") != "1" {
+	if propertyDetailTarget.Path != "/properties/3" || propertyDetailTarget.Query().Get("period") != "2026-06" || propertyDetailTarget.Query().Get("list_status") != "all" || propertyDetailTarget.Query().Get("list_search") != "Canal House" || propertyDetailTarget.Query().Get("list_collection") != "paid" || propertyDetailTarget.Query().Get("list_sort") != "paid_desc" || propertyDetailTarget.Query().Get("edit") != "1" {
 		t.Fatalf("property detail redirect lost list context: %s", propertyDetailTarget)
 	}
 
@@ -235,6 +235,9 @@ func TestObjectListMutationRedirectsPreservePeriodAndFilters(t *testing.T) {
 	}
 	if got := roomListURL("2026-05", 7, "active", "A-01", "unpaid"); got != "/rooms?collection=unpaid&period=2026-05&property_id=7&search=A-01&status=active" {
 		t.Fatalf("filtered room list return URL=%q", got)
+	}
+	if got := roomListURL("2026-05", 7, "active", "A-01", "unpaid", "paid_desc"); got != "/rooms?collection=unpaid&period=2026-05&property_id=7&search=A-01&sort=paid_desc&status=active" {
+		t.Fatalf("sorted room list return URL=%q", got)
 	}
 }
 

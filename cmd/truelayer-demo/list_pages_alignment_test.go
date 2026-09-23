@@ -305,7 +305,7 @@ func TestTransactionRouteActionColumnSaysViewDetails(t *testing.T) {
 	})
 	// html/template escapes the & in the href to &amp;, so pin the two halves
 	// rather than the literal URL the row was handed.
-	for _, marker := range []string{`<th>状态</th><th>操作</th>`, `>查看详情</a>`, `/transactions?detail=7`} {
+	for _, marker := range []string{`>状态</a></th><th>操作</th>`, `>查看详情</a>`, `/transactions?detail=7`} {
 		if !strings.Contains(page, marker) {
 			t.Fatalf("transactions action column missing %q", marker)
 		}

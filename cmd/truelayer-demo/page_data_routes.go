@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -70,6 +71,8 @@ type propertyPageData struct {
 	StatusFilter     string
 	CollectionFilter string
 	Search           string
+	Sort             string
+	SortLinks        map[string]tableSortLink
 }
 
 type propertyPageForm struct {
@@ -88,6 +91,7 @@ type propertyDetailPageData struct {
 	ListStatus     string
 	ListSearch     string
 	ListCollection string
+	ListSort       string
 	Property       propertyPageRow
 	Rooms          []roomPageRow
 	Expenses       []expenseRecord
@@ -141,6 +145,8 @@ type roomPageData struct {
 	StatusFilter     string
 	CollectionFilter string
 	Search           string
+	Sort             string
+	SortLinks        map[string]tableSortLink
 	Drawer           *roomCreateDrawerData
 }
 
@@ -149,6 +155,7 @@ type roomCreateDrawerData struct {
 	StatusFilter         string
 	CollectionFilter     string
 	Search               string
+	Sort                 string
 	PropertyID           uint64
 	Properties           []propertyPageRow
 	Form                 roomPageForm
@@ -159,6 +166,7 @@ type roomCreateDrawerData struct {
 	ReturnListStatus     string
 	ReturnListSearch     string
 	ReturnListCollection string
+	ReturnListSort       string
 	ErrorMessage         string
 }
 
@@ -243,6 +251,8 @@ type cashReceiptPageData struct {
 	Period       string
 	StatusFilter string
 	Search       string
+	Sort         string
+	SortLinks    map[string]tableSortLink
 	ShowForm     bool
 	Form         cashReceiptFormData
 	Drawer       *cashReceiptDrawerData
@@ -873,6 +883,106 @@ func filterPropertyCollectionRows(rows []propertyPageRow, filter string) []prope
 	return filtered
 }
 
+const (
+	propertyPageDefaultSort = "name_asc"
+	roomPageDefaultSort     = "room_asc"
+)
+
+func validPropertyPageSort(value string) bool {
+	switch value {
+	case "", "name_asc", "name_desc", "address_asc", "address_desc", "rooms_asc", "rooms_desc", "responsibilities_asc", "responsibilities_desc", "expected_asc", "expected_desc", "paid_asc", "paid_desc", "status_asc", "status_desc":
+		return true
+	default:
+		return false
+	}
+}
+
+func sortPropertyPageRows(rows []propertyPageRow, sortValue string) []propertyPageRow {
+	if sortValue == "" {
+		sortValue = propertyPageDefaultSort
+	}
+	sorted := append([]propertyPageRow(nil), rows...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		left, right := sorted[i], sorted[j]
+		leftName, rightName := strings.ToLower(left.Name), strings.ToLower(right.Name)
+		switch sortValue {
+		case "name_asc":
+			if leftName != rightName {
+				return leftName < rightName
+			}
+		case "name_desc":
+			if leftName != rightName {
+				return leftName > rightName
+			}
+		case "address_asc", "address_desc":
+			leftAddress, rightAddress := strings.ToLower(firstNonEmpty(left.CityRegion, left.Address)), strings.ToLower(firstNonEmpty(right.CityRegion, right.Address))
+			if leftAddress != rightAddress {
+				return leftAddress < rightAddress == (sortValue == "address_asc")
+			}
+		case "rooms_asc", "rooms_desc":
+			if left.RoomCount != right.RoomCount {
+				return left.RoomCount < right.RoomCount == (sortValue == "rooms_asc")
+			}
+		case "responsibilities_asc", "responsibilities_desc":
+			if left.ResponsibilityCount != right.ResponsibilityCount {
+				return left.ResponsibilityCount < right.ResponsibilityCount == (sortValue == "responsibilities_asc")
+			}
+		case "expected_asc", "expected_desc":
+			if left.ExpectedCents != right.ExpectedCents {
+				return left.ExpectedCents < right.ExpectedCents == (sortValue == "expected_asc")
+			}
+		case "paid_asc", "paid_desc":
+			if left.PaidCents != right.PaidCents {
+				return left.PaidCents < right.PaidCents == (sortValue == "paid_asc")
+			}
+		case "status_asc", "status_desc":
+			leftStatus, rightStatus := strings.ToLower(left.CollectionStatusLabel), strings.ToLower(right.CollectionStatusLabel)
+			if leftStatus != rightStatus {
+				return leftStatus < rightStatus == (sortValue == "status_asc")
+			}
+		}
+		if leftName != rightName {
+			return leftName < rightName
+		}
+		return left.ID < right.ID
+	})
+	return sorted
+}
+
+func propertyListURL(period, status, search, collection, sortValue string) string {
+	query := url.Values{"period": []string{validatedPeriodValue(period)}}
+	if status != "all" && status != "active" && status != "inactive" {
+		status = "active"
+	}
+	query.Set("status", status)
+	if search = strings.TrimSpace(search); search != "" {
+		query.Set("search", search)
+	}
+	if collection == "unpaid" || collection == "paid" {
+		query.Set("collection", collection)
+	}
+	if sortValue != "" && sortValue != propertyPageDefaultSort {
+		query.Set("sort", sortValue)
+	}
+	return "/properties?" + query.Encode()
+}
+
+func propertyPageSortLinks(period, status, search, collection, current string) map[string]tableSortLink {
+	activeSort := normalisedSort(current, propertyPageDefaultSort)
+	sortURL := func(sortValue string) string {
+		return propertyListURL(period, status, search, collection, sortValue)
+	}
+	return map[string]tableSortLink{
+		"name":             sortLinkFor(sortURL, activeSort, "name_asc", "name_desc"),
+		"address":          sortLinkFor(sortURL, activeSort, "address_asc", "address_desc"),
+		"rooms":            sortLinkFor(sortURL, activeSort, "rooms_asc", "rooms_desc"),
+		"responsibilities": sortLinkFor(sortURL, activeSort, "responsibilities_asc", "responsibilities_desc"),
+		"expected":         sortLinkFor(sortURL, activeSort, "expected_asc", "expected_desc"),
+		"paid":             sortLinkFor(sortURL, activeSort, "paid_asc", "paid_desc"),
+		"status":           sortLinkFor(sortURL, activeSort, "status_asc", "status_desc"),
+	}
+}
+
 func filterRoomCollectionRows(rows []roomPageRow, filter string) []roomPageRow {
 	if filter == "" || filter == "all" {
 		return rows
@@ -913,6 +1023,84 @@ func filterRoomPageRows(rows []roomPageRow, search, status string) []roomPageRow
 	return filtered
 }
 
+func validRoomPageSort(value string) bool {
+	switch value {
+	case "", "room_asc", "room_desc", "property_asc", "property_desc", "tenants_asc", "tenants_desc", "expected_asc", "expected_desc", "paid_asc", "paid_desc", "count_asc", "count_desc", "status_asc", "status_desc":
+		return true
+	default:
+		return false
+	}
+}
+
+func sortRoomPageRows(rows []roomPageRow, sortValue string) []roomPageRow {
+	if sortValue == "" {
+		sortValue = roomPageDefaultSort
+	}
+	sorted := append([]roomPageRow(nil), rows...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		left, right := sorted[i], sorted[j]
+		leftRoom, rightRoom := strings.ToLower(left.RoomLabel), strings.ToLower(right.RoomLabel)
+		switch sortValue {
+		case "room_asc":
+			if leftRoom != rightRoom {
+				return leftRoom < rightRoom
+			}
+		case "room_desc":
+			if leftRoom != rightRoom {
+				return leftRoom > rightRoom
+			}
+		case "property_asc", "property_desc":
+			leftProperty, rightProperty := strings.ToLower(left.PropertyName), strings.ToLower(right.PropertyName)
+			if leftProperty != rightProperty {
+				return leftProperty < rightProperty == (sortValue == "property_asc")
+			}
+		case "tenants_asc", "tenants_desc":
+			leftTenants, rightTenants := strings.ToLower(strings.Join(left.TenantNames, " ")), strings.ToLower(strings.Join(right.TenantNames, " "))
+			if leftTenants != rightTenants {
+				return leftTenants < rightTenants == (sortValue == "tenants_asc")
+			}
+		case "expected_asc", "expected_desc":
+			if left.ExpectedCents != right.ExpectedCents {
+				return left.ExpectedCents < right.ExpectedCents == (sortValue == "expected_asc")
+			}
+		case "paid_asc", "paid_desc":
+			if left.PaidCents != right.PaidCents {
+				return left.PaidCents < right.PaidCents == (sortValue == "paid_asc")
+			}
+		case "count_asc", "count_desc":
+			if len(left.TenantNames) != len(right.TenantNames) {
+				return len(left.TenantNames) < len(right.TenantNames) == (sortValue == "count_asc")
+			}
+		case "status_asc", "status_desc":
+			leftStatus, rightStatus := strings.ToLower(left.CollectionStatusLabel), strings.ToLower(right.CollectionStatusLabel)
+			if leftStatus != rightStatus {
+				return leftStatus < rightStatus == (sortValue == "status_asc")
+			}
+		}
+		if leftRoom != rightRoom {
+			return leftRoom < rightRoom
+		}
+		return left.ID < right.ID
+	})
+	return sorted
+}
+
+func roomPageSortLinks(period string, propertyID uint64, status, search, collection, current string) map[string]tableSortLink {
+	activeSort := normalisedSort(current, roomPageDefaultSort)
+	sortURL := func(sortValue string) string {
+		return roomListURL(period, propertyID, status, search, collection, sortValue)
+	}
+	return map[string]tableSortLink{
+		"room":     sortLinkFor(sortURL, activeSort, "room_asc", "room_desc"),
+		"property": sortLinkFor(sortURL, activeSort, "property_asc", "property_desc"),
+		"tenants":  sortLinkFor(sortURL, activeSort, "tenants_asc", "tenants_desc"),
+		"expected": sortLinkFor(sortURL, activeSort, "expected_asc", "expected_desc"),
+		"paid":     sortLinkFor(sortURL, activeSort, "paid_asc", "paid_desc"),
+		"count":    sortLinkFor(sortURL, activeSort, "count_asc", "count_desc"),
+		"status":   sortLinkFor(sortURL, activeSort, "status_asc", "status_desc"),
+	}
+}
+
 func (a *app) handleProperties(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		a.handlePropertyMutation(w, r, 0)
@@ -946,6 +1134,13 @@ func (a *app) handleProperties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data.Rows = filterPropertyCollectionRows(data.Rows, data.CollectionFilter)
+	data.Sort = strings.TrimSpace(r.URL.Query().Get("sort"))
+	if !validPropertyPageSort(data.Sort) {
+		http.Error(w, "property sort is invalid", http.StatusBadRequest)
+		return
+	}
+	data.Rows = sortPropertyPageRows(data.Rows, data.Sort)
+	data.SortLinks = propertyPageSortLinks(data.Period, data.StatusFilter, data.Search, data.CollectionFilter, data.Sort)
 	data.ShowForm = r.URL.Query().Get("add") == "1"
 	data.Form = propertyPageForm{Timezone: "Europe/Dublin"}
 	data.Message, data.Error = r.URL.Query().Get("message"), r.URL.Query().Get("error")
@@ -1002,7 +1197,11 @@ func (a *app) handlePropertyDetail(w http.ResponseWriter, r *http.Request, prope
 	if listCollection != "all" && listCollection != "unpaid" && listCollection != "paid" {
 		listCollection = "all"
 	}
-	data := propertyDetailPageData{workspaceShell: canonicalPageShell(a, r, "properties", "房产详情"), Period: period.Format("2006-01"), PeriodLabel: formatMonthLabel(period), ListStatus: listStatus, ListSearch: strings.TrimSpace(r.URL.Query().Get("list_search")), ListCollection: listCollection, Property: propertyPageRow{ID: propertyRow.ID, Mark: propertyMark(propertyRow.Name), Name: propertyRow.Name, CityRegion: propertyRow.CityRegion, Address: propertyAddress(propertyRow), Timezone: propertyRow.Timezone, Notes: stringValue(propertyRow.Notes), Status: propertyRow.Status, StatusLabel: assetStatusLabel(propertyRow.Status), Actions: propertyActions(propertyRow.ID, propertyRow.Status == "active")}, Rooms: rooms, Expenses: filteredExpenses, Editing: r.URL.Query().Get("edit") == "1", Message: r.URL.Query().Get("message"), Error: r.URL.Query().Get("error")}
+	listSort := strings.TrimSpace(r.URL.Query().Get("list_sort"))
+	if !validPropertyPageSort(listSort) {
+		listSort = ""
+	}
+	data := propertyDetailPageData{workspaceShell: canonicalPageShell(a, r, "properties", "房产详情"), Period: period.Format("2006-01"), PeriodLabel: formatMonthLabel(period), ListStatus: listStatus, ListSearch: strings.TrimSpace(r.URL.Query().Get("list_search")), ListCollection: listCollection, ListSort: listSort, Property: propertyPageRow{ID: propertyRow.ID, Mark: propertyMark(propertyRow.Name), Name: propertyRow.Name, CityRegion: propertyRow.CityRegion, Address: propertyAddress(propertyRow), Timezone: propertyRow.Timezone, Notes: stringValue(propertyRow.Notes), Status: propertyRow.Status, StatusLabel: assetStatusLabel(propertyRow.Status), Actions: propertyActions(propertyRow.ID, propertyRow.Status == "active")}, Rooms: rooms, Expenses: filteredExpenses, Editing: r.URL.Query().Get("edit") == "1", Message: r.URL.Query().Get("message"), Error: r.URL.Query().Get("error")}
 	data.RoomOpenURL = propertyRoomOpenURL(r)
 	if r.URL.Query().Get("room") == "1" || r.URL.Query().Get("room_error") != "" {
 		returnURL := propertyDetailReturnURL(r)
@@ -1011,7 +1210,7 @@ func (a *app) handlePropertyDetail(w http.ResponseWriter, r *http.Request, prope
 			Period: period.Format("2006-01"), StatusFilter: "all", CollectionFilter: "all", PropertyID: propertyID,
 			Properties: []propertyPageRow{{ID: propertyRow.ID, Name: propertyRow.Name}}, Form: form, ReturnURL: returnURL,
 			ReturnContext: "property", ReturnPropertyID: propertyID, ReturnPeriod: period.Format("2006-01"),
-			ReturnListStatus: listStatus, ReturnListSearch: strings.TrimSpace(r.URL.Query().Get("list_search")), ReturnListCollection: listCollection,
+			ReturnListStatus: listStatus, ReturnListSearch: strings.TrimSpace(r.URL.Query().Get("list_search")), ReturnListCollection: listCollection, ReturnListSort: listSort,
 			ErrorMessage: roomMutationErrorMessage(r.URL.Query().Get("room_error")),
 		}
 	}
@@ -1167,6 +1366,9 @@ func redirectPropertyMutation(w http.ResponseWriter, r *http.Request, propertyID
 	if listCollection == "unpaid" || listCollection == "paid" {
 		query.Set("list_collection", listCollection)
 	}
+	if listSort := strings.TrimSpace(r.Form.Get("list_sort")); validPropertyPageSort(listSort) && listSort != "" && listSort != propertyPageDefaultSort {
+		query.Set("list_sort", listSort)
+	}
 	if editing {
 		query.Set("edit", "1")
 	}
@@ -1187,6 +1389,9 @@ func redirectPropertyList(w http.ResponseWriter, r *http.Request, message, error
 	collection := strings.TrimSpace(r.Form.Get("collection"))
 	if collection == "unpaid" || collection == "paid" {
 		query.Set("collection", collection)
+	}
+	if sortValue := strings.TrimSpace(r.Form.Get("sort")); validPropertyPageSort(sortValue) && sortValue != "" && sortValue != propertyPageDefaultSort {
+		query.Set("sort", sortValue)
 	}
 	if message != "" {
 		query.Set("message", message)
@@ -1225,6 +1430,9 @@ func redirectRoomList(w http.ResponseWriter, r *http.Request, message, errorCode
 	collection := strings.TrimSpace(r.Form.Get("collection"))
 	if collection == "unpaid" || collection == "paid" {
 		query.Set("collection", collection)
+	}
+	if sortValue := strings.TrimSpace(r.Form.Get("sort")); validRoomPageSort(sortValue) && sortValue != "" && sortValue != roomPageDefaultSort {
+		query.Set("sort", sortValue)
 	}
 	if message != "" {
 		query.Set("message", message)
@@ -1277,6 +1485,9 @@ func roomListURL(period string, propertyID uint64, status, search string, collec
 	}
 	if len(collection) > 0 && (collection[0] == "unpaid" || collection[0] == "paid") {
 		query.Set("collection", collection[0])
+	}
+	if len(collection) > 1 && collection[1] != "" && collection[1] != roomPageDefaultSort {
+		query.Set("sort", collection[1])
 	}
 	return "/rooms?" + query.Encode()
 }
@@ -1386,6 +1597,12 @@ func (a *app) handleRooms(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows = filterRoomCollectionRows(rows, collectionFilter)
+	sortValue := strings.TrimSpace(r.URL.Query().Get("sort"))
+	if !validRoomPageSort(sortValue) {
+		http.Error(w, "room sort is invalid", http.StatusBadRequest)
+		return
+	}
+	rows = sortRoomPageRows(rows, sortValue)
 	repo := newLandlordRentRepository(a.db)
 	properties, err := repo.listProperties(r.Context(), userID, propertyQuery{Status: "active"})
 	if err != nil {
@@ -1405,10 +1622,10 @@ func (a *app) handleRooms(w http.ResponseWriter, r *http.Request) {
 	for _, row := range allProperties {
 		propertyOptions = append(propertyOptions, propertyPageRow{ID: row.ID, Name: row.Name, CityRegion: row.CityRegion, Address: propertyAddress(row), Timezone: row.Timezone, Notes: stringValue(row.Notes), Status: row.Status, StatusLabel: assetStatusLabel(row.Status)})
 	}
-	data := roomPageData{workspaceShell: canonicalPageShell(a, r, "rooms", "房间与房产绑定"), Period: period.Format("2006-01"), PeriodLabel: formatMonthLabel(period), PeriodOptions: pagePeriodOptions(period), Rows: rows, Properties: propertyRows, PropertyOptions: propertyOptions, PropertyID: propertyID, StatusFilter: statusFilter, CollectionFilter: collectionFilter, Search: search, ShowForm: r.URL.Query().Get("add") == "1", Form: defaultRoomCreateForm(propertyID), Message: r.URL.Query().Get("message"), Error: r.URL.Query().Get("error")}
+	data := roomPageData{workspaceShell: canonicalPageShell(a, r, "rooms", "房间与房产绑定"), Period: period.Format("2006-01"), PeriodLabel: formatMonthLabel(period), PeriodOptions: pagePeriodOptions(period), Rows: rows, Properties: propertyRows, PropertyOptions: propertyOptions, PropertyID: propertyID, StatusFilter: statusFilter, CollectionFilter: collectionFilter, Search: search, Sort: sortValue, SortLinks: roomPageSortLinks(period.Format("2006-01"), propertyID, statusFilter, search, collectionFilter, sortValue), ShowForm: r.URL.Query().Get("add") == "1", Form: defaultRoomCreateForm(propertyID), Message: r.URL.Query().Get("message"), Error: r.URL.Query().Get("error")}
 	if data.ShowForm {
-		returnURL := roomListURL(data.Period, propertyID, statusFilter, search, collectionFilter)
-		data.Drawer = &roomCreateDrawerData{Period: data.Period, StatusFilter: statusFilter, CollectionFilter: collectionFilter, Search: search, PropertyID: propertyID, Properties: propertyRows, Form: data.Form, ReturnURL: returnURL, ErrorMessage: roomMutationErrorMessage(data.Error)}
+		returnURL := roomListURL(data.Period, propertyID, statusFilter, search, collectionFilter, sortValue)
+		data.Drawer = &roomCreateDrawerData{Period: data.Period, StatusFilter: statusFilter, CollectionFilter: collectionFilter, Search: search, Sort: sortValue, PropertyID: propertyID, Properties: propertyRows, Form: data.Form, ReturnURL: returnURL, ErrorMessage: roomMutationErrorMessage(data.Error)}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := roomPageTemplate.Execute(w, data); err != nil {
@@ -1592,6 +1809,9 @@ func roomPropertyReturnURL(values url.Values, message, errorCode string, open bo
 	if collection == "unpaid" || collection == "paid" {
 		query.Set("list_collection", collection)
 	}
+	if sortValue := strings.TrimSpace(values.Get("return_list_sort")); validPropertyPageSort(sortValue) && sortValue != "" && sortValue != propertyPageDefaultSort {
+		query.Set("list_sort", sortValue)
+	}
 	if open {
 		query.Set("room", "1")
 	}
@@ -1677,6 +1897,9 @@ func copyRoomReturnContext(target, source url.Values) {
 	collection := strings.TrimSpace(source.Get("return_collection"))
 	if collection == "unpaid" || collection == "paid" {
 		target.Set("return_collection", collection)
+	}
+	if sortValue := strings.TrimSpace(source.Get("return_sort")); validRoomPageSort(sortValue) && sortValue != "" && sortValue != roomPageDefaultSort {
+		target.Set("return_sort", sortValue)
 	}
 }
 
@@ -1834,8 +2057,8 @@ func roomPageDrawer(data roomPageData) *roomCreateDrawerData {
 	if data.Drawer != nil {
 		return data.Drawer
 	}
-	returnURL := roomListURL(data.Period, data.PropertyID, data.StatusFilter, data.Search, data.CollectionFilter)
-	return &roomCreateDrawerData{Period: data.Period, StatusFilter: data.StatusFilter, CollectionFilter: data.CollectionFilter, Search: data.Search, PropertyID: data.PropertyID, Properties: data.Properties, Form: withRoomCreateDefaults(data.Form), ReturnURL: returnURL, ErrorMessage: roomMutationErrorMessage(data.Error)}
+	returnURL := roomListURL(data.Period, data.PropertyID, data.StatusFilter, data.Search, data.CollectionFilter, data.Sort)
+	return &roomCreateDrawerData{Period: data.Period, StatusFilter: data.StatusFilter, CollectionFilter: data.CollectionFilter, Search: data.Search, Sort: data.Sort, PropertyID: data.PropertyID, Properties: data.Properties, Form: withRoomCreateDefaults(data.Form), ReturnURL: returnURL, ErrorMessage: roomMutationErrorMessage(data.Error)}
 }
 
 var roomEditPageTemplate = newWorkspacePageTemplate("room-edit-page", nil, `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RentOps Room Edit</title><style>`+workspacePageCSS+`</style></head><body><div class="app">{{template "workspace-nav" .}}<main class="content"><header class="topbar"><div><div class="brand-title">资产管理</div><h1>编辑房间</h1><div class="tiny">房间资料与入住租金计划分开维护</div></div><a class="btn" href="/rooms">返回房间</a></header>{{if .Error}}<div class="notice error">{{.Error}}</div>{{end}}<section class="panel surface entity-form" aria-labelledby="room-form-title"><div class="panel-head"><div><h2 id="room-form-title">房间资料</h2><p class="tiny">房间必须绑定一个房产。</p></div></div><form method="post" action="/rooms/{{.Form.ID}}"><input type="hidden" name="action" value="save"><div class="form-grid"><div class="form-field"><label for="room-label">房间名称</label><input id="room-label" name="room_label" value="{{.Form.RoomLabel}}" maxlength="191" required></div><div class="form-field"><label for="room-property">所属房产</label><select id="room-property" name="property_id" required><option value="">请选择房产</option>{{range .Properties}}<option value="{{.ID}}"{{if eq $.Form.PropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></div></div><div class="drawer-actions"><button class="btn primary" type="submit">保存房间</button></div></form></section></main></div></body></html>`)

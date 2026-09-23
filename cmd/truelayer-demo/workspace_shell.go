@@ -112,8 +112,10 @@ var workspaceNav = embeddedWebText("web/templates/partials/workspace-nav.html")
 // workspace's tenant view must render the same inline form.
 var workspaceBase = template.Must(template.New("workspace").Funcs(template.FuncMap{
 	"tenantPeriodMatchCalendar": tenantPeriodMatchCalendar,
+	"tableSortHeading":          tableSortHeading,
 }).ParseFS(webFiles,
 	"web/templates/partials/workspace-nav.html",
+	"web/templates/partials/table-sort-heading.html",
 	"web/templates/partials/collection-settle-form.html",
 	"web/templates/partials/tenant-period-calendar.html",
 	"web/templates/partials/tenant-form-drawer.html",

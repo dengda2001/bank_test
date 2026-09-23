@@ -6,12 +6,24 @@ import "strings"
 //
 // Clicking a column that is already sorted flips it to its paired direction;
 // clicking any other column adopts that column's primary direction. The arrow
-// always shows what a click will produce, so even an unsorted table tells the
-// reader which way each column would go.
+// is displayed only for the active column and describes the order currently
+// applied to the list, rather than predicting what a second click will do.
 type tableSortLink struct {
 	URL    string
 	Active bool
 	Arrow  string
+}
+
+// tableSortHeadingData keeps the shared heading template free of page-specific
+// query construction. Each page builds its links from its own validated filter
+// contract and the partial only renders a label, link, and active direction.
+type tableSortHeadingData struct {
+	Label string
+	Link  tableSortLink
+}
+
+func tableSortHeading(label string, link tableSortLink) tableSortHeadingData {
+	return tableSortHeadingData{Label: label, Link: link}
 }
 
 // sortLinkFor builds the heading link for one column. baseURL turns a sort value
@@ -31,13 +43,17 @@ func sortLinkFor(baseURL func(sortValue string) string, current, primary, second
 	case secondary:
 		next = primary
 	}
-	arrow := "▼"
-	if strings.HasSuffix(next, "_asc") {
-		arrow = "▲"
+	arrow := ""
+	active := current == primary || current == secondary
+	if active {
+		arrow = "▼"
+		if strings.HasSuffix(current, "_asc") {
+			arrow = "▲"
+		}
 	}
 	return tableSortLink{
 		URL:    baseURL(next),
-		Active: current == primary || current == secondary,
+		Active: active,
 		Arrow:  arrow,
 	}
 }

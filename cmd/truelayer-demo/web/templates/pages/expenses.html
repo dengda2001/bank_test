@@ -15,14 +15,14 @@
     <main class="content workspace expense-page">
       <header class="collection-toolbar expense-heading">
         <div><div class="eyebrow"><span class="expense-desktop-copy">RentOps · 费用支出</span><span class="expense-mobile-copy">更多 · 支出</span></div><h1>费用支出</h1><p class="tiny"><span class="expense-desktop-subtitle">记录房产及房间支出，并将原始发票绑定到账目。</span><span class="expense-mobile-subtitle">按房产归集，并保留发票。</span></p></div>
-        <a class="btn primary" href="/expenses?period={{.Period}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}&amp;add=1"><span class="expense-desktop-copy">新增支出</span><span class="expense-mobile-copy">新增</span></a>
+        <a class="btn primary" href="/expenses?period={{.Period}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}{{if .Sort}}&amp;sort={{.Sort}}{{end}}&amp;add=1"><span class="expense-desktop-copy">新增支出</span><span class="expense-mobile-copy">新增</span></a>
       </header>
 
       {{if eq .Message "expense_added"}}<div class="notice ok" data-toast>支出记录已保存。</div>{{else if eq .Message "invoice_bound"}}<div class="notice ok" data-toast>发票已绑定，历史版本已保留。</div>{{end}}
       {{if eq .Error "invalid_invoice"}}<div class="notice error">发票未保存，请检查编号、开票方、日期、金额和文件格式（PDF、JPG、PNG 或 WebP，最大 8 MB）。</div>{{else if .Error}}<div class="notice error">支出记录未保存，请检查描述、金额和房产。</div>{{end}}
 
       <form class="expense-filters" method="get" action="/expenses">
-        <label class="expense-search"><span>搜索当前列表</span><input type="search" name="search" value="{{.Search}}" placeholder="描述、房产、房间或租客"></label>
+        <label class="expense-search"><span>搜索当前列表</span><input type="search" name="search" value="{{.Search}}" placeholder="描述、房产、房间或租客"></label><input type="hidden" name="sort" value="{{.Sort}}">
         <label><span>状态</span><select name="status"><option value="all"{{if eq .StatusFilter "all"}} selected{{end}}>全部状态</option><option value="invoice_missing"{{if eq .StatusFilter "invoice_missing"}} selected{{end}}>未绑定发票</option><option value="invoice_linked"{{if eq .StatusFilter "invoice_linked"}} selected{{end}}>已绑定发票</option></select></label>
         <label><span>月份</span><input type="month" name="period" value="{{.Period}}"></label>
         <button class="btn subtle" type="submit">搜索</button>
@@ -30,7 +30,7 @@
 
       <section class="panel surface expense-list-panel" aria-label="费用支出列表">
         {{if .Rows}}
-        <div class="expense-table-wrap table-wrap"><table class="expense-table"><thead><tr><th>月份</th><th>说明</th><th>关联对象</th><th>类别</th><th class="amount">金额</th><th>发票</th><th>状态</th><th>操作</th></tr></thead><tbody>
+        <div class="expense-table-wrap table-wrap"><table class="expense-table"><thead><tr>{{template "table-sort-heading" (tableSortHeading "月份" (index .SortLinks "date"))}}{{template "table-sort-heading" (tableSortHeading "说明" (index .SortLinks "description"))}}{{template "table-sort-heading" (tableSortHeading "关联对象" (index .SortLinks "object"))}}{{template "table-sort-heading" (tableSortHeading "类别" (index .SortLinks "category"))}}{{template "table-sort-heading" (tableSortHeading "金额" (index .SortLinks "amount"))}}{{template "table-sort-heading" (tableSortHeading "发票" (index .SortLinks "invoice"))}}<th>状态</th><th>操作</th></tr></thead><tbody>
           {{range .Rows}}<tr data-page="expenses" data-expense-id="{{.ID}}">
             <td class="mono">{{.PeriodDisplay}}</td><td><strong>{{.Description}}</strong></td>
             <td>{{if .PropertyName}}{{.PropertyName}}{{else if .RoomHint}}{{.RoomHint}}{{else}}房产级支出{{end}}{{if .RoomLabel}}<small>房间 {{.RoomLabel}}</small>{{end}}{{if .TenantHint}}<small>租客 {{.TenantHint}}</small>{{end}}</td>
@@ -62,7 +62,7 @@
           {{if .Current}}<div class="expense-invoice-current"><div><span>当前发票</span><strong>{{.Current.InvoiceNumber}} · {{.Current.Vendor}}</strong><small>{{.Current.DateDisplay}} · {{.Current.AmountDisplay}}</small></div><a class="btn subtle" href="{{.Current.DownloadURL}}">查看文件</a></div>{{end}}
           {{if .History}}<details class="expense-invoice-history"><summary>更换记录（{{len .History}}）</summary><div>{{range .History}}<p><a href="{{.DownloadURL}}">{{.InvoiceNumber}}</a> · {{.Vendor}} · {{.CreatedAtDisplay}}</p>{{end}}</div></details>{{end}}
           <form method="post" action="{{.PostURL}}" enctype="multipart/form-data">
-            <input type="hidden" name="expense_id" value="{{.ExpenseID}}"><input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="status" value="{{.StatusFilter}}"><input type="hidden" name="search" value="{{.Search}}">
+            <input type="hidden" name="expense_id" value="{{.ExpenseID}}"><input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="status" value="{{.StatusFilter}}"><input type="hidden" name="search" value="{{.Search}}"><input type="hidden" name="sort" value="{{.Sort}}">
             <div class="form-field"><label for="invoice-number">发票编号</label><input id="invoice-number" name="invoice_number" maxlength="191" value="{{.InvoiceNumber}}" required></div>
             <div class="form-field"><label for="invoice-vendor">开票方</label><input id="invoice-vendor" name="vendor" maxlength="191" value="{{.Vendor}}" required></div>
             <div class="expense-form-grid"><div class="form-field"><label for="invoice-date">开票日期</label><input id="invoice-date" name="invoice_date" type="date" value="{{.InvoiceDate}}" required></div><div class="form-field"><label for="invoice-amount">发票金额</label><input id="invoice-amount" name="invoice_amount" type="number" min="0.01" step="0.01" inputmode="decimal" value="{{.InvoiceAmount}}" required></div></div>

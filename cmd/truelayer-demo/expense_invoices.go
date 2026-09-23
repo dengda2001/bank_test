@@ -74,6 +74,7 @@ type expenseInvoiceFormView struct {
 	Period        string
 	StatusFilter  string
 	Search        string
+	Sort          string
 }
 
 func invoiceView(row manualExpenseInvoice) expenseInvoiceView {
@@ -86,7 +87,7 @@ func invoiceView(row manualExpenseInvoice) expenseInvoiceView {
 	}
 }
 
-func expenseInvoiceActionURL(expenseID, period, status, search string) string {
+func expenseInvoiceActionURL(expenseID, period, status, search, sortValue string) string {
 	query := url.Values{}
 	query.Set("invoice", expenseID)
 	query.Set("period", validatedPeriodValue(period))
@@ -95,6 +96,9 @@ func expenseInvoiceActionURL(expenseID, period, status, search string) string {
 	}
 	if search = strings.TrimSpace(search); search != "" {
 		query.Set("search", search)
+	}
+	if sortValue != "" && sortValue != expensePageDefaultSort {
+		query.Set("sort", sortValue)
 	}
 	return "/expenses?" + query.Encode()
 }
@@ -117,7 +121,7 @@ func (a *app) loadCurrentExpenseInvoices(ctx context.Context, userID uint64, exp
 	return result, nil
 }
 
-func (a *app) expenseInvoiceForm(ctx context.Context, userID uint64, expense expenseRecord, period, status, search string) (*expenseInvoiceFormView, error) {
+func (a *app) expenseInvoiceForm(ctx context.Context, userID uint64, expense expenseRecord, period, status, search, sortValue string) (*expenseInvoiceFormView, error) {
 	expenseID, err := strconv.ParseUint(expense.ID, 10, 64)
 	if err != nil || expenseID == 0 || a.db == nil {
 		return nil, errInvalidExpenseInvoice
@@ -130,9 +134,9 @@ func (a *app) expenseInvoiceForm(ctx context.Context, userID uint64, expense exp
 		ExpenseID: expense.ID, Description: expense.Description,
 		ExpenseAmount: strconv.FormatFloat(expense.Amount, 'f', 2, 64),
 		InvoiceDate:   time.Now().UTC().Format(dateLayout), InvoiceAmount: strconv.FormatFloat(expense.Amount, 'f', 2, 64),
-		ReturnURL: expensePageURL(url.Values{"period": {period}, "status": {status}, "search": {search}}, "", "", false),
-		PostURL:   expenseInvoicePostURL(expenseID, period, status, search),
-		Period:    period, StatusFilter: status, Search: search,
+		ReturnURL: expenseListURL(period, status, search, sortValue),
+		PostURL:   expenseInvoicePostURL(expenseID, period, status, search, sortValue),
+		Period:    period, StatusFilter: status, Search: search, Sort: sortValue,
 	}
 	for _, row := range rows {
 		if row.IsCurrent && view.Current == nil {
@@ -149,13 +153,16 @@ func (a *app) expenseInvoiceForm(ctx context.Context, userID uint64, expense exp
 	return view, nil
 }
 
-func expenseInvoicePostURL(expenseID uint64, period, status, search string) string {
+func expenseInvoicePostURL(expenseID uint64, period, status, search, sortValue string) string {
 	query := url.Values{"invoice": {strconv.FormatUint(expenseID, 10)}, "period": {validatedPeriodValue(period)}}
 	if status == "all" || status == "invoice_linked" || status == "invoice_missing" {
 		query.Set("status", status)
 	}
 	if search = strings.TrimSpace(search); search != "" {
 		query.Set("search", search)
+	}
+	if sortValue != "" && sortValue != expensePageDefaultSort {
+		query.Set("sort", sortValue)
 	}
 	return "/expenses/invoices?" + query.Encode()
 }

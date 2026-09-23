@@ -114,7 +114,7 @@ func normalizePaymentTransactions(result demoResult) []paymentTransactionInput {
 			raw, _ := json.Marshal(tx)
 			ts := parseTransactionTime(tx.Timestamp)
 			payerName, payerNameKind := payerName(tx)
-			payerID := firstNonEmpty(tx.PayerID, tx.RemitterID, tx.CounterpartyID, metaString(tx.Meta, "payer_id"), metaString(tx.Meta, "remitter_id"), metaString(tx.Meta, "counterparty_id"))
+			payerID := stablePayerID(firstNonEmpty(tx.PayerID, tx.RemitterID, tx.CounterpartyID, metaString(tx.Meta, "payer_id"), metaString(tx.Meta, "remitter_id"), metaString(tx.Meta, "counterparty_id")))
 			providerID := firstNonEmpty(tx.NormalisedProviderTransactionID, tx.ProviderTransactionID, metaString(tx.Meta, "normalised_provider_transaction_id"), metaString(tx.Meta, "provider_transaction_id"), metaString(tx.Meta, "bank_transaction_id"))
 			reference := firstNonEmpty(tx.Reference, metaString(tx.Meta, "payment_reference"), metaString(tx.Meta, "reference"), metaString(tx.Meta, "provider_reference"), metaString(tx.Meta, "remittance_information"), metaString(tx.Meta, "remittanceInformation"))
 			parsedPeriod, parsed := parseReferencedPeriod(tx.Description+" "+reference, firstNonZeroTime(ts))
@@ -156,7 +156,7 @@ func (s *transactionService) ingestDemoResult(ctx context.Context, userID uint64
 			return err
 		}
 	}
-	return nil
+	return s.reconcilePendingRentTransactions(ctx, userID)
 }
 
 func paymentTransactionFromInput(userID uint64, input paymentTransactionInput) paymentTransaction {
@@ -174,7 +174,7 @@ func paymentTransactionFromInput(userID uint64, input paymentTransactionInput) p
 		TransactionTime:        input.TransactionTime,
 		Description:            input.Description,
 		Reference:              input.Reference,
-		PayerID:                nullableString(input.PayerID),
+		PayerID:                nullableString(stablePayerID(input.PayerID)),
 		PayerName:              nullableString(input.PayerName),
 		PayerNameKind:          input.PayerNameKind,
 		ParsedPeriodMonth:      input.ParsedPeriodMonth,
@@ -361,7 +361,7 @@ func validateTransactionFilters(filters transactionFilters) error {
 		return errors.New("allocation filter is invalid")
 	}
 	switch filters.Sort {
-	case "", "arrival_desc", "arrival_asc", "amount_desc", "amount_asc", "payer_asc", "payer_desc":
+	case "", "arrival_desc", "arrival_asc", "amount_desc", "amount_asc", "payer_asc", "payer_desc", "object_asc", "object_desc", "rent_period_asc", "rent_period_desc", "reason_asc", "reason_desc", "status_asc", "status_desc":
 	default:
 		return errors.New("sort filter is invalid")
 	}
@@ -369,6 +369,42 @@ func validateTransactionFilters(filters transactionFilters) error {
 		return errors.New("pagination filter is invalid")
 	}
 	return nil
+}
+
+// transactionPageOrder maps the public sort token to a complete SQL fragment.
+// Keeping the allowlist here means request text never reaches GORM's Order
+// method, including when this service is called outside the HTTP handler.
+func transactionPageOrder(sortValue string) string {
+	switch sortValue {
+	case "arrival_asc":
+		return "payment_transactions.transaction_time ASC, payment_transactions.id ASC"
+	case "amount_desc":
+		return "payment_transactions.amount_cents DESC, payment_transactions.id DESC"
+	case "amount_asc":
+		return "payment_transactions.amount_cents ASC, payment_transactions.id ASC"
+	case "payer_asc":
+		return "payment_transactions.payer_name ASC, payment_transactions.id DESC"
+	case "payer_desc":
+		return "payment_transactions.payer_name DESC, payment_transactions.id DESC"
+	case "object_asc":
+		return "payment_transactions.account_name ASC, payment_transactions.id DESC"
+	case "object_desc":
+		return "payment_transactions.account_name DESC, payment_transactions.id DESC"
+	case "rent_period_asc":
+		return "payment_transactions.parsed_period_month ASC, payment_transactions.id DESC"
+	case "rent_period_desc":
+		return "payment_transactions.parsed_period_month DESC, payment_transactions.id DESC"
+	case "reason_asc":
+		return "payment_transactions.match_reason ASC, payment_transactions.id DESC"
+	case "reason_desc":
+		return "payment_transactions.match_reason DESC, payment_transactions.id DESC"
+	case "status_asc":
+		return "payment_transactions.match_status ASC, payment_transactions.id DESC"
+	case "status_desc":
+		return "payment_transactions.match_status DESC, payment_transactions.id DESC"
+	default:
+		return "payment_transactions.transaction_time DESC, payment_transactions.id DESC"
+	}
 }
 
 type transactionPageRow struct {
@@ -435,7 +471,7 @@ func paymentTransactionInputFromModel(row paymentTransaction) paymentTransaction
 		TransactionTime:        row.TransactionTime,
 		Description:            row.Description,
 		Reference:              row.Reference,
-		PayerID:                stringValue(row.PayerID),
+		PayerID:                stablePayerID(stringValue(row.PayerID)),
 		PayerName:              stringValue(row.PayerName),
 		PayerNameKind:          row.PayerNameKind,
 		ParsedPeriodMonth:      row.ParsedPeriodMonth,
@@ -561,19 +597,7 @@ func (s *transactionService) listTransactionsPage(ctx context.Context, userID ui
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	order := "payment_transactions.transaction_time DESC, payment_transactions.id DESC"
-	switch filters.Sort {
-	case "arrival_asc":
-		order = "payment_transactions.transaction_time ASC, payment_transactions.id ASC"
-	case "amount_desc":
-		order = "payment_transactions.amount_cents DESC, payment_transactions.id DESC"
-	case "amount_asc":
-		order = "payment_transactions.amount_cents ASC, payment_transactions.id ASC"
-	case "payer_asc":
-		order = "payment_transactions.payer_name ASC, payment_transactions.id DESC"
-	case "payer_desc":
-		order = "payment_transactions.payer_name DESC, payment_transactions.id DESC"
-	}
+	order := transactionPageOrder(filters.Sort)
 	page := filters.Page
 	if page <= 0 {
 		page = 1

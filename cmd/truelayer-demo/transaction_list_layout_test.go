@@ -315,7 +315,7 @@ func TestTransactionRowsShowParsedRentMonthAndNoTechnicalIDs(t *testing.T) {
 		}
 	}
 	for _, expected := range []string{
-		`>识别租金月份</th>`, `>2026年8月</td>`, "Rent account",
+		`>识别租金月份</a></th>`, `>2026年8月</td>`, "Rent account",
 	} {
 		if !strings.Contains(page, expected) {
 			t.Fatalf("transaction row is missing %q: %s", expected, page)
@@ -507,7 +507,7 @@ func TestTransactionRouteShowsTheParsedRentMonth(t *testing.T) {
 		},
 	})
 
-	if !strings.Contains(page, "<th>识别租金月份</th>") {
+	if !strings.Contains(page, ">识别租金月份</a></th>") {
 		t.Fatal("流水表没有「识别租金月份」表头")
 	}
 	// 除了表头，每一行都要有这一格；少一格就等于那一行的月份在桌面上看不出来。

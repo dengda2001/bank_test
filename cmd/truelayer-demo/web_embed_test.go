@@ -55,13 +55,13 @@ func TestEmbeddedWorkspaceResourcesArePresentAndReferenceSameOrigin(t *testing.T
 func TestEmbeddedObjectListsKeepFiltersAndResponsiveDetailLinks(t *testing.T) {
 	propertyPage, err := executeTemplate(propertyPageTemplate, propertyPageData{
 		workspaceShell: workspaceShell{ActivePage: "properties"},
-		Period:         "2026-09", PeriodLabel: "2026年9月", PeriodOptions: []pagePeriodOption{{Value: "2026-09", Label: "2026 年 9 月"}}, StatusFilter: "all", CollectionFilter: "unpaid", Search: "Canal",
+		Period:         "2026-09", PeriodLabel: "2026年9月", PeriodOptions: []pagePeriodOption{{Value: "2026-09", Label: "2026 年 9 月"}}, StatusFilter: "all", CollectionFilter: "unpaid", Search: "Canal", Sort: "expected_desc",
 		Rows: []propertyPageRow{{ID: 4, Name: "Canal House", Address: "1 Main Street", ResponsibilityCount: 2, RoomCount: 3, ExpectedAmount: "EUR 1,000.00", PaidAmount: "EUR 800.00", Status: "active", StatusLabel: "有效", CollectionStatus: "partial", CollectionStatusLabel: "部分未收"}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{`name="search"`, `name="status"`, `name="collection"`, `name="period"`, `aria-expanded="false"`, `data-property-id="4"`, `class="object-mobile-list"`, `class="object-mobile-money"`, `/properties/4?period=2026-09`, `部分未收`, "ResponsibilityCount"} {
+	for _, expected := range []string{`name="search"`, `name="status"`, `name="collection"`, `name="period"`, `aria-expanded="false"`, `data-property-id="4"`, `class="object-mobile-list"`, `class="object-mobile-money"`, `/properties/4?period=2026-09`, `list_sort=expected_desc`, `部分未收`, "ResponsibilityCount"} {
 		if expected == "ResponsibilityCount" {
 			if !strings.Contains(propertyPage, ">2</td>") {
 				t.Fatal("property list does not render its responsibility count")
@@ -75,13 +75,13 @@ func TestEmbeddedObjectListsKeepFiltersAndResponsiveDetailLinks(t *testing.T) {
 
 	roomPage, err := executeTemplate(roomPageTemplate, roomPageData{
 		workspaceShell: workspaceShell{ActivePage: "rooms"},
-		Period:         "2026-09", PeriodLabel: "2026年9月", PeriodOptions: []pagePeriodOption{{Value: "2026-09", Label: "2026 年 9 月"}}, StatusFilter: "active", CollectionFilter: "paid", Search: "A-01", PropertyID: 2,
+		Period:         "2026-09", PeriodLabel: "2026年9月", PeriodOptions: []pagePeriodOption{{Value: "2026-09", Label: "2026 年 9 月"}}, StatusFilter: "active", CollectionFilter: "paid", Search: "A-01", Sort: "count_desc", PropertyID: 2,
 		Rows: []roomPageRow{{ID: 9, PropertyID: 2, PropertyName: "Canal House", RoomLabel: "A-01", TenantNames: []string{"Aoife Murphy"}, ExpectedAmount: "EUR 1,000.00", PaidAmount: "EUR 800.00", BalanceAmount: "EUR 200.00", Status: "active", StatusLabel: "有效", CollectionStatus: "partial", CollectionStatusLabel: "部分未收"}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{`name="search"`, `name="property_id"`, `name="status"`, `name="collection"`, `name="period"`, `data-room-id="9"`, `class="object-mobile-list"`, `class="object-mobile-money"`, `/rooms/9?period=2026-09&amp;from=rooms`, `return_collection=paid`, "Aoife Murphy"} {
+	for _, expected := range []string{`name="search"`, `name="property_id"`, `name="status"`, `name="collection"`, `name="period"`, `data-room-id="9"`, `class="object-mobile-list"`, `class="object-mobile-money"`, `/rooms/9?period=2026-09&amp;from=rooms`, `return_collection=paid`, `return_sort=count_desc`, "Aoife Murphy"} {
 		if !strings.Contains(roomPage, expected) {
 			t.Fatalf("room list is missing %q", expected)
 		}
@@ -130,14 +130,14 @@ func TestPropertyDetailEditDrawerMatchesPrototypeFieldLayout(t *testing.T) {
 func TestEmbeddedPropertyDetailRendersCollectionAndFactsPanels(t *testing.T) {
 	page, err := executeTemplate(propertyDetailPageTemplate, propertyDetailPageData{
 		workspaceShell: workspaceShell{ActivePage: "properties"},
-		Period:         "2026-09", PeriodLabel: "2026年9月", ListCollection: "paid",
+		Period:         "2026-09", PeriodLabel: "2026年9月", ListCollection: "paid", ListSort: "paid_desc",
 		Property: propertyPageRow{ID: 1, Name: "Canal House", Address: "1 Main Street", Status: "active", StatusLabel: "有效", ActiveRoomCount: 1, RoomCount: 1, ExpectedAmount: "EUR 1,000.00", PaidAmount: "EUR 600.00", ExpenseAmount: "EUR 100.00", NetAmount: "EUR 500.00"},
 		Rooms:    []roomPageRow{{ID: 2, RoomLabel: "A-01", PropertyName: "Canal House", TenantNames: []string{"Aoife Murphy"}, MonthlyRent: "EUR 1,000.00", ExpectedAmount: "EUR 1,000.00", PaidAmount: "EUR 600.00", BalanceAmount: "EUR 400.00", BalanceCents: 40000, Status: "active", StatusLabel: "有效"}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"Canal House", "房产资料", "房间收款概览", "Aoife Murphy", "EUR 400.00", "经营净额", `list_collection=paid`} {
+	for _, expected := range []string{"Canal House", "房产资料", "房间收款概览", "Aoife Murphy", "EUR 400.00", "经营净额", `list_collection=paid`, `list_sort=paid_desc`} {
 		if !strings.Contains(page, expected) {
 			t.Fatalf("property detail is missing %q", expected)
 		}
@@ -202,6 +202,7 @@ func TestEmbeddedRoomDetailUsesTypedDisplayFields(t *testing.T) {
 		ReturnPropertyID: 3,
 		ReturnStatus:     "all",
 		ReturnSearch:     "A-01",
+		ReturnSort:       "count_desc",
 		Editing:          true,
 		RoomID:           5,
 		Form:             roomPageForm{ID: 5, PropertyID: 3, RoomLabel: "A-01"},
@@ -217,7 +218,7 @@ func TestEmbeddedRoomDetailUsesTypedDisplayFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"A-01", "Typed property", "Typed property · A-01", "2026-09-04", "EUR 10.00", `href="/rooms?period=2026-09&amp;status=all&amp;search=A-01"`, `name="return_property_id" value="3"`} {
+	for _, expected := range []string{"A-01", "Typed property", "Typed property · A-01", "2026-09-04", "EUR 10.00", `href="/rooms?period=2026-09&amp;status=all&amp;search=A-01"`, `return_sort=count_desc`, `name="return_property_id" value="3"`} {
 		if !strings.Contains(page, expected) {
 			t.Fatalf("room detail missing typed display field %q", expected)
 		}

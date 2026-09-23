@@ -39,7 +39,7 @@ func TestInlineCashReceiptPayerPickerSupportsFuzzySearch(t *testing.T) {
 
 func TestCashReceiptListURLPreservesListContext(t *testing.T) {
 	values := url.Values{
-		"list_period": {"2026-09"}, "list_status": {cashReceiptStatusVoided}, "list_search": {"Tenant A"},
+		"list_period": {"2026-09"}, "list_status": {cashReceiptStatusVoided}, "list_search": {"Tenant A"}, "list_sort": {"amount_asc"},
 	}
 	got := cashReceiptListReturnURL(values, "", "cash_receipt_saved", false, "")
 	parsed, err := url.Parse(got)
@@ -47,8 +47,30 @@ func TestCashReceiptListURLPreservesListContext(t *testing.T) {
 		t.Fatal(err)
 	}
 	query := parsed.Query()
-	if query.Get("period") != "2026-09" || query.Get("status") != cashReceiptStatusVoided || query.Get("search") != "Tenant A" || query.Get("message") != "cash_receipt_saved" {
+	if query.Get("period") != "2026-09" || query.Get("status") != cashReceiptStatusVoided || query.Get("search") != "Tenant A" || query.Get("sort") != "amount_asc" || query.Get("message") != "cash_receipt_saved" {
 		t.Fatalf("cash receipt list redirect=%q", got)
+	}
+}
+
+func TestCashReceiptVoidReturnKeepsTheListSort(t *testing.T) {
+	voidURL, err := url.Parse(cashReceiptVoidURL(8, "2026-09", cashReceiptStatusVoided, "Tenant A", "amount_asc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	returnURL, ok := cashReceiptVoidListReturnURL(voidURL.Query(), "", "cash_receipt_voided")
+	if !ok {
+		t.Fatal("cash receipt void URL did not provide a valid list return context")
+	}
+	parsed, err := url.Parse(returnURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := parsed.Query()
+	if parsed.Path != "/cash-receipts" || query.Get("period") != "2026-09" || query.Get("status") != cashReceiptStatusVoided || query.Get("search") != "Tenant A" || query.Get("sort") != "amount_asc" || query.Get("message") != "cash_receipt_voided" {
+		t.Fatalf("cash receipt void return lost list context: %s", parsed.String())
+	}
+	if _, ok := cashReceiptVoidListReturnURL(url.Values{"return_to": {"cash-receipts"}, "list_period": {"2026-09"}, "list_status": {"all"}, "list_sort": {"unsupported"}}, "", ""); ok {
+		t.Fatal("cash receipt void return accepted an invalid sort")
 	}
 }
 

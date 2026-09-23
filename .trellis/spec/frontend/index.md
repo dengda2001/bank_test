@@ -29,6 +29,7 @@ that parse the rendered markup. Those are the things that bite.
 | [Status Vocabulary](./status-vocabulary.md) | One word and one control per stored status value; pseudo-filters; known vocabulary splits | Filled |
 | [Rent Workspace Navigation](./rent-workspace-navigation.md) | Canonical rent workspace routes, hidden legacy pages, safe redirects | Filled |
 | [Tenant Room Assignment](./tenant-room-assignment.md) | Creation-time room selection, safe plan previews, and composite form contract | Filled |
+| [Sortable List Headings](./sortable-list-headings.md) | Typed server-side ordering, URL context, and accessible desktop heading links | Filled |
 
 ---
 

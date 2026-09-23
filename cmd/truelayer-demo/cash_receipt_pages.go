@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -26,6 +27,7 @@ type cashReceiptDrawerData struct {
 	Period       string
 	StatusFilter string
 	Search       string
+	Sort         string
 	ReturnURL    string
 	ReturnTo     string
 	OpenURL      string
@@ -44,9 +46,9 @@ func cashReceiptPageDrawer(data cashReceiptPageData) *cashReceiptDrawerData {
 	if form.Error == "" {
 		form.Error = data.Error
 	}
-	closeURL := cashReceiptListURL(data.Period, data.StatusFilter, data.Search, false, "", "", "")
-	openURL := cashReceiptListURL(data.Period, data.StatusFilter, data.Search, true, form.TenantID, "", "")
-	return &cashReceiptDrawerData{Form: form, Period: data.Period, StatusFilter: data.StatusFilter, Search: data.Search, ReturnURL: closeURL, ReturnTo: "cash-receipts", OpenURL: openURL, ListContext: true, ErrorMessage: cashReceiptErrorMessage(form.Error)}
+	closeURL := cashReceiptListURLWithSort(data.Period, data.StatusFilter, data.Search, data.Sort, false, "", "", "")
+	openURL := cashReceiptListURLWithSort(data.Period, data.StatusFilter, data.Search, data.Sort, true, form.TenantID, "", "")
+	return &cashReceiptDrawerData{Form: form, Period: data.Period, StatusFilter: data.StatusFilter, Search: data.Search, Sort: data.Sort, ReturnURL: closeURL, ReturnTo: "cash-receipts", OpenURL: openURL, ListContext: true, ErrorMessage: cashReceiptErrorMessage(form.Error)}
 }
 
 func cashReceiptDrawerFromRequest(r *http.Request) *cashReceiptDrawerData {
@@ -237,6 +239,10 @@ func (a *app) renderCashReceiptHostPage(w http.ResponseWriter, r *http.Request, 
 }
 
 func cashReceiptListURL(period, status, search string, add bool, tenantID string, errorCode, message string) string {
+	return cashReceiptListURLWithSort(period, status, search, "", add, tenantID, errorCode, message)
+}
+
+func cashReceiptListURLWithSort(period, status, search, sortValue string, add bool, tenantID string, errorCode, message string) string {
 	query := url.Values{}
 	query.Set("period", validatedPeriodValue(period))
 	if status != "all" && status != cashReceiptStatusConfirmed && status != cashReceiptStatusVoided {
@@ -245,6 +251,9 @@ func cashReceiptListURL(period, status, search string, add bool, tenantID string
 	query.Set("status", status)
 	if search = strings.TrimSpace(search); search != "" {
 		query.Set("search", search)
+	}
+	if sortValue != "" && sortValue != cashReceiptPageDefaultSort {
+		query.Set("sort", sortValue)
 	}
 	if add {
 		query.Set("add", "1")
@@ -261,8 +270,112 @@ func cashReceiptListURL(period, status, search string, add bool, tenantID string
 	return "/cash-receipts?" + query.Encode()
 }
 
+func cashReceiptVoidURL(receiptID uint64, period, status, search, sortValue string) string {
+	query := url.Values{"receipt_id": {strconv.FormatUint(receiptID, 10)}, "return_to": {"cash-receipts"}, "list_period": {validatedPeriodValue(period)}, "list_status": {status}}
+	if search = strings.TrimSpace(search); search != "" {
+		query.Set("list_search", search)
+	}
+	if validCashReceiptPageSort(sortValue) && sortValue != "" && sortValue != cashReceiptPageDefaultSort {
+		query.Set("list_sort", sortValue)
+	}
+	return "/cash-receipts/void?" + query.Encode()
+}
+
+func cashReceiptVoidListReturnURL(values url.Values, errorCode, message string) (string, bool) {
+	if values.Get("return_to") != "cash-receipts" {
+		return "", false
+	}
+	period, err := parsePeriodMonth(strings.TrimSpace(values.Get("list_period")))
+	if err != nil {
+		return "", false
+	}
+	status := strings.TrimSpace(values.Get("list_status"))
+	if status != "all" && status != cashReceiptStatusConfirmed && status != cashReceiptStatusVoided {
+		return "", false
+	}
+	sortValue := strings.TrimSpace(values.Get("list_sort"))
+	if !validCashReceiptPageSort(sortValue) {
+		return "", false
+	}
+	return cashReceiptListURLWithSort(period.Format("2006-01"), status, values.Get("list_search"), sortValue, false, "", errorCode, message), true
+}
+
+const cashReceiptPageDefaultSort = "received_desc"
+
+func validCashReceiptPageSort(value string) bool {
+	switch value {
+	case "", "received_asc", "received_desc", "tenant_asc", "tenant_desc", "payer_asc", "payer_desc", "room_asc", "room_desc", "amount_asc", "amount_desc", "period_asc", "period_desc", "note_asc", "note_desc", "status_asc", "status_desc":
+		return true
+	default:
+		return false
+	}
+}
+
+func sortCashReceiptPageRows(rows []cashReceiptPageRow, sortValue string) []cashReceiptPageRow {
+	if sortValue == "" {
+		sortValue = cashReceiptPageDefaultSort
+	}
+	sorted := append([]cashReceiptPageRow(nil), rows...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		left, right := sorted[i], sorted[j]
+		compareText := func(leftValue, rightValue string, ascending bool) (bool, bool) {
+			leftValue, rightValue = strings.ToLower(leftValue), strings.ToLower(rightValue)
+			if leftValue == rightValue {
+				return false, false
+			}
+			return true, leftValue < rightValue == ascending
+		}
+		switch sortValue {
+		case "received_asc", "received_desc":
+			if left.ReceivedAt != right.ReceivedAt {
+				return left.ReceivedAt < right.ReceivedAt == (sortValue == "received_asc")
+			}
+		case "tenant_asc", "tenant_desc":
+			if decided, less := compareText(left.TenantName, right.TenantName, sortValue == "tenant_asc"); decided {
+				return less
+			}
+		case "payer_asc", "payer_desc":
+			if decided, less := compareText(left.PayerName, right.PayerName, sortValue == "payer_asc"); decided {
+				return less
+			}
+		case "room_asc", "room_desc":
+			if decided, less := compareText(left.RoomLabel, right.RoomLabel, sortValue == "room_asc"); decided {
+				return less
+			}
+		case "amount_asc", "amount_desc":
+			if left.AmountCents != right.AmountCents {
+				return left.AmountCents < right.AmountCents == (sortValue == "amount_asc")
+			}
+		case "period_asc", "period_desc":
+			if left.Period != right.Period {
+				return left.Period < right.Period == (sortValue == "period_asc")
+			}
+		case "note_asc", "note_desc":
+			if decided, less := compareText(left.Note, right.Note, sortValue == "note_asc"); decided {
+				return less
+			}
+		case "status_asc", "status_desc":
+			if decided, less := compareText(left.StatusLabel, right.StatusLabel, sortValue == "status_asc"); decided {
+				return less
+			}
+		}
+		return left.ID < right.ID
+	})
+	return sorted
+}
+
+func cashReceiptPageSortLinks(period, status, search, current string) map[string]tableSortLink {
+	activeSort := normalisedSort(current, cashReceiptPageDefaultSort)
+	sortURL := func(sortValue string) string {
+		return cashReceiptListURLWithSort(period, status, search, sortValue, false, "", "", "")
+	}
+	return map[string]tableSortLink{
+		"received": sortLinkFor(sortURL, activeSort, "received_desc", "received_asc"), "tenant": sortLinkFor(sortURL, activeSort, "tenant_asc", "tenant_desc"), "payer": sortLinkFor(sortURL, activeSort, "payer_asc", "payer_desc"), "room": sortLinkFor(sortURL, activeSort, "room_asc", "room_desc"), "amount": sortLinkFor(sortURL, activeSort, "amount_desc", "amount_asc"), "period": sortLinkFor(sortURL, activeSort, "period_asc", "period_desc"), "note": sortLinkFor(sortURL, activeSort, "note_asc", "note_desc"), "status": sortLinkFor(sortURL, activeSort, "status_asc", "status_desc"),
+	}
+}
+
 func cashReceiptListReturnURL(values url.Values, errorCode, message string, add bool, tenantID string) string {
-	return cashReceiptListURL(values.Get("list_period"), values.Get("list_status"), values.Get("list_search"), add, tenantID, errorCode, message)
+	return cashReceiptListURLWithSort(values.Get("list_period"), values.Get("list_status"), values.Get("list_search"), values.Get("list_sort"), add, tenantID, errorCode, message)
 }
 
 func cashReceiptFormErrorURL(values url.Values, draft cashReceiptFormInput, errorCode string) string {
@@ -295,7 +408,7 @@ func cashReceiptDrawerIsOpen(values url.Values) bool {
 	return values.Get("add") == "1" || values.Get("error") != ""
 }
 
-func (a *app) loadCashReceiptListPage(ctx context.Context, r *http.Request, userID uint64, period time.Time, statusFilter, search string) (cashReceiptPageData, error) {
+func (a *app) loadCashReceiptListPage(ctx context.Context, r *http.Request, userID uint64, period time.Time, statusFilter, search, sortValue string) (cashReceiptPageData, error) {
 	var receipts []cashReceipt
 	if err := a.db.WithContext(ctx).Where("user_id = ?", userID).Order("received_at DESC, id DESC").Find(&receipts).Error; err != nil {
 		return cashReceiptPageData{}, err
@@ -337,7 +450,7 @@ func (a *app) loadCashReceiptListPage(ctx context.Context, r *http.Request, user
 			ReceivedAt: receipt.ReceivedAt.Format(dateLayout), Status: receipt.Status,
 			StatusLabel: pageStatusLabel(receipt.Status), Note: receipt.Note,
 			VoidReason: stringValue(receipt.VoidReason),
-			VoidURL:    "/cash-receipts/void?receipt_id=" + strconv.FormatUint(receipt.ID, 10),
+			VoidURL:    cashReceiptVoidURL(receipt.ID, periodValue, statusFilter, search, sortValue),
 		}
 		row.Period = obligation.PeriodMonth.Format("2006-01")
 		if obligation.RentChargeID != 0 {
@@ -371,15 +484,15 @@ func (a *app) loadCashReceiptListPage(ctx context.Context, r *http.Request, user
 	}
 	data := cashReceiptPageData{
 		workspaceShell: canonicalPageShell(a, r, "cash-receipts", "现金补录"),
-		Rows:           rows, Period: periodValue, StatusFilter: statusFilter, Search: search,
+		Rows:           sortCashReceiptPageRows(rows, sortValue), Period: periodValue, StatusFilter: statusFilter, Search: search, Sort: sortValue, SortLinks: cashReceiptPageSortLinks(periodValue, statusFilter, search, sortValue),
 		ShowForm: cashReceiptDrawerIsOpen(r.URL.Query()),
 		Form:     form, Message: r.URL.Query().Get("message"), Error: r.URL.Query().Get("error"),
 	}
 	if data.ShowForm {
-		closeURL := cashReceiptListURL(periodValue, statusFilter, search, false, "", "", "")
-		openURL := cashReceiptListURL(periodValue, statusFilter, search, true, r.URL.Query().Get("tenant_id"), "", "")
+		closeURL := cashReceiptListURLWithSort(periodValue, statusFilter, search, sortValue, false, "", "", "")
+		openURL := cashReceiptListURLWithSort(periodValue, statusFilter, search, sortValue, true, r.URL.Query().Get("tenant_id"), "", "")
 		form.Error = r.URL.Query().Get("error")
-		data.Drawer = &cashReceiptDrawerData{Form: form, Period: periodValue, StatusFilter: statusFilter, Search: search, ReturnURL: closeURL, ReturnTo: "cash-receipts", OpenURL: openURL, ListContext: true, ErrorMessage: cashReceiptErrorMessage(form.Error)}
+		data.Drawer = &cashReceiptDrawerData{Form: form, Period: periodValue, StatusFilter: statusFilter, Search: search, Sort: sortValue, ReturnURL: closeURL, ReturnTo: "cash-receipts", OpenURL: openURL, ListContext: true, ErrorMessage: cashReceiptErrorMessage(form.Error)}
 	}
 	return data, nil
 }
@@ -403,7 +516,12 @@ func (a *app) handleCashReceiptList(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "cash receipt status is invalid", http.StatusBadRequest)
 		return
 	}
-	data, err := a.loadCashReceiptListPage(r.Context(), r, userID, period, status, strings.TrimSpace(r.URL.Query().Get("search")))
+	sortValue := strings.TrimSpace(r.URL.Query().Get("sort"))
+	if !validCashReceiptPageSort(sortValue) {
+		http.Error(w, "cash receipt sort is invalid", http.StatusBadRequest)
+		return
+	}
+	data, err := a.loadCashReceiptListPage(r.Context(), r, userID, period, status, strings.TrimSpace(r.URL.Query().Get("search")), sortValue)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -421,7 +539,7 @@ func (a *app) renderCashReceiptDrawerPreview(w http.ResponseWriter, r *http.Requ
 	}
 	status := firstNonEmpty(r.Form.Get("list_status"), "all")
 	search := strings.TrimSpace(r.Form.Get("list_search"))
-	data, err := a.loadCashReceiptListPage(r.Context(), r, userID, period, status, search)
+	data, err := a.loadCashReceiptListPage(r.Context(), r, userID, period, status, search, strings.TrimSpace(r.Form.Get("list_sort")))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -431,7 +549,7 @@ func (a *app) renderCashReceiptDrawerPreview(w http.ResponseWriter, r *http.Requ
 	if data.Drawer != nil {
 		data.Drawer.Form = form
 		data.Drawer.ErrorMessage = cashReceiptErrorMessage(form.Error)
-		data.Drawer.OpenURL = cashReceiptListURL(data.Period, data.StatusFilter, data.Search, true, form.TenantID, "", "")
+		data.Drawer.OpenURL = cashReceiptListURLWithSort(data.Period, data.StatusFilter, data.Search, data.Sort, true, form.TenantID, "", "")
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := cashReceiptPageTemplate.Execute(w, data); err != nil {

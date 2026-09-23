@@ -206,8 +206,8 @@ func TestRentWorkspaceTenantTableKeepsTheActionColumn(t *testing.T) {
 		}},
 	})
 	desktop := markupBetween(t, page, `<div class="workspace-desktop-list">`, `<div class="workspace-mobile-list"`)
-	if !strings.Contains(desktop, `<th>收缴率</th>`) || !strings.Contains(desktop, `<th>操作</th>`) {
-		t.Fatalf("tenant table is missing the 收缴率 / 操作 headers: %s", desktop)
+	if !strings.Contains(desktop, `>收缴率</a></th>`) || !strings.Contains(desktop, `<th>操作</th>`) {
+		t.Fatalf("tenant table is missing the sortable 收缴率 / 操作 headers: %s", desktop)
 	}
 	if got := strings.Count(desktop, `class="collection-balance-form"`); got != 1 {
 		t.Fatalf("tenant settle form count=%d want 1: %s", got, desktop)
@@ -366,6 +366,33 @@ func TestWorkspaceSortBreaksExpectedTiesDeterministically(t *testing.T) {
 	}, filters)
 	if tenants[0].TenantID != 2 {
 		t.Fatalf("tenants are not ordered by expected rent: %+v", tenants)
+	}
+}
+
+func TestWorkspaceSortsVisibleColumnValues(t *testing.T) {
+	period := parseTestPeriod(t, "2026-09")
+	properties := filterAndSortWorkspaceProperties([]rentWorkspacePropertyRow{
+		{PropertyID: 1, Name: "Alpha", TotalRooms: 2, ExpenseCents: 200, CollectionPercent: 30, Status: "paid"},
+		{PropertyID: 2, Name: "Beta", TotalRooms: 5, ExpenseCents: 100, CollectionPercent: 80, Status: "overdue"},
+	}, rentWorkspaceFilters{PeriodMonth: period, Status: "all", Sort: "rooms_desc"})
+	if properties[0].PropertyID != 2 {
+		t.Fatalf("property rooms_desc did not use the visible room count: %+v", properties)
+	}
+
+	rooms := filterAndSortWorkspaceRooms([]rentWorkspaceRoomRow{
+		{RoomID: 1, PropertyName: "A", RoomLabel: "01", TenantCount: 1, CollectionPercent: 40, DueDateValue: period.AddDate(0, 0, 10), Status: "paid"},
+		{RoomID: 2, PropertyName: "B", RoomLabel: "02", TenantCount: 3, CollectionPercent: 80, DueDateValue: period.AddDate(0, 0, 5), Status: "overdue"},
+	}, rentWorkspaceFilters{PeriodMonth: period, Status: "all", Sort: "tenant_count_desc"})
+	if rooms[0].RoomID != 2 {
+		t.Fatalf("room tenant_count_desc did not use the visible occupancy: %+v", rooms)
+	}
+
+	tenants := filterAndSortWorkspaceTenants([]rentWorkspaceTenantRow{
+		{TenantID: 1, TenantName: "Alpha", PropertyName: "A", RoomLabel: "01", CollectionPercent: 30, Status: "paid", Payments: []rentPaymentDetail{{Source: "cash"}}},
+		{TenantID: 2, TenantName: "Beta", PropertyName: "B", RoomLabel: "02", CollectionPercent: 80, Status: "overdue", Payments: []rentPaymentDetail{{Source: "bank"}}},
+	}, rentWorkspaceFilters{PeriodMonth: period, Status: "all", Sort: "source_asc"})
+	if tenants[0].TenantID != 2 {
+		t.Fatalf("tenant source_asc did not use the visible payment source: %+v", tenants)
 	}
 }
 

@@ -112,7 +112,13 @@ func validateRentWorkspaceFilters(filters rentWorkspaceFilters) error {
 		return errors.New("workspace status is invalid")
 	}
 	switch filters.Sort {
-	case dashboardDefaultSort, "name_asc", "name_desc", "balance_desc", "balance_asc", "due_asc", "due_desc":
+	case dashboardDefaultSort,
+		"name_asc", "name_desc", "room_asc", "room_desc",
+		"rooms_asc", "rooms_desc", "paid_rooms_asc", "paid_rooms_desc", "unpaid_rooms_asc", "unpaid_rooms_desc",
+		"tenant_count_asc", "tenant_count_desc",
+		"expected_asc", "expected_desc", "paid_asc", "paid_desc", "balance_desc", "balance_asc",
+		"expense_asc", "expense_desc", "net_asc", "net_desc", "rate_asc", "rate_desc",
+		"due_asc", "due_desc", "source_asc", "source_desc", "status_asc", "status_desc":
 	default:
 		return errors.New("workspace sort is invalid")
 	}
@@ -1038,6 +1044,55 @@ func workspaceTextMatches(search string, values ...string) bool {
 	return false
 }
 
+func workspaceOrderedText(sortValue, key, left, right string) (bool, bool) {
+	if sortValue != key+"_asc" && sortValue != key+"_desc" {
+		return false, false
+	}
+	left, right = strings.ToLower(left), strings.ToLower(right)
+	if left == right {
+		return false, false
+	}
+	return true, (left < right) == (sortValue == key+"_asc")
+}
+
+func workspaceOrderedInt(sortValue, key string, left, right int) (bool, bool) {
+	if sortValue != key+"_asc" && sortValue != key+"_desc" || left == right {
+		return false, false
+	}
+	return true, (left < right) == (sortValue == key+"_asc")
+}
+
+func workspaceOrderedCents(sortValue, key string, left, right int64) (bool, bool) {
+	if sortValue != key+"_asc" && sortValue != key+"_desc" || left == right {
+		return false, false
+	}
+	return true, (left < right) == (sortValue == key+"_asc")
+}
+
+func workspaceOrderedDate(sortValue, key string, left, right time.Time) (bool, bool) {
+	if sortValue != key+"_asc" && sortValue != key+"_desc" {
+		return false, false
+	}
+	if left.IsZero() != right.IsZero() {
+		return true, !left.IsZero()
+	}
+	if left.Equal(right) {
+		return false, false
+	}
+	return true, left.Before(right) == (sortValue == key+"_asc")
+}
+
+func workspaceTenantPaymentSource(row rentWorkspaceTenantRow) string {
+	if len(row.Payments) == 0 {
+		return ""
+	}
+	return row.Payments[0].Source + " " + row.Payments[0].ConfirmationSource
+}
+
+func workspaceRoomSortName(row rentWorkspaceRoomRow) string {
+	return row.PropertyName + " " + row.RoomLabel
+}
+
 func filterAndSortWorkspaceProperties(rows []rentWorkspacePropertyRow, filters rentWorkspaceFilters) []rentWorkspacePropertyRow {
 	filtered := make([]rentWorkspacePropertyRow, 0, len(rows))
 	for _, row := range rows {
@@ -1051,17 +1106,38 @@ func filterAndSortWorkspaceProperties(rows []rentWorkspacePropertyRow, filters r
 	}
 	sort.SliceStable(filtered, func(i, j int) bool {
 		left, right := filtered[i], filtered[j]
-		if filters.Sort == "name_asc" && left.Name != right.Name {
-			return strings.ToLower(left.Name) < strings.ToLower(right.Name)
+		if decided, less := workspaceOrderedText(filters.Sort, "name", left.Name, right.Name); decided {
+			return less
 		}
-		if filters.Sort == "name_desc" && left.Name != right.Name {
-			return strings.ToLower(left.Name) > strings.ToLower(right.Name)
+		if decided, less := workspaceOrderedInt(filters.Sort, "rooms", left.TotalRooms, right.TotalRooms); decided {
+			return less
 		}
-		if filters.Sort == "balance_desc" && left.BalanceCents != right.BalanceCents {
-			return left.BalanceCents > right.BalanceCents
+		if decided, less := workspaceOrderedInt(filters.Sort, "paid_rooms", left.PaidRooms, right.PaidRooms); decided {
+			return less
 		}
-		if filters.Sort == "balance_asc" && left.BalanceCents != right.BalanceCents {
-			return left.BalanceCents < right.BalanceCents
+		if decided, less := workspaceOrderedInt(filters.Sort, "unpaid_rooms", left.UnpaidRooms, right.UnpaidRooms); decided {
+			return less
+		}
+		if decided, less := workspaceOrderedCents(filters.Sort, "expected", left.ExpectedCents+left.ForecastCents, right.ExpectedCents+right.ForecastCents); decided {
+			return less
+		}
+		if decided, less := workspaceOrderedCents(filters.Sort, "paid", left.PaidCents, right.PaidCents); decided {
+			return less
+		}
+		if decided, less := workspaceOrderedCents(filters.Sort, "balance", left.BalanceCents, right.BalanceCents); decided {
+			return less
+		}
+		if decided, less := workspaceOrderedCents(filters.Sort, "expense", left.ExpenseCents, right.ExpenseCents); decided {
+			return less
+		}
+		if decided, less := workspaceOrderedCents(filters.Sort, "net", left.NetCents, right.NetCents); decided {
+			return less
+		}
+		if decided, less := workspaceOrderedInt(filters.Sort, "rate", left.CollectionPercent, right.CollectionPercent); decided {
+			return less
+		}
+		if decided, less := workspaceOrderedInt(filters.Sort, "status", workspaceStatusPriority[left.Status], workspaceStatusPriority[right.Status]); decided {
+			return less
 		}
 		if workspaceStatusPriority[left.Status] != workspaceStatusPriority[right.Status] {
 			return workspaceStatusPriority[left.Status] < workspaceStatusPriority[right.Status]
@@ -1093,21 +1169,32 @@ func filterAndSortWorkspaceRooms(rows []rentWorkspaceRoomRow, filters rentWorksp
 	}
 	sort.SliceStable(filtered, func(i, j int) bool {
 		left, right := filtered[i], filtered[j]
-		if filters.Sort == "name_asc" || filters.Sort == "name_desc" {
-			leftName := strings.ToLower(left.PropertyName + " " + left.RoomLabel)
-			rightName := strings.ToLower(right.PropertyName + " " + right.RoomLabel)
-			if leftName != rightName {
-				if filters.Sort == "name_desc" {
-					return leftName > rightName
-				}
-				return leftName < rightName
-			}
+		if decided, less := workspaceOrderedText(filters.Sort, "name", workspaceRoomSortName(left), workspaceRoomSortName(right)); decided {
+			return less
 		}
-		if filters.Sort == "balance_desc" && left.BalanceCents != right.BalanceCents {
-			return left.BalanceCents > right.BalanceCents
+		if decided, less := workspaceOrderedText(filters.Sort, "room", workspaceRoomSortName(left), workspaceRoomSortName(right)); decided {
+			return less
 		}
-		if filters.Sort == "balance_asc" && left.BalanceCents != right.BalanceCents {
-			return left.BalanceCents < right.BalanceCents
+		if decided, less := workspaceOrderedInt(filters.Sort, "tenant_count", left.TenantCount, right.TenantCount); decided {
+			return less
+		}
+		if decided, less := workspaceOrderedCents(filters.Sort, "expected", left.ExpectedCents+left.ForecastCents, right.ExpectedCents+right.ForecastCents); decided {
+			return less
+		}
+		if decided, less := workspaceOrderedCents(filters.Sort, "paid", left.PaidCents, right.PaidCents); decided {
+			return less
+		}
+		if decided, less := workspaceOrderedCents(filters.Sort, "balance", left.BalanceCents, right.BalanceCents); decided {
+			return less
+		}
+		if decided, less := workspaceOrderedInt(filters.Sort, "rate", left.CollectionPercent, right.CollectionPercent); decided {
+			return less
+		}
+		if decided, less := workspaceOrderedDate(filters.Sort, "due", left.DueDateValue, right.DueDateValue); decided {
+			return less
+		}
+		if decided, less := workspaceOrderedInt(filters.Sort, "status", workspaceStatusPriority[left.Status], workspaceStatusPriority[right.Status]); decided {
+			return less
 		}
 		if workspaceStatusPriority[left.Status] != workspaceStatusPriority[right.Status] {
 			return workspaceStatusPriority[left.Status] < workspaceStatusPriority[right.Status]
@@ -1148,27 +1235,32 @@ func filterAndSortWorkspaceTenants(rows []rentWorkspaceTenantRow, filters rentWo
 	}
 	sort.SliceStable(filtered, func(i, j int) bool {
 		left, right := filtered[i], filtered[j]
-		if filters.Sort == "name_asc" || filters.Sort == "name_desc" {
-			leftName := strings.ToLower(left.TenantName)
-			rightName := strings.ToLower(right.TenantName)
-			if leftName != rightName {
-				if filters.Sort == "name_desc" {
-					return leftName > rightName
-				}
-				return leftName < rightName
-			}
+		if decided, less := workspaceOrderedText(filters.Sort, "name", left.TenantName, right.TenantName); decided {
+			return less
 		}
-		if filters.Sort == "balance_desc" && left.BalanceCents != right.BalanceCents {
-			return left.BalanceCents > right.BalanceCents
+		if decided, less := workspaceOrderedText(filters.Sort, "room", left.PropertyName+" "+left.RoomLabel, right.PropertyName+" "+right.RoomLabel); decided {
+			return less
 		}
-		if filters.Sort == "balance_asc" && left.BalanceCents != right.BalanceCents {
-			return left.BalanceCents < right.BalanceCents
+		if decided, less := workspaceOrderedCents(filters.Sort, "expected", left.ExpectedCents, right.ExpectedCents); decided {
+			return less
 		}
-		if filters.Sort == "due_asc" && !left.DueDateValue.Equal(right.DueDateValue) {
-			return left.DueDateValue.Before(right.DueDateValue)
+		if decided, less := workspaceOrderedCents(filters.Sort, "paid", left.PaidCents, right.PaidCents); decided {
+			return less
 		}
-		if filters.Sort == "due_desc" && !left.DueDateValue.Equal(right.DueDateValue) {
-			return left.DueDateValue.After(right.DueDateValue)
+		if decided, less := workspaceOrderedCents(filters.Sort, "balance", left.BalanceCents, right.BalanceCents); decided {
+			return less
+		}
+		if decided, less := workspaceOrderedInt(filters.Sort, "rate", left.CollectionPercent, right.CollectionPercent); decided {
+			return less
+		}
+		if decided, less := workspaceOrderedText(filters.Sort, "source", workspaceTenantPaymentSource(left), workspaceTenantPaymentSource(right)); decided {
+			return less
+		}
+		if decided, less := workspaceOrderedInt(filters.Sort, "status", workspaceStatusPriority[left.Status], workspaceStatusPriority[right.Status]); decided {
+			return less
+		}
+		if decided, less := workspaceOrderedDate(filters.Sort, "due", left.DueDateValue, right.DueDateValue); decided {
+			return less
 		}
 		if workspaceStatusPriority[left.Status] != workspaceStatusPriority[right.Status] {
 			return workspaceStatusPriority[left.Status] < workspaceStatusPriority[right.Status]

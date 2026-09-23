@@ -84,6 +84,9 @@ func validateTenantPayerInput(input tenantPayerInput) error {
 	if len([]rune(strings.TrimSpace(input.Name))) > 191 || len([]rune(strings.TrimSpace(input.PayerID))) > 191 {
 		return errors.New("payer name or id is too long")
 	}
+	if isBankTransactionReference(input.PayerID) {
+		return errors.New("transaction reference cannot be used as payer id")
+	}
 	return nil
 }
 
@@ -100,7 +103,7 @@ func classifyTenantPayerSharing(rows []tenantPayer) []tenantPayerRecord {
 			}
 			activeNameTenants[row.PayerNameNormalized][row.TenantID] = struct{}{}
 		}
-		payerID := stringValue(row.PayerID)
+		payerID := stablePayerID(stringValue(row.PayerID))
 		if payerID != "" {
 			if activeIDTenants[payerID] == nil {
 				activeIDTenants[payerID] = make(map[uint64]struct{})
@@ -111,9 +114,9 @@ func classifyTenantPayerSharing(rows []tenantPayer) []tenantPayerRecord {
 	result := make([]tenantPayerRecord, 0, len(rows))
 	for _, row := range rows {
 		record := tenantPayerRecord{
-			ID: strconv.FormatUint(row.ID, 10), PayerID: stringValue(row.PayerID), Name: row.PayerNameOriginal,
+			ID: strconv.FormatUint(row.ID, 10), PayerID: stablePayerID(stringValue(row.PayerID)), Name: row.PayerNameOriginal,
 			Source: row.Source,
-			Shared: len(activeNameTenants[row.PayerNameNormalized]) > 1 || len(activeIDTenants[stringValue(row.PayerID)]) > 1,
+			Shared: len(activeNameTenants[row.PayerNameNormalized]) > 1 || len(activeIDTenants[stablePayerID(stringValue(row.PayerID))]) > 1,
 		}
 		if row.LastMatchedAt != nil {
 			record.LastMatchedAt = row.LastMatchedAt.Format(time.RFC3339)
@@ -455,7 +458,7 @@ func addTenantPayerInTx(tx *gorm.DB, userID, tenantID uint64, input tenantPayerI
 }
 
 func (s *tenantService) rememberTenantPayer(ctx context.Context, userID, tenantID uint64, payerID, payerName string) error {
-	payerName, payerID = strings.TrimSpace(payerName), strings.TrimSpace(payerID)
+	payerName, payerID = strings.TrimSpace(payerName), stablePayerID(payerID)
 	if payerName == "" {
 		return nil
 	}

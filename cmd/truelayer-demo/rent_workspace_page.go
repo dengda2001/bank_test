@@ -32,6 +32,7 @@ type rentWorkspacePageData struct {
 	RoomRows         []rentWorkspaceRoomRow
 	RoomTreeRows     []rentWorkspaceRoomTreeRow
 	TenantRows       []rentWorkspaceTenantRow
+	SortLinks        map[string]tableSortLink
 	TotalRows        int
 	FilteredCount    int
 	TotalPages       int
@@ -152,6 +153,7 @@ func rentWorkspacePageFromData(a *app, r *http.Request, data rentWorkspaceData, 
 		RoomRows:         data.RoomRows,
 		RoomTreeRows:     data.RoomTreeRows,
 		TenantRows:       data.TenantRows,
+		SortLinks:        rentWorkspaceSortLinks(data.Filters),
 		TotalRows:        data.TotalRows,
 		FilteredCount:    data.FilteredCount,
 		TotalPages:       data.TotalPages,
@@ -159,6 +161,33 @@ func rentWorkspacePageFromData(a *app, r *http.Request, data rentWorkspaceData, 
 		Page:             data.Page,
 		PageSize:         data.PageSize,
 		Error:            pageError,
+	}
+}
+
+func rentWorkspaceSortLinks(filters rentWorkspaceFilters) map[string]tableSortLink {
+	activeSort := normalisedSort(filters.Sort, dashboardDefaultSort)
+	sortURL := func(sortValue string) string {
+		next := filters
+		next.Sort = sortValue
+		return rentWorkspaceURL(next, 1)
+	}
+	return map[string]tableSortLink{
+		"property":     sortLinkFor(sortURL, activeSort, "name_asc", "name_desc"),
+		"rooms":        sortLinkFor(sortURL, activeSort, "rooms_asc", "rooms_desc"),
+		"paid_rooms":   sortLinkFor(sortURL, activeSort, "paid_rooms_asc", "paid_rooms_desc"),
+		"unpaid_rooms": sortLinkFor(sortURL, activeSort, "unpaid_rooms_asc", "unpaid_rooms_desc"),
+		"tenant_count": sortLinkFor(sortURL, activeSort, "tenant_count_asc", "tenant_count_desc"),
+		"tenant":       sortLinkFor(sortURL, activeSort, "name_asc", "name_desc"),
+		"room":         sortLinkFor(sortURL, activeSort, "room_asc", "room_desc"),
+		"expected":     sortLinkFor(sortURL, activeSort, "expected_desc", "expected_asc"),
+		"paid":         sortLinkFor(sortURL, activeSort, "paid_desc", "paid_asc"),
+		"balance":      sortLinkFor(sortURL, activeSort, "balance_desc", "balance_asc"),
+		"expense":      sortLinkFor(sortURL, activeSort, "expense_desc", "expense_asc"),
+		"net":          sortLinkFor(sortURL, activeSort, "net_desc", "net_asc"),
+		"rate":         sortLinkFor(sortURL, activeSort, "rate_desc", "rate_asc"),
+		"due":          sortLinkFor(sortURL, activeSort, "due_asc", "due_desc"),
+		"source":       sortLinkFor(sortURL, activeSort, "source_asc", "source_desc"),
+		"status":       sortLinkFor(sortURL, activeSort, "status_asc", "status_desc"),
 	}
 }
 
@@ -257,6 +286,7 @@ type rentRoomDetailPageData struct {
 	ReturnStatus      string
 	ReturnSearch      string
 	ReturnCollection  string
+	ReturnSort        string
 	Period            string
 	PeriodLabel       string
 	RoomID            uint64
@@ -543,7 +573,11 @@ func (a *app) handleRoomDetail(w http.ResponseWriter, r *http.Request) {
 		if data.ReturnCollection != "unpaid" && data.ReturnCollection != "paid" {
 			data.ReturnCollection = "all"
 		}
-		data.ReturnURL = roomListURL(data.Period, data.ReturnPropertyID, data.ReturnStatus, data.ReturnSearch, data.ReturnCollection)
+		data.ReturnSort = strings.TrimSpace(r.URL.Query().Get("return_sort"))
+		if !validRoomPageSort(data.ReturnSort) {
+			data.ReturnSort = ""
+		}
+		data.ReturnURL = roomListURL(data.Period, data.ReturnPropertyID, data.ReturnStatus, data.ReturnSearch, data.ReturnCollection, data.ReturnSort)
 	}
 	data.Form = roomPageForm{ID: data.RoomID, PropertyID: data.Summary.PropertyID, RoomLabel: data.RoomLabel, RoomType: data.RoomType, Capacity: data.Capacity, Notes: data.RoomNotes}
 	if r.URL.Query().Get("expense") == "1" || isExpenseFormError(r.URL.Query().Get("error")) {

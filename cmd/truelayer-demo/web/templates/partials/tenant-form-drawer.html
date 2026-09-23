@@ -14,8 +14,9 @@
       <input id="email" name="email" type="email" autocomplete="email" value="{{.Form.Email}}" placeholder="tenant@example.com">
     </fieldset>
     <fieldset class="tenant-form-section"><legend>付款人识别（可选）</legend>
-      <label for="payer_id">银行付款人编号</label>
-      <input id="payer_id" name="payer_id" value="{{.Form.PayerID}}" maxlength="191">
+      <label for="payer_id">稳定付款人 ID</label>
+      <input id="payer_id" name="payer_id" value="{{.Form.PayerID}}" maxlength="191" placeholder="仅在银行明确提供时填写">
+      <small class="tiny">IE… 是单笔流水号，不要填入付款人 ID。</small>
       <label for="payer_name_hint">付款人名称</label>
       <input id="payer_name_hint" name="payer_name_hint" value="{{.Form.PayerNameHint}}" maxlength="191">
     </fieldset>

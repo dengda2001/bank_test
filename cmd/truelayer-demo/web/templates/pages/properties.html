@@ -15,7 +15,7 @@
     <main class="content workspace object-list-page">
       <header class="object-list-heading">
         <div><div class="eyebrow desktop-object-eyebrow">RentOps · 房产管理</div><div class="eyebrow mobile-object-eyebrow">资产与关系</div><h1 class="desktop-object-title">房产管理</h1><h1 class="mobile-object-title">对象管理</h1><p class="desktop-object-subtitle">查看 {{len .Rows}} 套房产的 {{.PeriodLabel}} 收租表现。</p><p class="mobile-object-subtitle">按房产、房间或租客查找。</p></div>
-        <a class="btn primary" href="/properties?add=1&amp;period={{.Period}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}&amp;collection={{.CollectionFilter}}"><span class="desktop-object-action">新增房产</span><span class="mobile-object-action">新增</span></a>
+        <a class="btn primary" href="/properties?add=1&amp;period={{.Period}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}&amp;collection={{.CollectionFilter}}&amp;sort={{.Sort}}"><span class="desktop-object-action">新增房产</span><span class="mobile-object-action">新增</span></a>
       </header>
       {{template "workspace-object-tabs" .}}
       {{if .Message}}<div class="notice ok" data-toast>{{if eq .Message "property_saved"}}房产资料已保存。{{else if eq .Message "property_deactivated"}}房产已停用。{{else if eq .Message "property_deleted"}}房产已删除。{{else}}操作已完成。{{end}}</div>{{end}}
@@ -24,15 +24,15 @@
       {{if .ShowForm}}
       <div class="entity-drawer-backdrop">
         <section class="entity-drawer" role="dialog" aria-modal="true" aria-labelledby="property-form-title">
-          <div class="panel-head"><div><h2 id="property-form-title">新建房产</h2><p class="tiny">先建立房产，再绑定房间。</p></div><a class="drawer-close" href="/properties?period={{.Period}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}&amp;collection={{.CollectionFilter}}" aria-label="关闭新增房产">×</a></div>
+          <div class="panel-head"><div><h2 id="property-form-title">新建房产</h2><p class="tiny">先建立房产，再绑定房间。</p></div><a class="drawer-close" href="/properties?period={{.Period}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}&amp;collection={{.CollectionFilter}}&amp;sort={{.Sort}}" aria-label="关闭新增房产">×</a></div>
           <form method="post" action="/properties">
-            <input type="hidden" name="action" value="save"><input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="status" value="{{.StatusFilter}}"><input type="hidden" name="search" value="{{.Search}}"><input type="hidden" name="collection" value="{{.CollectionFilter}}">
+            <input type="hidden" name="action" value="save"><input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="status" value="{{.StatusFilter}}"><input type="hidden" name="search" value="{{.Search}}"><input type="hidden" name="collection" value="{{.CollectionFilter}}"><input type="hidden" name="sort" value="{{.Sort}}">
             <div class="form-field"><label for="property-name">房产名称</label><input id="property-name" name="name" maxlength="191" required autofocus></div>
             <div class="form-field"><label for="property-region">城市 / 区域</label><input id="property-region" name="city_region" maxlength="191"></div>
             <div class="form-field"><label for="property-address">完整地址</label><input id="property-address" name="address" maxlength="1000"></div>
             <div class="form-field"><label for="property-timezone">时区</label><select id="property-timezone" name="timezone"><option value="Europe/Dublin">Europe/Dublin</option><option value="Europe/London">Europe/London</option><option value="Europe/Paris">Europe/Paris</option><option value="Asia/Shanghai">Asia/Shanghai</option></select></div>
             <div class="form-field"><label for="property-notes">房产备注</label><textarea id="property-notes" name="notes" maxlength="2000"></textarea></div>
-            <div class="drawer-actions"><a class="btn subtle" href="/properties?period={{.Period}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}&amp;collection={{.CollectionFilter}}">取消</a><button class="btn primary" type="submit">保存房产</button></div>
+            <div class="drawer-actions"><a class="btn subtle" href="/properties?period={{.Period}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}&amp;collection={{.CollectionFilter}}&amp;sort={{.Sort}}">取消</a><button class="btn primary" type="submit">保存房产</button></div>
           </form>
         </section>
       </div>
@@ -40,7 +40,7 @@
 
       <form class="object-list-filters" method="get" action="/properties">
         <label class="object-search"><span class="visually-hidden">搜索当前列表</span><input type="search" name="search" value="{{.Search}}" placeholder="搜索当前列表" aria-label="搜索当前列表"></label>
-        <input type="hidden" name="status" value="{{.StatusFilter}}">
+        <input type="hidden" name="status" value="{{.StatusFilter}}"><input type="hidden" name="sort" value="{{.Sort}}">
         <div class="object-list-filter-fields">
           <label><span class="visually-hidden">收缴状态</span><select name="collection" aria-label="收缴状态"><option value="all"{{if eq .CollectionFilter "all"}} selected{{end}}>全部状态</option><option value="unpaid"{{if eq .CollectionFilter "unpaid"}} selected{{end}}>未收齐</option><option value="paid"{{if eq .CollectionFilter "paid"}} selected{{end}}>已收齐</option></select></label>
           <label class="object-list-period-filter"><span class="visually-hidden">月份</span><input type="month" name="period" value="{{.Period}}" aria-label="月份"></label>
@@ -51,16 +51,16 @@
 
       <section class="panel surface object-list-panel" aria-labelledby="property-list-title">
         {{if .Rows}}
-        <div class="table-wrap object-table-wrap"><table class="object-table property-table"><thead><tr><th>房产</th><th>地址</th><th>房间</th><th>责任记录</th><th>本月应收</th><th>本月已收</th><th>状态</th><th>操作</th></tr></thead><tbody>
+        <div class="table-wrap object-table-wrap"><table class="object-table property-table"><thead><tr>{{template "table-sort-heading" (tableSortHeading "房产" (index .SortLinks "name"))}}{{template "table-sort-heading" (tableSortHeading "地址" (index .SortLinks "address"))}}{{template "table-sort-heading" (tableSortHeading "房间" (index .SortLinks "rooms"))}}{{template "table-sort-heading" (tableSortHeading "责任记录" (index .SortLinks "responsibilities"))}}{{template "table-sort-heading" (tableSortHeading "本月应收" (index .SortLinks "expected"))}}{{template "table-sort-heading" (tableSortHeading "本月已收" (index .SortLinks "paid"))}}{{template "table-sort-heading" (tableSortHeading "状态" (index .SortLinks "status"))}}<th>操作</th></tr></thead><tbody>
           {{range .Rows}}<tr data-page="properties" data-property-id="{{.ID}}">
-            <td><a class="object-primary-link" href="/properties/{{.ID}}?period={{$.Period}}&amp;list_status={{$.StatusFilter}}&amp;list_search={{$.Search}}&amp;list_collection={{$.CollectionFilter}}">{{.Name}}</a></td><td>{{if .CityRegion}}{{.CityRegion}}{{else}}{{.Address}}{{end}}</td><td>{{.RoomCount}}</td><td>{{.ResponsibilityCount}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td><span class="status {{.CollectionStatus}}">{{.CollectionStatusLabel}}</span></td>
-            <td><a class="btn subtle" href="/properties/{{.ID}}?period={{$.Period}}&amp;list_status={{$.StatusFilter}}&amp;list_search={{$.Search}}&amp;list_collection={{$.CollectionFilter}}">查看详情</a></td>
+            <td><a class="object-primary-link" href="/properties/{{.ID}}?period={{$.Period}}&amp;list_status={{$.StatusFilter}}&amp;list_search={{$.Search}}&amp;list_collection={{$.CollectionFilter}}&amp;list_sort={{$.Sort}}">{{.Name}}</a></td><td>{{if .CityRegion}}{{.CityRegion}}{{else}}{{.Address}}{{end}}</td><td>{{.RoomCount}}</td><td>{{.ResponsibilityCount}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td><span class="status {{.CollectionStatus}}">{{.CollectionStatusLabel}}</span></td>
+            <td><a class="btn subtle" href="/properties/{{.ID}}?period={{$.Period}}&amp;list_status={{$.StatusFilter}}&amp;list_search={{$.Search}}&amp;list_collection={{$.CollectionFilter}}&amp;list_sort={{$.Sort}}">查看详情</a></td>
           </tr>{{end}}
         </tbody></table></div>
         <div class="object-mobile-list">{{range .Rows}}<article class="object-mobile-card" data-page="properties" data-property-id="{{.ID}}">
-          <div class="object-mobile-card-main"><span class="object-mobile-chevron" aria-hidden="true">›</span><div><a class="object-primary-link" href="/properties/{{.ID}}?period={{$.Period}}&amp;list_status={{$.StatusFilter}}&amp;list_search={{$.Search}}&amp;list_collection={{$.CollectionFilter}}">{{.Name}}</a><p>{{if .CityRegion}}{{.CityRegion}}{{else}}{{.Address}}{{end}} · {{.RoomCount}} 个房间</p></div><div class="object-mobile-balance"><strong>{{.BalanceAmount}}</strong><small>未收</small></div></div>
+          <div class="object-mobile-card-main"><span class="object-mobile-chevron" aria-hidden="true">›</span><div><a class="object-primary-link" href="/properties/{{.ID}}?period={{$.Period}}&amp;list_status={{$.StatusFilter}}&amp;list_search={{$.Search}}&amp;list_collection={{$.CollectionFilter}}&amp;list_sort={{$.Sort}}">{{.Name}}</a><p>{{if .CityRegion}}{{.CityRegion}}{{else}}{{.Address}}{{end}} · {{.RoomCount}} 个房间</p></div><div class="object-mobile-balance"><strong>{{.BalanceAmount}}</strong><small>未收</small></div></div>
           <dl class="object-mobile-money"><div><dt>应收</dt><dd>{{.ExpectedAmount}}</dd></div><div><dt>实收</dt><dd>{{.PaidAmount}}</dd></div><div><dt>未收</dt><dd>{{.BalanceAmount}}</dd></div></dl>
-          <div class="object-mobile-card-footer"><span class="status {{.CollectionStatus}}">{{.CollectionStatusLabel}}</span><div class="object-row-actions"><a class="btn subtle" href="/properties/{{.ID}}?period={{$.Period}}&amp;list_status={{$.StatusFilter}}&amp;list_search={{$.Search}}&amp;list_collection={{$.CollectionFilter}}">查看详情</a></div></div>
+          <div class="object-mobile-card-footer"><span class="status {{.CollectionStatus}}">{{.CollectionStatusLabel}}</span><div class="object-row-actions"><a class="btn subtle" href="/properties/{{.ID}}?period={{$.Period}}&amp;list_status={{$.StatusFilter}}&amp;list_search={{$.Search}}&amp;list_collection={{$.CollectionFilter}}&amp;list_sort={{$.Sort}}">查看详情</a></div></div>
         </article>{{end}}</div>
         {{else}}<div class="object-list-empty">{{if and (eq .Search "") (eq .StatusFilter "active")}}还没有房产。<a href="/properties?add=1&amp;period={{.Period}}">新增第一套房产</a>{{else}}当前筛选条件下没有房产。{{end}}</div>{{end}}
       </section>
