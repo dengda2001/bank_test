@@ -1290,3 +1290,36 @@ description 作为唯一明确租金月份来源；无月份时仅展示转账�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 36: Bank rent-month evidence and date suggestion
+
+**Date**: 2026-09-24
+**Task**: Bank rent-month evidence and date suggestion
+**Branch**: `main`
+
+### Summary
+
+Audited 179 income descriptions; ignored bank TxnDate and non-rent months for explicit matching; added Dublin posting-date suggestions with configurable day-15 cutoff and regression tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6b1c0a2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

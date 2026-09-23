@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 35
-- **Last Active**: 2026-09-23
+- **Total Sessions**: 36
+- **Last Active**: 2026-09-24
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1292 | Active |
+| `journal-1.md` | ~1325 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 36 | 2026-09-24 | Bank rent-month evidence and date suggestion | `6b1c0a2` | `main` |
 | 35 | 2026-09-23 | 流水租金月份来源优先级 | `8526a9d` | `main` |
 | 34 | 2026-09-23 | 流水匹配核对抽屉 | `890761f` | `main` |
 | 33 | 2026-09-23 | 完成桌面列表排序与收款识别 | `32bd4bc` | `main` |
