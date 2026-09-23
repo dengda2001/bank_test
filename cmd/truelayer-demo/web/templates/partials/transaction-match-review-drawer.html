@@ -7,7 +7,7 @@
     </header>
     {{if .Error}}<div class="notice error" role="alert">{{.Error}}</div>{{end}}
     <section class="transaction-review-source" aria-labelledby="transaction-review-source-title">
-      <div class="transaction-review-section-head"><h3 id="transaction-review-source-title">当前流水</h3><span class="status {{.Source.MatchStatus}}">{{.Source.MatchStatusLabel}}</span></div>
+      <div class="transaction-review-section-head"><h3 id="transaction-review-source-title">当前流水</h3><span class="status {{.Source.MatchStatus}}">{{.Source.MatchStatusLabel}}</span>{{if .Source.MatchMethodLabel}}<span class="transaction-review-tag">{{.Source.MatchMethodLabel}}</span>{{end}}</div>
       <div class="transaction-review-source-grid"><div><span>到账日期</span><strong>{{.Source.DateDisplay}}</strong></div><div><span>付款人</span><strong>{{.Source.PayerName}}</strong></div><div><span>金额 / 未分配</span><strong>{{.Source.AmountDisplay}} / {{.Source.RemainingAmountDisplay}}</strong></div><div><span>识别月份</span><strong>{{if .Source.ParsedPeriodDisplay}}{{.Source.ParsedPeriodDisplay}}{{if .Source.ParsedPeriodSourceLabel}} <small>{{.Source.ParsedPeriodSourceLabel}}</small>{{end}}{{else}}未识别{{end}}</strong></div><div class="wide"><span>Description</span><strong class="review-long-text">{{if .Source.Description}}{{.Source.Description}}{{else}}无描述{{end}}</strong></div><div class="wide"><span>银行参考号</span><strong class="review-long-text">{{.Reference}}</strong></div></div>
       {{if .Source.MatchReason}}<p class="transaction-review-reason">{{.Source.MatchReason}}</p>{{end}}
       {{if .AllowDefer}}<div class="transaction-review-source-actions"><a class="btn subtle" href="{{.Source.DetailURL}}">查看流水详情</a><form method="post" action="/transactions/defer"><input type="hidden" name="transaction_id" value="{{.Source.ID}}"><input type="hidden" name="reason" value="首页暂不处理"><input type="hidden" name="return_to" value="{{.ReturnURL}}"><button class="btn subtle" type="submit">暂不处理</button></form></div>{{end}}
@@ -15,6 +15,7 @@
     <section class="transaction-review-identity" aria-labelledby="transaction-review-identity-title">
       <div class="transaction-review-section-head"><h3 id="transaction-review-identity-title">核对租客</h3>{{if .IdentifiedTenant}}<span class="transaction-review-tag">已预选</span>{{end}}</div>
       <p class="tiny">{{.IdentityNote}}切换查看的租客不会清空下方待确认分配。</p>
+      {{if .SuggestedTenants}}<div class="transaction-review-suggestions"><span>姓名相近的租客 · 仅供核对</span>{{range .SuggestedTenants}}<a class="btn subtle" href="{{.URL}}">{{.Name}}</a>{{end}}</div>{{end}}
       <form class="transaction-review-tenant-form" data-review-lookup method="get" action="{{.FormAction}}">{{range $key, $values := .ListValues}}{{range $values}}<input type="hidden" name="{{$key}}" value="{{.}}">{{end}}{{end}}<input type="hidden" name="match" value="{{.Source.ID}}"><label for="transaction-review-tenant">租客</label><select id="transaction-review-tenant" name="match_tenant" data-searchable><option value="">请选择租客</option>{{range .TenantOptions}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select><button class="btn" type="submit">查看该租客</button></form>
     </section>
     <div class="transaction-review-columns">

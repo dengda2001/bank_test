@@ -241,6 +241,41 @@ func TestReconcilePendingRentTransactionsOnMySQL(t *testing.T) {
 	if coveredAllocationCount != 0 {
 		t.Fatalf("covered-month allocation count=%d want 0", coveredAllocationCount)
 	}
+
+	// A later date-window transaction can use its confirmed official name after
+	// the remembered payer relation is removed. Replaying reconciliation must
+	// not allocate the same bank row twice or rewrite the August allocation.
+	october := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	openOctober := createObligation(october, 95000, 0)
+	removedAt := time.Now().UTC()
+	if err := db.Model(&tenantPayer{}).Where("id = ? AND user_id = ?", payer.ID, owner.ID).Update("removed_at", removedAt).Error; err != nil {
+		t.Fatalf("remove payer relation: %v", err)
+	}
+	paidAt := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
+	name := tenantRow.Name
+	dateTransaction := paymentTransaction{
+		UserID: owner.ID, Source: "truelayer", StableTransactionKey: "reconcile-date-exact-name", Direction: "income",
+		AmountCents: 95000, Currency: "EUR", TransactionTime: &paidAt, Description: "FASTER PAYMENT",
+		PayerName: &name, PayerNameKind: "confirmed", MatchStatus: "unmatched",
+	}
+	if err := db.Create(&dateTransaction).Error; err != nil {
+		t.Fatalf("create date transaction: %v", err)
+	}
+	for repeat := 0; repeat < 2; repeat++ {
+		if err := newTransactionService(db).reconcilePendingRentTransactions(ctx, owner.ID); err != nil {
+			t.Fatalf("reconcile date transaction run %d: %v", repeat+1, err)
+		}
+	}
+	var dateAllocations []paymentAllocation
+	if err := db.Where("user_id = ? AND payment_transaction_id = ?", owner.ID, dateTransaction.ID).Find(&dateAllocations).Error; err != nil {
+		t.Fatalf("load date allocations: %v", err)
+	}
+	if len(dateAllocations) != 1 || dateAllocations[0].RentObligationID == nil || *dateAllocations[0].RentObligationID != openOctober.ID || dateAllocations[0].ConfirmationSource != "auto_exact_name" {
+		t.Fatalf("date auto allocations=%+v, want one October allocation from exact name", dateAllocations)
+	}
+	if err := db.Model(&paymentAllocation{}).Where("user_id = ? AND payment_transaction_id = ?", owner.ID, augustTransaction.ID).Count(&allocationCount).Error; err != nil || allocationCount != 1 {
+		t.Fatalf("existing August allocation changed: count=%d err=%v", allocationCount, err)
+	}
 }
 
 func TestTenantPayerInputRejectsIETransactionReferenceAsStableID(t *testing.T) {

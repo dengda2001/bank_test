@@ -439,6 +439,7 @@ type transactionPageRow struct {
 	Source                    string
 	MatchStatus               string
 	MatchStatusLabel          string
+	MatchMethodLabel          string
 	MatchReason               string
 	ManualAdjustmentReason    string
 	Deferred                  bool
@@ -552,6 +553,25 @@ func transactionPageRowFromModel(row paymentTransaction) transactionPageRow {
 // obligation walk that fed it went with it.
 func enrichTransactionPageRow(row transactionPageRow, source paymentTransaction, allocations []paymentAllocation) transactionPageRow {
 	summary := summarizeTransactionAllocations(source, allocations)
+	var hasAutoRent, hasManualRent bool
+	for _, allocation := range allocations {
+		if !ledgerAllocationIsEffective(allocation) || ledgerAllocationKind(allocation) != allocationKindRent {
+			continue
+		}
+		if strings.HasPrefix(allocation.ConfirmationSource, "auto_") {
+			hasAutoRent = true
+		} else {
+			hasManualRent = true
+		}
+	}
+	switch {
+	case hasAutoRent && hasManualRent:
+		row.MatchMethodLabel = "自动＋手动"
+	case hasAutoRent:
+		row.MatchMethodLabel = "自动匹配"
+	case hasManualRent:
+		row.MatchMethodLabel = "手动匹配"
+	}
 	row.AllocatedAmountDisplay = formatMoney(centsToMoney(summary.AllocatedCents), source.Currency, 2)
 	row.RemainingAmountDisplay = formatMoney(centsToMoney(summary.RemainingCents), source.Currency, 2)
 	row.RemainingAmountInput = strconv.FormatFloat(centsToMoney(summary.RemainingCents), 'f', 2, 64)

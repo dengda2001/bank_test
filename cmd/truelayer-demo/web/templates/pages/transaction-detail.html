@@ -25,6 +25,7 @@
             <div class="transaction-detail-meta">
               <span>{{.Subtitle}}</span>
               <span class="status {{.StatusClass}}">{{.Transaction.MatchStatusLabel}}</span>
+              {{if .Transaction.MatchMethodLabel}}<span class="transaction-match-method">{{.Transaction.MatchMethodLabel}}</span>{{end}}
             </div>
           </div>
         </div>

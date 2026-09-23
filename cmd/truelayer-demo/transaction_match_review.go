@@ -18,6 +18,7 @@ type transactionReviewTenant struct {
 	ID       uint64
 	Name     string
 	Selected bool
+	URL      string
 }
 
 type transactionReviewEvidence struct {
@@ -72,6 +73,7 @@ type transactionMatchReviewData struct {
 	FormAction           string
 	AllowDefer           bool
 	TenantOptions        []transactionReviewTenant
+	SuggestedTenants     []transactionReviewTenant
 	SelectedTenantID     uint64
 	SelectedTenantName   string
 	IdentifiedTenant     bool
@@ -190,6 +192,9 @@ func (s *transactionService) transactionMatchReviewForMonth(ctx context.Context,
 		RequestKey:           recordID("review", time.Now().UTC()),
 	}
 	data.Source.DetailURL = "/transactions?detail=" + strconv.FormatUint(source.ID, 10)
+	if identifiedID == 0 {
+		data.SuggestedTenants = manualTenantSuggestions(stringValue(source.PayerName), source.PayerNameKind, tenants)
+	}
 	selectedExists := selectedID == 0
 	for _, tenantRow := range tenants {
 		name := firstNonEmpty(tenantRow.DisplayAlias, tenantRow.Name)
@@ -528,6 +533,7 @@ func (d *transactionMatchReviewData) setURLs(query url.Values) {
 	d.ReturnURL = d.CloseURL
 	d.FormAction = "/transactions"
 	d.ListValues = cloneQueryValues(query)
+	d.setSuggestionURLs(query)
 	for _, key := range []string{"match", "match_tenant", "match_history_page", "match_month", "detail", "error", "message"} {
 		d.ListValues.Del(key)
 	}
@@ -549,6 +555,7 @@ func (d *transactionMatchReviewData) setWorkspaceURLs(filters rentWorkspaceFilte
 	d.FormAction = "/rent-dashboard"
 	d.AllowDefer = isPendingMatchStatus(d.Source.MatchStatus)
 	d.ListValues = cloneQueryValues(query)
+	d.setSuggestionURLs(query)
 	for _, key := range []string{"match", "match_tenant", "match_history_page", "match_month", "detail", "error", "message"} {
 		d.ListValues.Del(key)
 	}
@@ -564,4 +571,16 @@ func (d *transactionMatchReviewData) setWorkspaceURLs(filters rentWorkspaceFilte
 		d.NextHistoryURL = "/rent-dashboard?" + values.Encode()
 	}
 	d.Error = transactionReviewErrorText(query.Get("error"))
+}
+
+func (d *transactionMatchReviewData) setSuggestionURLs(query url.Values) {
+	for i := range d.SuggestedTenants {
+		values := cloneQueryValues(query)
+		values.Del("detail")
+		values.Del("match_history_page")
+		values.Del("match_month")
+		values.Set("match", d.Source.ID)
+		values.Set("match_tenant", strconv.FormatUint(d.SuggestedTenants[i].ID, 10))
+		d.SuggestedTenants[i].URL = d.FormAction + "?" + values.Encode()
+	}
 }

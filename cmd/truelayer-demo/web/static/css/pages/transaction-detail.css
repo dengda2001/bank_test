@@ -34,6 +34,7 @@
 .code-block { margin: 0; padding: 12px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-muted); color: var(--foreground); font: 12px/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 .transaction-risk-note { padding: 14px 16px; border: 1px solid color-mix(in oklch, var(--warning) 30%, var(--border)); border-left: 3px solid var(--warning); border-radius: 8px; background: color-mix(in oklch, var(--warning) 6%, var(--surface)); color: var(--foreground-subtle); font-size: 12px; line-height: 1.6; }
 .transaction-detail-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 7px; color: var(--foreground-muted); font-size: 12px; }
+.transaction-match-method { padding: 3px 7px; border-radius: 5px; background: color-mix(in oklch,var(--accent) 12%,var(--surface)); color: var(--accent); font-size: 11px; font-weight: 650; }
 .transaction-detail-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
 .transaction-detail-metrics .metric { display: flex; min-width: 0; min-height: 112px; flex-direction: column; align-items: flex-start; justify-content: center; gap: 7px; padding: 16px; }
 .transaction-detail-metrics .metric strong { font: 700 23px var(--mono); font-variant-numeric: tabular-nums; }

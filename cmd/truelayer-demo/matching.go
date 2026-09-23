@@ -55,16 +55,14 @@ func decideRentMatch(tx paymentTransactionInput, tenants []tenant, obligations [
 }
 
 // decideStrictRentMatch is the only decision path used by background
-// reconciliation. It deliberately ignores the legacy tenant name fields:
-// active tenant_payers relations are the remembered identity boundary, and a
-// rent allocation is never inferred from the arrival month.
+// reconciliation. Bank descriptions and a narrow arrival-date window provide
+// month evidence; identity must be unique and confirmed independently.
 func decideStrictRentMatch(tx paymentTransactionInput, payers []tenantPayer, tenants []tenant, obligations []rentObligation) matchDecision {
 	if tx.Direction != "income" {
 		return matchDecision{Status: "unmatched", Reason: "not income"}
 	}
-	if tx.Source == "truelayer" {
-		tx.ParsedPeriodMonth = bankTransactionPeriod(tx.Description, tx.TransactionTime).explicitMonth()
-	}
+	period, dateInferred := autoRentPeriod(tx)
+	tx.ParsedPeriodMonth = period
 	tenantByID := make(map[uint64]tenant, len(tenants))
 	for _, row := range tenants {
 		tenantByID[row.ID] = row
@@ -73,20 +71,45 @@ func decideStrictRentMatch(tx paymentTransactionInput, payers []tenantPayer, ten
 	matchSource := "auto_name"
 	if payerID := normalizeMatchText(stablePayerID(tx.PayerID)); payerID != "" {
 		payerMatches = strictTenantsByPayerID(payers, tenantByID, payerID)
-		matchSource = "auto_id"
 		if len(payerMatches) > 1 {
 			return matchDecision{Status: "needs_review", Reason: "multiple tenants for payer id"}
 		}
+		if len(payerMatches) == 1 {
+			matchSource = "auto_id"
+		}
 	}
-	if len(payerMatches) == 0 && normalizeMatchText(tx.PayerName) != "" {
-		payerMatches = strictTenantsByPayerName(payers, tenantByID, tx.PayerName)
-		matchSource = "auto_name"
-		if len(payerMatches) > 1 {
+	if normalizeMatchText(tx.PayerName) != "" {
+		nameMatches := strictTenantsByPayerName(payers, tenantByID, tx.PayerName)
+		if len(nameMatches) > 1 {
 			return matchDecision{Status: "needs_review", Reason: "multiple tenants for remembered payer name"}
+		}
+		if len(nameMatches) == 1 {
+			if len(payerMatches) == 1 && payerMatches[0].ID != nameMatches[0].ID {
+				return matchDecision{Status: "needs_review", Reason: "payer identities disagree"}
+			}
+			if len(payerMatches) == 0 {
+				payerMatches = nameMatches
+				matchSource = "auto_name"
+			}
+		}
+	}
+	if tx.PayerNameKind == "confirmed" {
+		exactMatches := tenantsByName(tenants, tx.PayerName)
+		if len(exactMatches) > 1 {
+			return matchDecision{Status: "needs_review", Reason: "multiple tenants with exact payer name"}
+		}
+		if len(exactMatches) == 1 {
+			if len(payerMatches) == 1 && payerMatches[0].ID != exactMatches[0].ID {
+				return matchDecision{Status: "needs_review", Reason: "payer name conflicts with remembered tenant"}
+			}
+			if len(payerMatches) == 0 {
+				payerMatches = exactMatches
+				matchSource = "auto_exact_name"
+			}
 		}
 	}
 	if len(payerMatches) == 0 {
-		return matchDecision{Status: "unmatched", Reason: "no remembered payer relation"}
+		return matchDecision{Status: "unmatched", Reason: "no confirmed tenant identity"}
 	}
 	tenantRow := payerMatches[0]
 	if tx.AmountCents <= 0 {
@@ -95,10 +118,50 @@ func decideStrictRentMatch(tx paymentTransactionInput, payers []tenantPayer, ten
 	if tx.ParsedPeriodMonth == nil || tx.ParsedPeriodMonth.IsZero() {
 		return matchDecision{Status: "candidate", TenantID: tenantRow.ID, ConfirmationSource: matchSource, Reason: "explicit rent period is missing"}
 	}
+	if dateInferred {
+		count := 0
+		for _, candidate := range obligations {
+			if candidate.TenantID == tenantRow.ID && candidate.RecordStatus != obligationRecordVoided && monthStart(candidate.PeriodMonth).Equal(monthStart(*tx.ParsedPeriodMonth)) {
+				count++
+			}
+		}
+		if count > 1 {
+			return matchDecision{Status: "needs_review", TenantID: tenantRow.ID, ConfirmationSource: matchSource, Reason: "multiple rent responsibilities for suggested month"}
+		}
+		obligation, ok := selectObligationForPeriod(tenantRow.ID, *tx.ParsedPeriodMonth, obligations)
+		decision := decideForTenantWithObligation(tx, tenantRow, obligation, ok, matchSource)
+		if decision.Status == "partial" {
+			decision.Status = "candidate"
+			decision.AllocationAmountCents = 0
+			decision.Reason = "date-based rent match requires exact unpaid amount"
+		}
+		return decision
+	}
 	if obligation, ok := obligationForTenantPeriod(tenantRow.ID, *tx.ParsedPeriodMonth, obligations); ok && obligation.PaidAmountCents >= obligation.ExpectedAmountCents {
 		return decideForTenantWithObligation(tx, tenantRow, obligation, true, matchSource)
 	}
 	return decideForTenantInPeriod(tx, tenantRow, obligations, *tx.ParsedPeriodMonth, matchSource)
+}
+
+// autoRentPeriod uses an arrival date only at the ends of a month. A clearly
+// non-rent description never qualifies for date-derived allocation.
+func autoRentPeriod(tx paymentTransactionInput) (*time.Time, bool) {
+	if tx.Source != "truelayer" {
+		return tx.ParsedPeriodMonth, false
+	}
+	evidence := bankTransactionPeriod(tx.Description, tx.TransactionTime)
+	if evidence.Explicit {
+		return evidence.Month, false
+	}
+	if evidence.Month == nil || tx.TransactionTime == nil || bankNonRentWord.MatchString(tx.Description) {
+		return nil, false
+	}
+	day := tx.TransactionTime.In(bankLocalTime).Day()
+	currentThrough, nextFrom := rentAutoWindowDays()
+	if day <= currentThrough || day >= nextFrom {
+		return evidence.Month, true
+	}
+	return nil, false
 }
 
 func strictTenantsByPayerID(payers []tenantPayer, tenants map[uint64]tenant, payerID string) []tenant {

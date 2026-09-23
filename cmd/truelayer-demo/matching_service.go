@@ -70,10 +70,9 @@ func pendingMatchProjection(decision matchDecision) transactionMatchProjection {
 	return projection
 }
 
-// reconcilePendingRentTransactions applies remembered payer relations to
-// unallocated income transactions. An exact/open rent responsibility can be
-// allocated automatically; a recognized payer whose referenced month is
-// already covered remains a candidate for human confirmation.
+// reconcilePendingRentTransactions evaluates trusted payer identities for
+// unallocated income transactions. It materializes only current/past rent
+// facts; future inferred months need an obligation that already exists.
 func (s *transactionService) reconcilePendingRentTransactions(ctx context.Context, userID uint64) error {
 	if userID == 0 {
 		return errors.New("userID is required")
@@ -107,7 +106,7 @@ func (s *transactionService) reconcilePendingRentTransactions(ctx context.Contex
 		if deferred {
 			continue
 		}
-		if period := transactionPeriodForModel(transaction).explicitMonth(); period != nil {
+		if period, _ := autoRentPeriod(paymentTransactionInputFromModel(transaction)); period != nil {
 			if err := facts.ensureMonthlyRentFacts(ctx, userID, *period, rentFactsIntentRead); err != nil {
 				return err
 			}

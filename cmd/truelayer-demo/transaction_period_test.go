@@ -179,7 +179,7 @@ func TestBankTransactionPeriodSuggestionCutoffIsConfigurable(t *testing.T) {
 	}
 }
 
-func TestBankTxnDateOnlyNeverAutoMatches(t *testing.T) {
+func TestBankTxnDateOnlyUsesTransferDateForAutoMatching(t *testing.T) {
 	transfer := time.Date(2026, 8, 31, 23, 0, 0, 0, time.UTC)
 	payerID := "payer-1"
 	tx := paymentTransactionInput{Source: "truelayer", Direction: "income", AmountCents: 95000, Currency: "EUR", PayerID: payerID, Description: "TxnDate: 25Apr2026 RENT", TransactionTime: &transfer}
@@ -191,8 +191,8 @@ func TestBankTxnDateOnlyNeverAutoMatches(t *testing.T) {
 		{ID: 10, TenantID: 7, PeriodMonth: april, ExpectedAmountCents: 95000, Currency: "EUR"},
 		{ID: 11, TenantID: 7, PeriodMonth: september, ExpectedAmountCents: 95000, Currency: "EUR"},
 	})
-	if decision.Status != "candidate" || decision.RentObligationID != 0 {
-		t.Fatalf("date suggestion auto matched: %+v", decision)
+	if decision.Status != "matched" || decision.RentObligationID != 11 {
+		t.Fatalf("transaction should use September transfer date, not April TxnDate: %+v", decision)
 	}
 	if obligation, ok := selectObligationForTransaction(tx, 7, []rentObligation{{ID: 10, TenantID: 7, PeriodMonth: april, ExpectedAmountCents: 95000, Currency: "EUR"}}); ok {
 		t.Fatalf("legacy candidate path selected bank date as a rent period: %+v", obligation)

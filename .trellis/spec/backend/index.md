@@ -20,6 +20,7 @@ This directory contains guidelines for backend development. Fill in each file wi
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | Partial |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
 | [Batch Rent Matching](./transaction-match-batch.md) | Multi-tenant and cross-month receipt allocation contract | Complete |
+| [Automatic Rent Matching](./transaction-auto-match.md) | Trusted payer identity, date windows, and allocation-source labels | Complete |
 
 ---
 

@@ -9,11 +9,15 @@ import (
 	_ "time/tzdata"
 )
 
-const defaultRentNextMonthFromDay = 15
+const (
+	defaultRentNextMonthFromDay      = 15
+	defaultRentAutoCurrentThroughDay = 5
+	defaultRentAutoNextMonthFromDay  = 25
+)
 
 var (
 	bankRentWord        = regexp.MustCompile(`(?i)\brent\b|租金|房租|月租`)
-	bankNonRentWord     = regexp.MustCompile(`(?i)\b(?:deposits?|desposits?|refunds?|repayments?|expenses?)\b|押金|退款|报销`)
+	bankNonRentWord     = regexp.MustCompile(`(?i)\b(?:deposits?|desposits?|refunds?|repayments?|expenses?|loans?|borrow(?:ed|ing)?)\b|押金|退款|报销|借款`)
 	bankTxnDate         = regexp.MustCompile(`(?i)\btxndate\s*:\s*\d{1,2}\s*[a-z]{3,9}\s*20\d{2}\b`)
 	bankDayMonthYear    = regexp.MustCompile(`(?i)\b\d{1,2}\s*[a-z]{3,9}\s*20\d{2}\b`)
 	bankFullNumericDate = regexp.MustCompile(`\b(?:20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.](?:20\d{2}|\d{2}))\b`)
@@ -61,6 +65,22 @@ func rentNextMonthFromDay() int {
 		return defaultRentNextMonthFromDay
 	}
 	return value
+}
+
+func rentAutoWindowDays() (currentThrough, nextFrom int) {
+	currentThrough = defaultRentAutoCurrentThroughDay
+	nextFrom = defaultRentAutoNextMonthFromDay
+	cutoff := rentNextMonthFromDay()
+	if value, err := strconv.Atoi(strings.TrimSpace(os.Getenv("RENT_AUTO_CURRENT_THROUGH_DAY"))); err == nil && value >= 1 && value < cutoff {
+		currentThrough = value
+	}
+	if value, err := strconv.Atoi(strings.TrimSpace(os.Getenv("RENT_AUTO_NEXT_MONTH_FROM_DAY"))); err == nil && value >= cutoff && value <= 31 {
+		nextFrom = value
+	}
+	if currentThrough >= cutoff || nextFrom < cutoff {
+		return 0, 32
+	}
+	return currentThrough, nextFrom
 }
 
 func transactionPeriodForModel(row paymentTransaction) transactionPeriodEvidence {
