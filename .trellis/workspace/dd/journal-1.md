@@ -1257,3 +1257,36 @@ Added vacant room rent plans, atomic room and tenant composite writes, tenant ro
 ### Next Steps
 
 - None - task complete
+
+
+## Session 35: 流水租金月份来源优先级
+
+**Date**: 2026-09-23
+**Task**: 流水租金月份来源优先级
+**Branch**: `main`
+
+### Summary
+
+description 作为唯一明确租金月份来源；无月份时仅展示转账月份待确认建议。旧 reference-only 流水不会自动匹配。全量 Go 测试、go vet 和差异检查通过；本地 MySQL 不可连接。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8526a9d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

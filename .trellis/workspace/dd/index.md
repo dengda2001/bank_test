@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 34
+- **Total Sessions**: 35
 - **Last Active**: 2026-09-23
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1259 | Active |
+| `journal-1.md` | ~1292 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 35 | 2026-09-23 | 流水租金月份来源优先级 | `8526a9d` | `main` |
 | 34 | 2026-09-23 | 流水匹配核对抽屉 | `890761f` | `main` |
 | 33 | 2026-09-23 | 完成桌面列表排序与收款识别 | `32bd4bc` | `main` |
 | 32 | 2026-09-22 | Tenant room rent setup | `b7f2d41`, `0ebad35`, `6e3f510`, `be1dfc7`, `5cde6c5`, `7320729` | `main` |
