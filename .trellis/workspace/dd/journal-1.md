@@ -1323,3 +1323,36 @@ Audited 179 income descriptions; ignored bank TxnDate and non-rent months for ex
 ### Next Steps
 
 - None - task complete
+
+
+## Session 37: 多租客与跨月流水匹配
+
+**Date**: 2026-09-24
+**Task**: 多租客与跨月流水匹配
+**Branch**: `main`
+
+### Summary
+
+实现单笔流水多租客与同租客跨月批量匹配；保留租客月份证据和同付款人历史；Go、MySQL 和浏览器验证通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a3e7196` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
