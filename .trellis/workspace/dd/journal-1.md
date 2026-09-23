@@ -1357,3 +1357,36 @@ Audited 179 income descriptions; ignored bank TxnDate and non-rent months for ex
 ### Next Steps
 
 - None - task complete
+
+
+## Session 38: 流水日期自动匹配与租客建议
+
+**Date**: 2026-09-24
+**Task**: 流水日期自动匹配与租客建议
+**Branch**: `main`
+
+### Summary
+
+实现明确月份优先、5日及25日起按日期自动匹配、可信付款人及精确余额约束；列表详情标记自动/手动来源，人工抽屉展示姓名近似租客建议。全套 Go 测试与 go vet 通过；隔离 MySQL 测试 DSN 未配置。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `680635e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
