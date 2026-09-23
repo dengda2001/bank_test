@@ -1390,3 +1390,36 @@ Audited 179 income descriptions; ignored bank TxnDate and non-rent months for ex
 ### Next Steps
 
 - None - task complete
+
+
+## Session 39: 月底预付匹配补充
+
+**Date**: 2026-09-24
+**Task**: 月底预付匹配补充
+**Branch**: `main`
+
+### Summary
+
+补齐25日后指向未来月份、但账单尚未生成的情况：先核对唯一有效租金计划、租客、金额和币种，再生成下月责任并重新严格匹配；新增边界测试。完整 Go 测试和 go vet 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c89b388` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

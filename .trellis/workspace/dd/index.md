@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 38
+- **Total Sessions**: 39
 - **Last Active**: 2026-09-24
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1392 | Active |
+| `journal-1.md` | ~1425 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 39 | 2026-09-24 | 月底预付匹配补充 | `c89b388` | `main` |
 | 38 | 2026-09-24 | 流水日期自动匹配与租客建议 | `680635e` | `main` |
 | 37 | 2026-09-24 | 多租客与跨月流水匹配 | `a3e7196`, `9419f60` | `main` |
 | 36 | 2026-09-24 | Bank rent-month evidence and date suggestion | `6b1c0a2` | `main` |
