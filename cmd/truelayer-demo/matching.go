@@ -119,6 +119,9 @@ func decideStrictRentMatch(tx paymentTransactionInput, payers []tenantPayer, ten
 		return matchDecision{Status: "candidate", TenantID: tenantRow.ID, ConfirmationSource: matchSource, Reason: "explicit rent period is missing"}
 	}
 	if dateInferred {
+		if strings.TrimSpace(tx.Currency) == "" {
+			return matchDecision{Status: "needs_review", TenantID: tenantRow.ID, ConfirmationSource: matchSource, Reason: "currency is missing"}
+		}
 		count := 0
 		for _, candidate := range obligations {
 			if candidate.TenantID == tenantRow.ID && candidate.RecordStatus != obligationRecordVoided && monthStart(candidate.PeriodMonth).Equal(monthStart(*tx.ParsedPeriodMonth)) {
@@ -129,6 +132,9 @@ func decideStrictRentMatch(tx paymentTransactionInput, payers []tenantPayer, ten
 			return matchDecision{Status: "needs_review", TenantID: tenantRow.ID, ConfirmationSource: matchSource, Reason: "multiple rent responsibilities for suggested month"}
 		}
 		obligation, ok := selectObligationForPeriod(tenantRow.ID, *tx.ParsedPeriodMonth, obligations)
+		if ok && strings.TrimSpace(obligation.Currency) == "" {
+			return matchDecision{Status: "needs_review", TenantID: tenantRow.ID, ConfirmationSource: matchSource, Reason: "rent currency is missing"}
+		}
 		decision := decideForTenantWithObligation(tx, tenantRow, obligation, ok, matchSource)
 		if decision.Status == "partial" {
 			decision.Status = "candidate"

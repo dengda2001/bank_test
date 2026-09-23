@@ -12,6 +12,7 @@
 - `autoRentPeriod(tx paymentTransactionInput) (*time.Time, bool)` returns a month and whether it was inferred from the bank arrival date.
 - `RENT_NEXT_MONTH_FROM_DAY` (default `15`) controls the **display suggestion** cutoff.
 - `RENT_AUTO_CURRENT_THROUGH_DAY` (default `5`) and `RENT_AUTO_NEXT_MONTH_FROM_DAY` (default `25`) control the automatic date windows. Bounds must straddle the suggestion cutoff; invalid values fall back to the defaults. An incompatible suggestion cutoff disables date-based automatic matching.
+- `transactionService.futureRentPlanMatchesTransaction(ctx, userID, tenantID, period, amountCents, currency) (bool, error)` gates future fact creation using `room_rent_plan_members` joined to active `room_rent_plans`.
 - `payment_allocations.confirmation_source` records `auto_id`, `auto_name`, or `auto_exact_name` for automatic allocations. `transactionPageRow.MatchMethodLabel` derives the display label from effective rent allocations.
 
 ### 3. Contracts
@@ -20,7 +21,7 @@ For TrueLayer income, an explicit rent month in `description` wins on every arri
 
 Identity is unique only when an active `tenant_payers` relation identifies one tenant, or a bank-confirmed payer name equals one tenant's official `tenants.name` after trimming, case folding and collapsing spaces. Multiple or conflicting relations/name matches stay pending. Fuzzy name similarity is presentation-only in the manual review drawer.
 
-Date-inferred matching requires exactly one active obligation for that tenant and month, the same currency, positive amount, and a transaction amount equal to the obligation's unpaid balance. Explicit description months retain the existing partial allocation behavior. Reconciliation creates current/past monthly rent facts with `rentFactsIntentRead`; it does not create future facts from an inferred date. The allocator revalidates balances and uses an idempotency key before writing.
+Date-inferred matching requires exactly one active obligation for that tenant and month, matching nonempty currencies, positive amount, and a transaction amount equal to the obligation's unpaid balance. Explicit description months retain the existing partial allocation behavior. Reconciliation creates current/past monthly rent facts with `rentFactsIntentRead`. For a future date-inferred month, it may first create monthly facts only when identity is unique and exactly one active rent-plan member has the same amount and currency; it then reloads obligations and rechecks the complete match decision. The allocator revalidates balances and uses an idempotency key before writing.
 
 ### 4. Validation & Error Matrix
 
@@ -32,7 +33,8 @@ Date-inferred matching requires exactly one active obligation for that tenant an
 | Date-derived target has zero or multiple open obligations | Pending review; no allocation |
 | Date-derived amount differs from unpaid balance or currency differs | Pending review; no allocation |
 | Existing allocation, deferred transaction, or ignored status | Reconciliation skips it |
-| Future date-derived month without existing obligation | Pending review until facts exist or user confirms manually |
+| Future date-derived month without obligation, but one exact active rent plan | Materialize monthly facts, then re-evaluate the full decision |
+| Future month with no plan, multiple plans, or plan amount/currency mismatch | Pending review; no future fact creation |
 
 ### 5. Good / Base / Bad Cases
 
@@ -46,7 +48,7 @@ Date-inferred matching requires exactly one active obligation for that tenant an
 - `TestDateAutoWindowIsConfigurableAndUsesDublinCalendarDay`: configurable windows and UTC-to-Dublin day crossing.
 - `TestStrictRentMatchDateWindowHonorsIdentityAndPaymentGuards` and `TestStrictRentMatchDateWindowRejectsMultipleOpenObligations`: identity, amount, currency, non-rent, and obligation ambiguity.
 - `TestBankTxnDateOnlyUsesTransferDateForAutoMatching`: `TxnDate` does not select the rent month.
-- `TestReconcilePendingRentTransactionsOnMySQL`: on a disposable DB, rerun reconciliation and assert one allocation and unchanged earlier allocation; this test skips without `RENTOPS_MYSQL_TEST_DSN`.
+- `TestReconcilePendingRentTransactionsOnMySQL`: on a disposable DB, create only a future plan, rerun reconciliation, assert one generated obligation and allocation, and assert the earlier allocation remains unchanged; this test skips without `RENTOPS_MYSQL_TEST_DSN`.
 - `TestManualTenantSuggestionsFindCloseBankNamesOnly` and `TestMatchMethodLabelUsesOnlyEffectiveRentAllocations`: fuzzy suggestions remain manual and badges reflect confirmed effective rent allocations.
 
 ### 7. Wrong vs Correct

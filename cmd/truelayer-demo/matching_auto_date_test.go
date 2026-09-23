@@ -58,6 +58,7 @@ func TestStrictRentMatchDateWindowHonorsIdentityAndPaymentGuards(t *testing.T) {
 		{"amount below remaining", func(tx *paymentTransactionInput) { tx.AmountCents = 89999 }, nil, tenants, obligations},
 		{"amount above remaining", func(tx *paymentTransactionInput) { tx.AmountCents = 90001 }, nil, tenants, obligations},
 		{"currency mismatch", func(tx *paymentTransactionInput) { tx.Currency = "GBP" }, nil, tenants, obligations},
+		{"currency missing", func(tx *paymentTransactionInput) { tx.Currency = "" }, nil, tenants, []rentObligation{{ID: 11, TenantID: 7, PeriodMonth: september, ExpectedAmountCents: 90000, Currency: ""}}},
 		{"deposit", func(tx *paymentTransactionInput) { tx.Description = "Deposit September" }, nil, tenants, obligations},
 		{"refund", func(tx *paymentTransactionInput) { tx.Description = "Refund" }, nil, tenants, obligations},
 		{"borrowed money", func(tx *paymentTransactionInput) { tx.Description = "Borrowed money" }, nil, tenants, obligations},
@@ -149,5 +150,29 @@ func TestStrictRentMatchDateWindowRejectsMultipleOpenObligations(t *testing.T) {
 	})
 	if decision.Status == "matched" || decision.Status == "partial" {
 		t.Fatalf("ambiguous obligations must remain for review: %+v", decision)
+	}
+}
+
+func TestFutureRentPlanGateRequiresOneExactPlan(t *testing.T) {
+	matching := futureRentPlanCandidate{ResponsibilityCents: 95000, Currency: "EUR"}
+	for _, tc := range []struct {
+		name     string
+		plans    []futureRentPlanCandidate
+		amount   int64
+		currency string
+		want     bool
+	}{
+		{"one exact plan", []futureRentPlanCandidate{matching}, 95000, "eur", true},
+		{"missing plan", nil, 95000, "EUR", false},
+		{"two matching plans", []futureRentPlanCandidate{matching, matching}, 95000, "EUR", false},
+		{"wrong amount", []futureRentPlanCandidate{matching}, 90000, "EUR", false},
+		{"wrong currency", []futureRentPlanCandidate{matching}, 95000, "GBP", false},
+		{"currency missing", []futureRentPlanCandidate{{ResponsibilityCents: 95000, Currency: ""}}, 95000, "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := oneFutureRentPlanMatches(tc.plans, tc.amount, tc.currency); got != tc.want {
+				t.Fatalf("gate=%v want %v", got, tc.want)
+			}
+		})
 	}
 }

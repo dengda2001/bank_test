@@ -72,7 +72,8 @@ func pendingMatchProjection(decision matchDecision) transactionMatchProjection {
 
 // reconcilePendingRentTransactions evaluates trusted payer identities for
 // unallocated income transactions. It materializes only current/past rent
-// facts; future inferred months need an obligation that already exists.
+// facts. For a future date-inferred month, a single matching rent plan may
+// materialize the target facts before the final decision.
 func (s *transactionService) reconcilePendingRentTransactions(ctx context.Context, userID uint64) error {
 	if userID == 0 {
 		return errors.New("userID is required")
@@ -122,7 +123,26 @@ func (s *transactionService) reconcilePendingRentTransactions(ctx context.Contex
 		if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Find(&obligations).Error; err != nil {
 			return err
 		}
-		decision := decideStrictRentMatch(paymentTransactionInputFromModel(transaction), payers, tenants, obligations)
+		input := paymentTransactionInputFromModel(transaction)
+		decision := decideStrictRentMatch(input, payers, tenants, obligations)
+		if period, inferred := autoRentPeriod(input); inferred && period != nil && decision.TenantID != 0 &&
+			monthStart(*period).After(monthStart(time.Now().UTC())) {
+			if _, exists := obligationForTenantPeriod(decision.TenantID, *period, obligations); !exists {
+				matches, err := s.futureRentPlanMatchesTransaction(ctx, userID, decision.TenantID, *period, transaction.AmountCents, transaction.Currency)
+				if err != nil {
+					return err
+				}
+				if matches {
+					if err := facts.ensureMonthlyRentFacts(ctx, userID, *period, rentFactsIntentExplicitPayment); err != nil {
+						return err
+					}
+					if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Find(&obligations).Error; err != nil {
+						return err
+					}
+					decision = decideStrictRentMatch(input, payers, tenants, obligations)
+				}
+			}
+		}
 		switch decision.Status {
 		case "matched", "partial":
 			if decision.RentObligationID == 0 || decision.AllocationAmountCents <= 0 {
@@ -146,6 +166,35 @@ func (s *transactionService) reconcilePendingRentTransactions(ctx context.Contex
 		}
 	}
 	return nil
+}
+
+// A future prepayment may create the coming month's facts only after a single
+// active plan confirms the proposed tenant, currency, and exact rent amount.
+func (s *transactionService) futureRentPlanMatchesTransaction(ctx context.Context, userID, tenantID uint64, period time.Time, amountCents int64, currency string) (bool, error) {
+	if userID == 0 || tenantID == 0 || amountCents <= 0 {
+		return false, nil
+	}
+	var plans []futureRentPlanCandidate
+	period = monthStart(period)
+	err := s.db.WithContext(ctx).Table("room_rent_plan_members AS member").
+		Select("member.responsibility_cents, plan.currency").
+		Joins("JOIN room_rent_plans AS plan ON plan.id = member.room_rent_plan_id AND plan.user_id = member.user_id").
+		Where("member.user_id = ? AND member.tenant_id = ? AND plan.effective_from_month <= ? AND (plan.effective_to_month IS NULL OR plan.effective_to_month >= ?)", userID, tenantID, period, period).
+		Scan(&plans).Error
+	if err != nil {
+		return false, err
+	}
+	return oneFutureRentPlanMatches(plans, amountCents, currency), nil
+}
+
+type futureRentPlanCandidate struct {
+	ResponsibilityCents int64
+	Currency            string
+}
+
+func oneFutureRentPlanMatches(plans []futureRentPlanCandidate, amountCents int64, currency string) bool {
+	return len(plans) == 1 && amountCents > 0 && strings.TrimSpace(currency) != "" && strings.TrimSpace(plans[0].Currency) != "" &&
+		plans[0].ResponsibilityCents == amountCents && strings.EqualFold(strings.TrimSpace(plans[0].Currency), strings.TrimSpace(currency))
 }
 
 func (s *transactionService) confirmRentMatch(ctx context.Context, userID, transactionID, tenantID uint64, period *time.Time, rememberPayer bool) error {

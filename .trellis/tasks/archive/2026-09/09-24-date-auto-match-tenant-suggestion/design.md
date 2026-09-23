@@ -8,7 +8,7 @@ Identity candidates come from active `tenant_payers` by stable payer ID/name and
 
 ## Data flow
 
-Ingestion and re-reconciliation call `reconcilePendingRentTransactions`. It skips ignored, deferred, and allocated transactions; materializes only current/past monthly facts for eligible evidence; evaluates the decision; applies an allocation or updates the pending projection. Future months require an already existing obligation, since inferred date alone is not explicit payment intent. Existing confirmed allocations are never rewritten.
+Ingestion and re-reconciliation call `reconcilePendingRentTransactions`. It skips ignored, deferred, and allocated transactions; materializes current/past monthly facts for eligible evidence; evaluates the decision; applies an allocation or updates the pending projection. For a future month inferred at the end of the previous month, it first requires a uniquely identified tenant and exactly one active rent-plan member with the same amount and currency. Only then may it materialize the next month's obligation and repeat the decision. Existing confirmed allocations are never rewritten.
 
 `enrichTransactionPageRow` derives a display-only method label from effective rent allocations. The list, detail, and review drawer share that field. No schema migration is needed.
 

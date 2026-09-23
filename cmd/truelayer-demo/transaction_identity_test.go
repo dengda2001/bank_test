@@ -246,7 +246,13 @@ func TestReconcilePendingRentTransactionsOnMySQL(t *testing.T) {
 	// the remembered payer relation is removed. Replaying reconciliation must
 	// not allocate the same bank row twice or rewrite the August allocation.
 	october := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
-	openOctober := createObligation(october, 95000, 0)
+	futurePlan := roomRentPlan{UserID: owner.ID, RoomID: roomRow.ID, EffectiveFromMonth: october, EffectiveToMonth: &october, MonthlyRentCents: 95000, Currency: "EUR", DueDay: 5}
+	if err := db.Create(&futurePlan).Error; err != nil {
+		t.Fatalf("create future rent plan: %v", err)
+	}
+	if err := db.Create(&roomRentPlanMember{UserID: owner.ID, RoomRentPlanID: futurePlan.ID, TenantID: tenantRow.ID, ResponsibilityCents: 95000}).Error; err != nil {
+		t.Fatalf("create future plan member: %v", err)
+	}
 	removedAt := time.Now().UTC()
 	if err := db.Model(&tenantPayer{}).Where("id = ? AND user_id = ?", payer.ID, owner.ID).Update("removed_at", removedAt).Error; err != nil {
 		t.Fatalf("remove payer relation: %v", err)
@@ -265,6 +271,10 @@ func TestReconcilePendingRentTransactionsOnMySQL(t *testing.T) {
 		if err := newTransactionService(db).reconcilePendingRentTransactions(ctx, owner.ID); err != nil {
 			t.Fatalf("reconcile date transaction run %d: %v", repeat+1, err)
 		}
+	}
+	var openOctober rentObligation
+	if err := db.Where("user_id = ? AND tenant_id = ? AND period_month = ?", owner.ID, tenantRow.ID, october).First(&openOctober).Error; err != nil {
+		t.Fatalf("future prepayment did not materialize October obligation: %v", err)
 	}
 	var dateAllocations []paymentAllocation
 	if err := db.Where("user_id = ? AND payment_transaction_id = ?", owner.ID, dateTransaction.ID).Find(&dateAllocations).Error; err != nil {
