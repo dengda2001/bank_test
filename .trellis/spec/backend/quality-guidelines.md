@@ -124,19 +124,21 @@ func (a *app) handleCallback(w http.ResponseWriter, r *http.Request) {
 #### 1. Scope / Trigger
 
 - Trigger: Any bank transaction matching or billing-history projection that derives a billing month from `Description`.
-- Keep date extraction in the shared `parseReferencedPeriod` path so matching and UI projections use the same interpretation; bank `Reference` is an identifier or raw note, not a rent-month source.
+- Keep month token parsing in the shared `parseReferencedPeriod` path. TrueLayer rows first pass through `bankTransactionPeriod` so matching and UI projections use the same rent-context and date rules; bank `Reference` is an identifier or raw note, not a rent-month source.
 
 #### 2. Signatures
 
 - `parseReferencedPeriod(text string, transactionTime time.Time) (time.Time, bool)` returns the first recognized billing period and whether the description contained a usable period.
-- `selectObligationForTransaction(tx transactionRow, obligations []obligationRow) (obligationRow, bool)` consumes the parsed period when selecting a billing obligation.
+- `bankTransactionPeriod(description string, transactionTime *time.Time) transactionPeriodEvidence` returns either an explicit description month or a tentative posting-date suggestion. `explicitMonth()` returns nil for suggestions.
+- `selectObligationForTransaction(tx paymentTransactionInput, tenantID uint64, obligations []rentObligation) (rentObligation, bool)` uses `bankTransactionPeriod(...).explicitMonth()` for TrueLayer rows; without an explicit rent month it returns no obligation. Other sources retain the legacy parser.
 
 #### 3. Contracts
 
 - Supported explicit formats include numeric month/year (`9/26`, `09/2026`), spaced English month/year (`Sep 2026`), Chinese year/month, and compact English month/year (`JULY26`, `SEP26`, `JULY2026`).
 - A two-digit year in a compact English token maps to `2000 + year`.
 - An explicit year in the description always takes precedence over `transactionTime`; `transactionTime` is only a fallback for month-only references such as `JULY`.
-- For TrueLayer transactions, parse `Description` alone. If it has no recognizable period, the arrival month is a tentative UI suggestion only; keep `parsed_period_month` empty and do not auto-allocate.
+- For TrueLayer transactions, remove `TxnDate: 25Apr2026` and other complete date tokens before month parsing. A description month counts as explicit only when rent context (`rent`, `租金`, `房租`, `月租`) exists and non-rent markers such as deposit, refund, repayment, or expense do not. `Sep Rent` is explicit even if the bank posts the transfer in August; `TxnDate` alone never is.
+- With no explicit rent month, use the TrueLayer posting timestamp in `Europe/Dublin` and suggest that month on days 1–14, the following month from day 15. `RENT_NEXT_MONTH_FROM_DAY` can change the first next-month day to an integer from 1 to 31; missing/invalid values use 15. This is display-only: keep `parsed_period_month` empty and do not auto-allocate.
 - Legacy `description_reference` rows must re-evaluate their original description before strict reconciliation because the old stored period may have come only from a reference number. Existing confirmed allocations stay unchanged.
 
 #### 4. Validation & Error Matrix
@@ -144,19 +146,23 @@ func (a *app) handleCallback(w http.ResponseWriter, r *http.Request) {
 - Valid month and year -> return the first day of that month with `true`.
 - Invalid month/year token -> ignore that token and continue with other supported formats; if none match, return the existing month-only or no-period fallback.
 - Unknown description text -> return `false` without inventing a year. A valid transaction timestamp may still supply a clearly labeled tentative display month.
+- TrueLayer description containing only `TxnDate` or a non-rent month -> no explicit month; 15th-day suggestion is labeled `入账日期推测 · 待确认` and cannot trigger strict matching.
+- Invalid `RENT_NEXT_MONTH_FROM_DAY` (empty, non-integer, below 1, above 31) -> default 15. Missing timestamp -> no date suggestion.
 - Compact token such as `JULY26` with a transaction dated in 2027 -> return July 2026, never July 2027.
 
 #### 5. Good/Base/Bad Cases
 
 - Good: `REMAIN50 *MOBI RENT JULY26` on a 2027 transaction matches `2026-07-01`.
+- Good: `TxnDate: 01Sep2026 ... Sep Rent` posted on August 31 resolves September from `Sep Rent`, regardless of the bank date token.
 - Base: `RENT 9/26` matches September 2026; `REMAIN 50 EURO *MOBI RENT 8/26` matches August 2026.
-- Bad: Treating `JULY26` as month-only and deriving 2027 from the transaction timestamp.
+- Bad: Treating `JULY26` as month-only and deriving 2027 from the transaction timestamp; treating `TxnDate: 25Apr2026` as April rent; or treating `Deposit Sep` as September rent.
 
 #### 6. Tests Required
 
 - Unit-test compact English month/year tokens with a transaction timestamp in a different year; assert both `2026-07-01` and `2026-09-01` examples.
 - Retain tests for numeric, spaced English, Chinese, month-only, and no-period inputs.
 - Cover reference-only and legacy combined-source rows so a plausible reference month cannot trigger strict auto matching.
+- Cover the day 14/15 boundary, December rollover, Dublin-local date conversion, adjustable cutoff, bank dates, non-rent months, and strict matching with both an old bank-date month and the date-suggested month available.
 - Run the billing matching and full backend test suites after changing regex precedence or fallback behavior.
 
 #### 7. Wrong vs Correct

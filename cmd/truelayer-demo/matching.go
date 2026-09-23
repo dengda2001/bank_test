@@ -196,6 +196,13 @@ func decideForTenantWithObligation(tx paymentTransactionInput, row tenant, oblig
 }
 
 func selectObligationForTransaction(tx paymentTransactionInput, tenantID uint64, obligations []rentObligation) (rentObligation, bool) {
+	if tx.Source == "truelayer" {
+		period := bankTransactionPeriod(tx.Description, tx.TransactionTime).explicitMonth()
+		if period == nil {
+			return rentObligation{}, false
+		}
+		return selectObligationForPeriod(tenantID, *period, obligations)
+	}
 	text := strings.Join([]string{tx.Description, tx.Reference}, " ")
 	transactionTime := time.Now().UTC()
 	if tx.TransactionTime != nil {

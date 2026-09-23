@@ -272,9 +272,9 @@ func transactionReviewMonths(source paymentTransaction, sourceRemaining int64, o
 		}
 		if row.Highlighted && !periodEvidence.Explicit {
 			if row.Note != "" {
-				row.Note = "转账月份建议，请核对后选择；" + row.Note
+				row.Note = "入账日期建议，请核对后选择；" + row.Note
 			} else {
-				row.Note = "转账月份建议，请核对后选择"
+				row.Note = "入账日期建议，请核对后选择"
 			}
 		}
 		for _, allocation := range byObligation[obligation.ID] {
@@ -296,7 +296,7 @@ func transactionReviewMonths(source paymentTransaction, sourceRemaining int64, o
 	if parsedPeriod != "" && !seenPeriod[parsedPeriod] {
 		note := "系统未找到该月租金责任，请核对入住与租金计划"
 		if !periodEvidence.Explicit {
-			note = "转账月份建议；" + note
+			note = "入账日期建议；" + note
 		}
 		rows = append(rows, transactionReviewMonth{Period: parsedPeriod, Label: parsedPeriod, Highlighted: true, Note: note})
 	}
