@@ -260,7 +260,8 @@ func TestRentWorkspacePendingCardsOpenMatchReview(t *testing.T) {
 func TestRentWorkspaceMatchReviewShowsSamePayerHistoryAndDashboardActions(t *testing.T) {
 	filters := defaultRentWorkspaceFilters(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
 	review := transactionMatchReviewData{
-		Source: transactionPageRow{ID: "9", PayerName: "Aoife Murphy", AmountDisplay: "EUR 1200.00", RemainingAmountDisplay: "EUR 1200.00", ParsedPeriodDisplay: "2026-09", Description: "SEPT RENT", MatchStatus: "unmatched", MatchStatusLabel: "未关联"},
+		Source:       transactionPageRow{ID: "9", PayerName: "Aoife Murphy", AmountDisplay: "EUR 1200.00", RemainingAmountDisplay: "EUR 1200.00", ParsedPeriodDisplay: "2026-09", Description: "SEPT RENT", MatchStatus: "unmatched", MatchStatusLabel: "未关联"},
+		HistoryTotal: 2, HistoryPage: 1, HistoryPages: 1,
 		History: []transactionReviewHistory{
 			{Date: "2026-08-05", PayerName: "Aoife Murphy", Amount: "EUR 1200.00", Description: "AUG RENT", ParsedPeriod: "2026-08", MatchedPeriod: "2026-08", Status: "已关联"},
 			{Date: "2026-07-05", PayerName: "Aoife Murphy", Amount: "EUR 600.00", Description: "JUL RENT", ParsedPeriod: "2026-07", MatchedPeriod: "—", Status: "未关联"},
@@ -268,13 +269,13 @@ func TestRentWorkspaceMatchReviewShowsSamePayerHistoryAndDashboardActions(t *tes
 	}
 	review.setWorkspaceURLs(filters, url.Values{"period": {"2026-09"}, "match": {"9"}})
 	page := renderRentWorkspace(t, rentWorkspacePageData{Period: "2026-09", MatchReview: &review})
-	for _, text := range []string{"AUG RENT", "JUL RENT", "EUR 1200.00", "EUR 600.00", "2026-08", "2026-07", "已关联", "未关联", "全部 2 笔", `action="/rent-dashboard"`, `>暂不处理</button>`} {
+	for _, text := range []string{"AUG RENT", "JUL RENT", "EUR 1200.00", "EUR 600.00", "2026-08", "2026-07", "已关联", "未关联", "共 2 笔", `action="/rent-dashboard"`, `>暂不处理</button>`} {
 		if !strings.Contains(page, text) {
 			t.Fatalf("dashboard review is missing %q", text)
 		}
 	}
-	if strings.Contains(page, `第 1 /`) {
-		t.Fatal("dashboard history should show every same-payer transaction without pagination")
+	if !strings.Contains(page, `第 1 / 1 页`) {
+		t.Fatal("dashboard history should show its page position")
 	}
 }
 
