@@ -253,6 +253,10 @@ func (s *transactionService) listTransactionPageRowsWithTotal(ctx context.Contex
 	rows := make([]transactionPageRow, 0, len(transactions))
 	tenantNames := make(map[uint64]string, len(tenants))
 	tenantByID := make(map[uint64]tenant, len(tenants))
+	obligationByID := make(map[uint64]rentObligation, len(obligations))
+	for _, obligation := range obligations {
+		obligationByID[obligation.ID] = obligation
+	}
 	for _, tenantRow := range tenants {
 		tenantNames[tenantRow.ID] = tenantRow.Name
 		tenantByID[tenantRow.ID] = tenantRow
@@ -262,6 +266,31 @@ func (s *transactionService) listTransactionPageRowsWithTotal(ctx context.Contex
 		row := enrichTransactionPageRow(transactionPageRowFromModel(transaction), transaction, allocations)
 		decorateTransactionPageRow(&row, transaction, allocations, obligations, tenants, tenantByID, tenantNames, payers)
 		rows = append(rows, row)
+	}
+	chargeIDsByRow := make([][]uint64, len(rows))
+	neededChargeIDs := make(map[uint64]struct{})
+	for index := range rows {
+		chargeIDsByRow[index] = transactionObjectChargeIDs(rows[index], allocationsByTransaction[transactions[index].ID], obligationByID)
+		for _, chargeID := range chargeIDsByRow[index] {
+			neededChargeIDs[chargeID] = struct{}{}
+		}
+	}
+	if len(neededChargeIDs) > 0 {
+		ids := make([]uint64, 0, len(neededChargeIDs))
+		for id := range neededChargeIDs {
+			ids = append(ids, id)
+		}
+		var chargeRows []rentCharge
+		if err := s.db.WithContext(ctx).Where("user_id = ? AND id IN ?", userID, ids).Find(&chargeRows).Error; err != nil {
+			return nil, 0, err
+		}
+		charges := make(map[uint64]rentCharge, len(chargeRows))
+		for _, charge := range chargeRows {
+			charges[charge.ID] = charge
+		}
+		for index := range rows {
+			rows[index].ObjectLabel, rows[index].RoomOnlyLabel = transactionRentObjectLabels(chargeIDsByRow[index], charges)
+		}
 	}
 	return rows, total, nil
 }
@@ -316,13 +345,6 @@ func decorateTransactionPageRow(row *transactionPageRow, transaction paymentTran
 	if row.NeedsMonthChoice && len(row.MonthOptions) == 0 {
 		row.MonthOptions = rentMonthOptionsForTenant(transaction, obligations, row.TenantID)
 	}
-	contextTenantID := row.CandidateTenantID
-	if contextTenantID == 0 {
-		contextTenantID = row.TenantID
-	}
-	if contextTenant, ok := tenantByID[contextTenantID]; ok {
-		row.ObjectLabel = transactionTenantObjectLabel(contextTenant)
-	}
 	if transaction.Direction == "income" && summary.RemainingCents > 0 && transaction.MatchStatus != "ignored" {
 		row.ManualMatchOptions = availableRentManualMatchOptions(transaction, obligations, tenantNames, summary.RemainingCents)
 		row.ManualMatchTenantOptions, _ = rematchFilterOptions(row.ManualMatchOptions)
@@ -338,8 +360,65 @@ func decorateTransactionPageRow(row *transactionPageRow, transaction paymentTran
 	}
 }
 
-func transactionTenantObjectLabel(row tenant) string {
-	return ""
+// A confirmed rent allocation identifies a room through its obligation and
+// charge. Before confirmation, only a specific suggested obligation can supply
+// that context; a tenant alone may have occupied different rooms over time.
+func transactionObjectChargeIDs(row transactionPageRow, allocations []paymentAllocation, obligations map[uint64]rentObligation) []uint64 {
+	seen := make(map[uint64]struct{})
+	for _, allocation := range allocations {
+		if !ledgerAllocationIsEffective(allocation) || ledgerAllocationKind(allocation) != allocationKindRent || allocation.RentObligationID == nil {
+			continue
+		}
+		if obligation, ok := obligations[*allocation.RentObligationID]; ok && obligation.RentChargeID != 0 {
+			seen[obligation.RentChargeID] = struct{}{}
+		}
+	}
+	if len(seen) == 0 && row.CandidateRentObligationID != 0 {
+		if obligation, ok := obligations[row.CandidateRentObligationID]; ok && obligation.RentChargeID != 0 {
+			seen[obligation.RentChargeID] = struct{}{}
+		}
+	}
+	ids := make([]uint64, 0, len(seen))
+	for id := range seen {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids
+}
+
+func transactionRentObjectLabels(chargeIDs []uint64, charges map[uint64]rentCharge) (string, string) {
+	seen := make(map[string]struct{})
+	labels := make([]string, 0, len(chargeIDs))
+	roomOnly := ""
+	for _, chargeID := range chargeIDs {
+		charge, ok := charges[chargeID]
+		if !ok {
+			continue
+		}
+		propertyName := strings.TrimSpace(stringValue(charge.PropertyNameSnapshot))
+		roomLabel := strings.TrimSpace(stringValue(charge.RoomLabelSnapshot))
+		label := propertyName
+		if roomLabel != "" {
+			if label != "" {
+				label += " · "
+			}
+			label += roomLabel
+		}
+		if label == "" {
+			continue
+		}
+		if _, exists := seen[label]; exists {
+			continue
+		}
+		seen[label] = struct{}{}
+		labels = append(labels, label)
+		roomOnly = roomLabel
+	}
+	sort.Strings(labels)
+	if len(labels) != 1 {
+		roomOnly = ""
+	}
+	return strings.Join(labels, "、"), roomOnly
 }
 
 func availableRentMatchOptions(source paymentTransaction, obligations []rentObligation, tenantNames map[uint64]string, amountCents int64, excludedObligationID uint64) []billingRentMatchOption {

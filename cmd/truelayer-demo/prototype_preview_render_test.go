@@ -113,6 +113,23 @@ func TestWritePrototypePreviewHTML(t *testing.T) {
 			})
 		})
 	})
+	write("transaction-match-review.html", func() error {
+		return writeFile("transaction-match-review.html", func(body *strings.Builder) error {
+			review := transactionMatchReviewData{
+				Source:    transactionPageRow{ID: "11", InternalID: "11", DetailKey: "11", MatchURL: "/transactions?match=11&match_status=pending", DateDisplay: "12 Aug 2026 09:12", PayerName: "WAHAJULLAH KHAN", AmountDisplay: "€1,250.00", RemainingAmountDisplay: "€1,250.00", Description: "AUGUST RENT WAHAJULLAH KHAN VERY LONG BANK DESCRIPTION", MatchStatus: "needs_review", MatchStatusLabel: "需处理", ParsedPeriodDisplay: "2026-08", MatchReason: "租客已识别，但8月似乎已经交过。"},
+				Reference: "IE0023260847", SelectedTenantID: 7, IdentifiedTenant: true, IdentityNote: "根据已保存的付款人关系识别；请与银行原文核对。", CloseURL: "/transactions?match_status=pending", ReturnURL: "/transactions?match_status=pending", CanMatch: true,
+				TenantOptions: []transactionReviewTenant{{ID: 7, Name: "WAHAJULLAH KHAN", Selected: true}, {ID: 11, Name: "Bríd Ní Bhraonáin"}},
+				Months:        []transactionReviewMonth{{Period: "2026-08", Label: "2026年8月", Expected: "€1,250.00", Paid: "€1,250.00", Remaining: "€0.00", Highlighted: true, Note: "本月已交清，请先核对下方原匹配流水", Evidence: []transactionReviewEvidence{{Date: "2026-08-01", PayerName: "WAHAJULLAH KHAN", Description: "AUGUST RENT RECEIVED ON 1ST", Amount: "€1,250.00", DetailURL: "/transactions?detail=10"}}}, {Period: "2026-09", Label: "2026年9月", Expected: "€1,250.00", Paid: "€0.00", Remaining: "€1,250.00", Selectable: true, Coverage: "€1,250.00", SourceRemainder: "€0.00"}},
+				History:       []transactionReviewHistory{{Date: "2026-08-01", PayerName: "WAHAJULLAH KHAN", Description: "AUGUST RENT RECEIVED ON 1ST", Amount: "€1,250.00", ParsedPeriod: "2026-08", MatchedPeriod: "2026-08", Status: "已关联", DetailURL: "/transactions?detail=10"}}, HistoryPage: 1, HistoryPages: 1,
+			}
+			return transactionListTemplate.Execute(body, transactionListPageData{workspaceShell: workspaceShell{ActivePage: "transactions", Username: "audit", Environment: "sandbox", FootNote: "银行流水与租金关联", CompactTitle: "流水"}, CanonicalPath: "/transactions", TransactionScope: "pending", MatchReview: &review, TransactionRows: []transactionPageRow{review.Source}})
+		})
+	})
+	write("transaction-match-list.html", func() error {
+		return writeFile("transaction-match-list.html", func(body *strings.Builder) error {
+			return transactionListTemplate.Execute(body, transactionListPageData{CanonicalPath: "/transactions", TransactionRows: []transactionPageRow{{ID: "11", InternalID: "11", DetailKey: "11", PayerName: "WAHAJULLAH KHAN", MatchURL: "/transactions?match=11&match_status=pending", MatchStatus: "needs_review", MatchStatusLabel: "需处理"}}})
+		})
+	})
 	write("properties.html", func() error {
 		return writeFile("properties.html", func(body *strings.Builder) error {
 			return propertyPageTemplate.Execute(body, propertyPageData{
@@ -256,6 +273,26 @@ func TestWritePrototypePreviewHTML(t *testing.T) {
 			})
 		})
 	})
+	write("rent-workspace-review.html", func() error {
+		return writeFile("rent-workspace-review.html", func(body *strings.Builder) error {
+			period := parseTestPeriod(t, "2026-09")
+			filters := defaultRentWorkspaceFilters(period)
+			review := transactionMatchReviewData{
+				Source: transactionPageRow{ID: "10", PayerName: "WAHAJULLAH KHAN", AmountDisplay: "€1,250.00", RemainingAmountDisplay: "€1,250.00", DateDisplay: "2026-09-01", ParsedPeriodDisplay: "2026-09", Description: "RENT SEPT 03", MatchStatus: "unmatched", MatchStatusLabel: "未关联", DetailURL: "/transactions?detail=10"},
+				History: []transactionReviewHistory{
+					{Date: "2026-08-01", PayerName: "WAHAJULLAH KHAN", Amount: "€1,250.00", Description: "RENT AUG 03", ParsedPeriod: "2026-08", MatchedPeriod: "2026-08", Status: "已关联", DetailURL: "/transactions?detail=9"},
+					{Date: "2026-07-01", PayerName: "WAHAJULLAH KHAN", Amount: "€1,250.00", Description: "RENT JUL 03", ParsedPeriod: "2026-07", MatchedPeriod: "—", Status: "未关联", DetailURL: "/transactions?detail=8"},
+				},
+			}
+			review.setWorkspaceURLs(filters, nil)
+			return rentWorkspaceTemplate.Execute(body, rentWorkspacePageData{
+				workspaceShell: workspaceShell{ActivePage: "rent-dashboard", Username: "audit", Environment: "sandbox", CompactTitle: "本月收租"},
+				Filters:        filters, Period: "2026-09", PeriodLabel: "2026 年 9 月", View: rentWorkspaceViewProperties,
+				PendingCount: 1, PendingItems: []rentWorkspacePendingItem{{Index: 1, ID: 10, Title: "WAHAJULLAH KHAN", Subtitle: "09-01 · RENT SEPT 03", Amount: "€1,250.00", MatchURL: "/rent-dashboard?period=2026-09&match=10"}},
+				MatchReview: &review,
+			})
+		})
+	})
 	write("rent-workspace.html", func() error {
 		return writeFile("rent-workspace.html", func(body *strings.Builder) error {
 			period := parseTestPeriod(t, "2026-09")
@@ -270,17 +307,8 @@ func TestWritePrototypePreviewHTML(t *testing.T) {
 				Filters:        rentWorkspaceFilters{PeriodMonth: period, View: rentWorkspaceViewProperties, Status: "all", Page: 1, PageSize: 12}, Period: "2026-09", PeriodLabel: "2026 年 9 月", PreviousPeriod: "2026-08", NextPeriod: "2026-10", View: rentWorkspaceViewProperties,
 				Summary:      rentWorkspaceSummary{ExpectedCents: 2621000, PaidCents: 2279000, BalanceCents: 342000, ExpectedAmount: "€26,210", PaidAmount: "€22,790", BalanceAmount: "€3,420", ExpenseAmount: "€1,600", NetAmount: "€21,190", CollectionPercent: 86, TotalRooms: 25, PaidRooms: 15, UnpaidRooms: 7, VacantRooms: 3, ResponsibilityCount: 40, FollowupCount: 4},
 				PendingCount: 3, PendingItems: []rentWorkspacePendingItem{{
-					Index: 1, ID: 10, Title: "WAHAJULLAH KHAN", Subtitle: "09-01 · 同住代付待确认", Amount: "€1,250", RemainingAmount: "€1,250",
-					DateTime: "2026-09-01 09:12", Description: "RENT SEPT 03", Reference: "TL-8f21c4",
-					// 展开浮窗里那张匹配表单要有内容，日历和「应交／未收」提示才看得见；
-					// 生产里这两份选项由 availableRentManualMatchOptions 一起给出来。
-					TenantOptions: []billingTenantOption{{ID: 11, Name: "WAHAJULLAH KHAN"}, {ID: 12, Name: "同住人"}},
-					MatchOptions: []billingRentMatchOption{
-						{TenantID: 11, TenantName: "WAHAJULLAH KHAN", Period: "2026-09", PeriodLabel: "2026年9月", Expected: "€625.00", Remaining: "€625.00"},
-						{TenantID: 12, TenantName: "同住人", Period: "2026-09", PeriodLabel: "2026年9月", Expected: "€625.00", Remaining: "€625.00"},
-					},
-					DetailURL: "/transactions?detail=10&period=2026-09", ReturnURL: "/rent-dashboard?period=2026-09", ListURL: "/transactions?period=2026-09&match_status=pending",
-				}, {Index: 2, Title: "付款人待识别", Subtitle: "09-04 · AIB · RENT SEPT", Amount: "€800", DetailURL: "/transactions?detail=11&period=2026-09", ListURL: "/transactions?period=2026-09&match_status=pending"}}, PropertyOptions: []rentWorkspacePropertyOption{{ID: 7, Name: "78 Old County Road"}},
+					Index: 1, ID: 10, Title: "WAHAJULLAH KHAN", Subtitle: "09-01 · 同住代付待确认", Amount: "€1,250", MatchURL: "/rent-dashboard?period=2026-09&match=10",
+				}, {Index: 2, ID: 11, Title: "付款人待识别", Subtitle: "09-04 · AIB · RENT SEPT", Amount: "€800", MatchURL: "/rent-dashboard?period=2026-09&match=11"}}, PropertyOptions: []rentWorkspacePropertyOption{{ID: 7, Name: "78 Old County Road"}},
 				PropertyRows: []rentWorkspacePropertyRow{property}, PropertyTreeRows: []rentWorkspacePropertyTreeRow{{Property: property, Rooms: []rentWorkspaceRoomTreeRow{{Room: room, Tenants: tenantRows}}}},
 				RoomRows: []rentWorkspaceRoomRow{room}, RoomTreeRows: []rentWorkspaceRoomTreeRow{{Room: room, Tenants: tenantRows}}, TenantRows: tenantRows, TotalRows: 1, FilteredCount: 1, TotalPages: 1, Page: 1, PageSize: 12,
 			})

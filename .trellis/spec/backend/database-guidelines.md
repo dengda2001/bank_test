@@ -1581,7 +1581,7 @@ legacy-only fallback.
 
 - `POST /transactions/defer` and `POST /transactions/undefer`. The `/billing`
   aliases were removed with the rest of that surface.
-- Deferral is reachable from 租客工作台首页待办队列的「暂不处理」(rent-workspace.html),
+- Deferral is reachable from 租客工作台首页待办队列「处理流水」核对抽屉的「暂不处理」(rent-workspace.html),
   and undefer from 流水详情页右栏「已暂不处理」那块 (transaction-detail.html). Both
   post a fixed reason, so neither asks the user why.
 - Forms submit `transaction_id`, a non-empty `reason`, and an optional local
@@ -1660,3 +1660,24 @@ Correct:
 // visibility, and allocation clears a prior defer in its own DB transaction.
 writeTransactionAction(txdb, userID, transactionID, transactionActionDefer, reason, "", "", now)
 ```
+
+## Manual transaction review read models
+
+The tenant picker for a manual transaction review must query all tenants owned
+by the account. `availableRentManualMatchOptions` contains only obligations
+with a positive remaining balance, so deriving the picker from it hides an
+already identified tenant when the referenced month is fully paid. Keep tenant
+identity and month eligibility as separate questions.
+
+When explaining a fully paid month, read effective confirmed rent allocations
+for the owned obligation and then the owned source transactions. Show their
+original dates, descriptions, and allocated amounts. A voided allocation or
+one for a different allocation kind is not evidence that rent was paid.
+
+Same-payer transaction history is supporting evidence, not a tenant identity
+decision. The transaction list drawer pages it; the dashboard drawer shows all
+same-payer rows for the selected transaction. Show the actual effective
+allocation period alongside the bank-parsed period. Scope every transaction,
+obligation, allocation, and tenant lookup by `user_id`; the final confirmation
+service must repeat its ownership, currency, and remaining-balance checks after
+the user submits.

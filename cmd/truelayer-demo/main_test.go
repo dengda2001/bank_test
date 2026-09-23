@@ -698,42 +698,10 @@ func TestTransactionListRendersFilters(t *testing.T) {
 
 // 记住的付款人：租客已经识别出来了，行里只该再问一次租金月份。租客下拉预选到
 // 那一户，月份交给日历控件——选项袋里带 data-tenant，选完才报出应交与未收。
-func TestTransactionListShowsMonthChoiceForRememberedTenant(t *testing.T) {
-	var body strings.Builder
-	err := transactionListTemplate.Execute(&body, transactionListPageData{
-		CanonicalPath: "/transactions",
-		TransactionRows: []transactionPageRow{{
-			Direction:         "income",
-			MatchStatus:       "needs_review",
-			MatchStatusLabel:  "需处理",
-			TenantID:          7,
-			CandidateTenantID: 7,
-			NeedsMonthChoice:  true,
-			MonthOptions: []billingMonthOption{{
-				Period:    "2026-08",
-				Label:     "2026年8月",
-				Expected:  "EUR 950.00",
-				Paid:      "EUR 0.00",
-				Remaining: "EUR 950.00",
-			}},
-			ManualMatchTenantOptions: []billingTenantOption{{ID: 7, Name: "Aoife"}},
-			ManualMatchOptions:       []billingRentMatchOption{{TenantID: 7, TenantName: "Aoife", Period: "2026-08", PeriodLabel: "2026年8月", Expected: "EUR 950.00", Remaining: "EUR 950.00"}},
-		}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	monthChoice := markupBetween(t, body.String(), `action="/transactions/confirm" data-tenant-period-match`, `</form>`)
-	for _, expected := range []string{`<option value="7" selected>Aoife</option>`, "data-tenant-period-input", `data-tenant="7"`, "2026年8月", "EUR 950.00", "确认匹配"} {
-		if !strings.Contains(monthChoice, expected) {
-			t.Fatalf("remembered-tenant row is missing %q: %s", expected, monthChoice)
-		}
-	}
-	if strings.Contains(monthChoice, `<select name="period"`) {
-		t.Fatalf("remembered-tenant month choice still renders a repeated period select: %s", monthChoice)
-	}
-	if !strings.Contains(embeddedWebText("web/static/js/workspace-controls.js"), `form.querySelector('[name="tenant_id"]')`) {
-		t.Fatal("the shared tenant/month calendar does not read the tenant select in this form")
+func TestTransactionListOpensDrawerForRememberedTenantWithoutOpenMonth(t *testing.T) {
+	page := renderTransactionListPage(t, transactionListPageData{TransactionRows: []transactionPageRow{{ID: "7", InternalID: "7", Direction: "income", MatchStatus: "needs_review", CandidateTenantID: 7, MatchURL: "/transactions?match=7"}}})
+	if !strings.Contains(page, `href="/transactions?match=7"`) || !strings.Contains(page, `>匹配流水</a>`) {
+		t.Fatal("recognized tenant row must open the review drawer even without an open month")
 	}
 }
 
@@ -1125,16 +1093,14 @@ func TestTransactionPageRowDisplaysInternalAndProviderIdentifiers(t *testing.T) 
 // head (the prototype's .link-btn), which is why the needle is now the anchor
 // inside .workspace-queue-head-meta rather than a footer element.
 //
-// The item-level ListURL is loader-supplied, so it must not be able to satisfy
-// this assertion: the fixture deliberately points it at another month, and the
-// needle names the class of the template-built anchor. Otherwise the test would
-// pass even if the template stopped deriving the link from .Period.
+// The needle names the class of the template-built anchor, so a queued row's
+// separate match link cannot satisfy this assertion.
 func TestRentWorkspaceLinksPendingCountToSelectedPeriod(t *testing.T) {
 	page, err := executeTemplate(rentWorkspaceTemplate, rentWorkspacePageData{
 		Period:       "2026-09",
 		PeriodLabel:  "2026年9月",
 		PendingCount: 4,
-		PendingItems: []rentWorkspacePendingItem{{Index: 1, Title: "待确认付款人", Amount: "EUR 800.00", ListURL: "/transactions?period=2026-08&match_status=pending"}},
+		PendingItems: []rentWorkspacePendingItem{{Index: 1, Title: "待确认付款人", Amount: "EUR 800.00", MatchURL: "/rent-dashboard?period=2026-08&match=9"}},
 	})
 	if err != nil {
 		t.Fatal(err)

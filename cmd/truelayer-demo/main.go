@@ -134,6 +134,7 @@ type transactionListPageData struct {
 	TransactionRows    []transactionPageRow
 	ExpenseDrawer      *expenseDrawerData
 	CashReceiptDrawer  *cashReceiptDrawerData
+	MatchReview        *transactionMatchReviewData
 	ExpenseOpenURL     string
 	CashReceiptOpenURL string
 	TenantOptions      []billingTenantOption
@@ -838,6 +839,13 @@ func (a *app) handleTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	setTransactionDetailLinks(r.URL.Query(), rows)
+	for index := range rows {
+		if rows[index].Direction == "income" && rows[index].RemainingAmountInput != "0.00" && rows[index].MatchStatus != "ignored" {
+			if id, err := strconv.ParseUint(rows[index].InternalID, 10, 64); err == nil {
+				rows[index].MatchURL = transactionReviewURL(r.URL.Query(), id)
+			}
+		}
+	}
 	transactionReturnURL := transactionListURL(r.URL.Query())
 	for index := range rows {
 		rows[index].ReturnURL = transactionReturnURL
@@ -911,6 +919,45 @@ func (a *app) handleTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 	data.ExpenseOpenURL = transactionDrawerURL(r, "expense")
 	data.CashReceiptOpenURL = transactionDrawerURL(r, "cash")
+	if matchKey := strings.TrimSpace(r.URL.Query().Get("match")); matchKey != "" {
+		matchID, parseErr := parsePositiveUint(matchKey)
+		if parseErr != nil {
+			http.NotFound(w, r)
+			return
+		}
+		var tenantID uint64
+		if selected := r.URL.Query().Get("match_tenant"); selected != "" {
+			tenantID, parseErr = parsePositiveUint(selected)
+			if parseErr != nil {
+				http.NotFound(w, r)
+				return
+			}
+		}
+		historyPage := 1
+		if selected := r.URL.Query().Get("match_history_page"); selected != "" {
+			historyPage, parseErr = strconv.Atoi(selected)
+			if parseErr != nil || historyPage < 1 || historyPage > 100000 {
+				http.NotFound(w, r)
+				return
+			}
+		}
+		userID, _ := a.currentUserID(r)
+		if a.db == nil || userID == 0 {
+			http.NotFound(w, r)
+			return
+		}
+		review, reviewErr := newTransactionService(a.db).transactionMatchReview(r.Context(), userID, matchID, tenantID, historyPage)
+		if errors.Is(reviewErr, gorm.ErrRecordNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		if reviewErr != nil {
+			http.Error(w, reviewErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		review.setURLs(r.URL.Query())
+		data.MatchReview = &review
+	}
 	if r.URL.Query().Get("expense") == "1" || isExpenseFormError(r.URL.Query().Get("error")) {
 		if userID, ok := a.currentUserID(r); ok {
 			drawer, drawerErr := a.loadExpenseDrawerData(r.Context(), userID, monthStart(time.Now().UTC()).Format("2006-01"), 0, 0, expenseFormReturnURL(r), r.URL.Query().Get("error"))
@@ -1030,11 +1077,11 @@ func (a *app) handleRentMatchConfirmation(w http.ResponseWriter, r *http.Request
 	if value := strings.TrimSpace(r.Form.Get("rent_obligation_id")); value != "" {
 		rentObligationID, parseErr := parsePositiveUint(value)
 		if parseErr != nil {
-			redirectTransactionResult(w, r, "error", "invalid_confirmation")
+			redirectTransactionConfirmationResult(w, r, a.db, userID, transactionID, "error", "invalid_confirmation")
 			return
 		}
 		if err := service.confirmRentMatchToObligation(r.Context(), userID, transactionID, rentObligationID, rememberPayer); err != nil {
-			redirectTransactionResult(w, r, "error", "confirmation_failed")
+			redirectTransactionConfirmationResult(w, r, a.db, userID, transactionID, "error", transactionFailureCode(err, "confirmation_failed"))
 			return
 		}
 		redirectTransactionResult(w, r, "message", "rent_confirmed")
@@ -1042,20 +1089,20 @@ func (a *app) handleRentMatchConfirmation(w http.ResponseWriter, r *http.Request
 	}
 	tenantID, err := strconv.ParseUint(r.Form.Get("tenant_id"), 10, 64)
 	if err != nil || tenantID == 0 {
-		redirectTransactionResult(w, r, "error", "invalid_confirmation")
+		redirectTransactionConfirmationResult(w, r, a.db, userID, transactionID, "error", "invalid_confirmation")
 		return
 	}
 	var period *time.Time
 	if value := strings.TrimSpace(r.Form.Get("period")); value != "" {
 		parsed, err := parsePeriodMonth(value)
 		if err != nil {
-			redirectTransactionResult(w, r, "error", "invalid_confirmation")
+			redirectTransactionConfirmationResult(w, r, a.db, userID, transactionID, "error", "invalid_confirmation")
 			return
 		}
 		period = &parsed
 	}
 	if err := service.confirmRentMatch(r.Context(), userID, transactionID, tenantID, period, rememberPayer); err != nil {
-		redirectTransactionResult(w, r, "error", "confirmation_failed")
+		redirectTransactionConfirmationResult(w, r, a.db, userID, transactionID, "error", transactionFailureCode(err, "confirmation_failed"))
 		return
 	}
 	redirectTransactionResult(w, r, "message", "rent_confirmed")

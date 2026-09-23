@@ -27,7 +27,7 @@ func TestTransactionRouteUsesPrototypeQueueAndKeepsLocalReturnPath(t *testing.T)
 		workspaceShell: workspaceShell{ActivePage: "transactions", CompactTitle: "流水处理"},
 		CanonicalPath:  "/transactions", TransactionScope: "pending", PendingCount: 2,
 		TransactionRows: []transactionPageRow{{
-			ID: "7", InternalID: "7", DetailKey: "7", DetailURL: "/transactions?detail=7&match_status=pending",
+			ID: "7", InternalID: "7", DetailKey: "7", DetailURL: "/transactions?detail=7&match_status=pending", MatchURL: "/transactions?match=7&match_status=pending",
 			Direction: "income", DirectionLabel: "收入", PayerName: "WAHAJULLAH KHAN", AmountDisplay: "€1,250.00",
 			RemainingAmountDisplay: "€1,250.00", AllocationUseDisplay: "同住代付", DateDisplay: "01 Sep 2026",
 			Description: "RENT SEPT", AccountName: "AIB", MatchStatus: "candidate", MatchStatusLabel: "待确认",
@@ -44,10 +44,9 @@ func TestTransactionRouteUsesPrototypeQueueAndKeepsLocalReturnPath(t *testing.T)
 		`href="/transactions?match_status=matched"`,
 		`href="/transactions?scope=all"`,
 		`class="transaction-route-mobile-list"`,
+		`<th>入账用途</th>`,
 		`class="transaction-review-card"`,
-		`action="/transactions/confirm"`,
-		`name="tenant_id" aria-label="选择匹配租客" data-searchable`,
-		`name="return_to" value="/transactions"`,
+		`href="/transactions?match=7&amp;match_status=pending"`,
 		`href="/transactions?detail=7&amp;match_status=pending"`,
 	} {
 		if !strings.Contains(page, marker) {
@@ -79,7 +78,7 @@ func TestTransactionRouteUsesPrototypeQueueAndKeepsLocalReturnPath(t *testing.T)
 		t.Fatal("transaction row action cell is not closed")
 	}
 	actionCell := page[actionStart : actionStart+actionEnd]
-	if !strings.Contains(actionCell, `href="/transactions?detail=7&amp;match_status=pending"`) || !strings.Contains(actionCell, `>匹配流水</summary>`) {
+	if !strings.Contains(actionCell, `href="/transactions?detail=7&amp;match_status=pending"`) || !strings.Contains(actionCell, `>匹配流水</a>`) {
 		t.Errorf("directly matchable transaction row must keep both detail and match actions: %s", actionCell)
 	}
 }
@@ -108,39 +107,22 @@ func TestTransactionListNoLongerRendersTheLegacyTable(t *testing.T) {
 	}
 }
 
-func TestDirectTransactionMatchUsesCalendarWithoutRepeatedMonthOptions(t *testing.T) {
-	page := renderTransactionListPage(t, transactionListPageData{
-		workspaceShell: workspaceShell{ActivePage: "transactions", CompactTitle: "流水处理"},
-		CanonicalPath:  "/transactions",
-		TransactionRows: []transactionPageRow{{
-			ID: "7", DetailURL: "/transactions?detail=7", ReturnURL: "/transactions",
-			ManualMatchTenantOptions: []billingTenantOption{{ID: 7, Name: "Aoife Murphy"}, {ID: 8, Name: "Bríd Murphy"}},
-			ManualMatchOptions: []billingRentMatchOption{
-				{TenantID: 7, TenantName: "Aoife Murphy", Period: "2026-09", PeriodLabel: "2026年9月", Expected: "€950.00", Remaining: "€950.00"},
-				{TenantID: 8, TenantName: "Bríd Murphy", Period: "2026-09", PeriodLabel: "2026年9月", Expected: "€1,100.00", Remaining: "€1,100.00"},
-			},
-		}},
-	})
-
-	form := markupBetween(t, page, `action="/transactions/confirm" data-tenant-period-match`, `</form>`)
-	for _, marker := range []string{
-		`type="month"`,
-		`data-tenant-period-input`,
-		`data-tenant-period-options`,
-		`data-tenant-period-rent`,
-		`aria-live="polite"`,
-		// 选完租客和月份之后那一行要报出所选月份的交租数字，所以数据袋里必须
-		// 同时有「应交」和「未收」——前端只负责显示，金额由服务端格式化好。
-		`data-label="2026年9月"`,
-		`data-due="€950.00"`,
-		`data-rent="€950.00"`,
-	} {
-		if !strings.Contains(form, marker) {
-			t.Errorf("calendar match form missing %q: %s", marker, form)
+func TestTransactionMatchDrawerKeepsPaidMonthEvidenceAndFullTenantList(t *testing.T) {
+	data := transactionMatchReviewData{
+		Source:           transactionPageRow{ID: "7", PayerName: "Aoife", Description: "August rent", AmountDisplay: "EUR 950.00", RemainingAmountDisplay: "EUR 950.00", ParsedPeriodDisplay: "2026-08"},
+		SelectedTenantID: 7, IdentifiedTenant: true, CanMatch: true,
+		ReturnURL: "/transactions?match_status=pending", CloseURL: "/transactions?match_status=pending",
+		TenantOptions: []transactionReviewTenant{{ID: 7, Name: "Aoife", Selected: true}, {ID: 8, Name: "Bríd"}},
+		Months:        []transactionReviewMonth{{Period: "2026-08", Label: "2026年8月", Highlighted: true, Note: "本月已交清", Evidence: []transactionReviewEvidence{{Date: "2026-08-01", PayerName: "Aoife", Amount: "EUR 950.00", Description: "Original August rent", DetailURL: "/transactions?detail=42"}}}, {Period: "2026-09", Label: "2026年9月", Selectable: true, Coverage: "EUR 950.00"}},
+	}
+	page := renderTransactionListPage(t, transactionListPageData{MatchReview: &data})
+	for _, marker := range []string{`role="dialog"`, `>Aoife</option>`, `>Bríd</option>`, `Original August rent`, `href="/transactions?detail=42"`, `name="period" value="2026-09"`, `name="tenant_id" value="7"`, `name="return_to" value="/transactions?match_status=pending"`} {
+		if !strings.Contains(page, marker) {
+			t.Errorf("drawer missing %q", marker)
 		}
 	}
-	if strings.Contains(form, `<select name="period"`) {
-		t.Errorf("calendar match form still renders the repeated period select: %s", form)
+	if strings.Contains(page, `name="period" value="2026-08"`) {
+		t.Error("paid month is selectable")
 	}
 }
 
@@ -323,11 +305,39 @@ func TestTransactionRowsShowParsedRentMonthAndNoTechnicalIDs(t *testing.T) {
 	}
 }
 
+func TestTransactionListShowsDescriptionAndOnlyKnownPropertyRoom(t *testing.T) {
+	page := renderTransactionListPage(t, transactionListPageData{
+		TransactionRows: []transactionPageRow{
+			{Description: "RENT <SEPT>", ObjectLabel: "Rosewood Court · 2B", AccountName: "AIB"},
+			{Description: "FASTER PAYMENT", AccountName: "AIB"},
+		},
+	})
+	for _, expected := range []string{
+		`<th>Description</th>`,
+		`<td class="route-txn-description">RENT &lt;SEPT&gt;</td>`,
+		`<td class="route-txn-context">Rosewood Court · 2B</td>`,
+		`<td class="route-txn-context">—</td>`,
+		`class="transaction-review-description">RENT &lt;SEPT&gt;</p>`,
+		`账户：AIB`,
+	} {
+		if !strings.Contains(page, expected) {
+			t.Fatalf("transaction list missing %q", expected)
+		}
+	}
+	if strings.Contains(page, `<td class="route-txn-context">AIB</td>`) {
+		t.Fatal("bank account was presented as a property/room")
+	}
+	if strings.Contains(page, `.transaction-review-head .transaction-review-description { display: none; }`) {
+		t.Fatal("description is hidden on mobile cards")
+	}
+}
+
 func TestTransactionListUsesExplicitOneClickMatchAndLimitedRematch(t *testing.T) {
 	page := renderTransactionListPage(t, transactionListPageData{
 		TransactionRows: []transactionPageRow{
 			{
 				ID:                        "7",
+				MatchURL:                  "/transactions?match=7",
 				Direction:                 "income",
 				MatchStatus:               "unmatched",
 				MatchStatusLabel:          "未关联",
@@ -354,7 +364,7 @@ func TestTransactionListUsesExplicitOneClickMatchAndLimitedRematch(t *testing.T)
 
 	// 直接匹配走「租客 + 月份」两个控件，不再让前端挑一条租金责任记录的 ID：
 	// 月份用日历组件选，责任记录由服务端按租客+月份反查。
-	for _, expected := range []string{"匹配流水", `action="/transactions/confirm" data-tenant-period-match`, `name="tenant_id" aria-label="选择匹配租客"`, "修改匹配", `action="/transactions/rematch"`, `aria-label="修改匹配租客"`, `aria-label="修改租金月份"`, "Bríd Murphy", "2026年10月"} {
+	for _, expected := range []string{"匹配流水", `href="/transactions?match=7"`, "修改匹配", `action="/transactions/rematch"`, `aria-label="修改匹配租客"`, `aria-label="修改租金月份"`, "Bríd Murphy", "2026年10月"} {
 		if !strings.Contains(page, expected) {
 			t.Fatalf("transaction list missing explicit match control %q: %s", expected, page)
 		}
@@ -526,7 +536,7 @@ func TestTransactionRouteShowsTheParsedRentMonth(t *testing.T) {
 		}
 	}
 
-	// 这是第 10 列，而表格在加列之前就已经占满容器（1440 宽下 9 列正好铺满 1146px）。
+	// 状态列现在排第 10，新增 Description 后整张表有 11 列；1440 宽下正好铺满 1146px。
 	// 短列不锁 nowrap，浏览器被挤窄时会挑软柿子：日期从连字符处断成 "09-"/"01"、
 	// "同住代付"四个汉字断成两行。锁住之后被压缩的只剩「匹配依据」那句本就该折行的
 	// 说明。加列之前没有这个现象，所以这条断言是跟着新列一起来的。

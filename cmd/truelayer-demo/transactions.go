@@ -413,6 +413,7 @@ type transactionPageRow struct {
 	DetailKey                 string
 	DetailURL                 string
 	ReturnURL                 string
+	MatchURL                  string
 	Direction                 string
 	DirectionLabel            string
 	PayerName                 string

@@ -26,6 +26,7 @@ type rentWorkspacePageData struct {
 	DimensionSummary rentWorkspaceDimensionSummary
 	PendingCount     int
 	PendingItems     []rentWorkspacePendingItem
+	MatchReview      *transactionMatchReviewData
 	PropertyOptions  []rentWorkspacePropertyOption
 	PropertyRows     []rentWorkspacePropertyRow
 	PropertyTreeRows []rentWorkspacePropertyTreeRow
@@ -47,20 +48,12 @@ type rentWorkspacePendingItem struct {
 	// Index is the 01/02/03 badge the prototype puts in front of every queued
 	// row. It is numbered at the source because Go templates cannot add, and a
 	// template func for one badge would be a poor trade.
-	Index           int
-	ID              uint64
-	Title           string
-	Subtitle        string
-	Amount          string
-	RemainingAmount string
-	DateTime        string
-	Description     string
-	Reference       string
-	TenantOptions   []billingTenantOption
-	MatchOptions    []billingRentMatchOption
-	DetailURL       string
-	ListURL         string
-	ReturnURL       string
+	Index    int
+	ID       uint64
+	Title    string
+	Subtitle string
+	Amount   string
+	MatchURL string
 }
 
 // rentWorkspacePendingItems maps the queued transactions to the panel's rows and
@@ -79,18 +72,12 @@ func rentWorkspacePendingItems(rows []paymentTransaction, periodMonth time.Time)
 			subtitle = transaction.TransactionTime.In(time.UTC).Format("01-02") + " · " + subtitle
 		}
 		items = append(items, rentWorkspacePendingItem{
-			Index:           i + 1,
-			ID:              transaction.ID,
-			Title:           payer,
-			Subtitle:        subtitle,
-			Amount:          formatMoney(centsToMoney(transaction.AmountCents), firstNonEmpty(transaction.Currency, ledgerCurrencyEUR), 2),
-			RemainingAmount: formatMoney(centsToMoney(transaction.AmountCents), firstNonEmpty(transaction.Currency, ledgerCurrencyEUR), 2),
-			DateTime:        formatTransactionTimestamp(transaction.TransactionTime),
-			Description:     firstNonEmpty(strings.TrimSpace(transaction.Description), "—"),
-			Reference:       firstNonEmpty(strings.TrimSpace(transaction.Reference), "—"),
-			DetailURL:       rentWorkspaceTransactionDetailURL(transaction.ID, periodMonth),
-			ListURL:         "/transactions?period=" + url.QueryEscape(periodMonth.Format("2006-01")) + "&match_status=pending",
-			ReturnURL:       rentWorkspaceURL(defaultRentWorkspaceFilters(periodMonth), 1),
+			Index:    i + 1,
+			ID:       transaction.ID,
+			Title:    payer,
+			Subtitle: subtitle,
+			Amount:   formatMoney(centsToMoney(transaction.AmountCents), firstNonEmpty(transaction.Currency, ledgerCurrencyEUR), 2),
+			MatchURL: rentWorkspaceURL(defaultRentWorkspaceFilters(periodMonth), 1) + "&match=" + strconv.FormatUint(transaction.ID, 10),
 		})
 	}
 	return items
@@ -230,43 +217,42 @@ func (a *app) renderRentWorkspaceDashboard(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	page.PendingItems = rentWorkspacePendingItems(pendingRows, filters.PeriodMonth)
-	var tenants []tenant
-	if err := a.db.WithContext(r.Context()).Where("user_id = ?", userID).Order("name ASC, id ASC").Find(&tenants).Error; err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	for index, transaction := range pendingRows {
+		page.PendingItems[index].MatchURL = rentWorkspaceURL(filters, filters.Page) + "&match=" + strconv.FormatUint(transaction.ID, 10)
 	}
-	var obligations []rentObligation
-	if err := a.db.WithContext(r.Context()).Where("user_id = ?", userID).Order("period_month DESC, id DESC").Find(&obligations).Error; err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	tenantNames := make(map[uint64]string, len(tenants))
-	for _, tenantRow := range tenants {
-		tenantNames[tenantRow.ID] = firstNonEmpty(tenantRow.DisplayAlias, tenantRow.Name)
-	}
-	allocationsByTransaction := make(map[uint64][]paymentAllocation, len(pendingRows))
-	if len(pendingRows) > 0 {
-		transactionIDs := make([]uint64, 0, len(pendingRows))
-		for _, transaction := range pendingRows {
-			transactionIDs = append(transactionIDs, transaction.ID)
-		}
-		var allocations []paymentAllocation
-		if err := a.db.WithContext(r.Context()).Where("user_id = ? AND payment_transaction_id IN ?", userID, transactionIDs).Order("id ASC").Find(&allocations).Error; err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+	if matchKey := strings.TrimSpace(r.URL.Query().Get("match")); matchKey != "" {
+		matchID, parseErr := parsePositiveUint(matchKey)
+		if parseErr != nil {
+			http.NotFound(w, r)
 			return
 		}
-		for _, allocation := range allocations {
-			allocationsByTransaction[allocation.PaymentTransactionID] = append(allocationsByTransaction[allocation.PaymentTransactionID], allocation)
+		var tenantID uint64
+		if selected := r.URL.Query().Get("match_tenant"); selected != "" {
+			tenantID, parseErr = parsePositiveUint(selected)
+			if parseErr != nil {
+				http.NotFound(w, r)
+				return
+			}
 		}
-	}
-	for index, transaction := range pendingRows {
-		remaining := summarizeTransactionAllocations(transaction, allocationsByTransaction[transaction.ID]).RemainingCents
-		page.PendingItems[index].RemainingAmount = formatMoney(centsToMoney(remaining), firstNonEmpty(transaction.Currency, ledgerCurrencyEUR), 2)
-		options := availableRentManualMatchOptions(transaction, obligations, tenantNames, remaining)
-		tenantOptions, _ := rematchFilterOptions(options)
-		page.PendingItems[index].MatchOptions = options
-		page.PendingItems[index].TenantOptions = tenantOptions
-		page.PendingItems[index].ReturnURL = rentWorkspaceURL(filters, filters.Page)
+		historyPage := 1
+		if selected := r.URL.Query().Get("match_history_page"); selected != "" {
+			historyPage, parseErr = strconv.Atoi(selected)
+			if parseErr != nil || historyPage < 1 || historyPage > 100000 {
+				http.NotFound(w, r)
+				return
+			}
+		}
+		review, reviewErr := newTransactionService(a.db).transactionMatchReview(r.Context(), userID, matchID, tenantID, historyPage)
+		if errors.Is(reviewErr, gorm.ErrRecordNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		if reviewErr != nil {
+			http.Error(w, reviewErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		review.setWorkspaceURLs(filters, r.URL.Query())
+		page.MatchReview = &review
 	}
 	if filterErr != nil {
 		page.Error = "invalid_workspace_filter"

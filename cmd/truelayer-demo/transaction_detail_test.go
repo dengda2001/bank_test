@@ -264,3 +264,39 @@ func TestTransactionDetailAllocationRowsIncludeRoomContextAndVoidedHistory(t *te
 		t.Fatalf("voided allocation history was presented as effective: %+v", rows[1])
 	}
 }
+
+func TestTransactionObjectContextComesFromEffectiveRentOrSpecificSuggestion(t *testing.T) {
+	firstObligationID, secondObligationID := uint64(10), uint64(11)
+	obligations := map[uint64]rentObligation{
+		firstObligationID:  {ID: firstObligationID, RentChargeID: 20},
+		secondObligationID: {ID: secondObligationID, RentChargeID: 21},
+	}
+	charges := map[uint64]rentCharge{
+		20: {PropertyNameSnapshot: nullableString("Rosewood"), RoomLabelSnapshot: nullableString("2B")},
+		21: {PropertyNameSnapshot: nullableString("Oak House"), RoomLabelSnapshot: nullableString("3A")},
+	}
+	allocations := []paymentAllocation{
+		{RentObligationID: &firstObligationID, AllocationKind: allocationKindRent, Status: allocationStatusConfirmed},
+		{RentObligationID: &secondObligationID, AllocationKind: allocationKindRent, Status: allocationStatusVoided},
+	}
+	ids := transactionObjectChargeIDs(transactionPageRow{CandidateRentObligationID: secondObligationID}, allocations, obligations)
+	if label, room := transactionRentObjectLabels(ids, charges); label != "Rosewood · 2B" || room != "2B" {
+		t.Fatalf("confirmed allocation should take precedence over suggestion and voided allocation: %q, %q", label, room)
+	}
+	ids = transactionObjectChargeIDs(transactionPageRow{CandidateRentObligationID: secondObligationID}, nil, obligations)
+	if label, room := transactionRentObjectLabels(ids, charges); label != "Oak House · 3A" || room != "3A" {
+		t.Fatalf("specific suggestion did not resolve its room: %q, %q", label, room)
+	}
+	ids = transactionObjectChargeIDs(transactionPageRow{TenantID: 9}, nil, obligations)
+	if label, _ := transactionRentObjectLabels(ids, charges); label != "" {
+		t.Fatalf("tenant identity alone must not imply a room: %q", label)
+	}
+	allocations = []paymentAllocation{
+		{RentObligationID: &firstObligationID, AllocationKind: allocationKindRent, Status: allocationStatusConfirmed},
+		{RentObligationID: &secondObligationID, AllocationKind: allocationKindRent, Status: allocationStatusConfirmed},
+	}
+	ids = transactionObjectChargeIDs(transactionPageRow{}, allocations, obligations)
+	if label, room := transactionRentObjectLabels(ids, charges); label != "Oak House · 3A、Rosewood · 2B" || room != "" {
+		t.Fatalf("split payment should display both rooms without a single-room hint: %q, %q", label, room)
+	}
+}

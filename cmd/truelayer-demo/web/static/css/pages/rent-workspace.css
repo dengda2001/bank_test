@@ -326,39 +326,10 @@
     .workspace-queue-item:not(:last-child) { border-right: 1px solid color-mix(in oklch, #d07b8a 24%, var(--border)); }
     .workspace-queue-process { position: absolute; right: 14px; bottom: 12px; }
     .workspace-queue-process-trigger { min-height: 32px; padding: 0 10px; font-size: 11px; }
-    /* 这里给的是 height 而不是 max-height。租金月份用的是 calendar.js 的浮层，
-       它是绝对定位、挂在输入框下方约 300px 高，超出面板的部分会被 overflow 裁掉
-       ——之前用 max-height 时面板只有内容那么高，浮层一开就被切掉，得先滚动面板
-       才看得见日历。固定一个够高的高度，浮层就有地方整个摊开。overflow 留着当
-       矮屏幕上的兜底。 */
-    .workspace-queue-process-body { position: fixed; z-index: 1600; top: 50%; left: 50%; display: grid; align-content: start; gap: 12px; width: min(520px, calc(100vw - 24px)); height: min(86vh, 700px); overflow: auto; padding: 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: 0 18px 58px rgb(15 23 42 / 28%); transform: translate(-50%, -50%); }
-    .workspace-queue-process-body[hidden] { display: none; }
-    .workspace-queue-process-body dl { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px 12px; margin: 0; }
-    .workspace-queue-process-body dl > div { display: grid; gap: 3px; min-width: 0; }
-    .workspace-queue-process-body dt { color: var(--foreground-muted); font-size: 10px; }
-    .workspace-queue-process-body dd { min-width: 0; margin: 0; overflow-wrap: anywhere; font-size: 12px; font-weight: 650; }
-    .workspace-queue-process-body form { display: grid; gap: 8px; }
-    .workspace-queue-process-body form > label { display: grid; gap: 4px; color: var(--foreground-muted); font-size: 11px; }
-    .workspace-queue-process-body form select { min-height: 38px; }
-    .workspace-queue-process-body .workspace-queue-match-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-    .workspace-queue-match-actions > label { display: inline-flex !important; align-items: center; gap: 7px !important; min-height: 38px; margin: 0; white-space: nowrap; }
-    .workspace-queue-match-actions input[type="checkbox"] { width: 16px; height: 16px; min-height: 0; margin: 0; accent-color: var(--accent); }
-    .workspace-queue-process-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-    .workspace-queue-process-actions form { display: contents; }
-    .workspace-queue-process-actions .btn,
-    .workspace-queue-process-body form .btn { min-height: 38px; }
     @media (max-width: 640px) {
       .workspace-queue-list { gap: 9px; padding: 10px; }
       .workspace-queue-item { min-height: 0; padding: 12px 12px 64px; }
       .workspace-queue-process { right: 12px; bottom: 10px; }
       .workspace-queue-process-trigger { min-height: 44px; padding: 0 12px; }
-      .workspace-queue-process-body { padding: 10px; }
-      .workspace-queue-process-body { top: auto; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); left: 12px; width: auto; max-height: calc(100dvh - 94px - env(safe-area-inset-bottom)); border-radius: 16px; transform: none; }
-      .workspace-queue-process-body dl { grid-template-columns: 1fr 1fr; }
-      .workspace-queue-process-actions { display: grid; grid-template-columns: 1fr 1fr; }
-      .workspace-queue-match-actions { flex-wrap: wrap; }
-      .workspace-queue-match-actions > label { min-height: 44px; }
-      .workspace-queue-match-actions .btn { min-height: 44px; }
-      .workspace-queue-process-actions .btn,
-      .workspace-queue-process-body form .btn { min-height: 44px; }
     }
+@media (min-width: 641px) { .workspace-period .calendar-popover { left: auto; right: 0; transform-origin: top right; } }

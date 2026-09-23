@@ -733,3 +733,14 @@ Search clear buttons are added to non-empty `input[type=search]` fields by the
 same shared script. The button clears the native input, dispatches `input`, and
 returns focus to the field; its target is 44px on narrow screens. Do not add an
 auto-submit unless the page already submits in response to the input event.
+
+### 8.5 Wide transaction review drawers
+
+The transaction review drawer reuses `.entity-drawer` but needs a wider desktop
+reading area and a full-height mobile layout. Load its page CSS after
+`entity-drawers.css`; `withWorkspaceControlAssets` arranges that order for both
+the inline transaction list and the embedded rent workspace. A full-height flex
+drawer must keep its sticky header from shrinking (`flex: 0 0 auto`), or the
+title can render above the mobile viewport while the scroll position is zero.
+Check the title position, internal scroll, and document width in a real browser
+at 1440px, 1024px, and 390px.

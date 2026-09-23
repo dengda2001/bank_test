@@ -2,6 +2,7 @@ package main
 
 import (
 	"html/template"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -217,15 +218,14 @@ func TestRentWorkspaceTenantTableKeepsTheActionColumn(t *testing.T) {
 	}
 }
 
-// The queue expands each independent card into an inline process panel with a
-// detail link and a defer action.
-func TestRentWorkspacePendingCardsExposeInlineActions(t *testing.T) {
+// Each queue card opens the same review drawer used by the transaction list.
+func TestRentWorkspacePendingCardsOpenMatchReview(t *testing.T) {
 	page := renderRentWorkspace(t, rentWorkspacePageData{
 		Period: "2026-09", PeriodLabel: "2026年9月", View: rentWorkspaceViewTenants,
 		PendingCount: 2,
 		PendingItems: []rentWorkspacePendingItem{
-			{Index: 1, Title: "待确认付款人", Subtitle: "09-06 · Rent payment", Amount: "EUR 1200.00", TenantOptions: []billingTenantOption{{ID: 11, Name: "Aoife Murphy"}}, MatchOptions: []billingRentMatchOption{{TenantID: 11, TenantName: "Aoife Murphy", Period: "2026-09", PeriodLabel: "2026年9月", Remaining: "EUR 1200.00"}}, DetailURL: "/transactions/9?period=2026-09", ListURL: "/transactions?period=2026-09&match_status=pending"},
-			{Index: 2, Title: "责任人待匹配", Subtitle: "09-07 · Rent payment", Amount: "EUR 700.00", DetailURL: "/transactions/10?period=2026-09", ListURL: "/transactions?period=2026-09&match_status=pending"},
+			{Index: 1, ID: 9, Title: "待确认付款人", Subtitle: "09-06 · Rent payment", Amount: "EUR 1200.00", MatchURL: "/rent-dashboard?period=2026-09&match=9"},
+			{Index: 2, ID: 10, Title: "责任人待匹配", Subtitle: "09-07 · Rent payment", Amount: "EUR 700.00", MatchURL: "/rent-dashboard?period=2026-09&match=10"},
 		},
 		TenantRows: []rentWorkspaceTenantRow{{
 			TenantID: 11, TenantName: "Aoife Murphy", ObligationID: 71, Period: "2026-09",
@@ -234,17 +234,13 @@ func TestRentWorkspacePendingCardsExposeInlineActions(t *testing.T) {
 	})
 
 	queue := markupBetween(t, page, `class="workspace-queue-list"`, `</section>`)
-	if got := strings.Count(queue, `>查看流水详情</a>`); got != 2 {
-		t.Fatalf("detail link count=%d want one per queued row: %s", got, queue)
-	}
-	if got := strings.Count(queue, `>处理流水</button>`); got != 2 {
+	if got := strings.Count(queue, `>处理流水</a>`); got != 2 {
 		t.Fatalf("process control count=%d want one per queued row: %s", got, queue)
 	}
-	if got := strings.Count(queue, `>暂不处理</button>`); got != 2 {
-		t.Fatalf("defer action count=%d want one per queued row: %s", got, queue)
-	}
-	if !strings.Contains(queue, `name="tenant_id" data-searchable`) {
-		t.Fatal("dashboard tenant picker does not opt into searchable tenant selection")
+	for _, target := range []string{`href="/rent-dashboard?period=2026-09&amp;match=9"`, `href="/rent-dashboard?period=2026-09&amp;match=10"`} {
+		if !strings.Contains(queue, target) {
+			t.Fatalf("queue card lost review link %s: %s", target, queue)
+		}
 	}
 	// The prototype numbers each queued row (01/02/03) in front of its body.
 	for _, badge := range []string{`class="workspace-queue-index">01<`, `class="workspace-queue-index">02<`} {
@@ -258,6 +254,27 @@ func TestRentWorkspacePendingCardsExposeInlineActions(t *testing.T) {
 	list := strings.Index(page, `class="workspace-queue-list"`)
 	if !(head >= 0 && head < more && more < list) {
 		t.Fatalf("the see-all link is not in the queue panel head: head=%d more=%d list=%d", head, more, list)
+	}
+}
+
+func TestRentWorkspaceMatchReviewShowsSamePayerHistoryAndDashboardActions(t *testing.T) {
+	filters := defaultRentWorkspaceFilters(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
+	review := transactionMatchReviewData{
+		Source: transactionPageRow{ID: "9", PayerName: "Aoife Murphy", AmountDisplay: "EUR 1200.00", RemainingAmountDisplay: "EUR 1200.00", ParsedPeriodDisplay: "2026-09", Description: "SEPT RENT", MatchStatus: "unmatched", MatchStatusLabel: "未关联"},
+		History: []transactionReviewHistory{
+			{Date: "2026-08-05", PayerName: "Aoife Murphy", Amount: "EUR 1200.00", Description: "AUG RENT", ParsedPeriod: "2026-08", MatchedPeriod: "2026-08", Status: "已关联"},
+			{Date: "2026-07-05", PayerName: "Aoife Murphy", Amount: "EUR 600.00", Description: "JUL RENT", ParsedPeriod: "2026-07", MatchedPeriod: "—", Status: "未关联"},
+		},
+	}
+	review.setWorkspaceURLs(filters, url.Values{"period": {"2026-09"}, "match": {"9"}})
+	page := renderRentWorkspace(t, rentWorkspacePageData{Period: "2026-09", MatchReview: &review})
+	for _, text := range []string{"AUG RENT", "JUL RENT", "EUR 1200.00", "EUR 600.00", "2026-08", "2026-07", "已关联", "未关联", "全部 2 笔", `action="/rent-dashboard"`, `>暂不处理</button>`} {
+		if !strings.Contains(page, text) {
+			t.Fatalf("dashboard review is missing %q", text)
+		}
+	}
+	if strings.Contains(page, `第 1 /`) {
+		t.Fatal("dashboard history should show every same-payer transaction without pagination")
 	}
 }
 

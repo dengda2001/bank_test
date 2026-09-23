@@ -94,6 +94,11 @@ func setTransactionDetailLinks(query url.Values, rows []transactionPageRow) {
 func transactionListURL(query url.Values) string {
 	values := cloneQueryValues(query)
 	values.Del("detail")
+	values.Del("match")
+	values.Del("match_tenant")
+	values.Del("match_history_page")
+	values.Del("error")
+	values.Del("message")
 	if len(values) == 0 {
 		return "/transactions"
 	}
@@ -226,6 +231,7 @@ func (a *app) transactionDetailPageData(ctx context.Context, r *http.Request, us
 			properties[propertyRow.ID] = propertyRow
 		}
 	}
+	row.ObjectLabel, row.RoomOnlyLabel = transactionRentObjectLabels(transactionObjectChargeIDs(row, allocations, obligationByID), charges)
 
 	allocationRows := transactionDetailAllocationRows(allocations, source.Currency, obligationByID, charges, rooms, properties, nameByTenant)
 	events, err := a.transactionDetailEvents(ctx, userID, source, allocations)

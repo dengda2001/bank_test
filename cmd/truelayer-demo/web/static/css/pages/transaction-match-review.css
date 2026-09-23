@@ -1,0 +1,63 @@
+.transaction-review-backdrop { background: rgba(10,18,24,.38); }
+.transaction-review-drawer { width: min(960px,calc(100vw - 24px)); max-width: 100vw; gap: 18px; }
+.transaction-review-drawer .panel-head { display: flex; flex: 0 0 auto; justify-content: space-between; gap: 16px; }
+.transaction-review-drawer .panel-head h2 { font-size: 22px; }
+.transaction-review-drawer .panel-head h2:focus { outline: none; }
+.transaction-review-drawer section, .transaction-review-drawer article, .transaction-review-drawer div { min-width: 0; }
+.transaction-review-drawer h3 { margin: 0; font-size: 15px; }
+.transaction-review-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.transaction-review-section-head a, .transaction-review-evidence a, .transaction-review-history a { color: var(--accent); font-size: 12px; }
+.transaction-review-source, .transaction-review-identity, .transaction-review-months, .transaction-review-history { padding: 16px; border: 1px solid var(--border); border-radius: 10px; }
+.transaction-review-source-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px 24px; }
+.transaction-review-source-grid > div { display: grid; gap: 3px; }
+.transaction-review-source-grid span, .transaction-review-month-facts, .transaction-review-history-row dt { color: var(--foreground-muted); font-size: 11px; }
+.transaction-review-source-grid strong { font-size: 13px; }
+.transaction-review-source-grid .wide { grid-column: 1/-1; }
+.review-long-text { overflow-wrap: anywhere; white-space: pre-wrap; }
+.transaction-review-reason, .transaction-review-coverage, .transaction-review-note { margin: 10px 0 0; color: var(--foreground-muted); font-size: 12px; }
+.transaction-review-source-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.transaction-review-tag { flex: none; padding: 3px 7px; border-radius: 5px; background: color-mix(in oklch,var(--accent) 12%,var(--surface)); color: var(--accent); font-size: 11px; font-weight: 650; }
+.transaction-review-tenant-form { display: grid!important; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 10px!important; margin-top: 12px; }
+.transaction-review-tenant-form select { width: 100%; min-width: 0; }
+.transaction-review-tenant-form .btn { min-height: 40px; }
+.transaction-review-columns { display: grid; grid-template-columns: minmax(0,1.12fr) minmax(0,.88fr); align-items: start; gap: 16px; }
+.transaction-review-month-list, .transaction-review-history-list { display: grid; gap: 10px; }
+.transaction-review-month { padding: 13px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
+.transaction-review-month.highlighted { border-color: var(--accent); background: color-mix(in oklch,var(--accent) 4%,var(--surface)); }
+.transaction-review-month-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.transaction-review-month-choice { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.transaction-review-month-choice input { width: 17px; height: 17px; margin: 0; }
+.transaction-review-month-facts { display: flex; flex-wrap: wrap; gap: 3px 12px; margin-top: 9px; }
+.transaction-review-evidence { margin-top: 11px; border-top: 1px solid var(--border); padding-top: 10px; }
+.transaction-review-evidence summary { color: var(--accent); font-size: 12px; cursor: pointer; }
+.transaction-review-evidence-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 4px 8px; padding-top: 10px; font-size: 12px; }
+.transaction-review-evidence-row p { grid-column: 1/-1; margin: 0; color: var(--foreground-muted); }
+.transaction-review-evidence-row a { grid-column: 1/-1; }
+.transaction-review-history-row { padding: 13px; border: 1px solid var(--border); border-radius: 9px; }
+.transaction-review-history-row > div:first-child { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.transaction-review-history-row > div:first-child span { color: var(--foreground-muted); }
+.transaction-review-history-row p { margin: 8px 0; font-size: 12px; }
+.transaction-review-history-row dl { display: grid; gap: 4px; margin: 0 0 8px; }
+.transaction-review-history-row dl > div { display: flex; justify-content: space-between; gap: 8px; }
+.transaction-review-history-row dd { margin: 0; text-align: right; font-size: 12px; overflow-wrap: anywhere; }
+.transaction-review-pagination { display: flex; justify-content: space-between; gap: 8px; margin-top: 12px; font-size: 12px; }
+.transaction-review-empty { margin: 0; padding: 24px 14px; border-radius: 8px; background: var(--surface-muted); color: var(--foreground-muted); font-size: 13px; }
+.transaction-review-drawer .transaction-review-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.transaction-review-actions label { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+.transaction-review-actions input { margin: 0; }
+.transaction-review-actions > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.transaction-review-actions button:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 700px) { .transaction-review-columns { grid-template-columns: 1fr; } }
+@media (max-width: 640px) {
+  .transaction-review-drawer { width: 100vw; height: 100dvh; max-height: none; padding: 18px 16px 0; border-radius: 0; }
+  .transaction-review-drawer .panel-head { border-bottom: 1px solid var(--border); }
+  .transaction-review-source, .transaction-review-identity, .transaction-review-months, .transaction-review-history { padding: 13px; }
+  .transaction-review-source-grid { grid-template-columns: 1fr; }
+  .transaction-review-source-grid .wide { grid-column: auto; }
+  .transaction-review-tenant-form { grid-template-columns: 1fr; }
+  .transaction-review-tenant-form label { grid-column: 1/-1; }
+  .transaction-review-tenant-form .btn { width: 100%; }
+  .transaction-review-drawer .panel-head { top: 0; margin: 0 -16px; padding: 8px 16px 12px; }
+  .transaction-review-drawer .transaction-review-actions { align-items: stretch; flex-direction: column; }
+  .transaction-review-actions > div { justify-content: space-between; }
+}

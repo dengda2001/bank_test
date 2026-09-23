@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"gorm.io/gorm"
 )
 
 func transactionReturnTarget(r *http.Request) string {
@@ -37,6 +39,23 @@ func redirectTransactionResult(w http.ResponseWriter, r *http.Request, key, valu
 	query := parsed.Query()
 	query.Set(key, value)
 	http.Redirect(w, r, parsed.Path+"?"+query.Encode(), http.StatusFound)
+}
+
+func redirectTransactionConfirmationResult(w http.ResponseWriter, r *http.Request, db *gorm.DB, userID, transactionID uint64, key, value string) {
+	if key == "error" && r.Form.Get("review_drawer") == "1" {
+		var tenantID uint64
+		if parsed, err := parsePositiveUint(r.Form.Get("tenant_id")); err == nil {
+			var count int64
+			if db != nil && db.WithContext(r.Context()).Model(&tenant{}).Where("id = ? AND user_id = ?", parsed, userID).Count(&count).Error == nil && count == 1 {
+				tenantID = parsed
+			}
+		}
+		if target, err := transactionReviewFailureURL(transactionReturnTarget(r), transactionID, tenantID, value); err == nil {
+			http.Redirect(w, r, target, http.StatusFound)
+			return
+		}
+	}
+	redirectTransactionResult(w, r, key, value)
 }
 
 func transactionFailureCode(err error, fallback string) string {

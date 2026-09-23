@@ -121,6 +121,7 @@ var workspaceBase = template.Must(template.New("workspace").Funcs(template.FuncM
 	"web/templates/partials/tenant-form-drawer.html",
 	"web/templates/partials/expense-form-drawer.html",
 	"web/templates/partials/cash-receipt-drawer.html",
+	"web/templates/partials/transaction-match-review-drawer.html",
 	"web/templates/partials/room-create-drawer.html",
 ))
 
@@ -146,6 +147,11 @@ func newEmbeddedWorkspacePageTemplate(name string, funcs template.FuncMap, path 
 }
 
 func withWorkspaceControlAssets(body string) string {
+	reviewStyle := `<link rel="stylesheet" href="/static/css/pages/transaction-match-review.css">`
+	hasReviewStyle := strings.Contains(body, reviewStyle)
+	if hasReviewStyle {
+		body = strings.Replace(body, reviewStyle, "", 1)
+	}
 	if strings.Contains(body, `href="/static/css/workspace-controls.css"`) {
 		return body
 	}
@@ -159,6 +165,9 @@ func withWorkspaceControlAssets(body string) string {
 	}
 	if !strings.Contains(body, `href="/static/css/pages/cash-receipts.css"`) {
 		assets += `<link rel="stylesheet" href="/static/css/pages/cash-receipts.css">`
+	}
+	if hasReviewStyle {
+		assets += reviewStyle
 	}
 	assets += `<script src="/static/js/calendar.js" defer></script><script src="/static/js/workspace-controls.js" defer></script>`
 	return body[:headEnd] + assets + body[headEnd:]

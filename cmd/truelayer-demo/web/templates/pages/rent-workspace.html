@@ -6,6 +6,7 @@
   <link rel="stylesheet" href="/static/css/workspace.css">
   <link rel="stylesheet" href="/static/css/pages/collection-pages.css">
   <link rel="stylesheet" href="/static/css/pages/rent-workspace.css">
+  <link rel="stylesheet" href="/static/css/pages/transaction-match-review.css">
 </head>
 <body>
   <div class="app">
@@ -32,6 +33,7 @@
     {{if eq .Message "manual_balance_not_needed"}}<div class="notice ok" data-toast>该责任已无未付金额，无需平账。</div>{{end}}
     {{if eq .Message "rent_confirmed"}}<div class="notice ok" data-toast>流水已关联，待处理队列已更新。</div>{{end}}
     {{if eq .Message "transaction_action_saved"}}<div class="notice ok" data-toast>流水已暂不处理，待处理队列已更新。</div>{{end}}
+    {{if .MatchReview}}{{template "transaction-match-review-drawer" .MatchReview}}{{end}}
     {{if not .PropertyOptions}}<div class="notice workspace-empty-notice">尚未建立房产。未绑定房间的历史租客责任仍可在租客视角查看；你可以先<a href="/properties?add=1">新建房产</a>。</div>{{end}}
     <section class="workspace-summary" aria-label="月度汇总">
       <div class="panel metric metric-main"><div class="label">{{if .IsFuturePeriod}}预计应收{{else}}所选月份应收{{end}}</div><strong>{{if .IsFuturePeriod}}{{.Summary.ForecastExpectedAmount}}{{else}}{{.Summary.ExpectedAmount}}{{end}}</strong><span>{{if .IsFuturePeriod}}{{.Summary.ForecastCount}} 条预计分摊{{else}}{{.Summary.ResponsibilityCount}} 条租客责任{{end}}</span></div>
@@ -43,7 +45,7 @@
     </section>
     <section class="panel surface workspace-action-queue{{if eq .PendingCount 0}} is-empty{{end}}" id="pending-review" aria-label="待人工处理流水">
       <div class="panel-head"><div><h2>待人工处理流水</h2><p class="tiny">核对付款人与租金责任，处理后同步更新收缴结果。</p></div><div class="workspace-queue-head-meta"><span class="workspace-queue-count">{{.PendingCount}}</span><a class="workspace-queue-more" href="/transactions?period={{.Period}}&amp;match_status=pending">查看全部流水</a></div></div>
-      {{if .PendingItems}}<div class="workspace-queue-list">{{range .PendingItems}}<article class="workspace-queue-item"><span class="workspace-queue-index">{{printf "%02d" .Index}}</span><div class="workspace-queue-body"><strong>{{.Title}}</strong><small>{{.Subtitle}}</small></div><strong class="workspace-queue-amount">{{.Amount}}</strong><div class="workspace-queue-process"><button class="btn primary workspace-queue-process-trigger" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="workspace-queue-process-{{.ID}}">处理流水</button><div class="workspace-queue-process-body" id="workspace-queue-process-{{.ID}}" role="dialog" aria-label="处理流水" hidden><dl><div><dt>付款人</dt><dd>{{.Title}}</dd></div><div><dt>付款时间</dt><dd>{{.DateTime}}</dd></div><div><dt>备注</dt><dd>{{.Description}}{{if and .Reference (ne .Reference "—")}} · {{.Reference}}{{end}}</dd></div><div><dt>金额</dt><dd>{{.Amount}}</dd></div>{{if ne .Amount .RemainingAmount}}<div><dt>待匹配余额</dt><dd>{{.RemainingAmount}}</dd></div>{{end}}</dl>{{if .MatchOptions}}<form method="post" action="/transactions/confirm" data-tenant-period-match><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="remember_payer" value="0"><input type="hidden" name="return_to" value="{{.ReturnURL}}"><label>租客<select name="tenant_id" data-searchable required><option value="">选择租客</option>{{range .TenantOptions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>{{template "tenant-period-calendar" (tenantPeriodMatchCalendar .MatchOptions 0 "")}}<div class="workspace-queue-match-actions"><label class="tiny"><input type="checkbox" name="remember_payer" value="1" checked> 记住付款人</label><button class="btn primary" type="submit">匹配流水</button></div></form>{{else}}<p class="tiny">当前没有可直接匹配的未收账单，可以打开流水详情继续处理。</p>{{end}}<div class="workspace-queue-process-actions"><a class="btn subtle" href="{{.DetailURL}}">查看流水详情</a><form method="post" action="/transactions/defer"><input type="hidden" name="transaction_id" value="{{.ID}}"><input type="hidden" name="reason" value="首页暂不处理"><input type="hidden" name="return_to" value="{{.ReturnURL}}"><button class="btn subtle" type="submit">暂不处理</button></form></div></div></div></article>{{end}}</div>{{else}}<div class="workspace-empty workspace-queue-empty">当前没有待处理流水。</div>{{end}}
+      {{if .PendingItems}}<div class="workspace-queue-list">{{range .PendingItems}}<article class="workspace-queue-item"><span class="workspace-queue-index">{{printf "%02d" .Index}}</span><div class="workspace-queue-body"><strong>{{.Title}}</strong><small>{{.Subtitle}}</small></div><strong class="workspace-queue-amount">{{.Amount}}</strong><div class="workspace-queue-process"><a class="btn primary workspace-queue-process-trigger" href="{{.MatchURL}}" data-match-trigger="{{.ID}}">处理流水</a></div></article>{{end}}</div>{{else}}<div class="workspace-empty workspace-queue-empty">当前没有待处理流水。</div>{{end}}
     </section>
     <div class="workspace-mobile-view-heading"><strong>收缴视图</strong><span>点击房产展开房间，再点房间查看租客责任</span></div>
     <section class="panel surface workspace-list-panel" aria-label="工作台列表">
@@ -174,66 +176,10 @@
   </div>
   <script>
     (() => {
-      let activeQueueProcess = null;
-      const closeQueueProcess = (restoreFocus) => {
-        if (!activeQueueProcess) return;
-        activeQueueProcess.body.hidden = true;
-        activeQueueProcess.trigger.setAttribute("aria-expanded", "false");
-        activeQueueProcess.wrapper.classList.remove("is-open");
-        const trigger = activeQueueProcess.trigger;
-        activeQueueProcess = null;
-        if (restoreFocus) trigger.focus();
-      };
-      document.querySelectorAll(".workspace-queue-process").forEach((wrapper) => {
-        const trigger = wrapper.querySelector(".workspace-queue-process-trigger");
-        const body = wrapper.querySelector(".workspace-queue-process-body");
-        if (!trigger || !body) return;
-        trigger.addEventListener("click", () => {
-          if (activeQueueProcess?.wrapper === wrapper) {
-            closeQueueProcess(false);
-            return;
-          }
-          closeQueueProcess(false);
-          body.hidden = false;
-          trigger.setAttribute("aria-expanded", "true");
-          wrapper.classList.add("is-open");
-          activeQueueProcess = {wrapper, trigger, body};
-          body.querySelector("select, a, button")?.focus();
-        });
-      });
-      document.addEventListener("pointerdown", (event) => {
-        // 共享选择控件把选项浮层挂到 document.body（见 workspace-controls.js），
-        // 所以点浮层里的选项时事件目标是面板的「外面」。不排除它的话，选一个
-        // 租客就会把整个面板关掉，月份和提交按钮都来不及用。
-        if (event.target.closest(".workspace-select-popup")) return;
-        if (activeQueueProcess && !activeQueueProcess.wrapper.contains(event.target)) closeQueueProcess(false);
-      });
-      document.addEventListener("keydown", (event) => {
-        // 同上：Escape 来自浮层时只关浮层。事件目标是派发时就定下的，所以
-        // 即使浮层的处理器已经把浮层关掉、焦点还给触发器，这里仍然认得出它。
-        if (event.key === "Escape" && event.target instanceof Element && event.target.closest(".workspace-select-popup")) return;
-        if (event.key === "Escape") closeQueueProcess(true);
-      });
-      document.querySelectorAll("[data-tenant-period-match]").forEach((form) => {
-        const tenant = form.querySelector('select[name="tenant_id"]');
-        const period = form.querySelector('select[name="period"]');
-        if (!tenant || !period) return;
-        const filterPeriods = () => {
-          const selectedTenant = tenant.value;
-          let selectedStillAvailable = false;
-          Array.from(period.options).forEach((option) => {
-            if (!option.value) return;
-            const visible = !selectedTenant || option.dataset.tenant === selectedTenant;
-            option.hidden = !visible;
-            option.disabled = !visible;
-            if (visible && option.selected) selectedStillAvailable = true;
-          });
-          if (!selectedStillAvailable) period.value = "";
-          period.dispatchEvent(new Event("change", {bubbles: true}));
-        };
-        tenant.addEventListener("change", filterPeriods);
-        filterPeriods();
-      });
+      const id = sessionStorage.getItem("transactionReviewFocus");
+      if (!id || new URLSearchParams(location.search).has("match")) return;
+      sessionStorage.removeItem("transactionReviewFocus");
+      [...document.querySelectorAll("[data-match-trigger]")].find(el => el.dataset.matchTrigger === id)?.focus();
     })();
   </script>
 </body>
