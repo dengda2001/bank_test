@@ -19,6 +19,7 @@ This directory contains guidelines for backend development. Fill in each file wi
 | [Error Handling](./error-handling.md) | Error types, handling strategies | Partial |
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | Partial |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
+| [Batch Rent Matching](./transaction-match-batch.md) | Multi-tenant and cross-month receipt allocation contract | Complete |
 
 ---
 

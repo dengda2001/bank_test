@@ -242,7 +242,7 @@ func (a *app) renderRentWorkspaceDashboard(w http.ResponseWriter, r *http.Reques
 				return
 			}
 		}
-		review, reviewErr := newTransactionService(a.db).transactionMatchReview(r.Context(), userID, matchID, tenantID, historyPage)
+		review, reviewErr := newTransactionService(a.db).transactionMatchReviewForMonth(r.Context(), userID, matchID, tenantID, historyPage, strings.TrimSpace(r.URL.Query().Get("match_month")))
 		if errors.Is(reviewErr, gorm.ErrRecordNotFound) {
 			http.NotFound(w, r)
 			return

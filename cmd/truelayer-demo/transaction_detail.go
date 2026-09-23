@@ -97,6 +97,7 @@ func transactionListURL(query url.Values) string {
 	values.Del("match")
 	values.Del("match_tenant")
 	values.Del("match_history_page")
+	values.Del("match_month")
 	values.Del("error")
 	values.Del("message")
 	if len(values) == 0 {

@@ -35,12 +35,21 @@ type transactionReviewMonth struct {
 	Expected        string
 	Paid            string
 	Remaining       string
+	RemainingCents  int64
 	Coverage        string
 	SourceRemainder string
 	Note            string
 	Highlighted     bool
+	Viewed          bool
 	Selectable      bool
 	Evidence        []transactionReviewEvidence
+}
+
+type transactionReviewExistingAllocation struct {
+	TenantName string
+	Period     string
+	Amount     string
+	KindLabel  string
 }
 
 type transactionReviewHistory struct {
@@ -56,30 +65,39 @@ type transactionReviewHistory struct {
 }
 
 type transactionMatchReviewData struct {
-	Source             transactionPageRow
-	Reference          string
-	CloseURL           string
-	ReturnURL          string
-	FormAction         string
-	AllowDefer         bool
-	TenantOptions      []transactionReviewTenant
-	SelectedTenantID   uint64
-	IdentifiedTenant   bool
-	IdentityNote       string
-	Months             []transactionReviewMonth
-	History            []transactionReviewHistory
-	AllHistoryShown    bool
-	HistoryPage        int
-	HistoryPages       int
-	CanMatch           bool
-	PreviousHistoryURL string
-	NextHistoryURL     string
-	AllHistoryURL      string
-	ListValues         url.Values
-	Error              string
+	Source               transactionPageRow
+	Reference            string
+	CloseURL             string
+	ReturnURL            string
+	FormAction           string
+	AllowDefer           bool
+	TenantOptions        []transactionReviewTenant
+	SelectedTenantID     uint64
+	SelectedTenantName   string
+	IdentifiedTenant     bool
+	IdentityNote         string
+	Months               []transactionReviewMonth
+	ExistingAllocations  []transactionReviewExistingAllocation
+	SourceAmountCents    int64
+	SourceRemainingCents int64
+	RequestKey           string
+	History              []transactionReviewHistory
+	HistoryTotal         int
+	HistoryPage          int
+	HistoryPages         int
+	CanMatch             bool
+	PreviousHistoryURL   string
+	NextHistoryURL       string
+	AllHistoryURL        string
+	ListValues           url.Values
+	Error                string
 }
 
 func (s *transactionService) transactionMatchReview(ctx context.Context, userID, transactionID, requestedTenantID uint64, historyPage int) (transactionMatchReviewData, error) {
+	return s.transactionMatchReviewForMonth(ctx, userID, transactionID, requestedTenantID, historyPage, "")
+}
+
+func (s *transactionService) transactionMatchReviewForMonth(ctx context.Context, userID, transactionID, requestedTenantID uint64, historyPage int, requestedMonth string) (transactionMatchReviewData, error) {
 	if userID == 0 || transactionID == 0 {
 		return transactionMatchReviewData{}, gorm.ErrRecordNotFound
 	}
@@ -89,6 +107,33 @@ func (s *transactionService) transactionMatchReview(ctx context.Context, userID,
 	}
 	if source.Direction != "income" {
 		return transactionMatchReviewData{}, gorm.ErrRecordNotFound
+	}
+	var sourceAllocations []paymentAllocation
+	if err := s.db.WithContext(ctx).Where("user_id = ? AND payment_transaction_id = ?", userID, transactionID).Find(&sourceAllocations).Error; err != nil {
+		return transactionMatchReviewData{}, err
+	}
+	summary := summarizeTransactionAllocations(source, sourceAllocations)
+	if summary.RemainingCents <= 0 || source.MatchStatus == "ignored" {
+		return transactionMatchReviewData{}, gorm.ErrRecordNotFound
+	}
+	if requestedMonth != "" {
+		if requestedTenantID == 0 {
+			return transactionMatchReviewData{}, gorm.ErrRecordNotFound
+		}
+		var count int64
+		if err := s.db.WithContext(ctx).Model(&tenant{}).Where("id = ? AND user_id = ?", requestedTenantID, userID).Count(&count).Error; err != nil {
+			return transactionMatchReviewData{}, err
+		}
+		if count != 1 {
+			return transactionMatchReviewData{}, gorm.ErrRecordNotFound
+		}
+		period, err := parsePeriodMonth(requestedMonth)
+		if err != nil {
+			return transactionMatchReviewData{}, gorm.ErrRecordNotFound
+		}
+		if err := newMonthlyRentFactsService(s.db).ensureMonthlyRentFacts(ctx, userID, period, rentFactsIntentExplicitPayment); err != nil {
+			return transactionMatchReviewData{}, err
+		}
 	}
 	if period := transactionPeriodForModel(source).explicitMonth(); period != nil {
 		if err := newMonthlyRentFactsService(s.db).ensureMonthlyRentFacts(ctx, userID, *period, rentFactsIntentRead); err != nil {
@@ -106,14 +151,6 @@ func (s *transactionService) transactionMatchReview(ctx context.Context, userID,
 	var obligations []rentObligation
 	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Find(&obligations).Error; err != nil {
 		return transactionMatchReviewData{}, err
-	}
-	var sourceAllocations []paymentAllocation
-	if err := s.db.WithContext(ctx).Where("user_id = ? AND payment_transaction_id = ?", userID, transactionID).Find(&sourceAllocations).Error; err != nil {
-		return transactionMatchReviewData{}, err
-	}
-	summary := summarizeTransactionAllocations(source, sourceAllocations)
-	if summary.RemainingCents <= 0 || source.MatchStatus == "ignored" {
-		return transactionMatchReviewData{}, gorm.ErrRecordNotFound
 	}
 	decision := decideStrictRentMatch(paymentTransactionInputFromModel(source), payers, tenants, obligations)
 	identifiedID := decision.TenantID
@@ -143,11 +180,14 @@ func (s *transactionService) transactionMatchReview(ctx context.Context, userID,
 		selectedID = requestedTenantID
 	}
 	data := transactionMatchReviewData{
-		Source:           enrichTransactionPageRow(transactionPageRowFromModel(source), source, sourceAllocations),
-		Reference:        firstNonEmpty(source.Reference, "—"),
-		SelectedTenantID: selectedID,
-		IdentifiedTenant: identifiedID != 0 && selectedID == identifiedID,
-		IdentityNote:     identityNote,
+		Source:               enrichTransactionPageRow(transactionPageRowFromModel(source), source, sourceAllocations),
+		Reference:            firstNonEmpty(source.Reference, "—"),
+		SelectedTenantID:     selectedID,
+		IdentifiedTenant:     identifiedID != 0 && selectedID == identifiedID,
+		IdentityNote:         identityNote,
+		SourceAmountCents:    source.AmountCents,
+		SourceRemainingCents: summary.RemainingCents,
+		RequestKey:           recordID("review", time.Now().UTC()),
 	}
 	data.Source.DetailURL = "/transactions?detail=" + strconv.FormatUint(source.ID, 10)
 	selectedExists := selectedID == 0
@@ -156,10 +196,40 @@ func (s *transactionService) transactionMatchReview(ctx context.Context, userID,
 		data.TenantOptions = append(data.TenantOptions, transactionReviewTenant{ID: tenantRow.ID, Name: name, Selected: tenantRow.ID == selectedID})
 		if tenantRow.ID == selectedID {
 			selectedExists = true
+			data.SelectedTenantName = name
 		}
 	}
 	if !selectedExists {
 		return transactionMatchReviewData{}, gorm.ErrRecordNotFound
+	}
+	obligationByID := make(map[uint64]rentObligation, len(obligations))
+	for _, obligation := range obligations {
+		obligationByID[obligation.ID] = obligation
+	}
+	for _, allocation := range sourceAllocations {
+		if !ledgerAllocationIsEffective(allocation) {
+			continue
+		}
+		name := "未指定租客"
+		for _, tenantRow := range tenants {
+			if allocation.TenantID != nil && tenantRow.ID == *allocation.TenantID {
+				name = firstNonEmpty(tenantRow.DisplayAlias, tenantRow.Name)
+				break
+			}
+		}
+		period := ""
+		if allocation.RentObligationID != nil {
+			if obligation, ok := obligationByID[*allocation.RentObligationID]; ok {
+				period = monthStart(obligation.PeriodMonth).Format("2006-01")
+			}
+		}
+		kindLabel := map[string]string{allocationKindRent: "房租", allocationKindDeposit: "押金", allocationKindOther: "其他收入"}[ledgerAllocationKind(allocation)]
+		data.ExistingAllocations = append(data.ExistingAllocations, transactionReviewExistingAllocation{
+			TenantName: name,
+			Period:     period,
+			Amount:     formatMoney(centsToMoney(allocation.AmountCents), source.Currency, 2),
+			KindLabel:  kindLabel,
+		})
 	}
 	if selectedID != 0 {
 		selectedObligations := make([]rentObligation, 0)
@@ -193,6 +263,19 @@ func (s *transactionService) transactionMatchReview(ctx context.Context, userID,
 			}
 		}
 		data.Months = transactionReviewMonths(source, summary.RemainingCents, selectedObligations, allocations, transactions)
+		if requestedMonth != "" {
+			found := false
+			for index := range data.Months {
+				if data.Months[index].Period == requestedMonth {
+					data.Months[index].Viewed = true
+					found = true
+				}
+			}
+			if !found {
+				period, _ := parsePeriodMonth(requestedMonth)
+				data.Months = append([]transactionReviewMonth{{Period: requestedMonth, Label: formatMonthLabel(period), Viewed: true, Note: "该月没有可分配的租金责任，请核对房间租金计划。"}}, data.Months...)
+			}
+		}
 		for _, month := range data.Months {
 			data.CanMatch = data.CanMatch || month.Selectable
 		}
@@ -216,6 +299,7 @@ func (s *transactionService) transactionMatchReview(ctx context.Context, userID,
 		if err := q.Count(&count).Error; err != nil {
 			return transactionMatchReviewData{}, err
 		}
+		data.HistoryTotal = int(count)
 		data.HistoryPages = int((count + transactionReviewHistoryPageSize - 1) / transactionReviewHistoryPageSize)
 		if data.HistoryPages > 0 && historyPage > data.HistoryPages {
 			historyPage = data.HistoryPages
@@ -252,12 +336,13 @@ func transactionReviewMonths(source paymentTransaction, sourceRemaining int64, o
 		remaining := max(int64(0), obligation.ExpectedAmountCents-obligation.PaidAmountCents)
 		currency := firstNonEmpty(obligation.Currency, source.Currency, "EUR")
 		row := transactionReviewMonth{
-			Period:      period,
-			Label:       formatMonthLabel(obligation.PeriodMonth),
-			Expected:    formatMoney(centsToMoney(obligation.ExpectedAmountCents), currency, 2),
-			Paid:        formatMoney(centsToMoney(obligation.PaidAmountCents), currency, 2),
-			Remaining:   formatMoney(centsToMoney(remaining), currency, 2),
-			Highlighted: period == parsedPeriod,
+			Period:         period,
+			Label:          formatMonthLabel(obligation.PeriodMonth),
+			Expected:       formatMoney(centsToMoney(obligation.ExpectedAmountCents), currency, 2),
+			Paid:           formatMoney(centsToMoney(obligation.PaidAmountCents), currency, 2),
+			Remaining:      formatMoney(centsToMoney(remaining), currency, 2),
+			RemainingCents: remaining,
+			Highlighted:    period == parsedPeriod,
 		}
 		switch {
 		case !strings.EqualFold(currency, source.Currency):
@@ -396,6 +481,7 @@ func transactionReviewURL(query url.Values, transactionID uint64) string {
 	values.Del("match")
 	values.Del("match_tenant")
 	values.Del("match_history_page")
+	values.Del("match_month")
 	values.Set("match", strconv.FormatUint(transactionID, 10))
 	return "/transactions?" + values.Encode()
 }
@@ -414,6 +500,10 @@ func transactionReviewErrorText(code string) string {
 		return "该月份的租金计划刚刚变化，请重新核对。"
 	case "invalid_confirmation":
 		return "匹配请求无效，请重新选择租客和月份。"
+	case "invalid_batch_match":
+		return "分配清单无效，请核对租客、月份和金额。"
+	case "batch_match_failed":
+		return "分配未保存。租金或流水余额可能已变化，请核对后重试。"
 	default:
 		return ""
 	}
@@ -438,7 +528,7 @@ func (d *transactionMatchReviewData) setURLs(query url.Values) {
 	d.ReturnURL = d.CloseURL
 	d.FormAction = "/transactions"
 	d.ListValues = cloneQueryValues(query)
-	for _, key := range []string{"match", "match_tenant", "match_history_page", "detail", "error", "message"} {
+	for _, key := range []string{"match", "match_tenant", "match_history_page", "match_month", "detail", "error", "message"} {
 		d.ListValues.Del(key)
 	}
 	if d.HistoryPage > 1 {
@@ -458,9 +548,8 @@ func (d *transactionMatchReviewData) setWorkspaceURLs(filters rentWorkspaceFilte
 	d.ReturnURL = d.CloseURL
 	d.FormAction = "/rent-dashboard"
 	d.AllowDefer = isPendingMatchStatus(d.Source.MatchStatus)
-	d.AllHistoryShown = true
 	d.ListValues = cloneQueryValues(query)
-	for _, key := range []string{"match", "match_tenant", "match_history_page", "detail", "error", "message"} {
+	for _, key := range []string{"match", "match_tenant", "match_history_page", "match_month", "detail", "error", "message"} {
 		d.ListValues.Del(key)
 	}
 	d.AllHistoryURL = "/transactions?scope=all&payer=" + url.QueryEscape(d.Source.PayerName)

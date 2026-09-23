@@ -110,18 +110,19 @@ func TestTransactionListNoLongerRendersTheLegacyTable(t *testing.T) {
 func TestTransactionMatchDrawerKeepsPaidMonthEvidenceAndFullTenantList(t *testing.T) {
 	data := transactionMatchReviewData{
 		Source:           transactionPageRow{ID: "7", PayerName: "Aoife", Description: "August rent", AmountDisplay: "EUR 950.00", RemainingAmountDisplay: "EUR 950.00", ParsedPeriodDisplay: "2026-08"},
-		SelectedTenantID: 7, IdentifiedTenant: true, CanMatch: true,
+		SelectedTenantID: 7, SelectedTenantName: "Aoife", IdentifiedTenant: true, CanMatch: true,
+		SourceAmountCents: 95000, SourceRemainingCents: 95000, RequestKey: "review-test",
 		ReturnURL: "/transactions?match_status=pending", CloseURL: "/transactions?match_status=pending",
 		TenantOptions: []transactionReviewTenant{{ID: 7, Name: "Aoife", Selected: true}, {ID: 8, Name: "Bríd"}},
-		Months:        []transactionReviewMonth{{Period: "2026-08", Label: "2026年8月", Highlighted: true, Note: "本月已交清", Evidence: []transactionReviewEvidence{{Date: "2026-08-01", PayerName: "Aoife", Amount: "EUR 950.00", Description: "Original August rent", DetailURL: "/transactions?detail=42"}}}, {Period: "2026-09", Label: "2026年9月", Selectable: true, Coverage: "EUR 950.00"}},
+		Months:        []transactionReviewMonth{{Period: "2026-08", Label: "2026年8月", Highlighted: true, Note: "本月已交清", Evidence: []transactionReviewEvidence{{Date: "2026-08-01", PayerName: "Aoife", Amount: "EUR 950.00", Description: "Original August rent", DetailURL: "/transactions?detail=42"}}}, {Period: "2026-09", Label: "2026年9月", Selectable: true, Remaining: "EUR 950.00", RemainingCents: 95000}},
 	}
 	page := renderTransactionListPage(t, transactionListPageData{MatchReview: &data})
-	for _, marker := range []string{`role="dialog"`, `>Aoife</option>`, `>Bríd</option>`, `Original August rent`, `href="/transactions?detail=42"`, `name="period" value="2026-09"`, `name="tenant_id" value="7"`, `name="return_to" value="/transactions?match_status=pending"`} {
+	for _, marker := range []string{`role="dialog"`, `>Aoife</option>`, `>Bríd</option>`, `Original August rent`, `href="/transactions?detail=42"`, `data-period="2026-09"`, `data-tenant-id="7"`, `data-remaining-cents="95000"`, `action="/transactions/confirm-batch"`, `name="return_to" value="/transactions?match_status=pending"`} {
 		if !strings.Contains(page, marker) {
 			t.Errorf("drawer missing %q", marker)
 		}
 	}
-	if strings.Contains(page, `name="period" value="2026-08"`) {
+	if strings.Contains(page, `data-period="2026-08"`) {
 		t.Error("paid month is selectable")
 	}
 }

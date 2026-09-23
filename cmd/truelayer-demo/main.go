@@ -511,6 +511,7 @@ func newAppMux(a *app) *http.ServeMux {
 	mux.HandleFunc("/billing", a.handleBillingAlias)
 	mux.HandleFunc("/transactions", a.handleTransactions)
 	mux.HandleFunc("/transactions/confirm", a.handleRentMatchConfirmation)
+	mux.HandleFunc("/transactions/confirm-batch", a.handleRentMatchBatchConfirmation)
 	mux.HandleFunc("/transactions/rematch", a.handleTransactionRematch)
 	mux.HandleFunc("/transactions/allocate", a.handleTransactionAllocation)
 	mux.HandleFunc("/transactions/ignore", a.handleTransactionIgnore)
@@ -946,7 +947,7 @@ func (a *app) handleTransactions(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		review, reviewErr := newTransactionService(a.db).transactionMatchReview(r.Context(), userID, matchID, tenantID, historyPage)
+		review, reviewErr := newTransactionService(a.db).transactionMatchReviewForMonth(r.Context(), userID, matchID, tenantID, historyPage, strings.TrimSpace(r.URL.Query().Get("match_month")))
 		if errors.Is(reviewErr, gorm.ErrRecordNotFound) {
 			http.NotFound(w, r)
 			return
