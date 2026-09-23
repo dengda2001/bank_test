@@ -239,6 +239,10 @@ func (a *app) transactionDetailPageData(ctx context.Context, r *http.Request, us
 		return transactionDetailPageData{}, err
 	}
 	backURL := transactionListURL(r.URL.Query())
+	periodNote := row.ParsedPeriodSourceLabel
+	if source.Source != "truelayer" {
+		periodNote = firstNonEmpty(source.ParsedPeriodNote, source.ParsedPeriodSource)
+	}
 	data := transactionDetailPageData{
 		workspaceShell:   a.transactionDetailShell(r, userID, filters),
 		Transaction:      row,
@@ -254,7 +258,7 @@ func (a *app) transactionDetailPageData(ctx context.Context, r *http.Request, us
 		ProviderID:       firstNonEmpty(stringValue(source.ProviderTransactionID), "—"),
 		Reference:        firstNonEmpty(source.Reference, "—"),
 		ParsedPeriod:     row.ParsedPeriodDisplay,
-		ParsedPeriodNote: firstNonEmpty(source.ParsedPeriodNote, source.ParsedPeriodSource),
+		ParsedPeriodNote: periodNote,
 		RawRecord:        strings.TrimSpace(string(source.RawPayloadJSON)),
 		Allocations:      allocationRows,
 		AllocationCount:  effectiveAllocationCount(allocations),

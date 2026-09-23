@@ -49,6 +49,7 @@ type transactionReviewHistory struct {
 	Amount        string
 	Description   string
 	ParsedPeriod  string
+	PeriodSource  string
 	MatchedPeriod string
 	Status        string
 	DetailURL     string
@@ -89,8 +90,8 @@ func (s *transactionService) transactionMatchReview(ctx context.Context, userID,
 	if source.Direction != "income" {
 		return transactionMatchReviewData{}, gorm.ErrRecordNotFound
 	}
-	if source.ParsedPeriodMonth != nil {
-		if err := newMonthlyRentFactsService(s.db).ensureMonthlyRentFacts(ctx, userID, monthStart(*source.ParsedPeriodMonth), rentFactsIntentRead); err != nil {
+	if period := transactionPeriodForModel(source).explicitMonth(); period != nil {
+		if err := newMonthlyRentFactsService(s.db).ensureMonthlyRentFacts(ctx, userID, *period, rentFactsIntentRead); err != nil {
 			return transactionMatchReviewData{}, err
 		}
 	}
@@ -241,10 +242,8 @@ func transactionReviewMonths(source paymentTransaction, sourceRemaining int64, o
 			byObligation[*allocation.RentObligationID] = append(byObligation[*allocation.RentObligationID], allocation)
 		}
 	}
-	parsedPeriod := ""
-	if source.ParsedPeriodMonth != nil {
-		parsedPeriod = monthStart(*source.ParsedPeriodMonth).Format("2006-01")
-	}
+	periodEvidence := transactionPeriodForModel(source)
+	parsedPeriod := periodEvidence.display()
 	rows := make([]transactionReviewMonth, 0, len(obligations)+1)
 	seenPeriod := make(map[string]bool)
 	for _, obligation := range obligations {
@@ -271,6 +270,13 @@ func transactionReviewMonths(source paymentTransaction, sourceRemaining int64, o
 			row.Coverage = formatMoney(centsToMoney(coverage), source.Currency, 2)
 			row.SourceRemainder = formatMoney(centsToMoney(sourceRemaining-coverage), source.Currency, 2)
 		}
+		if row.Highlighted && !periodEvidence.Explicit {
+			if row.Note != "" {
+				row.Note = "转账月份建议，请核对后选择；" + row.Note
+			} else {
+				row.Note = "转账月份建议，请核对后选择"
+			}
+		}
 		for _, allocation := range byObligation[obligation.ID] {
 			transaction, ok := transactions[allocation.PaymentTransactionID]
 			if !ok || transaction.Direction != "income" {
@@ -288,7 +294,11 @@ func transactionReviewMonths(source paymentTransaction, sourceRemaining int64, o
 		rows = append(rows, row)
 	}
 	if parsedPeriod != "" && !seenPeriod[parsedPeriod] {
-		rows = append(rows, transactionReviewMonth{Period: parsedPeriod, Label: parsedPeriod, Highlighted: true, Note: "系统未找到该月租金责任，请核对入住与租金计划"})
+		note := "系统未找到该月租金责任，请核对入住与租金计划"
+		if !periodEvidence.Explicit {
+			note = "转账月份建议；" + note
+		}
+		rows = append(rows, transactionReviewMonth{Period: parsedPeriod, Label: parsedPeriod, Highlighted: true, Note: note})
 	}
 	sort.Slice(rows, func(i, j int) bool {
 		if rows[i].Highlighted != rows[j].Highlighted {
@@ -338,16 +348,15 @@ func (s *transactionService) transactionReviewHistoryRows(ctx context.Context, u
 	periodsByTransaction := transactionReviewMatchedPeriods(allocations, obligations)
 	for _, source := range history {
 		periods := periodsByTransaction[source.ID]
-		parsed := "—"
-		if source.ParsedPeriodMonth != nil {
-			parsed = monthStart(*source.ParsedPeriodMonth).Format("2006-01")
-		}
+		periodEvidence := transactionPeriodForModel(source)
+		parsed := firstNonEmpty(periodEvidence.display(), "—")
 		rows = append(rows, transactionReviewHistory{
 			Date:          transactionReviewDate(source.TransactionTime),
 			PayerName:     firstNonEmpty(stringValue(source.PayerName), "未知付款人"),
 			Amount:        formatMoney(centsToMoney(source.AmountCents), source.Currency, 2),
 			Description:   firstNonEmpty(source.Description, "无描述"),
 			ParsedPeriod:  parsed,
+			PeriodSource:  periodEvidence.Label,
 			MatchedPeriod: firstNonEmpty(strings.Join(periods, "、"), "—"),
 			Status:        transactionPageRowFromModel(source).MatchStatusLabel,
 			DetailURL:     "/transactions?detail=" + strconv.FormatUint(source.ID, 10),

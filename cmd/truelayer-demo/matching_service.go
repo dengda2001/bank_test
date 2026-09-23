@@ -107,8 +107,8 @@ func (s *transactionService) reconcilePendingRentTransactions(ctx context.Contex
 		if deferred {
 			continue
 		}
-		if transaction.ParsedPeriodMonth != nil && !transaction.ParsedPeriodMonth.IsZero() {
-			if err := facts.ensureMonthlyRentFacts(ctx, userID, *transaction.ParsedPeriodMonth, rentFactsIntentRead); err != nil {
+		if period := transactionPeriodForModel(transaction).explicitMonth(); period != nil {
+			if err := facts.ensureMonthlyRentFacts(ctx, userID, *period, rentFactsIntentRead); err != nil {
 				return err
 			}
 		}

@@ -117,7 +117,7 @@ func normalizePaymentTransactions(result demoResult) []paymentTransactionInput {
 			payerID := stablePayerID(firstNonEmpty(tx.PayerID, tx.RemitterID, tx.CounterpartyID, metaString(tx.Meta, "payer_id"), metaString(tx.Meta, "remitter_id"), metaString(tx.Meta, "counterparty_id")))
 			providerID := firstNonEmpty(tx.NormalisedProviderTransactionID, tx.ProviderTransactionID, metaString(tx.Meta, "normalised_provider_transaction_id"), metaString(tx.Meta, "provider_transaction_id"), metaString(tx.Meta, "bank_transaction_id"))
 			reference := firstNonEmpty(tx.Reference, metaString(tx.Meta, "payment_reference"), metaString(tx.Meta, "reference"), metaString(tx.Meta, "provider_reference"), metaString(tx.Meta, "remittance_information"), metaString(tx.Meta, "remittanceInformation"))
-			parsedPeriod, parsed := parseReferencedPeriod(tx.Description+" "+reference, firstNonZeroTime(ts))
+			period := bankTransactionPeriod(tx.Description, ts)
 			input := paymentTransactionInput{
 				Source:                "truelayer",
 				SourceBatchID:         firstNonEmpty(result.SyncRunID, result.FetchedAt),
@@ -133,9 +133,9 @@ func normalizePaymentTransactions(result demoResult) []paymentTransactionInput {
 				PayerID:               payerID,
 				PayerName:             payerName,
 				PayerNameKind:         firstNonEmpty(payerNameKind, "unknown"),
-				ParsedPeriodMonth:     optionalTime(parsedPeriod, parsed),
-				ParsedPeriodSource:    parsedPeriodSource(parsed),
-				ParsedPeriodNote:      parsedPeriodNote(tx.Description, reference, parsed),
+				ParsedPeriodMonth:     period.explicitMonth(),
+				ParsedPeriodSource:    parsedPeriodSource(period.Explicit),
+				ParsedPeriodNote:      parsedPeriodNote(tx.Description, period.Explicit),
 				MatchStatus:           "unmatched",
 				RawPayloadJSON:        raw,
 			}
@@ -430,6 +430,7 @@ type transactionPageRow struct {
 	ObjectLabel               string
 	RoomOnlyLabel             string
 	ParsedPeriodDisplay       string
+	ParsedPeriodSourceLabel   string
 	Description               string
 	AccountName               string
 	AccountID                 string
@@ -512,37 +513,35 @@ func transactionPageRowFromModel(row paymentTransaction) transactionPageRow {
 	if row.MatchedTenantID != nil {
 		tenantID = *row.MatchedTenantID
 	}
-	parsedPeriod := ""
-	if row.ParsedPeriodMonth != nil {
-		parsedPeriod = monthStart(*row.ParsedPeriodMonth).Format("2006-01")
-	}
+	period := transactionPeriodForModel(row)
 	return transactionPageRow{
-		ID:                     strconv.FormatUint(row.ID, 10),
-		InternalID:             strconv.FormatUint(row.ID, 10),
-		Direction:              row.Direction,
-		DirectionLabel:         directionLabel,
-		PayerName:              firstNonEmpty(stringValue(row.PayerName), "未知付款人"),
-		PayerNameKind:          firstNonEmpty(row.PayerNameKind, "unknown"),
-		PayerID:                firstNonEmpty(stringValue(row.PayerID), "无付款人编号"),
-		AmountDisplay:          formatMoney(centsToMoney(row.AmountCents), row.Currency, 2),
-		AmountInput:            strconv.FormatFloat(centsToMoney(row.AmountCents), 'f', 2, 64),
-		AllocatedAmountDisplay: formatMoney(0, row.Currency, 2),
-		RemainingAmountDisplay: formatMoney(centsToMoney(row.AmountCents), row.Currency, 2),
-		RemainingAmountInput:   strconv.FormatFloat(centsToMoney(row.AmountCents), 'f', 2, 64),
-		DateDisplay:            dateDisplay,
-		DateShort:              dateShort,
-		ParsedPeriodDisplay:    parsedPeriod,
-		Description:            firstNonEmpty(row.Description, "无描述"),
-		AccountName:            firstNonEmpty(stringValue(row.AccountName), "未知账户"),
-		AccountID:              stringValue(row.AccountID),
-		TransactionID:          firstNonEmpty(stringValue(row.ProviderTransactionID), "#"+strconv.FormatUint(row.ID, 10)),
-		ProviderTransactionID:  firstNonEmpty(stringValue(row.ProviderTransactionID), "无银行流水号"),
-		Source:                 row.Source,
-		MatchStatus:            row.MatchStatus,
-		MatchStatusLabel:       statusLabel,
-		MatchReason:            row.MatchReason,
-		ManualAdjustmentReason: row.ManualAdjustmentReason,
-		TenantID:               tenantID,
+		ID:                      strconv.FormatUint(row.ID, 10),
+		InternalID:              strconv.FormatUint(row.ID, 10),
+		Direction:               row.Direction,
+		DirectionLabel:          directionLabel,
+		PayerName:               firstNonEmpty(stringValue(row.PayerName), "未知付款人"),
+		PayerNameKind:           firstNonEmpty(row.PayerNameKind, "unknown"),
+		PayerID:                 firstNonEmpty(stringValue(row.PayerID), "无付款人编号"),
+		AmountDisplay:           formatMoney(centsToMoney(row.AmountCents), row.Currency, 2),
+		AmountInput:             strconv.FormatFloat(centsToMoney(row.AmountCents), 'f', 2, 64),
+		AllocatedAmountDisplay:  formatMoney(0, row.Currency, 2),
+		RemainingAmountDisplay:  formatMoney(centsToMoney(row.AmountCents), row.Currency, 2),
+		RemainingAmountInput:    strconv.FormatFloat(centsToMoney(row.AmountCents), 'f', 2, 64),
+		DateDisplay:             dateDisplay,
+		DateShort:               dateShort,
+		ParsedPeriodDisplay:     period.display(),
+		ParsedPeriodSourceLabel: period.Label,
+		Description:             firstNonEmpty(row.Description, "无描述"),
+		AccountName:             firstNonEmpty(stringValue(row.AccountName), "未知账户"),
+		AccountID:               stringValue(row.AccountID),
+		TransactionID:           firstNonEmpty(stringValue(row.ProviderTransactionID), "#"+strconv.FormatUint(row.ID, 10)),
+		ProviderTransactionID:   firstNonEmpty(stringValue(row.ProviderTransactionID), "无银行流水号"),
+		Source:                  row.Source,
+		MatchStatus:             row.MatchStatus,
+		MatchStatusLabel:        statusLabel,
+		MatchReason:             row.MatchReason,
+		ManualAdjustmentReason:  row.ManualAdjustmentReason,
+		TenantID:                tenantID,
 	}
 }
 
@@ -647,7 +646,23 @@ func applyTransactionFilters(q *gorm.DB, userID uint64, filters transactionFilte
 	}
 	if filters.Payer != "" {
 		like := "%" + filters.Payer + "%"
-		q = q.Where("(payment_transactions.payer_name LIKE ? OR payment_transactions.payer_id LIKE ?)", like, like)
+		q = q.Where(`(payment_transactions.payer_name LIKE ?
+            OR payment_transactions.payer_id LIKE ?
+            OR payment_transactions.description LIKE ?
+            OR EXISTS (
+                SELECT 1 FROM tenants AS search_tenant
+                WHERE search_tenant.user_id = payment_transactions.user_id
+                  AND (search_tenant.name LIKE ? OR search_tenant.display_alias LIKE ?)
+                  AND (search_tenant.id = payment_transactions.matched_tenant_id
+                       OR EXISTS (
+                           SELECT 1 FROM payment_allocations AS search_allocation
+                           WHERE search_allocation.user_id = payment_transactions.user_id
+                             AND search_allocation.payment_transaction_id = payment_transactions.id
+                             AND search_allocation.tenant_id = search_tenant.id
+                             AND search_allocation.status = ?
+                             AND search_allocation.voided_at IS NULL
+                       ))
+            ))`, like, like, like, like, like, allocationStatusConfirmed)
 	}
 	if filters.TenantID != 0 {
 		q = q.Where(`EXISTS (
@@ -728,16 +743,16 @@ func optionalTime(value time.Time, ok bool) *time.Time {
 
 func parsedPeriodSource(ok bool) string {
 	if ok {
-		return "description_reference"
+		return "description"
 	}
 	return ""
 }
 
-func parsedPeriodNote(description, reference string, ok bool) string {
+func parsedPeriodNote(description string, ok bool) string {
 	if !ok {
 		return ""
 	}
-	note := strings.TrimSpace(strings.Join([]string{description, reference}, " "))
+	note := strings.TrimSpace(description)
 	runes := []rune(note)
 	if len(runes) > 512 {
 		return string(runes[:512])

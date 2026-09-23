@@ -1075,7 +1075,11 @@ created, err := service.settleRentObligation(ctx, userID, obligationID)
   and balance/currency evidence without writing. Strict reconciliation may
   write a projection or allocation after a payer is explicitly remembered or
   after TrueLayer ingestion; it never uses arrival month as a rent-period
-  fallback.
+  fallback. For TrueLayer rows, only a month parsed from the description is an
+  explicit rent period; reference numbers are never month evidence. The arrival
+  month is shown as a tentative review suggestion and is never persisted as
+  `parsed_period_month`. Re-evaluate legacy `description_reference` rows from
+  their descriptions before reconciliation; keep existing confirmed allocations.
 - Sync coverage is authoritative only from persisted run/account rows. A
   partial or failed account result must not be shown as a complete yearly sync.
 

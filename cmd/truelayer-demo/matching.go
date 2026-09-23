@@ -62,6 +62,9 @@ func decideStrictRentMatch(tx paymentTransactionInput, payers []tenantPayer, ten
 	if tx.Direction != "income" {
 		return matchDecision{Status: "unmatched", Reason: "not income"}
 	}
+	if tx.Source == "truelayer" {
+		tx.ParsedPeriodMonth = bankTransactionPeriod(tx.Description, tx.TransactionTime).explicitMonth()
+	}
 	tenantByID := make(map[uint64]tenant, len(tenants))
 	for _, row := range tenants {
 		tenantByID[row.ID] = row

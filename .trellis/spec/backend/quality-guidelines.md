@@ -123,8 +123,8 @@ func (a *app) handleCallback(w http.ResponseWriter, r *http.Request) {
 
 #### 1. Scope / Trigger
 
-- Trigger: Any bank transaction matching or billing-history projection that derives a billing month from `Description` or `Reference`.
-- Keep date extraction in the shared `parseReferencedPeriod` path so matching and UI projections use the same interpretation.
+- Trigger: Any bank transaction matching or billing-history projection that derives a billing month from `Description`.
+- Keep date extraction in the shared `parseReferencedPeriod` path so matching and UI projections use the same interpretation; bank `Reference` is an identifier or raw note, not a rent-month source.
 
 #### 2. Signatures
 
@@ -136,13 +136,14 @@ func (a *app) handleCallback(w http.ResponseWriter, r *http.Request) {
 - Supported explicit formats include numeric month/year (`9/26`, `09/2026`), spaced English month/year (`Sep 2026`), Chinese year/month, and compact English month/year (`JULY26`, `SEP26`, `JULY2026`).
 - A two-digit year in a compact English token maps to `2000 + year`.
 - An explicit year in the description always takes precedence over `transactionTime`; `transactionTime` is only a fallback for month-only references such as `JULY`.
-- The parser returns the first valid period in the combined description/reference text, preserving the existing matching precedence.
+- For TrueLayer transactions, parse `Description` alone. If it has no recognizable period, the arrival month is a tentative UI suggestion only; keep `parsed_period_month` empty and do not auto-allocate.
+- Legacy `description_reference` rows must re-evaluate their original description before strict reconciliation because the old stored period may have come only from a reference number. Existing confirmed allocations stay unchanged.
 
 #### 4. Validation & Error Matrix
 
 - Valid month and year -> return the first day of that month with `true`.
 - Invalid month/year token -> ignore that token and continue with other supported formats; if none match, return the existing month-only or no-period fallback.
-- Unknown description text -> return `false` without inventing a year.
+- Unknown description text -> return `false` without inventing a year. A valid transaction timestamp may still supply a clearly labeled tentative display month.
 - Compact token such as `JULY26` with a transaction dated in 2027 -> return July 2026, never July 2027.
 
 #### 5. Good/Base/Bad Cases
@@ -155,6 +156,7 @@ func (a *app) handleCallback(w http.ResponseWriter, r *http.Request) {
 
 - Unit-test compact English month/year tokens with a transaction timestamp in a different year; assert both `2026-07-01` and `2026-09-01` examples.
 - Retain tests for numeric, spaced English, Chinese, month-only, and no-period inputs.
+- Cover reference-only and legacy combined-source rows so a plausible reference month cannot trigger strict auto matching.
 - Run the billing matching and full backend test suites after changing regex precedence or fallback behavior.
 
 #### 7. Wrong vs Correct
