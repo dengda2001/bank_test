@@ -7,10 +7,19 @@
   const error = drawer.querySelector('[data-draft-error]');
   const total = drawer.querySelector('[data-draft-total]');
   const remainder = drawer.querySelector('[data-draft-remainder]');
+  const progressTrack = drawer.querySelector('[data-progress-track]');
+  const confirmedSegment = drawer.querySelector('[data-progress-confirmed]');
+  const draftSegment = drawer.querySelector('[data-progress-draft]');
+  const remainingSegment = drawer.querySelector('[data-progress-remaining]');
+  const confirmedPercent = drawer.querySelector('[data-progress-confirmed-percent]');
+  const draftPercent = drawer.querySelector('[data-progress-draft-percent]');
+  const remainingPercent = drawer.querySelector('[data-progress-remaining-percent]');
   const remember = drawer.querySelector('[data-remember-tenant]');
   const queued = drawer.querySelector('[data-review-queued]');
   const submit = drawer.querySelector('.transaction-review-actions button[type=submit]');
+  const sourceAmount = Number(drawer.dataset.sourceCents);
   const sourceRemaining = Number(drawer.dataset.remainingCents);
+  const sourceAllocated = Math.max(0, sourceAmount - sourceRemaining);
   const storageKey = 'transactionReviewDraft:' + drawer.dataset.sourceId;
   const money = cents => new Intl.NumberFormat('en-IE', {style: 'currency', currency: 'EUR'}).format(cents / 100);
   const asCents = value => {
@@ -58,12 +67,11 @@
     for (const item of drafts) {
       const cents = asCents(item.amount);
       if (!Number.isFinite(cents) || cents <= 0) {
-        message = '每项分配都需要填写大于 €0 的金额，最多两位小数。';
-        break;
+        if (!message) message = '每项分配都需要填写大于 €0 的金额，最多两位小数。';
+        continue;
       }
       if (cents > item.maxCents) {
-        message = item.tenantName + ' · ' + item.label + ' 的金额超过该月未收。';
-        break;
+        if (!message) message = item.tenantName + ' · ' + item.label + ' 的金额超过该月未收。';
       }
       sum += cents;
     }
@@ -73,6 +81,17 @@
     }
     total.textContent = money(sum);
     remainder.textContent = money(sourceRemaining - sum);
+    const confirmedShare = sourceAmount > 0 ? Math.min(1, sourceAllocated / sourceAmount) : 0;
+    const draftShare = sourceAmount > 0 ? Math.min(1 - confirmedShare, sum / sourceAmount) : 0;
+    const remainingShare = Math.max(0, 1 - confirmedShare - draftShare);
+    confirmedSegment.style.width = (confirmedShare * 100) + '%';
+    draftSegment.style.width = (draftShare * 100) + '%';
+    remainingSegment.style.width = (remainingShare * 100) + '%';
+    confirmedPercent.textContent = Math.round(confirmedShare * 100) + '%';
+    draftPercent.textContent = Math.round(draftShare * 100) + '%';
+    remainingPercent.textContent = Math.round(remainingShare * 100) + '%';
+    progressTrack.classList.toggle('is-over', sum > sourceRemaining);
+    progressTrack.setAttribute('aria-label', '已确认 ' + money(sourceAllocated) + '；本次待确认 ' + money(sum) + '；' + (sum > sourceRemaining ? '超出可分配金额 ' + money(sum - sourceRemaining) : '确认后未分配 ' + money(sourceRemaining - sum)));
     queued.textContent = drafts.length ? '已加入 ' + drafts.length + ' 项 · 本次 ' + money(sum) : '还未加入分配';
     remainder.classList.toggle('is-negative', sum > sourceRemaining);
     submit.disabled = Boolean(message);
@@ -182,6 +201,8 @@
     const nextHistory = nextDrawer.querySelector('.transaction-review-history');
     drawer.querySelector('.transaction-review-history').replaceWith(nextHistory);
     if (!historyOnly) {
+      const nextIdentity = nextDrawer.querySelector('.transaction-review-identity');
+      drawer.querySelector('.transaction-review-identity').replaceWith(nextIdentity);
       const nextMonths = nextDrawer.querySelector('.transaction-review-months');
       drawer.querySelector('.transaction-review-months').replaceWith(nextMonths);
       form.elements.match_tenant.value = nextMonths.dataset.tenantId || '';
@@ -212,6 +233,12 @@
       replaceEvidence(historyLink.href, true).catch(cause => showError(cause.message));
       return;
     }
+    const tenantLink = event.target.closest('[data-review-tenant-link]');
+    if (tenantLink) {
+      event.preventDefault();
+      replaceEvidence(tenantLink.href).catch(cause => showError(cause.message));
+      return;
+    }
     if (event.target.closest('.transaction-review-actions a, .drawer-close')) {
       sessionStorage.removeItem(storageKey);
     }
@@ -225,6 +252,12 @@
     item.amount = input.value;
     validate();
     saveDrafts();
+  });
+  drawer.addEventListener('change', event => {
+    if (!event.target.matches('#transaction-review-tenant')) return;
+    if (event.target.value === drawer.querySelector('.transaction-review-months')?.dataset.tenantId) return;
+    drawer.querySelector('.transaction-review-smart-hint')?.remove();
+    drawer.querySelector('.transaction-review-suggestions')?.remove();
   });
   remember.addEventListener('change', () => {
     validate();
@@ -246,9 +279,14 @@
     saveDrafts();
     submit.disabled = true;
     fetch(form.action, {method: 'POST', credentials: 'same-origin', body: new FormData(form)})
-      .then(response => {
+      .then(async response => {
         if (!response.redirected) throw new Error('分配未保存，请重试。');
         const target = new URL(response.url);
+        if (target.searchParams.has('error')) {
+          const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+          const notice = doc.querySelector('.transaction-review-drawer .notice.error, .notice.error');
+          throw new Error(notice?.textContent.trim() || '分配未保存，请核对租金和流水余额后重试。');
+        }
         if (target.searchParams.get('message') === 'rent_confirmed') {
           sessionStorage.removeItem(storageKey);
         }
@@ -272,4 +310,5 @@
   } catch (_) {
     sessionStorage.removeItem(storageKey);
   }
+  validate(false);
 })();

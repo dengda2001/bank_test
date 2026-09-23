@@ -5,6 +5,16 @@ import (
 	"strings"
 )
 
+func parseRentMatchBatchForm(r *http.Request) error {
+	if err := r.ParseForm(); err != nil {
+		return err
+	}
+	if strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "multipart/form-data") {
+		return r.ParseMultipartForm(1 << 20)
+	}
+	return nil
+}
+
 func redirectTransactionBatchError(w http.ResponseWriter, r *http.Request, transactionID uint64, code string) {
 	if transactionID == 0 {
 		redirectTransactionResult(w, r, "error", code)
@@ -35,7 +45,8 @@ func (a *app) handleRentMatchBatchConfirmation(w http.ResponseWriter, r *http.Re
 		http.Error(w, "database session required", http.StatusBadRequest)
 		return
 	}
-	if err := r.ParseForm(); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	if err := parseRentMatchBatchForm(r); err != nil {
 		redirectTransactionResult(w, r, "error", "invalid_batch_match")
 		return
 	}

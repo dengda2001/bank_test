@@ -22,6 +22,8 @@
     </div>
     {{if eq .Error "invalid_workspace_filter"}}<div class="notice error">筛选条件无效，已恢复安全默认值。</div>{{end}}
     {{if eq .Error "confirmation_failed"}}<div class="notice error">匹配失败，请检查所选租客、月份和未收金额。</div>{{end}}
+    {{if eq .Error "invalid_batch_match"}}<div class="notice error">分配清单未保存，请重新打开流水核对。</div>{{end}}
+    {{if eq .Error "batch_match_failed"}}<div class="notice error">分配未保存，请核对租金和流水余额后重试。</div>{{end}}
     {{if eq .Error "transaction_action_failed"}}<div class="notice error">暂不处理失败，请检查这笔流水当前是否已有分配。</div>{{end}}
     {{if eq .Error "rent_facts_conflict"}}<div class="notice error">该租金月份的计划刚刚更新，请刷新后重新匹配流水。</div>{{end}}
     {{if eq .Error "rematch_failed"}}<div class="notice error">匹配调整失败，请刷新账期后重试。</div>{{end}}

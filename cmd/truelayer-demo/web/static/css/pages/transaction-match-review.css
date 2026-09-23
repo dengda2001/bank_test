@@ -17,8 +17,18 @@
 .transaction-review-reason, .transaction-review-coverage, .transaction-review-note { margin: 10px 0 0; color: var(--foreground-muted); font-size: 12px; }
 .transaction-review-source-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .transaction-review-tag { flex: none; padding: 3px 7px; border-radius: 5px; background: color-mix(in oklch,var(--accent) 12%,var(--surface)); color: var(--accent); font-size: 11px; font-weight: 650; }
-.transaction-review-suggestions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; color: var(--foreground-muted); font-size: 12px; }
+.transaction-review-smart-hint, .transaction-review-suggestions { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 10px; margin-top: 12px; padding: 11px 12px; border: 1px solid color-mix(in oklch,var(--accent) 35%,var(--border)); border-radius: 8px; background: color-mix(in oklch,var(--accent) 8%,var(--surface)); font-size: 12px; }
+.transaction-review-smart-hint > span, .transaction-review-suggestions > strong { padding: 4px 7px; border-radius: 5px; background: var(--accent); color: var(--surface); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.transaction-review-smart-hint > strong { font-size: 13px; }
+.transaction-review-smart-hint > small, .transaction-review-suggestions > span { color: var(--foreground-muted); font-size: 11px; }
 .transaction-review-suggestions .btn { min-height: 34px; padding: 5px 9px; }
+.transaction-review-roommates { display: grid; gap: 9px; margin-top: 12px; padding: 12px; border: 1px solid color-mix(in oklch,var(--accent) 24%,var(--border)); border-radius: 8px; background: color-mix(in oklch,var(--accent) 4%,var(--surface)); }
+.transaction-review-roommates > p { margin: 0; color: var(--foreground-muted); font-size: 12px; }
+.transaction-review-roommate-group { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.transaction-review-roommate-group > div:first-child { display: grid; gap: 3px; font-size: 12px; }
+.transaction-review-roommate-group small { color: var(--foreground-muted); font-size: 11px; }
+.transaction-review-roommate-group > div:last-child { display: flex; flex-wrap: wrap; gap: 6px; }
+.transaction-review-roommate-group .btn { min-height: 34px; padding: 5px 9px; }
 .transaction-review-tenant-form { display: grid!important; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 10px!important; margin-top: 12px; }
 .transaction-review-tenant-form select { width: 100%; min-width: 0; }
 .transaction-review-tenant-form .btn { min-height: 40px; }
@@ -61,11 +71,24 @@
 .transaction-review-draft label { display: grid; gap: 4px; font-size: 12px; }
 .transaction-review-draft input { width: 100%; min-height: 40px; }
 .transaction-review-draft-error { margin: 10px 0 0; color: var(--danger, #b42318); font-size: 12px; }
-.transaction-review-totals { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; margin-top: 14px; }
-.transaction-review-totals > div { display: grid; gap: 4px; padding: 10px; border-radius: 8px; background: var(--surface-muted); }
-.transaction-review-totals span { color: var(--foreground-muted); font-size: 11px; }
-.transaction-review-totals strong { font-size: 15px; overflow-wrap: anywhere; }
-.transaction-review-totals .is-negative { color: var(--danger, #b42318); }
+.transaction-review-progress { margin-top: 16px; }
+.transaction-review-progress-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 10px; font-size: 13px; }
+.transaction-review-progress-heading > span { color: var(--foreground-muted); }
+.transaction-review-progress-heading strong { font-size: 14px; text-align: right; }
+.transaction-review-progress-track { display: flex; width: 100%; height: 16px; overflow: hidden; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-muted); }
+.transaction-review-progress-track > span { display: block; height: 100%; flex: 0 0 auto; transition: width .18s ease; }
+.transaction-review-progress-confirmed, .transaction-review-progress-swatch.confirmed { background: var(--accent); }
+.transaction-review-progress-draft, .transaction-review-progress-swatch.draft { background: var(--warning); }
+.transaction-review-progress-remaining, .transaction-review-progress-swatch.remaining { background: var(--border-strong); }
+.transaction-review-progress-track.is-over { border-color: var(--danger); }
+.transaction-review-progress-track.is-over .transaction-review-progress-draft { background: var(--danger); }
+.transaction-review-progress-legend { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin-top: 12px; }
+.transaction-review-progress-legend > div { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: baseline; gap: 3px 8px; min-width: 0; }
+.transaction-review-progress-legend span { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--foreground-muted); font-size: 11px; }
+.transaction-review-progress-swatch { display: inline-block; width: 9px; height: 9px; flex: none; border-radius: 2px; }
+.transaction-review-progress-legend strong { grid-column: 1; overflow-wrap: anywhere; font-size: 15px; }
+.transaction-review-progress-legend small { grid-column: 2; color: var(--foreground-muted); font-size: 11px; }
+.transaction-review-progress-legend .is-negative { color: var(--danger); }
 .transaction-review-remember { display: grid; gap: 5px; max-width: 400px; margin-top: 14px; font-size: 12px; }
 .transaction-review-remember select { min-height: 40px; }
 .transaction-review-remember small { color: var(--foreground-muted); }
@@ -75,7 +98,7 @@
 .transaction-review-actions input { margin: 0; }
 .transaction-review-actions > div { display: flex; flex-wrap: wrap; gap: 8px; }
 .transaction-review-actions button:disabled { opacity: .45; cursor: not-allowed; }
-@media (max-width: 700px) { .transaction-review-columns { grid-template-columns: 1fr; } .transaction-review-totals { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 700px) { .transaction-review-columns { grid-template-columns: 1fr; } }
 @media (max-width: 640px) {
   .transaction-review-drawer { width: 100vw; height: 100dvh; max-height: none; padding: 18px 16px 0; border-radius: 0; }
   .transaction-review-drawer .panel-head { border-bottom: 1px solid var(--border); }
@@ -85,10 +108,16 @@
   .transaction-review-tenant-form { grid-template-columns: 1fr; }
   .transaction-review-tenant-form label { grid-column: 1/-1; }
   .transaction-review-tenant-form .btn { width: 100%; }
+  .transaction-review-roommate-group { align-items: stretch; flex-direction: column; gap: 8px; }
   .transaction-review-drawer .panel-head { top: 0; margin: 0 -16px; padding: 8px 16px 12px; }
   .transaction-review-drawer .transaction-review-actions { align-items: stretch; flex-direction: column; }
   .transaction-review-draft { grid-template-columns: minmax(0,1fr) auto; }
   .transaction-review-draft-name { grid-column: 1/-1; }
   .transaction-review-month-add { align-items: stretch; flex-direction: column; }
   .transaction-review-actions > div { display: flex; justify-content: space-between; gap: 8px; }
+}
+@media (max-width: 480px) {
+  .transaction-review-progress-legend { grid-template-columns: 1fr; gap: 0; }
+  .transaction-review-progress-legend > div { grid-template-columns: minmax(0,1fr) auto auto; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .transaction-review-progress-legend strong, .transaction-review-progress-legend small { grid-column: auto; }
 }

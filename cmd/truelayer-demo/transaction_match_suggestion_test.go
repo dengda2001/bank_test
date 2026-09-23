@@ -43,7 +43,7 @@ func TestManualTenantSuggestionLinkOnlyOpensReview(t *testing.T) {
 		t.Fatalf("suggestion must only open the review drawer: %q", link)
 	}
 	page := renderTransactionListPage(t, transactionListPageData{MatchReview: &review})
-	if !strings.Contains(page, "姓名相近的租客 · 仅供核对") || !strings.Contains(page, "Ardra M Punathil") {
+	if !strings.Contains(page, "智能建议") || !strings.Contains(page, "Ardra M Punathil") {
 		t.Fatalf("manual tenant suggestion is missing from review drawer")
 	}
 }

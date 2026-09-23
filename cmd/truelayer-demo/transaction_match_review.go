@@ -66,33 +66,35 @@ type transactionReviewHistory struct {
 }
 
 type transactionMatchReviewData struct {
-	Source               transactionPageRow
-	Reference            string
-	CloseURL             string
-	ReturnURL            string
-	FormAction           string
-	AllowDefer           bool
-	TenantOptions        []transactionReviewTenant
-	SuggestedTenants     []transactionReviewTenant
-	SelectedTenantID     uint64
-	SelectedTenantName   string
-	IdentifiedTenant     bool
-	IdentityNote         string
-	Months               []transactionReviewMonth
-	ExistingAllocations  []transactionReviewExistingAllocation
-	SourceAmountCents    int64
-	SourceRemainingCents int64
-	RequestKey           string
-	History              []transactionReviewHistory
-	HistoryTotal         int
-	HistoryPage          int
-	HistoryPages         int
-	CanMatch             bool
-	PreviousHistoryURL   string
-	NextHistoryURL       string
-	AllHistoryURL        string
-	ListValues           url.Values
-	Error                string
+	Source                transactionPageRow
+	Reference             string
+	CloseURL              string
+	ReturnURL             string
+	FormAction            string
+	AllowDefer            bool
+	TenantOptions         []transactionReviewTenant
+	SuggestedTenants      []transactionReviewTenant
+	RoommateGroups        []transactionReviewRoommateGroup
+	SelectedTenantID      uint64
+	SelectedTenantName    string
+	IdentifiedTenant      bool
+	IntelligentSuggestion bool
+	IdentityNote          string
+	Months                []transactionReviewMonth
+	ExistingAllocations   []transactionReviewExistingAllocation
+	SourceAmountCents     int64
+	SourceRemainingCents  int64
+	RequestKey            string
+	History               []transactionReviewHistory
+	HistoryTotal          int
+	HistoryPage           int
+	HistoryPages          int
+	CanMatch              bool
+	PreviousHistoryURL    string
+	NextHistoryURL        string
+	AllHistoryURL         string
+	ListValues            url.Values
+	Error                 string
 }
 
 func (s *transactionService) transactionMatchReview(ctx context.Context, userID, transactionID, requestedTenantID uint64, historyPage int) (transactionMatchReviewData, error) {
@@ -170,30 +172,40 @@ func (s *transactionService) transactionMatchReviewForMonth(ctx context.Context,
 			identifiedFromAllocation = true
 		}
 	}
+	selectedID := identifiedID
+	if requestedTenantID != 0 {
+		selectedID = requestedTenantID
+	}
 	identityNote := "系统尚未确认付款人对应的租客，请核对后选择。"
-	if identifiedID != 0 {
+	if identifiedID != 0 && selectedID == identifiedID {
 		identityNote = "根据已保存的付款人关系识别；请与银行原文核对。"
 		if identifiedFromAllocation {
 			identityNote = "根据这笔流水已有的租金分配预选；请与银行原文核对。"
 		}
 	}
-	selectedID := identifiedID
-	if requestedTenantID != 0 {
-		selectedID = requestedTenantID
+	suggestions := manualTenantSuggestions(stringValue(source.PayerName), source.PayerNameKind, tenants)
+	intelligentSuggestion := identifiedID != 0 && selectedID == identifiedID
+	if identifiedID == 0 {
+		for _, suggestion := range suggestions {
+			if selectedID != 0 && suggestion.ID == selectedID {
+				intelligentSuggestion = true
+			}
+		}
 	}
 	data := transactionMatchReviewData{
-		Source:               enrichTransactionPageRow(transactionPageRowFromModel(source), source, sourceAllocations),
-		Reference:            firstNonEmpty(source.Reference, "—"),
-		SelectedTenantID:     selectedID,
-		IdentifiedTenant:     identifiedID != 0 && selectedID == identifiedID,
-		IdentityNote:         identityNote,
-		SourceAmountCents:    source.AmountCents,
-		SourceRemainingCents: summary.RemainingCents,
-		RequestKey:           recordID("review", time.Now().UTC()),
+		Source:                enrichTransactionPageRow(transactionPageRowFromModel(source), source, sourceAllocations),
+		Reference:             firstNonEmpty(source.Reference, "—"),
+		SelectedTenantID:      selectedID,
+		IdentifiedTenant:      identifiedID != 0 && selectedID == identifiedID,
+		IntelligentSuggestion: intelligentSuggestion,
+		IdentityNote:          identityNote,
+		SourceAmountCents:     source.AmountCents,
+		SourceRemainingCents:  summary.RemainingCents,
+		RequestKey:            recordID("review", time.Now().UTC()),
 	}
 	data.Source.DetailURL = "/transactions?detail=" + strconv.FormatUint(source.ID, 10)
-	if identifiedID == 0 {
-		data.SuggestedTenants = manualTenantSuggestions(stringValue(source.PayerName), source.PayerNameKind, tenants)
+	if identifiedID == 0 && selectedID == 0 {
+		data.SuggestedTenants = suggestions
 	}
 	selectedExists := selectedID == 0
 	for _, tenantRow := range tenants {
@@ -207,6 +219,11 @@ func (s *transactionService) transactionMatchReviewForMonth(ctx context.Context,
 	if !selectedExists {
 		return transactionMatchReviewData{}, gorm.ErrRecordNotFound
 	}
+	roommates, err := loadTransactionReviewRoommates(ctx, s.db, userID, transactionReviewRoommateAnchors(selectedID, stringValue(source.PayerName), tenants), tenants, transactionReviewRoommateMonth(source, requestedMonth))
+	if err != nil {
+		return transactionMatchReviewData{}, err
+	}
+	data.RoommateGroups = roommates
 	obligationByID := make(map[uint64]rentObligation, len(obligations))
 	for _, obligation := range obligations {
 		obligationByID[obligation.ID] = obligation
@@ -582,5 +599,17 @@ func (d *transactionMatchReviewData) setSuggestionURLs(query url.Values) {
 		values.Set("match", d.Source.ID)
 		values.Set("match_tenant", strconv.FormatUint(d.SuggestedTenants[i].ID, 10))
 		d.SuggestedTenants[i].URL = d.FormAction + "?" + values.Encode()
+	}
+	for groupIndex := range d.RoommateGroups {
+		group := &d.RoommateGroups[groupIndex]
+		for roommateIndex := range group.Roommates {
+			values := cloneQueryValues(query)
+			values.Del("detail")
+			values.Del("match_history_page")
+			values.Set("match", d.Source.ID)
+			values.Set("match_tenant", strconv.FormatUint(group.Roommates[roommateIndex].ID, 10))
+			values.Set("match_month", group.Period)
+			group.Roommates[roommateIndex].URL = d.FormAction + "?" + values.Encode()
+		}
 	}
 }
