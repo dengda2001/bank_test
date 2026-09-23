@@ -1191,3 +1191,36 @@ Added vacant room rent plans, atomic room and tenant composite writes, tenant ro
 ### Next Steps
 
 - None - task complete
+
+
+## Session 33: 完成桌面列表排序与收款识别
+
+**Date**: 2026-09-23
+**Task**: 完成桌面列表排序与收款识别
+**Branch**: `main`
+
+### Summary
+
+完成桌面列表表头排序、筛选上下文保留、收款人身份识别与收款处理改进；测试与规范已更新。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `32bd4bc` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

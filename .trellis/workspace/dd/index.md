@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 32
-- **Last Active**: 2026-09-22
+- **Total Sessions**: 33
+- **Last Active**: 2026-09-23
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1193 | Active |
+| `journal-1.md` | ~1226 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 33 | 2026-09-23 | 完成桌面列表排序与收款识别 | `32bd4bc` | `main` |
 | 32 | 2026-09-22 | Tenant room rent setup | `b7f2d41`, `0ebad35`, `6e3f510`, `be1dfc7`, `5cde6c5`, `7320729` | `main` |
 | 31 | 2026-09-22 | 对象删除、匹配日历与租客搜索修复 | `e465b9a`, `3692312` | `main` |
 | 30 | 2026-09-22 | 房间入住与租金计划交付 | `80d34f0` | `main` |
