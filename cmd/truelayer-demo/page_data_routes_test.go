@@ -1,6 +1,7 @@
 package main
 
 import (
+	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -108,8 +109,8 @@ func TestBillsManualBalanceRequiresReasonField(t *testing.T) {
 			t.Fatalf("bills settle form missing manual-balance marker %q: %s", marker, form)
 		}
 	}
-	if !strings.Contains(page, "确认按剩余未付金额平账吗？") {
-		t.Fatal("bills page lost its manual-balance confirmation prompt")
+	if !strings.Contains(form, `data-confirm-title="确认平账"`) || !strings.Contains(form, `data-confirm-message="将对`) {
+		t.Fatal("bills page lost its manual-balance confirmation details")
 	}
 }
 
@@ -139,22 +140,61 @@ func TestCanonicalPageTemplatesExposeSemanticEntityIDs(t *testing.T) {
 
 func TestObjectListFiltersSearchAndStatus(t *testing.T) {
 	properties := []propertyPageRow{
-		{ID: 1, Name: "Canal House", Address: "Dublin 2", Status: "active"},
+		{ID: 1, Name: "Canal House", Address: "Dublin 2", SearchTerms: []string{"A-01", "Aoife Murphy", "Fi"}, Status: "active"},
 		{ID: 2, Name: "Park View", Address: "Cork", Status: "inactive"},
 	}
 	if got := filterPropertyPageRows(properties, "DUBLIN"); len(got) != 1 || got[0].ID != 1 {
 		t.Fatalf("property search result=%+v", got)
 	}
+	for _, term := range []string{"canal", "a-01", "aoife", "fi"} {
+		if got := filterPropertyPageRows(properties, term); len(got) != 1 || got[0].ID != 1 {
+			t.Fatalf("property search %q result=%+v", term, got)
+		}
+	}
 	rooms := []roomPageRow{
-		{ID: 1, RoomLabel: "A-01", PropertyName: "Canal House", TenantNames: []string{"Aoife Murphy"}, Status: "active"},
+		{ID: 1, RoomLabel: "A-01", PropertyName: "Canal House", TenantNames: []string{"Fi"}, SearchTerms: []string{"Aoife Murphy", "Fi"}, Status: "active"},
 		{ID: 2, RoomLabel: "B-02", PropertyName: "Park View", TenantNames: []string{"Chen Xi"}, Status: "inactive"},
 	}
 	if got := filterRoomPageRows(rooms, "AOIFE", "active"); len(got) != 1 || got[0].ID != 1 {
 		t.Fatalf("tenant room search result=%+v", got)
 	}
+	if got := filterRoomPageRows(rooms, "fi", "active"); len(got) != 1 || got[0].ID != 1 {
+		t.Fatalf("tenant alias room search result=%+v", got)
+	}
+	if got := filterRoomPageRows(rooms, "Aoife", "inactive"); len(got) != 0 {
+		t.Fatalf("room status filter was bypassed=%+v", got)
+	}
 	if got := filterRoomPageRows(rooms, "", "inactive"); len(got) != 1 || got[0].ID != 2 {
 		t.Fatalf("inactive room result=%+v", got)
 	}
+}
+
+func TestObjectListSearchAndFilterControlsHaveSeparateActions(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		page string
+	}{
+		{name: "properties", page: renderObjectList(t, propertyPageTemplate, propertyPageData{})},
+		{name: "rooms", page: renderObjectList(t, roomPageTemplate, roomPageData{})},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if !strings.Contains(test.page, `class="btn primary object-list-search-submit" type="submit">搜索</button>`) {
+				t.Fatal("search submit control missing")
+			}
+			if !strings.Contains(test.page, `class="btn subtle object-list-filter-toggle" type="button" aria-expanded="false">筛选</button>`) {
+				t.Fatal("advanced-filter disclosure missing")
+			}
+		})
+	}
+}
+
+func renderObjectList(t *testing.T, pageTemplate *template.Template, data any) string {
+	t.Helper()
+	var output strings.Builder
+	if err := pageTemplate.Execute(&output, data); err != nil {
+		t.Fatal(err)
+	}
+	return output.String()
 }
 
 func TestObjectListCollectionStatesMatchPrototypeLabelsAndFilters(t *testing.T) {

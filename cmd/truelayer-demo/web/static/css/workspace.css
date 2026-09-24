@@ -237,6 +237,37 @@
     .btn.danger { border-color: #fecaca; color: var(--danger); background: #fef2f2; }
     .btn.danger:hover { border-color: #fca5a5; background: #fee2e2; }
     .btn.subtle { background: var(--surface-muted); }
+    .danger-confirm-dialog {
+      width: min(440px, calc(100vw - 32px));
+      max-height: calc(100dvh - 32px);
+      margin: auto;
+      padding: 24px;
+      overflow: auto;
+      border: 1px solid color-mix(in oklch, var(--danger) 28%, var(--border));
+      border-radius: 14px;
+      background: var(--surface);
+      color: var(--foreground);
+    }
+    .danger-confirm-dialog::backdrop { background: rgb(17 24 39 / 58%); }
+    .danger-confirm-heading { display: flex; align-items: center; gap: 12px; }
+    .danger-confirm-heading h2 { margin: 0; font-size: 19px; line-height: 1.35; }
+    .danger-confirm-icon {
+      flex: none;
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: color-mix(in oklch, var(--danger) 12%, var(--surface));
+      color: var(--danger);
+      font-weight: 900;
+    }
+    .danger-confirm-dialog p { margin: 16px 0 24px; color: var(--foreground-subtle); line-height: 1.6; white-space: pre-line; }
+    .danger-confirm-actions { display: flex; justify-content: flex-end; gap: 10px; }
+    .danger-confirm-actions .btn { min-width: 96px; min-height: 44px; }
+    .danger-confirm-submit { border-color: var(--danger); background: var(--danger); color: #fff; }
+    .danger-confirm-submit:hover { border-color: oklch(45% .18 25); background: oklch(45% .18 25); }
+    .danger-confirm-submit:focus-visible { outline-color: var(--danger); }
     .summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
     .panel { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
     .metric { padding: 18px; min-height: 118px; }
@@ -678,6 +709,11 @@
       .table-wrap:not(.tenant-table-wrap):not(.expense-table-wrap) > table > tbody > tr > td { display: block; min-width: 0; padding: 0; border: 0; }
       .table-wrap:not(.tenant-table-wrap):not(.expense-table-wrap) > table > tbody > tr > td:last-child { position: static !important; background: transparent !important; box-shadow: none !important; }
       .table-wrap:not(.tenant-table-wrap):not(.expense-table-wrap) > table > tbody > tr > td .btn { min-height: 44px; }
+    }
+    @media (max-width: 640px) {
+      .danger-confirm-dialog { padding: 20px; }
+      .danger-confirm-actions { display: grid; grid-template-columns: 1fr 1fr; }
+      .danger-confirm-actions .btn { min-width: 0; }
     }
     @media (min-width: 600px) and (max-width: 640px) {
       .mobile-bottom-nav { left: 50%; right: auto; width: min(560px, 100vw); transform: translateX(-50%); }

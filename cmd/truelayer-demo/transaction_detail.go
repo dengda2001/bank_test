@@ -13,25 +13,33 @@ import (
 
 type transactionDetailPageData struct {
 	workspaceShell
-	Transaction      transactionPageRow
-	Title            string
-	Subtitle         string
-	StatusClass      string
-	BackURL          string
-	ActionBase       string
-	TransactionTime  string
-	AllocatedAmount  string
-	RemainingAmount  string
-	AllocationCount  int
-	SourceLabel      string
-	ProviderID       string
-	Reference        string
-	ParsedPeriod     string
-	ParsedPeriodNote string
-	RawRecord        string
-	HasRawRecord     bool
-	Allocations      []transactionDetailAllocationRow
-	Events           []transactionDetailEvent
+	Transaction       transactionPageRow
+	Title             string
+	Subtitle          string
+	StatusClass       string
+	BackURL           string
+	ActionBase        string
+	TransactionTime   string
+	AllocatedAmount   string
+	RemainingAmount   string
+	AllocationCount   int
+	ProgressConfirmed string
+	ProgressRemaining string
+	MatchURL          string
+	RevokeURL         string
+	CanReview         bool
+	MatchReview       *transactionMatchReviewData
+	Error             string
+	Message           string
+	SourceLabel       string
+	ProviderID        string
+	Reference         string
+	ParsedPeriod      string
+	ParsedPeriodNote  string
+	RawRecord         string
+	HasRawRecord      bool
+	Allocations       []transactionDetailAllocationRow
+	Events            []transactionDetailEvent
 	// TenantOptions feeds the 归类／拆分 select. The legacy table read this off
 	// the page-level transactionListPageData; the detail page has no such field, so it
 	// is built here from the tenants this handler already loads.
@@ -98,11 +106,23 @@ func transactionListURL(query url.Values) string {
 	values.Del("match_tenant")
 	values.Del("match_history_page")
 	values.Del("match_month")
+	values.Del("match_origin")
 	values.Del("error")
 	values.Del("message")
 	if len(values) == 0 {
 		return "/transactions"
 	}
+	return "/transactions?" + values.Encode()
+}
+
+func transactionNameSearchURL(query url.Values, name string) string {
+	values := cloneQueryValues(query)
+	for _, key := range []string{"detail", "match", "match_tenant", "match_history_page", "match_month", "match_origin", "tenant_id", "match_status", "error", "message"} {
+		values.Del(key)
+	}
+	values.Set("scope", "all")
+	values.Set("payer", name)
+	values.Set("page", "1")
 	return "/transactions?" + values.Encode()
 }
 
@@ -142,6 +162,21 @@ func (a *app) renderTransactionDetail(w http.ResponseWriter, r *http.Request, ke
 		return
 	}
 	data = detailData
+	if matchKey := strings.TrimSpace(r.URL.Query().Get("match")); matchKey != "" {
+		if matchKey != key || source.Direction != "income" || source.MatchStatus == "ignored" {
+			http.NotFound(w, r)
+			return
+		}
+		tenantID, _ := parseOptionalUint(r.URL.Query().Get("match_tenant"))
+		historyPage, _ := strconv.Atoi(r.URL.Query().Get("match_history_page"))
+		review, reviewErr := newTransactionService(a.db).transactionMatchReviewForMonthWithOrigin(r.Context(), userID, transactionID, tenantID, historyPage, strings.TrimSpace(r.URL.Query().Get("match_month")), r.URL.Query().Get("match_origin") != "roommate")
+		if reviewErr != nil {
+			http.Error(w, reviewErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		review.setDetailURLs(r.URL.Query())
+		data.MatchReview = &review
+	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := transactionDetailPageTemplate.Execute(w, data); err != nil {
@@ -171,6 +206,7 @@ func (a *app) transactionDetailPageData(ctx context.Context, r *http.Request, us
 	}
 
 	row := enrichTransactionPageRow(transactionPageRowFromModel(source), source, allocations)
+	summary := summarizeTransactionAllocations(source, allocations)
 	nameByTenant := make(map[uint64]string, len(tenants))
 	tenantByID := make(map[uint64]tenant, len(tenants))
 	for _, tenantRow := range tenants {
@@ -245,29 +281,62 @@ func (a *app) transactionDetailPageData(ctx context.Context, r *http.Request, us
 		periodNote = firstNonEmpty(source.ParsedPeriodNote, source.ParsedPeriodSource)
 	}
 	data := transactionDetailPageData{
-		workspaceShell:   a.transactionDetailShell(r, userID, filters),
-		Transaction:      row,
-		Title:            row.AmountDisplay + " · " + row.DirectionLabel,
-		Subtitle:         row.AccountName + " · " + row.DateDisplay,
-		StatusClass:      row.MatchStatus,
-		BackURL:          backURL,
-		ActionBase:       "/transactions",
-		TransactionTime:  formatTransactionTimestamp(source.TransactionTime),
-		AllocatedAmount:  row.AllocatedAmountDisplay,
-		RemainingAmount:  row.RemainingAmountDisplay,
-		SourceLabel:      transactionSourceLabel(source.Source),
-		ProviderID:       firstNonEmpty(stringValue(source.ProviderTransactionID), "—"),
-		Reference:        firstNonEmpty(source.Reference, "—"),
-		ParsedPeriod:     row.ParsedPeriodDisplay,
-		ParsedPeriodNote: periodNote,
-		RawRecord:        strings.TrimSpace(string(source.RawPayloadJSON)),
-		Allocations:      allocationRows,
-		AllocationCount:  effectiveAllocationCount(allocations),
-		Events:           events,
-		TenantOptions:    tenantOptionsFromRows(tenants),
+		workspaceShell:    a.transactionDetailShell(r, userID, filters),
+		Transaction:       row,
+		Title:             row.AmountDisplay + " · " + row.DirectionLabel,
+		Subtitle:          row.AccountName + " · " + row.DateDisplay,
+		StatusClass:       row.MatchStatus,
+		BackURL:           backURL,
+		ActionBase:        "/transactions",
+		TransactionTime:   formatTransactionTimestamp(source.TransactionTime),
+		AllocatedAmount:   row.AllocatedAmountDisplay,
+		RemainingAmount:   row.RemainingAmountDisplay,
+		ProgressConfirmed: transactionDetailProgressPercent(summary.AllocatedCents, source.AmountCents),
+		ProgressRemaining: transactionDetailProgressPercent(summary.RemainingCents, source.AmountCents),
+		CanReview:         source.Direction == "income" && source.MatchStatus != "ignored",
+		MatchURL:          transactionDetailMatchURL(r.URL.Query(), source.ID),
+		RevokeURL:         "/transactions/revoke?transaction_id=" + strconv.FormatUint(source.ID, 10) + "&return_to=" + url.QueryEscape(transactionDetailURL(r.URL.Query(), source.ID)),
+		Error:             r.URL.Query().Get("error"),
+		Message:           r.URL.Query().Get("message"),
+		SourceLabel:       transactionSourceLabel(source.Source),
+		ProviderID:        firstNonEmpty(stringValue(source.ProviderTransactionID), "—"),
+		Reference:         firstNonEmpty(source.Reference, "—"),
+		ParsedPeriod:      row.ParsedPeriodDisplay,
+		ParsedPeriodNote:  periodNote,
+		RawRecord:         strings.TrimSpace(string(source.RawPayloadJSON)),
+		Allocations:       allocationRows,
+		AllocationCount:   effectiveAllocationCount(allocations),
+		Events:            events,
+		TenantOptions:     tenantOptionsFromRows(tenants),
 	}
 	data.HasRawRecord = data.RawRecord != ""
 	return data, nil
+}
+
+func transactionDetailProgressPercent(part, total int64) string {
+	if total <= 0 {
+		return "0%"
+	}
+	return fmt.Sprintf("%.2f%%", 100*float64(max(int64(0), part))/float64(total))
+}
+
+func transactionDetailURL(query url.Values, transactionID uint64) string {
+	values := cloneQueryValues(query)
+	for _, key := range []string{"match", "match_tenant", "match_history_page", "match_month", "match_origin", "error", "message"} {
+		values.Del(key)
+	}
+	values.Set("detail", strconv.FormatUint(transactionID, 10))
+	return "/transactions?" + values.Encode()
+}
+
+func transactionDetailMatchURL(query url.Values, transactionID uint64) string {
+	values := cloneQueryValues(query)
+	for _, key := range []string{"match_tenant", "match_history_page", "match_month", "match_origin", "error", "message"} {
+		values.Del(key)
+	}
+	values.Set("detail", strconv.FormatUint(transactionID, 10))
+	values.Set("match", strconv.FormatUint(transactionID, 10))
+	return "/transactions?" + values.Encode()
 }
 
 func (a *app) transactionDetailShell(r *http.Request, userID uint64, filters transactionFilters) workspaceShell {
@@ -323,7 +392,7 @@ func transactionDetailAllocationRows(allocations []paymentAllocation, currency s
 					row.DueDate = obligation.DueDate.Format("2006-01-02")
 				}
 				row.ExpectedAmount = formatMoney(centsToMoney(obligation.ExpectedAmountCents), obligation.Currency, 2)
-				row.BillLabel = fmt.Sprintf("责任 #%d", obligation.ID)
+				row.BillLabel = "租金账单"
 				period := monthStart(obligation.PeriodMonth).Format("2006-01")
 				row.BillURL = fmt.Sprintf("/tenants/%d?from_month=%s&to_month=%s", obligation.TenantID, period, period)
 				if obligation.RentChargeID != 0 {
@@ -342,7 +411,7 @@ func transactionDetailAllocationRows(allocations []paymentAllocation, currency s
 			}
 		}
 		if row.BillLabel == "" {
-			row.BillLabel = "无租金责任"
+			row.BillLabel = "未关联租金账单"
 		}
 		if row.CreatedAt == "" {
 			row.CreatedAt = "—"
@@ -402,6 +471,7 @@ func transactionActionLabel(action string) string {
 		transactionActionDefer:             "从首页待处理队列暂缓",
 		transactionActionUndefer:           "重新加入首页待处理队列",
 		transactionActionRevokeAllocations: "撤销原有分配",
+		transactionActionRevokeAllocation:  "撤销一份租金分配",
 	}[action], "记录流水操作")
 }
 

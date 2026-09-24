@@ -16,7 +16,7 @@
   const remainingPercent = drawer.querySelector('[data-progress-remaining-percent]');
   const remember = drawer.querySelector('[data-remember-tenant]');
   const queued = drawer.querySelector('[data-review-queued]');
-  const submit = drawer.querySelector('.transaction-review-actions button[type=submit]');
+  const submit = drawer.querySelector('.transaction-review-actions button[form="transaction-review-confirm"]');
   const sourceAmount = Number(drawer.dataset.sourceCents);
   const sourceRemaining = Number(drawer.dataset.remainingCents);
   const sourceAllocated = Math.max(0, sourceAmount - sourceRemaining);
@@ -265,6 +265,65 @@
   });
 
   drawer.addEventListener('submit', event => {
+    const revokeForm = event.target.closest('[data-review-revoke-share]');
+    if (revokeForm) {
+      event.preventDefault();
+      const button = event.submitter || revokeForm.querySelector('button[type=submit]');
+      (async () => {
+        const confirmed = await window.RentOpsConfirm.open({
+          title: '撤销这一份匹配',
+          message: revokeForm.dataset.revokeMessage,
+          confirmLabel: '确认撤销这一份',
+          trigger: button
+        });
+        if (!confirmed) return;
+        button.disabled = true;
+        try {
+          const response = await fetch(revokeForm.action, {method: 'POST', credentials: 'same-origin', body: new FormData(revokeForm)});
+          if (!response.redirected) throw new Error('撤销未完成，请重试。');
+          const target = new URL(response.url);
+          if (target.searchParams.has('error') || target.searchParams.get('message') !== 'allocation_revoked') {
+            throw new Error('撤销未完成。该分配可能已变化，请刷新后核对。');
+          }
+          const current = new URL(location.href);
+          current.searchParams.set('message', 'allocation_revoked');
+          location.assign(current.href);
+        } catch (cause) {
+          button.disabled = false;
+          showError(cause.message);
+        }
+      })().catch(cause => showError(cause.message));
+      return;
+    }
+    const deferForm = event.target.closest('[data-review-defer]');
+    if (deferForm) {
+      event.preventDefault();
+      const button = event.submitter || deferForm.querySelector('button[type=submit]');
+      (async () => {
+        const confirmed = await window.RentOpsConfirm.open({
+          title: '暂不处理这笔流水',
+          message: '确认后，这笔流水不会再出现在首页的待人工处理列表。后续可到流水页筛选「待处理」状态，继续匹配。',
+          confirmLabel: '确认暂不处理',
+          trigger: button
+        });
+        if (!confirmed) return;
+        button.disabled = true;
+        try {
+          const response = await fetch(deferForm.action, {method: 'POST', credentials: 'same-origin', body: new FormData(deferForm)});
+          if (!response.redirected) throw new Error('暂不处理未保存，请重试。');
+          const target = new URL(response.url);
+          if (target.searchParams.has('error') || target.searchParams.get('message') !== 'transaction_action_saved') {
+            throw new Error('暂不处理未保存，请重试。');
+          }
+          sessionStorage.removeItem(storageKey);
+          location.assign(target.href);
+        } catch (cause) {
+          button.disabled = false;
+          showError(cause.message);
+        }
+      })().catch(cause => showError(cause.message));
+      return;
+    }
     const lookup = event.target.closest('[data-review-lookup], [data-review-month-lookup]');
     if (lookup) {
       event.preventDefault();

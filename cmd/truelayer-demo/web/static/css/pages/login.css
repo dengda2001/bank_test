@@ -1,0 +1,57 @@
+body {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.shell {
+  width: min(432px, 100%);
+  padding: 32px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 16px 44px rgb(23 40 40 / 5%);
+}
+
+.brand { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; }
+.brand-meta { margin-top: 3px; }
+.shell h1 { margin: 0; font-size: 28px; letter-spacing: -0.025em; }
+.sub { margin: 8px 0 24px; color: var(--foreground-muted); font-size: 14px; line-height: 1.6; }
+.shell form { display: grid; }
+.shell label { margin: 0 0 7px; color: var(--foreground-subtle); font-size: 13px; }
+.shell input {
+  width: 100%;
+  min-height: 44px;
+  margin-bottom: 20px;
+  background: var(--surface);
+}
+.shell input:focus-visible { outline-color: var(--accent-bright); }
+.shell input:-webkit-autofill,
+.shell input:-webkit-autofill:hover,
+.shell input:-webkit-autofill:focus { -webkit-text-fill-color: var(--foreground); caret-color: var(--foreground); }
+.shell button {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+.shell button:hover { border-color: var(--accent-bright); background: var(--accent-bright); }
+.shell .error {
+  margin: 0 0 20px;
+  padding: 11px 13px;
+  border: 1px solid color-mix(in oklch, var(--danger) 30%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in oklch, var(--danger) 7%, var(--surface));
+  color: var(--danger);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.hint { margin: 18px 0 0; color: var(--foreground-muted); font-size: 12px; line-height: 1.5; }
+
+@media (max-width: 640px) {
+  body { padding: 16px; }
+  .shell { padding: 24px; }
+}

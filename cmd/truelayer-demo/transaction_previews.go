@@ -9,7 +9,13 @@ import (
 )
 
 type transactionRevokePreviewData struct {
+	workspaceShell
 	TransactionID                 string
+	PayerName                     string
+	DateDisplay                   string
+	MatchStatusLabel              string
+	ParsedPeriodDisplay           string
+	ParsedPeriodSourceLabel       string
 	Description                   string
 	AmountDisplay                 string
 	AllocatedAmountDisplay        string
@@ -36,10 +42,7 @@ type transactionRevokePreview struct {
 	TenantNames map[uint64]string
 }
 
-var revokePreviewTemplate = template.Must(template.New("revoke-preview").Parse(`<!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>撤销流水匹配</title><style>
-:root{--canvas:#f3f4f6;--surface:#fff;--ink:#111827;--muted:#4b5563;--border:#d1d5db;--accent:#2563eb;--accent-dark:#1d4ed8;--sans:system-ui,-apple-system,"Segoe UI",sans-serif}*{box-sizing:border-box}body{margin:0;padding:32px;background:var(--canvas);color:var(--ink);font-family:var(--sans)}.card{max-width:760px;margin:auto;padding:24px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}h1{margin-top:0}dt{color:var(--muted);margin-top:14px}dd{margin:4px 0 0;overflow-wrap:anywhere}.allocation{padding:12px 0;border-top:1px solid var(--border)}label{display:block;margin-top:18px;color:var(--muted);font-weight:700}input{width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--border);border-radius:8px;color:var(--ink);background:#f9fafb}input:focus-visible{outline:2px solid #93c5fd;outline-offset:2px}button,a{display:inline-block;margin-top:16px;padding:10px 14px;border:1px solid var(--accent);border-radius:8px;color:#fff;background:var(--accent);text-decoration:none;cursor:pointer;font:inherit;font-weight:700}button:hover,a:hover{background:var(--accent-dark)}.back{margin-left:8px;color:var(--ink);border-color:var(--border);background:var(--surface)}.muted{color:var(--muted);font-size:13px}@media(max-width:640px){body{padding:16px}.card{padding:18px}button,a,input{min-height:44px}}
-</style></head><body><main class="card"><h1>撤销整笔匹配</h1><p class="muted">请核对原流水及所有有效分配。提交后只会作废这笔来源的当前有效分配，不删除银行原文。</p><dl><dt>原流水</dt><dd>{{.Description}}</dd><dt>来源金额</dt><dd>{{.AmountDisplay}}</dd><dt>当前已分配</dt><dd>{{.AllocatedAmountDisplay}}</dd><dt>当前余款</dt><dd>{{.CurrentRemainingAmountDisplay}}</dd><dt>撤销后余款</dt><dd>{{.RemainingAmountDisplay}}</dd></dl><h2>有效分配</h2>{{range .Allocations}}<div class="allocation"><strong>{{.Kind}}</strong> · {{.AmountDisplay}}{{if .TenantName}} · 租客：{{.TenantName}}{{end}}{{if .PeriodDisplay}} · 租金月：{{.PeriodDisplay}}{{end}}{{if .Note}}<div class="muted">备注：{{.Note}}</div>{{end}}</div>{{end}}<form method="post" action="/transactions/revoke"><input type="hidden" name="transaction_id" value="{{.TransactionID}}"><input type="hidden" name="return_to" value="{{.ReturnTo}}"><label for="reason">撤销原因（必填）</label><input id="reason" name="reason" required maxlength="512"><button type="submit">确认撤销</button><a class="back" href="{{.ReturnTo}}">返回流水</a></form></main></body></html>`))
+var revokePreviewTemplate = newEmbeddedWorkspacePageTemplate("revoke-preview", nil, "web/templates/pages/transaction-revoke.html")
 
 func (s *transactionService) previewTransactionRevoke(ctx context.Context, userID, transactionID uint64) (transactionRevokePreview, error) {
 	if userID == 0 || transactionID == 0 {
@@ -79,6 +82,7 @@ func (s *transactionService) previewTransactionRevoke(ctx context.Context, userI
 
 func transactionRevokePreviewDataFromModel(preview transactionRevokePreview, returnTo string) transactionRevokePreviewData {
 	summary := summarizeTransactionAllocations(preview.Source, preview.Allocations)
+	source := transactionPageRowFromModel(preview.Source)
 	rows := make([]transactionRevokePreviewAllocation, 0)
 	for _, allocation := range preview.Allocations {
 		if !ledgerAllocationIsEffective(allocation) {
@@ -104,6 +108,11 @@ func transactionRevokePreviewDataFromModel(preview transactionRevokePreview, ret
 	}
 	return transactionRevokePreviewData{
 		TransactionID:                 strconv.FormatUint(preview.Source.ID, 10),
+		PayerName:                     source.PayerName,
+		DateDisplay:                   source.DateDisplay,
+		MatchStatusLabel:              source.MatchStatusLabel,
+		ParsedPeriodDisplay:           source.ParsedPeriodDisplay,
+		ParsedPeriodSourceLabel:       source.ParsedPeriodSourceLabel,
 		Description:                   firstNonEmpty(preview.Source.Description, "无描述"),
 		AmountDisplay:                 formatMoney(centsToMoney(preview.Source.AmountCents), preview.Source.Currency, 2),
 		AllocatedAmountDisplay:        formatMoney(centsToMoney(summary.AllocatedCents), preview.Source.Currency, 2),

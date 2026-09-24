@@ -67,6 +67,8 @@ func TestTransactionDetailTemplateRendersPrototypeSectionsAndEscapesSourceData(t
 		AllocatedAmount: "EUR 0.00",
 		RemainingAmount: "EUR 640.00",
 		AllocationCount: 0,
+		CanReview:       true,
+		MatchURL:        "/transactions?detail=42&match=42",
 		SourceLabel:     "TrueLayer 银行同步",
 		Reference:       `<script>alert("x")</script>`,
 	})
@@ -75,13 +77,14 @@ func TestTransactionDetailTemplateRendersPrototypeSectionsAndEscapesSourceData(t
 	}
 	for _, marker := range []string{
 		"银行流水详情",
-		"关联责任与对象",
+		"流水分配",
+		"租客与入账分配",
 		"处理记录",
 		"原始流水",
 		"原始描述",
 		`class="code-block"`,
 		"交易时间",
-		"编辑分配",
+		"处理分配",
 		"标记非租金",
 		"&lt;script&gt;alert(&#34;x&#34;)&lt;/script&gt;",
 	} {
@@ -93,12 +96,11 @@ func TestTransactionDetailTemplateRendersPrototypeSectionsAndEscapesSourceData(t
 		t.Fatal("source reference rendered as executable markup")
 	}
 
-	// 原始流水是正文第一块：房东先看银行记了什么，再决定怎么匹配。位置是这次
-	// 改造的要点，所以钉住它排在其他正文板块之前，而不是只钉"页面上有这块"。
+	progressIndex := strings.Index(page, "分配进度")
+	allocationIndex := strings.Index(page, "租客与入账分配")
 	sourceIndex := strings.Index(page, "原始流水")
-	allocationsIndex := strings.Index(page, "关联责任与对象")
-	if sourceIndex < 0 || sourceIndex > allocationsIndex {
-		t.Fatalf("原始流水 is not the first block of the main column (source@%d, allocations@%d)", sourceIndex, allocationsIndex)
+	if progressIndex < 0 || allocationIndex < progressIndex || sourceIndex < allocationIndex {
+		t.Fatalf("detail order: progress@%d, allocation@%d, source@%d", progressIndex, allocationIndex, sourceIndex)
 	}
 
 	// 摘掉的两块不能悄悄回来：匹配建议是系统的猜测，猜错了要先推翻才能动手；
@@ -110,128 +112,32 @@ func TestTransactionDetailTemplateRendersPrototypeSectionsAndEscapesSourceData(t
 	}
 }
 
-// The detail header's two entries must reuse the list-row actions: the same
-// endpoints and parameters, plus the detail page's return target so acting from
-// the detail page lands back on the list it came from. Both entries always
-// render; which one carries a live form depends on the row state, exactly as it
-// does in the list row (修改匹配 needs an existing rent match, 标记非租金 does not).
-//
-// 确认匹配不再是页头第三格：它和右栏的「匹配流水」是同一个 action 的重复入口，
-// 页头那份已摘掉，所以下面确认相关的断言落在页面里唯一的那张匹配表单上。
-//
-// 页头现在是「编辑分配」「标记非租金」，再加一笔待处理的收入才有「归类／拆分」——
-// 这个入口是从老表格搬过来的，老表格删掉后它是归类唯一的下手处。
-func TestTransactionDetailHeaderActionsReuseListRowEndpoints(t *testing.T) {
-	render := func(t *testing.T, row transactionPageRow, tenantOptions []billingTenantOption) string {
-		t.Helper()
-		page, err := executeTemplate(transactionDetailPageTemplate, transactionDetailPageData{
-			workspaceShell:  workspaceShell{ActivePage: "transactions"},
-			ActionBase:      "/transactions",
-			BackURL:         "/transactions?page=2",
-			TransactionTime: "2026-09-12 09:18",
-			TenantOptions:   tenantOptions,
-			Transaction:     row,
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, entry := range []string{"编辑分配", "标记非租金"} {
-			if !strings.Contains(page, entry) {
-				t.Fatalf("transaction detail header is missing the %q entry", entry)
-			}
-		}
-		// 三格恒定：每一格都带自己的兜底说明，所以不给某类流水摘掉按钮——按钮
-		// 消失时房东只会以为是页面坏了。
-		if got := strings.Count(page, `class="transaction-head-action"`); got != 3 {
-			t.Fatalf("transaction detail header renders %d entries, want 3", got)
-		}
-		return page
+func TestTransactionDetailUsesReviewDrawerEntryAndSeparateNonRentAction(t *testing.T) {
+	page, err := executeTemplate(transactionDetailPageTemplate, transactionDetailPageData{
+		workspaceShell:  workspaceShell{ActivePage: "transactions"},
+		ActionBase:      "/transactions",
+		BackURL:         "/transactions?page=2",
+		MatchURL:        "/transactions?detail=42&match=42",
+		RevokeURL:       "/transactions/revoke?transaction_id=42",
+		CanReview:       true,
+		AllocationCount: 1,
+		Transaction:     transactionPageRow{ID: "42", Direction: "income", MatchStatus: "matched", MatchStatusLabel: "已关联"},
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	matched := render(t, transactionPageRow{
-		ID:                   "42",
-		Direction:            "income",
-		MatchStatus:          "matched",
-		MatchStatusLabel:     "已关联",
-		PayerName:            "C. CHEN",
-		Description:          "CREDIT TRANSFER\nC. CHEN",
-		CanEditRentMatch:     true,
-		RematchTenantOptions: []billingTenantOption{{ID: 9, Name: "Aoife"}},
-		RematchMonthOptions:  []billingMonthOption{{Period: "2026-09", Label: "2026年9月", Remaining: "€0.00"}},
-	}, nil)
-	for _, marker := range []string{
-		`action="/transactions/rematch"`,
-		`aria-label="修改匹配租客" data-searchable`,
-		`name="return_to" value="/transactions?page=2"`,
-		"2026-09-12 09:18",
-	} {
-		if !strings.Contains(matched, marker) {
-			t.Fatalf("matched header missing %q", marker)
+	for _, marker := range []string{`>处理分配</a>`, `>撤销整笔匹配</a>`, `>非租金归类</summary>`, `>租客与入账分配</h3>`, `>标记非租金</summary>`} {
+		if !strings.Contains(page, marker) {
+			t.Fatalf("detail missing %q", marker)
 		}
 	}
-	// 已关联的流水不给新的归类表单：钱已经落到某个租金月上了，再归一次是重复记账。
-	// 按钮还在，点开是一句"先在流水列表撤销匹配"。
-	if strings.Contains(matched, `action="/transactions/allocate"`) {
-		t.Fatalf("matched transaction still offers a fresh allocation form: %s", matched)
-	}
-	matchedAllocation := markupBetween(t, matched, `>归类／拆分</summary>`, `</details>`)
-	if !strings.Contains(matchedAllocation, "请先在流水列表撤销匹配") {
-		t.Fatalf("collapsed allocation entry gives no reason on a matched transaction: %s", matchedAllocation)
-	}
-
-	confirmable := render(t, transactionPageRow{
-		ID:                        "42",
-		Direction:                 "income",
-		MatchStatus:               "candidate",
-		RemainingAmountInput:      "640.00",
-		MatchStatusLabel:          "待确认",
-		CanConfirm:                true,
-		CandidateTenantName:       "C. CHEN",
-		CandidatePeriod:           "2026-09",
-		CandidateRentObligationID: 77,
-		RematchTenantOptions:      []billingTenantOption{{ID: 9, Name: "C. CHEN"}},
-		// 生产路径里这两个是配对的：租客下拉由 ManualMatchOptions 推出来
-		//（matching_service.go 的 rematchFilterOptions），所以 fixture 也照这个形状给。
-		ManualMatchTenantOptions: []billingTenantOption{{ID: 9, Name: "C. CHEN"}},
-		ManualMatchOptions:       []billingRentMatchOption{{TenantID: 9, TenantName: "C. CHEN", Period: "2026-09", PeriodLabel: "2026年9月", Remaining: "EUR 640.00"}},
-	}, []billingTenantOption{{ID: 9, Name: "C. CHEN"}, {ID: 11, Name: "Aoife Murphy"}})
-	for _, marker := range []string{
-		`action="/transactions/confirm"`,
-		`name="tenant_id" aria-label="选择匹配租客" data-searchable`,
-		`name="period"`,
-		`data-tenant="9"`,
-		"C. CHEN",
-		`action="/transactions/ignore"`,
-		`name="return_to" value="/transactions?page=2"`,
-	} {
-		if !strings.Contains(confirmable, marker) {
-			t.Fatalf("confirmable page missing %q", marker)
+	for _, old := range []string{`action="/transactions/rematch"`, `action="/transactions/confirm"`, `关联责任与对象`, `class="transaction-quick-match"`} {
+		if strings.Contains(page, old) {
+			t.Fatalf("detail still contains legacy flow %q", old)
 		}
 	}
-	if got := strings.Count(confirmable, `action="/transactions/confirm"`); got != 1 {
-		t.Fatalf("transaction detail renders %d confirm forms, want the single one in the right rail", got)
-	}
-	allocation := markupBetween(t, confirmable, `action="/transactions/allocate"`, `</form>`)
-	for _, marker := range []string{
-		"添加拆分项",
-		`name="allocation_kind"`,
-		`name="amount"`,
-		`name="tenant_id"`,
-		`name="period"`,
-		`name="return_to" value="/transactions?page=2"`,
-	} {
-		if !strings.Contains(allocation, marker) {
-			t.Fatalf("detail-page allocation form missing %q: %s", marker, allocation)
-		}
-	}
-	// 「添加拆分项」克隆的是 <template> 里的空行。克隆体不走 Go 渲染，所以租客选项
-	// 必须在模板里就展开好——少一个 range，拆出来的第二行就只能选「不指定租客」，
-	// 而页面上看不出任何异常。
-	clone := markupBetween(t, confirmable, `<template data-allocation-line-template>`, `</template>`)
-	for _, name := range []string{"C. CHEN", "Aoife Murphy"} {
-		if !strings.Contains(clone, name) {
-			t.Fatalf("allocation clone template lost tenant %q: %s", name, clone)
-		}
+	if got := strings.Count(page, `class="transaction-head-action"`); got != 2 {
+		t.Fatalf("header actions = %d, want separate non-rent actions only", got)
 	}
 }
 

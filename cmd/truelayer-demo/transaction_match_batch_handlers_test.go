@@ -24,10 +24,31 @@ func TestBatchMatchReadsBrowserFormData(t *testing.T) {
 	}
 	request := httptest.NewRequest("POST", "/transactions/confirm-batch", &body)
 	request.Header.Set("Content-Type", writer.FormDataContentType())
-	if err := parseRentMatchBatchForm(request); err != nil {
+	if err := parseTransactionForm(request); err != nil {
 		t.Fatal(err)
 	}
 	if request.Form.Get("transaction_id") != "71" || len(allocationFormValues(request.Form, "tenant_id")) != 1 {
 		t.Fatalf("browser FormData was not parsed: %v", request.Form)
+	}
+}
+
+func TestExactShareRevokeReadsBrowserFormData(t *testing.T) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	for key, value := range map[string]string{"allocation_id": "5", "transaction_id": "4", "idempotency_key": "share-5"} {
+		if err := writer.WriteField(key, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest("POST", "/transactions/revoke-allocation", &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	if err := parseTransactionForm(request); err != nil {
+		t.Fatal(err)
+	}
+	if request.Form.Get("allocation_id") != "5" || request.Form.Get("transaction_id") != "4" {
+		t.Fatalf("browser revoke FormData was not parsed: %v", request.Form)
 	}
 }

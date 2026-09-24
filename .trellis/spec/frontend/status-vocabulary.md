@@ -42,8 +42,8 @@ value.
   are a divergence waiting to happen: `/transactions` carried both a compact
   `match_status` selector and the filter bar's, and the compact one never gained
   the `ignored` option. A user entering through it could not reach 已忽略.
-- **Words come from the label function, not from the template.** A dropdown
-  `<option>` must read exactly what the row badge for that value reads. The rent
+- **Exact-status words come from the label function, not from the template.** A dropdown
+  `<option>` for a stored value must read exactly what the row badge for that value reads. The rent
   workspace dropdown said 逾期 / 已交满 / 未到期未缴 while its own badges said
   已逾期 / 已缴清 / 未缴.
 - **A control's own label counts as a word.** The surviving transactions selector
@@ -55,7 +55,8 @@ value.
 - **Rewording never moves values.** Deduplicating controls or unifying words must
   not touch a stored value, the validation whitelist, or any derivation function
   (`ledgerObligationStatus` in `ledger.go`, `workspaceWorstStatus` in
-  `rent_workspace.go`). Every value must remain reachable from some control.
+  `rent_workspace.go`). The visible transaction list intentionally groups the
+  four unfinished values under 待处理; exact legacy query values remain valid.
 - **Pseudo-filters are not values.** `pending` (transactions) and `unpaid` (rent
   workspace) are not in the whitelist as states — they expand to a set:
   `pendingMatchStatuses` is `candidate, needs_review, unmatched, partial`
@@ -76,17 +77,16 @@ value.
 | Status outside the whitelist | HTTP 400 (transactions), or falls back to `all` (rent filters) |
 | Pseudo-filter (`pending`, `unpaid`) | Accepted; expands to its set, filtered income-only (`pending`) |
 | Empty status | Renders all rows; the dropdown shows the 全部 option |
-| Status reachable from no control | Not valid — every whitelisted value needs a UI path |
+| Transaction list status | The outside selector offers 全部 (default), 待处理, 已关联, 已忽略 |
+| Individual `candidate`, `unmatched`, `needs_review`, `partial` query values | Valid for existing links; the outside selector groups them under 待处理 |
 
 ### 5. Good / Base / Bad Cases
 
-- Good: the transactions page has one `match_status` selector listing all seven
-  reachable values including 已忽略, and its tab for `matched` reads 已关联 —
-  the same word the row badge renders.
-- Base: `/transactions` renders the filter bar's status selector on wide screens
-  and the compact quick-filter form on narrow ones; the `/billing` page it
-  replaced had its own eight-option selector, which is why the two used to drift.
-  `/billing` now only forwards here, so there is one selector to keep honest.
+- Good: the transactions page has one `match_status` selector outside the
+  advanced filters on both wide and narrow screens, with four group options.
+- Base: `/transactions` previously rendered the filter bar's status selector on
+  wide screens and separate tabs on narrow ones. `/billing` now only forwards
+  here, so there is one visible selector to keep honest.
 - Bad: two selects for one parameter. They pass a test that only asserts "a
   selector exists", then drift apart on the next feature.
 - Bad: rewording a dropdown option without checking the badge — this is how 逾期
@@ -94,18 +94,17 @@ value.
 
 ### 6. Tests Required
 
-- `TestTransactionStatusSelectorExistsExactlyOnceAndReachesEveryStatus`: exactly
-  one status selector renders, it reaches every whitelisted value, and no retired
-  word (已匹配 / 未匹配 / 部分匹配) survives.
+- `TestTransactionStatusSelectorIsOutsideAdvancedFiltersWithFourOptions`: exactly
+  one status selector renders outside the advanced filters, offers the four
+  requested groups, and no retired word (已匹配 / 未匹配 / 部分匹配) survives.
 - `TestRentWorkspaceStatusFilterUsesTheBadgeVocabulary`: the option `value`s are
   unchanged **and** each option's text equals `workspaceStatusLabel` for that
   value, so the dropdown and the badge cannot drift again.
 - `TestRentWorkspaceConfirmationToastUsesTheBadgeVocabulary`: the `rent_confirmed`
   toast names the state with 已关联, not the retired 已匹配. Prose drifts on its
   own schedule; a state named in a sentence needs the same guard as a badge.
-- `TestTransactionRouteUsesPrototypeQueueAndKeepsLocalReturnPath`: the compact
-  filter form still carries its payer, period, and scope fields after its
-  duplicate selector was removed.
+- `TestTransactionRouteUsesPrototypeQueueAndKeepsLocalReturnPath`: the visible
+  filter form carries status, keyword, and arrival month fields.
 - **Assert on the shape that identifies the control.** `strings.Count(page,
   `name="match_status"`)` counts hidden pager inputs too — a page with one
   selector and one hidden field counts 2. Count `id="match_status"`, or assert
@@ -123,21 +122,20 @@ value.
   <option value="matched">已匹配</option>   <!-- filter bar says 已关联 -->
   <option value="">全部状态</option>
   <option value="partial">部分匹配</option> <!-- filter bar says 部分关联 -->
-  <!-- 已忽略 missing: unreachable from here -->
+  <!-- 已忽略 missing from this copy -->
 </select>
 ```
 
-#### Correct — one control, label and options from the badge's vocabulary
+#### Correct — one outside selector with the four requested groups
 
 ```html
-<!-- compact filter form: payer/period/scope only; status lives in the filter bar -->
-<label for="match_status">关联状态<select id="match_status" name="match_status" onchange="this.form.requestSubmit()">
-  <option value="">全部状态</option>
+<!-- the always-visible quick filter owns status on desktop and mobile -->
+<select id="match_status" name="match_status" aria-label="关联状态" onchange="this.form.requestSubmit()">
+  <option value="">全部</option>
+  <option value="pending" {{if eq .MatchStatusSelection "pending"}}selected{{end}}>待处理</option>
   <option value="matched" {{if eq .MatchStatusSelection "matched"}}selected{{end}}>已关联</option>
-  <option value="partial" {{if eq .MatchStatusSelection "partial"}}selected{{end}}>部分关联</option>
   <option value="ignored" {{if eq .MatchStatusSelection "ignored"}}selected{{end}}>已忽略</option>
-  <!-- …all whitelisted values, each word matching its row badge -->
-</select></label>
+</select>
 ```
 
 ---

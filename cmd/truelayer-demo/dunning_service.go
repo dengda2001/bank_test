@@ -352,7 +352,7 @@ func (s *dunningService) send(ctx context.Context, userID uint64, periodMonth ti
 			reserved, _, err := s.reserveDunningAttempt(ctx, attempt)
 			if err != nil {
 				if errors.Is(err, errDunningFactsChanged) {
-					result.Error, result.Skipped = "账单责任已更新，请刷新后重试", true
+					result.Error, result.Skipped = "租金账单已更新，请刷新后重试", true
 					results = append(results, result)
 					continue
 				}
@@ -369,7 +369,7 @@ func (s *dunningService) send(ctx context.Context, userID uint64, periodMonth ti
 			reserved, _, err := s.reserveDunningAttempt(ctx, attempt)
 			if err != nil {
 				if errors.Is(err, errDunningFactsChanged) {
-					result.Error, result.Skipped = "账单责任已更新，请刷新后重试", true
+					result.Error, result.Skipped = "租金账单已更新，请刷新后重试", true
 					results = append(results, result)
 					continue
 				}
@@ -385,7 +385,7 @@ func (s *dunningService) send(ctx context.Context, userID uint64, periodMonth ti
 			reserved, _, err := s.reserveDunningAttempt(ctx, attempt)
 			if err != nil {
 				if errors.Is(err, errDunningFactsChanged) {
-					result.Error, result.Skipped = "账单责任已更新，请刷新后重试", true
+					result.Error, result.Skipped = "租金账单已更新，请刷新后重试", true
 					results = append(results, result)
 					continue
 				}
@@ -403,7 +403,7 @@ func (s *dunningService) send(ctx context.Context, userID uint64, periodMonth ti
 			reserved, _, err := s.reserveDunningAttempt(ctx, attempt)
 			if err != nil {
 				if errors.Is(err, errDunningFactsChanged) {
-					result.Error, result.Skipped = "账单责任已更新，请刷新后重试", true
+					result.Error, result.Skipped = "租金账单已更新，请刷新后重试", true
 					results = append(results, result)
 					continue
 				}
@@ -417,7 +417,7 @@ func (s *dunningService) send(ctx context.Context, userID uint64, periodMonth ti
 		reserved, existing, err := s.reserveDunningAttempt(ctx, attempt)
 		if err != nil {
 			if errors.Is(err, errDunningFactsChanged) {
-				result.Error, result.Skipped = "账单责任已更新，请刷新后重试", true
+				result.Error, result.Skipped = "租金账单已更新，请刷新后重试", true
 				results = append(results, result)
 				continue
 			}

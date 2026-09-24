@@ -19,7 +19,7 @@
           <div>
             <div class="eyebrow">房产详情</div>
             <h1>{{.Property.Name}}</h1>
-            <div class="identity-meta"><span>{{.Property.CityRegion}}</span><span>{{.Property.RoomCount}} 个房间</span><span>{{.Property.ResponsibilityCount}} 条责任记录</span><span class="detail-status {{.Property.CollectionStatus}}">{{if .Property.CollectionStatusLabel}}{{.Property.CollectionStatusLabel}}{{else}}{{.Property.StatusLabel}}{{end}}</span></div>
+            <div class="identity-meta"><span>{{.Property.CityRegion}}</span><span>{{.Property.RoomCount}} 个房间</span><span>{{.Property.ResponsibilityCount}} 条租客租金记录</span><span class="detail-status {{.Property.CollectionStatus}}">{{if .Property.CollectionStatusLabel}}{{.Property.CollectionStatusLabel}}{{else}}{{.Property.StatusLabel}}{{end}}</span></div>
           </div>
         </div>
         <div class="actions"><a class="btn" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}&amp;list_sort={{.ListSort}}&amp;edit=1">编辑房产</a><a class="btn" href="/properties/{{.Property.ID}}?period={{.Period}}&amp;list_status={{.ListStatus}}&amp;list_search={{.ListSearch}}&amp;list_collection={{.ListCollection}}&amp;list_sort={{.ListSort}}&amp;expense=1">新增支出</a><a class="btn primary" href="/dunning?period={{.Period}}">提醒未收租客</a></div>
@@ -43,7 +43,7 @@
           </form>
           <section class="drawer-danger-zone" aria-labelledby="property-danger-title">
             <div><h3 id="property-danger-title">删除房产</h3><p class="tiny">房产下还有房间、租金或支出记录时删不掉，系统会拦下来；不再使用时可以改用停用。确认删除后资料无法恢复。</p></div>
-            <form method="post" action="/properties/{{.Property.ID}}" class="delete-object-form"><input type="hidden" name="action" value="delete"><input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="list_status" value="{{.ListStatus}}"><input type="hidden" name="list_search" value="{{.ListSearch}}"><input type="hidden" name="list_collection" value="{{.ListCollection}}"><input type="hidden" name="list_sort" value="{{.ListSort}}"><button class="btn danger" type="submit" data-confirm="true" data-confirm-message="删除房产「{{.Property.Name}}」及其资料？若仍有关联房间、租金或支出记录，系统会拒绝。">删除房产</button></form>
+            <form method="post" action="/properties/{{.Property.ID}}" class="delete-object-form"><input type="hidden" name="action" value="delete"><input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="list_status" value="{{.ListStatus}}"><input type="hidden" name="list_search" value="{{.ListSearch}}"><input type="hidden" name="list_collection" value="{{.ListCollection}}"><input type="hidden" name="list_sort" value="{{.ListSort}}"><button class="btn danger" type="submit" data-confirm="true" data-confirm-title="删除房产" data-confirm-label="确认删除房产" data-confirm-message="删除房产「{{.Property.Name}}」及其资料？若仍有关联房间、租金或支出记录，系统会拒绝。">删除房产</button></form>
           </section>
         </section>
       </div>

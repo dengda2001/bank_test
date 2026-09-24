@@ -414,6 +414,8 @@ type transactionPageRow struct {
 	DetailURL                 string
 	ReturnURL                 string
 	MatchURL                  string
+	PayerSearchURL            string
+	TenantSearchURL           string
 	Direction                 string
 	DirectionLabel            string
 	PayerName                 string
@@ -680,9 +682,9 @@ func applyTransactionFilters(q *gorm.DB, userID uint64, filters transactionFilte
                              AND search_allocation.payment_transaction_id = payment_transactions.id
                              AND search_allocation.tenant_id = search_tenant.id
                              AND search_allocation.status = ?
-                             AND search_allocation.voided_at IS NULL
+                             AND search_allocation.allocation_kind IN (?, ?, ?, '')
                        ))
-            ))`, like, like, like, like, like, allocationStatusConfirmed)
+            ))`, like, like, like, like, like, allocationStatusConfirmed, allocationKindRent, allocationKindDeposit, allocationKindOther)
 	}
 	if filters.TenantID != 0 {
 		q = q.Where(`EXISTS (

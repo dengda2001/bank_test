@@ -67,6 +67,8 @@
   if (!form || !property || !room || !month || !version || !roomPlan || !rentPreview || !rentAmount || !dueDay || !responsibility || !existing || !existingRows || !newResponsibility || !preview) return;
 
   const amount = (cents, currency) => new Intl.NumberFormat("zh-CN", {style: "currency", currency: currency || "EUR", minimumFractionDigits: 2}).format(cents / 100);
+  const emptyRoomOption = room.options[0];
+  const allRoomOptions = Array.from(room.options).slice(1);
   const selectedRoom = () => room.options[room.selectedIndex];
   const plansForOption = (option) => {
     if (!option?.value) return [];
@@ -130,7 +132,7 @@
       overview.textContent = "已填写合计 " + amount(specified, plan.currency) + " · 无需均分";
     }
     const title = document.createElement("strong");
-    title.textContent = "预计每人责任";
+    title.textContent = "预计每人应缴";
     preview.append(title, overview);
     const list = document.createElement("div");
     for (const value of values) {
@@ -187,15 +189,10 @@
   };
   const filterRooms = () => {
     const propertyID = property.value;
-    for (const option of Array.from(room.options)) {
-      if (!option.value) continue;
-      const hasPlan = plansForOption(option).some((plan) => plan.effective_from_month <= month.value && (!plan.effective_to_month || plan.effective_to_month >= month.value));
-      const visible = Boolean(propertyID) && option.dataset.propertyId === propertyID && hasPlan;
-      option.hidden = !visible;
-      option.disabled = !visible;
-    }
-    const option = selectedRoom();
-    if (option?.value && option.disabled) room.value = "";
+    const previousRoomID = room.value;
+    const matchingRooms = allRoomOptions.filter((option) => propertyID && option.dataset.propertyId === propertyID);
+    room.replaceChildren(emptyRoomOption, ...matchingRooms);
+    room.value = matchingRooms.some((option) => option.value === previousRoomID) ? previousRoomID : "";
     refreshPlan();
   };
   property.addEventListener("change", filterRooms);

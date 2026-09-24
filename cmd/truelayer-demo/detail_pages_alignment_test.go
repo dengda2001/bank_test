@@ -91,7 +91,7 @@ func TestRoomDetailUnallocatedCellRendersBothStates(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		cell := `<article><span>未分配</span><strong>` + unallocated + `</strong><small>收款中尚未归属责任</small></article>`
+		cell := `<article><span>未分配</span><strong>` + unallocated + `</strong><small>收款尚未分配给租客</small></article>`
 		if !strings.Contains(page, cell) {
 			t.Fatalf("room detail 代付分配详情 has no 未分配 cell for value %q", unallocated)
 		}
@@ -105,7 +105,7 @@ func TestRoomDetailUnallocatedCellRendersBothStates(t *testing.T) {
 
 	// 未分配 and 未覆盖 are different quantities; a fix that substituted one for
 	// the other would collapse these two values.
-	if !strings.Contains(withBalance, `<article><span>未覆盖责任</span><strong>€640.00</strong>`) {
+	if !strings.Contains(withBalance, `<article><span>未收金额</span><strong>€640.00</strong>`) {
 		t.Fatal("未覆盖责任 cell no longer renders the responsibility balance")
 	}
 	if !strings.Contains(withoutBalance, `<strong>€0.00</strong>`) {

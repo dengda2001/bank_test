@@ -39,10 +39,7 @@ func TestTransactionRouteUsesPrototypeQueueAndKeepsLocalReturnPath(t *testing.T)
 	for _, marker := range []string{
 		`class="content transaction-route-page"`,
 		`<span class="transaction-mobile-copy">流水处理</span>`,
-		`class="transaction-route-tabs"`,
-		`href="/transactions?match_status=pending"`,
-		`href="/transactions?match_status=matched"`,
-		`href="/transactions?scope=all"`,
+		`<select id="match_status" name="match_status"`,
 		`class="transaction-route-mobile-list"`,
 		`<th>入账用途</th>`,
 		`class="transaction-review-card"`,
@@ -53,21 +50,15 @@ func TestTransactionRouteUsesPrototypeQueueAndKeepsLocalReturnPath(t *testing.T)
 			t.Errorf("transaction route missing %q", marker)
 		}
 	}
-	// The compact form used to carry its own 关联状态 selector next to this one.
-	// It is gone: the two drifted apart, and the surviving selector owns the question.
 	quickFilters := markupBetween(t, page, `<form class="transaction-route-quickfilter"`, `</form>`)
-	if strings.Contains(quickFilters, `<select name="match_status"`) {
-		t.Errorf("compact filter form duplicates the status selector the filter bar already owns: %s", quickFilters)
-	}
-	for _, kept := range []string{`name="scope"`, `name="payer"`, `name="period"`} {
+	for _, kept := range []string{`id="match_status"`, `name="payer"`, `name="period"`} {
 		if !strings.Contains(quickFilters, kept) {
 			t.Errorf("compact filter form lost %q: %s", kept, quickFilters)
 		}
 	}
 	advancedFilters := markupBetween(t, page, `<form class="filterbar"`, `</form>`)
-	advancedStatus := markupBetween(t, advancedFilters, `<select id="match_status"`, `</select>`)
-	if !strings.Contains(advancedStatus, `onchange="this.form.requestSubmit()"`) {
-		t.Errorf("match-status selector does not submit its filter form on change: %s", advancedStatus)
+	if strings.Contains(advancedFilters, `<select id="match_status"`) {
+		t.Errorf("advanced filter still owns the visible status selector: %s", advancedFilters)
 	}
 	actionStart := strings.Index(page, `<td class="route-txn-action">`)
 	if actionStart < 0 {
@@ -78,7 +69,7 @@ func TestTransactionRouteUsesPrototypeQueueAndKeepsLocalReturnPath(t *testing.T)
 		t.Fatal("transaction row action cell is not closed")
 	}
 	actionCell := page[actionStart : actionStart+actionEnd]
-	if !strings.Contains(actionCell, `href="/transactions?detail=7&amp;match_status=pending"`) || !strings.Contains(actionCell, `>匹配流水</a>`) {
+	if !strings.Contains(actionCell, `href="/transactions?detail=7&amp;match_status=pending"`) || !strings.Contains(actionCell, `>处理分配</a>`) {
 		t.Errorf("directly matchable transaction row must keep both detail and match actions: %s", actionCell)
 	}
 }
@@ -167,42 +158,33 @@ func TestTenantPeriodHelperReadsBothAmountsAndMarksThemSet(t *testing.T) {
 	}
 }
 
-// The compact form and the filter bar each carried a 关联状态 selector, and they
-// drifted: the compact one never gained 已忽略, so a reader who used it could not
-// reach ignored rows at all. The filter bar keeps the only one, and it has to stay
-// able to reach every status the filter parser accepts.
-func TestTransactionStatusSelectorExistsExactlyOnceAndReachesEveryStatus(t *testing.T) {
+func TestTransactionStatusSelectorIsOutsideAdvancedFiltersWithFourOptions(t *testing.T) {
 	page := renderTransactionListPage(t, transactionListPageData{
-		workspaceShell: workspaceShell{ActivePage: "transactions"},
-		CanonicalPath:  "/transactions",
-		// Non-empty on purpose: the pager then renders its own hidden
-		// name="match_status" field, which must not be mistaken for a selector.
-		MatchStatusSelection: "partial",
+		workspaceShell:       workspaceShell{ActivePage: "transactions"},
+		CanonicalPath:        "/transactions",
+		MatchStatusSelection: "ignored",
 	})
-
-	// The survivor carries an id; the compact one did not. Counting the bare
-	// name="match_status" would also catch the pager's hidden field, so both shapes
-	// are asserted separately.
 	if got := strings.Count(page, `id="match_status"`); got != 1 {
 		t.Fatalf("transactions page renders %d status selectors, want 1: %s", got, page)
 	}
-	if strings.Contains(page, `<select name="match_status"`) {
-		t.Error("transactions page still renders the retired compact status selector")
+	quickFilters := markupBetween(t, page, `<form class="transaction-route-quickfilter"`, `</form>`)
+	advancedFilters := markupBetween(t, page, `<form class="filterbar"`, `</form>`)
+	if strings.Contains(advancedFilters, `<select id="match_status"`) || !strings.Contains(advancedFilters, `type="hidden" name="match_status" value="ignored"`) {
+		t.Errorf("advanced filters do not preserve the visible status choice: %s", advancedFilters)
 	}
 	status := markupBetween(t, page, `<select id="match_status"`, `</select>`)
 	for _, option := range []string{
-		`value="pending"`, `value="matched"`, `value="partial"`,
-		`value="candidate"`, `value="unmatched"`, `value="needs_review"`, `value="ignored"`,
+		`value=""`, `value="pending"`, `value="matched"`, `value="ignored"`,
 	} {
 		if !strings.Contains(status, option) {
-			t.Errorf("the surviving status selector cannot reach %s: %s", option, status)
+			t.Errorf("status selector missing %s: %s", option, status)
 		}
 	}
-
-	// The selector's own label has to keep the word its options use. It read
-	// 关联状态 while every option under it said 关联 — the same split, one line up.
-	if !strings.Contains(page, `for="match_status">关联状态<`) {
-		t.Error("the status selector's label does not use the 关联 word its own options use")
+	if strings.Count(status, `<option`) != 4 || !strings.Contains(status, `<option value="ignored" selected>已忽略</option>`) {
+		t.Errorf("status selector choices are not the four requested values: %s", status)
+	}
+	if !strings.Contains(quickFilters, status) {
+		t.Error("status selector is not outside the advanced filter panel")
 	}
 
 	// 已关联 is the app-wide word for matched, borrowed from the status labels the
@@ -214,17 +196,40 @@ func TestTransactionStatusSelectorExistsExactlyOnceAndReachesEveryStatus(t *test
 	}
 }
 
-// The filter bar carried thirteen controls, including a 排序 dropdown and a 每页
-// dropdown that duplicate what the table headings and the pager now do. It keeps
-// one control per question asked of the reader.
-func TestTransactionFilterBarKeepsOnlyTheSixQuestions(t *testing.T) {
+func TestTransactionListStatusDefaultsToAllAndGroupsOldLinks(t *testing.T) {
+	for _, tc := range []struct {
+		query       url.Values
+		wantScope   string
+		wantStatus  string
+		wantPending bool
+	}{
+		{query: url.Values{}, wantScope: "all"},
+		{query: url.Values{"match_status": {"pending"}}, wantScope: "pending", wantPending: true},
+		{query: url.Values{"match_status": {"matched"}}, wantScope: "matched", wantStatus: "matched"},
+		{query: url.Values{"match_status": {"ignored"}}, wantScope: "ignored", wantStatus: "ignored"},
+		{query: url.Values{"match_status": {"candidate"}}, wantScope: "pending", wantPending: true},
+		{query: url.Values{"scope": {"all"}, "match_status": {"pending"}}, wantScope: "all"},
+	} {
+		filters, scope := transactionListFiltersFromQuery(tc.query)
+		if scope != tc.wantScope || filters.MatchStatus != tc.wantStatus || filters.PendingOnly != tc.wantPending {
+			t.Errorf("query %v: scope=%q status=%q pending=%t", tc.query, scope, filters.MatchStatus, filters.PendingOnly)
+		}
+	}
+	page := renderTransactionListPage(t, transactionListPageData{})
+	status := markupBetween(t, page, `<select id="match_status"`, `</select>`)
+	if !strings.Contains(status, `<option value="" selected>全部</option>`) {
+		t.Errorf("empty query does not show 全部 by default: %s", status)
+	}
+}
+
+func TestTransactionFilterBarKeepsDetailedQuestions(t *testing.T) {
 	page := renderTransactionListPage(t, transactionListPageData{
 		Page: 1, PageSize: 50, TotalTransactions: 3, TotalPages: 1,
 		PeriodFilter: "2026-09", MatchStatusSelection: "pending",
 	})
 	filterBar := markupBetween(t, page, `<form class="filterbar"`, `</form>`)
 
-	for _, expected := range []string{`id="payer"`, `id="tenant_id"`, `id="tenant_id" name="tenant_id" data-searchable`, `id="period"`, `id="rent_period"`, `id="allocation"`, `id="direction"`, `id="match_status"`} {
+	for _, expected := range []string{`id="payer"`, `id="tenant_id"`, `id="tenant_id" name="tenant_id" data-searchable`, `id="period"`, `id="rent_period"`, `id="allocation"`, `id="direction"`, `type="hidden" name="match_status" value="pending"`} {
 		if !strings.Contains(filterBar, expected) {
 			t.Fatalf("filter bar lost %q: %s", expected, filterBar)
 		}
@@ -235,9 +240,7 @@ func TestTransactionFilterBarKeepsOnlyTheSixQuestions(t *testing.T) {
 		}
 	}
 
-	// 待处理 is no longer its own checkbox: it is the first option of 关联状态, and
-	// a link that still carries pending=1 has to light it up.
-	matchStatus := markupBetween(t, filterBar, `<select id="match_status"`, `</select>`)
+	matchStatus := markupBetween(t, page, `<select id="match_status"`, `</select>`)
 	if !strings.Contains(matchStatus, `<option value="pending" selected>待处理`) {
 		t.Fatalf("关联状态 does not absorb the 待处理 filter: %s", matchStatus)
 	}
@@ -333,85 +336,20 @@ func TestTransactionListShowsDescriptionAndOnlyKnownPropertyRoom(t *testing.T) {
 	}
 }
 
-func TestTransactionListUsesExplicitOneClickMatchAndLimitedRematch(t *testing.T) {
+func TestTransactionListUsesSharedReviewForNewAndMatchedIncome(t *testing.T) {
 	page := renderTransactionListPage(t, transactionListPageData{
 		TransactionRows: []transactionPageRow{
-			{
-				ID:                        "7",
-				MatchURL:                  "/transactions?match=7",
-				Direction:                 "income",
-				MatchStatus:               "unmatched",
-				MatchStatusLabel:          "未关联",
-				CandidateTenantID:         12,
-				CandidateTenantName:       "Aoife Murphy",
-				CandidateRentObligationID: 20,
-				CandidatePeriod:           "2026-09",
-				CanConfirm:                true,
-				ManualMatchTenantOptions:  []billingTenantOption{{ID: 12, Name: "Aoife Murphy"}},
-				ManualMatchOptions:        []billingRentMatchOption{{TenantID: 12, TenantName: "Aoife Murphy", Period: "2026-09", PeriodLabel: "2026年9月", Remaining: "EUR 950.00"}},
-			},
-			{
-				ID:                   "8",
-				Direction:            "income",
-				MatchStatus:          "matched",
-				MatchStatusLabel:     "已关联",
-				CanRematch:           true,
-				CanEditRentMatch:     true,
-				RematchTenantOptions: []billingTenantOption{{ID: 22, Name: "Bríd Murphy"}},
-				RematchMonthOptions:  []billingMonthOption{{Period: "2026-10", Label: "2026年10月", Remaining: "EUR 950.00"}},
-			},
+			{ID: "7", MatchURL: "/transactions?match=7", Direction: "income", MatchStatus: "unmatched", MatchStatusLabel: "未关联"},
+			{ID: "8", MatchURL: "/transactions?match=8", Direction: "income", MatchStatus: "matched", MatchStatusLabel: "已关联", ReturnURL: "/transactions?scope=all"},
 		},
 	})
-
-	// 直接匹配走「租客 + 月份」两个控件，不再让前端挑一条租金责任记录的 ID：
-	// 月份用日历组件选，责任记录由服务端按租客+月份反查。
-	for _, expected := range []string{"匹配流水", `href="/transactions?match=7"`, "修改匹配", `action="/transactions/rematch"`, `aria-label="修改匹配租客"`, `aria-label="修改租金月份"`, "Bríd Murphy", "2026年10月"} {
+	for _, expected := range []string{`href="/transactions?match=7"`, `href="/transactions?match=8"`, ">处理分配</a>", ">撤销整笔匹配</a>"} {
 		if !strings.Contains(page, expected) {
-			t.Fatalf("transaction list missing explicit match control %q: %s", expected, page)
+			t.Fatalf("transaction list missing %q", expected)
 		}
 	}
-	rematchStart := strings.Index(page, `<form method="post" action="/transactions/rematch">`)
-	if rematchStart < 0 {
-		t.Fatal("transaction list missing rematch form")
-	}
-	rematchEnd := strings.Index(page[rematchStart:], `</form>`)
-	if rematchEnd < 0 {
-		t.Fatal("transaction list rematch form is not closed")
-	}
-	rematchMarkup := page[rematchStart : rematchStart+rematchEnd]
-	if strings.Contains(rematchMarkup, `name="rent_obligation_id"`) {
-		t.Fatalf("rematch form should not use a combined rent-obligation selector: %s", rematchMarkup)
-	}
-}
-
-// 一笔已关联的流水本来在行里常驻两个 100% 宽的下拉框，状态早就定了，控件却占满整列。
-// 它们现在收在 <details> 里：默认只渲染一颗「修改匹配」按钮，点开才出现选择控件。
-func TestTransactionListRematchSelectsStayBehindTheRematchButton(t *testing.T) {
-	page := renderTransactionListPage(t, transactionListPageData{TransactionRows: []transactionPageRow{{
-		ID:                   "8",
-		Direction:            "income",
-		MatchStatus:          "matched",
-		MatchStatusLabel:     "已关联",
-		CanRematch:           true,
-		CanEditRentMatch:     true,
-		RematchTenantOptions: []billingTenantOption{{ID: 22, Name: "Bríd Murphy"}},
-		RematchMonthOptions:  []billingMonthOption{{Period: "2026-10", Label: "2026年10月", Remaining: "EUR 950.00"}},
-	}}})
-
-	// 不带 open：默认收起，两个下拉才不会出现在每一行已关联的流水里。带上 open 属性
-	// 这条断言就会读到 "open" 并失败，这正是要防的回归。
-	if tag := markupBetween(t, page, `<details class="transaction-list-match"`, ">"); strings.Contains(tag, "open") {
-		t.Fatalf("rematch disclosure starts expanded: %s", tag)
-	}
-
-	disclosure := markupBetween(t, page, `<details class="transaction-list-match"><summary class="btn">修改匹配</summary>`, "</details>")
-	if !strings.Contains(disclosure, `<summary class="btn">修改匹配</summary>`) {
-		t.Fatalf("collapsed rematch row does not offer the 修改匹配 button: %s", disclosure)
-	}
-	for _, expected := range []string{`action="/transactions/rematch"`, `name="tenant_id"`, `aria-label="修改匹配租客"`, `name="period"`, `aria-label="修改租金月份"`, "确认修改"} {
-		if !strings.Contains(disclosure, expected) {
-			t.Fatalf("rematch disclosure lost %q: %s", expected, disclosure)
-		}
+	if strings.Contains(page, `action="/transactions/rematch"`) || strings.Contains(page, `action="/transactions/confirm"`) {
+		t.Fatal("list still renders a competing rent-match form")
 	}
 }
 
@@ -429,21 +367,15 @@ func TestRematchFilterOptionsStayIndependentAndDeduplicated(t *testing.T) {
 	}
 }
 
-func TestTransactionListKeepsSplitMatchOnTheRevokeFlow(t *testing.T) {
+func TestTransactionListKeepsFullRevokeSeparateFromShareCorrection(t *testing.T) {
 	page := renderTransactionListPage(t, transactionListPageData{TransactionRows: []transactionPageRow{{
-		ID:               "9",
-		Direction:        "income",
-		MatchStatus:      "matched",
-		MatchStatusLabel: "已关联",
+		ID: "9", MatchURL: "/transactions?match=9", Direction: "income", MatchStatus: "matched", MatchStatusLabel: "已关联",
 	}}})
-
-	for _, expected := range []string{"该流水已拆分或含其他用途；请先撤销匹配，再重新归类。", `action="/transactions/revoke"`} {
-		if !strings.Contains(page, expected) {
-			t.Fatalf("transaction list missing split-match revoke guidance %q: %s", expected, page)
-		}
+	if !strings.Contains(page, ">处理分配</a>") || !strings.Contains(page, ">撤销整笔匹配</a>") {
+		t.Fatal("matched source needs both exact-share review and full-source revoke")
 	}
 	if strings.Contains(page, `action="/transactions/rematch"`) {
-		t.Fatalf("split match unexpectedly renders direct rematch: %s", page)
+		t.Fatal("legacy rematch form remains")
 	}
 }
 
@@ -557,49 +489,19 @@ func TestTransactionRouteShowsTheParsedRentMonth(t *testing.T) {
 //
 // 这条盯住出口本身：已关联的行必须同时给出改法和撤销，且两个表单都要带 return_to，
 // 否则改完会被扔回没筛选的列表。
-func TestMatchedTransactionRowOffersRematchAndRevoke(t *testing.T) {
-	page := renderTransactionListPage(t, transactionListPageData{
-		CanonicalPath: "/transactions", TransactionScope: "pending",
-		TransactionRows: []transactionPageRow{{
-			ID: "12", DetailKey: "12", DetailURL: "/transactions?detail=12",
-			Direction: "income", PayerName: "BRID NI BHRAONAIN", AmountDisplay: "€950.00",
-			MatchStatus: "matched", MatchStatusLabel: "已关联", MatchedTenantName: "Bríd Ní Bhraonáin",
-			CanRematch: true, CanEditRentMatch: true,
-			RematchTenantOptions: []billingTenantOption{{ID: 11, Name: "Bríd Ní Bhraonáin"}},
-			RematchMonthOptions:  []billingMonthOption{{Period: "2026-10", Label: "2026 年 10 月", Remaining: "€950.00"}},
-			ReturnURL:            "/transactions?match_status=pending",
-		}},
-	})
-
-	// 两种改错出口都在。
-	for _, expected := range []string{`<summary class="btn">修改匹配</summary>`, `<summary class="btn danger">撤销匹配</summary>`} {
-		if !strings.Contains(page, expected) {
-			t.Fatalf("已关联的行没有 %q，点错了没法改", expected)
+func TestMatchedTransactionRowOffersReviewAndFullRevokeOnMobile(t *testing.T) {
+	page := renderTransactionListPage(t, transactionListPageData{TransactionRows: []transactionPageRow{{
+		ID: "12", DetailKey: "12", DetailURL: "/transactions?detail=12", MatchURL: "/transactions?match=12",
+		Direction: "income", PayerName: "BRID NI BHRAONAIN", MatchStatus: "matched", MatchStatusLabel: "已关联",
+		ReturnURL: "/transactions?match_status=pending",
+	}}})
+	for _, expected := range []string{`href="/transactions?match=12"`, `href="/transactions/revoke?transaction_id=12`, ">处理分配</a>", ">撤销整笔匹配</a>"} {
+		if got := strings.Count(page, expected); got != 2 {
+			t.Fatalf("desktop/mobile %q count=%d", expected, got)
 		}
 	}
-	// 修改：POST 到 /transactions/rematch，带回跳地址。
-	if !strings.Contains(page, `<form method="post" action="/transactions/rematch">`) {
-		t.Fatal("修改匹配没有指向 /transactions/rematch")
-	}
-	// 撤销：这里必须是 GET。撤销是两步走的——先跳到确认页把全部分配摊开，填完原因
-	// 才真的 POST。写成 POST 就跳过确认页直接作废了。
-	if !strings.Contains(page, `<form method="get" action="/transactions/revoke">`) {
-		t.Fatal("撤销匹配应该是 GET 到确认页，不是直接提交作废")
-	}
-	// 桌面表格和窄屏卡片各一份，所以是 4。两边都得带 return_to——窄屏那侧少了它，
-	// 手机上改完一笔会掉回没筛选的列表。
-	if got := strings.Count(page, `name="return_to" value="/transactions?match_status=pending"`); got != 4 {
-		t.Fatalf("return_to 出现 %d 次，want 4（桌面/窄屏 × 修改/撤销）；少的那份改完会掉回没筛选的列表", got)
-	}
-	// 窄屏那边单独钉一下：桌面表格 ≤640px 是 display:none，手机上只剩卡片这一份。
-	// 只给"处理流水"的话，点进详情页也没有撤销——那里写的是"请先在流水列表撤销匹配"，
-	// 而手机上根本没有那张列表。
-	mobile := markupBetween(t, page, `<div class="transaction-route-mobile-list">`, `</article>`)
-	if !strings.Contains(mobile, `summary class="btn">修改匹配`) || !strings.Contains(mobile, `summary class="btn danger">撤销匹配`) {
-		t.Fatal("窄屏卡片没有改错出口：手机上点错了没地方改")
-	}
-	if !strings.Contains(mobile, `<form method="get" action="/transactions/revoke">`) {
-		t.Fatal("窄屏的撤销不是 GET 到确认页")
+	if strings.Contains(page, `action="/transactions/rematch"`) {
+		t.Fatal("legacy rematch form remains")
 	}
 }
 

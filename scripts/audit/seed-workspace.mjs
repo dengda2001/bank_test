@@ -107,6 +107,7 @@ async function createRoom(room, propertyID, period) {
   const result = await request('POST', '/rooms', {
     action: 'save', property_id: propertyID, room_label: room.label,
     room_type: room.type, capacity: room.capacity, notes: `${RUN_ID} browser audit`, period,
+    effective_month: period, monthly_rent: '1000.00', due_day: '5',
   });
   expectRedirect(result, `create room ${room.label}`, 'room_saved');
   const html = (await request('GET', `/rooms?period=${period}&property_id=${propertyID}`)).text;

@@ -135,7 +135,7 @@ func TestSettleFormPartialIsAvailableToEveryPageTemplate(t *testing.T) {
 	standalone := newWorkspacePageTemplate("settle-form-reuse-probe", nil, `{{template "collection-settle-form" .}}`)
 	page, err := executeTemplate(standalone, collectionSettleFormView{
 		ObligationID:      42,
-		DutyLabel:         "陈先生 · 2026年9月 租金责任",
+		DutyLabel:         "陈先生 · 2026年9月 租金账单",
 		OutstandingAmount: "EUR 640.00",
 		EffectiveDate:     "2026-09-20",
 		Dispositions:      collectionSettleDispositions(settleDispositionMatchPayment),
@@ -153,8 +153,8 @@ func TestSettleFormPartialIsAvailableToEveryPageTemplate(t *testing.T) {
 		`action="/rent-dashboard/settle"`,
 		`name="return_to"`,
 		`name="obligation_id" value="42"`,
-		`待平账责任`,
-		`陈先生 · 2026年9月 租金责任`,
+		`待平账账单`,
+		`陈先生 · 2026年9月 租金账单`,
 		`name="disposition"`,
 		`匹配现有收款`,
 		`登记现金收款`,

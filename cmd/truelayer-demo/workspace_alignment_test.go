@@ -92,7 +92,7 @@ func TestRentWorkspaceDimensionChipsFollowTheActiveView(t *testing.T) {
 	}{
 		{rentWorkspaceViewProperties, 2, "套房产", "按房产查看"},
 		{rentWorkspaceViewRooms, 6, "间房", "按房间查看"},
-		{rentWorkspaceViewTenants, 5, "条租客责任", "按租客查看"},
+		{rentWorkspaceViewTenants, 5, "条租客应收记录", "按租客查看"},
 	}
 	for _, tc := range cases {
 		page := renderRentWorkspace(t, rentWorkspacePageData{
@@ -121,7 +121,7 @@ func TestWorkspaceTopUsesSelectedMonthAndOutstandingLanguage(t *testing.T) {
 		Period: "2026-09", PeriodLabel: "2026年9月", View: rentWorkspaceViewTenants,
 		Filters: rentWorkspaceFilters{PeriodMonth: time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC), View: rentWorkspaceViewTenants, Status: "outstanding", Sort: dashboardDefaultSort, Page: 1, PageSize: dashboardDefaultPageSize},
 	})
-	for _, expected := range []string{"所选月份", "未结清责任", `value="outstanding"`} {
+	for _, expected := range []string{"所选月份", "未收租金", `value="outstanding"`} {
 		if !strings.Contains(page, expected) {
 			t.Errorf("workspace is missing %q", expected)
 		}
@@ -433,7 +433,7 @@ func TestTenantSettleFormCarriesTheWorkspaceContext(t *testing.T) {
 	if view.ObligationID != 71 || view.OutstandingAmount != "EUR 750.00" {
 		t.Fatalf("settle form did not take the obligation and its outstanding amount: %+v", view)
 	}
-	if !strings.Contains(view.DutyLabel, "Aoife Murphy") || !strings.Contains(view.DutyLabel, "租金责任") {
+	if !strings.Contains(view.DutyLabel, "Aoife Murphy") || !strings.Contains(view.DutyLabel, "租金账单") {
 		t.Fatalf("settle form duty label lost the responsible party or the duty: %q", view.DutyLabel)
 	}
 	if view.ReturnPeriod != "2026-09" || view.ReturnSearch != "Rosewood" || view.ReturnStatus != "overdue" ||

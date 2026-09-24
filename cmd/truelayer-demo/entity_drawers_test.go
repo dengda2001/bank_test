@@ -83,7 +83,7 @@ func TestRoomDetailEditStateRendersTheDetailsAndDrawerTogether(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{`class="room-detail-grid"`, `class="entity-drawer-backdrop"`, "租客责任", "房间信息"} {
+	for _, expected := range []string{`class="room-detail-grid"`, `class="entity-drawer-backdrop"`, "租客月租", "房间信息"} {
 		if !strings.Contains(page, expected) {
 			t.Fatalf("room detail edit state is missing %q", expected)
 		}

@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func parseRentMatchBatchForm(r *http.Request) error {
+func parseTransactionForm(r *http.Request) error {
 	if err := r.ParseForm(); err != nil {
 		return err
 	}
@@ -46,7 +46,7 @@ func (a *app) handleRentMatchBatchConfirmation(w http.ResponseWriter, r *http.Re
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	if err := parseRentMatchBatchForm(r); err != nil {
+	if err := parseTransactionForm(r); err != nil {
 		redirectTransactionResult(w, r, "error", "invalid_batch_match")
 		return
 	}

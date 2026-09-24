@@ -242,7 +242,7 @@ func (a *app) renderRentWorkspaceDashboard(w http.ResponseWriter, r *http.Reques
 				return
 			}
 		}
-		review, reviewErr := newTransactionService(a.db).transactionMatchReviewForMonth(r.Context(), userID, matchID, tenantID, historyPage, strings.TrimSpace(r.URL.Query().Get("match_month")))
+		review, reviewErr := newTransactionService(a.db).transactionMatchReviewForMonthWithOrigin(r.Context(), userID, matchID, tenantID, historyPage, strings.TrimSpace(r.URL.Query().Get("match_month")), r.URL.Query().Get("match_origin") != "roommate")
 		if errors.Is(reviewErr, gorm.ErrRecordNotFound) {
 			http.NotFound(w, r)
 			return
@@ -305,6 +305,7 @@ type rentRoomDetailPageData struct {
 	Tenants           []rentWorkspaceTenantRow
 	Expenses          []rentWorkspaceExpenseView
 	ExpenseDrawer     *expenseDrawerData
+	TenantDrawer      *tenantPageData
 	Message           string
 	Error             string
 	PlanError         string
@@ -543,8 +544,9 @@ func (a *app) handleRoomDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	data.workspaceShell = a.fillWorkspaceShell(r, workspaceShell{ActivePage: "rooms", Username: a.displayUsername(r), Environment: a.cfg.Environment, FootNote: "房间详情", CompactTitle: data.PropertyName + " · 房间 " + data.RoomLabel, ShowNavCounts: true})
 	data.Message, data.Error = r.URL.Query().Get("message"), roomMutationErrorMessage(r.URL.Query().Get("error"))
-	data.Editing = r.URL.Query().Get("edit") == "1"
-	data.PlanEditor = r.URL.Query().Get("rent") == "1"
+	tenantAdd := r.URL.Query().Get("tenant_add") == "1"
+	data.Editing = !tenantAdd && r.URL.Query().Get("edit") == "1"
+	data.PlanEditor = !tenantAdd && r.URL.Query().Get("rent") == "1"
 	data.PlanError = rentPlanErrorMessage(r.URL.Query().Get("rent_error"))
 	data.ReturnURL = rentWorkspaceURL(data.Filters, 1)
 	if r.URL.Query().Get("from") == "rooms" {
@@ -566,7 +568,35 @@ func (a *app) handleRoomDetail(w http.ResponseWriter, r *http.Request) {
 		data.ReturnURL = roomListURL(data.Period, data.ReturnPropertyID, data.ReturnStatus, data.ReturnSearch, data.ReturnCollection, data.ReturnSort)
 	}
 	data.Form = roomPageForm{ID: data.RoomID, PropertyID: data.Summary.PropertyID, RoomLabel: data.RoomLabel, RoomType: data.RoomType, Capacity: data.Capacity, Notes: data.RoomNotes}
-	if r.URL.Query().Get("expense") == "1" || isExpenseFormError(r.URL.Query().Get("error")) {
+	if tenantAdd {
+		properties, rooms, loadErr := a.loadTenantRoomAssignmentOptions(r.Context(), userID)
+		if loadErr != nil {
+			http.Error(w, loadErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		found := false
+		for _, room := range rooms {
+			if room.ID == roomID && room.PropertyID == data.Summary.PropertyID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			http.NotFound(w, r)
+			return
+		}
+		roomURL := "/rooms/" + strconv.FormatUint(roomID, 10) + "?period=" + url.QueryEscape(data.Period)
+		data.TenantDrawer = &tenantPageData{
+			Form: tenantRecord{Status: "active"}, ReturnURL: roomURL + "&rent=1",
+			PostReturnURL: roomURL + "&tenant_add=1", Error: r.URL.Query().Get("error"),
+			ErrorMessage:     tenantFormErrorMessage(r.URL.Query().Get("error")),
+			TenantProperties: properties, TenantRooms: rooms,
+			TenantAssignmentPropertyID: data.Summary.PropertyID, TenantAssignmentRoomID: roomID,
+			TenantArrangementStartMonth: data.Period, TenantRoomLocked: true,
+		}
+		data.Error = ""
+	}
+	if !tenantAdd && (r.URL.Query().Get("expense") == "1" || isExpenseFormError(r.URL.Query().Get("error"))) {
 		returnURL := expenseFormReturnURL(r)
 		expenseDrawer, drawerErr := a.loadExpenseDrawerData(r.Context(), userID, data.Period, data.Summary.PropertyID, data.RoomID, returnURL, r.URL.Query().Get("error"))
 		if drawerErr != nil {

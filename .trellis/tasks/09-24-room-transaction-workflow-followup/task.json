@@ -1,0 +1,33 @@
+{
+  "id": "room-transaction-workflow-followup",
+  "name": "room-transaction-workflow-followup",
+  "title": "Room and transaction workflow follow-up",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "dd",
+  "assignee": "dd",
+  "createdAt": "2026-09-24",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-24-room-tenant-setup-corrections",
+    "09-24-allocation-share-revocation",
+    "09-24-transaction-review-search-ux",
+    "09-24-shared-danger-confirmation-dialogs",
+    "09-24-login-visual-alignment",
+    "09-24-object-search-tenant-wording"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

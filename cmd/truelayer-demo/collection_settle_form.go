@@ -79,7 +79,7 @@ func (data rentDashboardPageData) SettleForm(row rentDashboardRow) collectionSet
 	if duty == "" {
 		duty = "本月"
 	}
-	duty += " 租金责任"
+	duty += " 租金账单"
 	if name := strings.TrimSpace(firstNonEmpty(row.TenantName, row.TenantAlias)); name != "" {
 		duty = name + " · " + duty
 	}
@@ -122,7 +122,7 @@ func (data rentWorkspacePageData) TenantSettleForm(row rentWorkspaceTenantRow) c
 	if duty == "" {
 		duty = "本月"
 	}
-	duty += " 租金责任"
+	duty += " 租金账单"
 	if name := strings.TrimSpace(firstNonEmpty(row.TenantName, row.TenantAlias)); name != "" {
 		duty = name + " · " + duty
 	}
@@ -164,9 +164,9 @@ func (data rentWorkspacePageData) TenantSettleForm(row rentWorkspaceTenantRow) c
 func billsMessageText(code string) string {
 	switch code {
 	case "manual_balance_saved":
-		return "平账已完成：已按剩余未付金额登记一笔收款并核销到该责任。"
+		return "平账已完成：已按剩余未付金额登记一笔收款并核销到该账单。"
 	case "manual_balance_not_needed":
-		return "该责任已无未付金额，无需平账。"
+		return "该账单已无未付金额，无需平账。"
 	case "bills_generated":
 		return "本月账单已生成，重复触发不会产生重复账单。"
 	default:
@@ -181,7 +181,7 @@ func billsErrorText(code string) string {
 	case "manual_balance_reason_required":
 		return "请填写平账原因。"
 	case "manual_balance_failed":
-		return "平账未完成，请核对责任状态后重试。"
+		return "平账未完成，请核对账单状态后重试。"
 	case "invalid_manual_balance":
 		return "平账请求无效，请刷新页面后重试。"
 	case "bills_generate_unavailable", "bills_generate_failed":

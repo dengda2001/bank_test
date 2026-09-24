@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RentOps 撤销流水匹配</title>
+  <link rel="stylesheet" href="/static/css/workspace.css">
+  <link rel="stylesheet" href="/static/css/pages/transaction-match-review.css">
+  <link rel="stylesheet" href="/static/css/pages/transaction-revoke.css">
+</head>
+<body>
+  <div class="app">
+    {{template "workspace-nav" .}}
+    <main class="content transaction-revoke-page">
+      <header class="topbar"><div><div class="brand-title">银行与收款</div><h1>流水匹配</h1><p class="tiny">核对流水与租金账单</p></div></header>
+      <section class="panel surface" aria-label="撤销匹配确认"><p class="tiny">正在核对一笔流水的撤销匹配请求。</p></section>
+    </main>
+  </div>
+  <div class="entity-drawer-backdrop transaction-review-backdrop transaction-revoke-backdrop">
+    <section class="entity-drawer transaction-review-drawer transaction-revoke-drawer" role="dialog" aria-modal="true" aria-labelledby="transaction-revoke-title">
+      <header class="panel-head transaction-review-titlebar"><div><span class="drawer-eyebrow">流水核对</span><h2 id="transaction-revoke-title" tabindex="-1">撤销匹配</h2><p class="tiny">先核对原流水和全部有效分配，再填写撤销原因。</p></div><a class="drawer-close" href="{{.ReturnTo}}" aria-label="关闭撤销匹配">×</a></header>
+
+      <section class="transaction-review-source" aria-labelledby="transaction-revoke-source-title">
+        <div class="transaction-review-section-head"><h3 id="transaction-revoke-source-title">当前流水</h3><span class="transaction-review-tag">{{.MatchStatusLabel}}</span></div>
+        <div class="transaction-review-source-grid">
+          <div><span>到账日期</span><strong>{{.DateDisplay}}</strong></div>
+          <div><span>付款人</span><strong>{{.PayerName}}</strong></div>
+          <div><span>来源金额</span><strong>{{.AmountDisplay}}</strong></div>
+          <div><span>识别月份</span><strong>{{if .ParsedPeriodDisplay}}{{.ParsedPeriodDisplay}}{{if .ParsedPeriodSourceLabel}} <small>{{.ParsedPeriodSourceLabel}}</small>{{end}}{{else}}未识别{{end}}</strong></div>
+          <div class="wide"><span>Description</span><strong class="review-long-text">{{.Description}}</strong></div>
+        </div>
+      </section>
+
+      <section class="transaction-review-source transaction-revoke-balance" aria-labelledby="transaction-revoke-balance-title">
+        <div class="transaction-review-section-head"><h3 id="transaction-revoke-balance-title">撤销影响</h3></div>
+        <div class="transaction-revoke-balance-grid"><div><span>当前已分配</span><strong>{{.AllocatedAmountDisplay}}</strong></div><div><span>当前余款</span><strong>{{.CurrentRemainingAmountDisplay}}</strong></div><div class="after"><span>撤销后余款</span><strong>{{.RemainingAmountDisplay}}</strong></div></div>
+        <p class="transaction-review-note">确认后会作废这笔流水的当前有效分配；银行原文和撤销记录会保留。</p>
+      </section>
+
+      <section class="transaction-review-history" aria-labelledby="transaction-revoke-allocations-title">
+        <div class="transaction-review-section-head"><h3 id="transaction-revoke-allocations-title">当前有效分配</h3><span class="tiny">共 {{len .Allocations}} 项</span></div>
+        <div class="transaction-review-history-list">{{range .Allocations}}<article class="transaction-review-history-row transaction-revoke-allocation"><div><strong>{{.Kind}} · {{.AmountDisplay}}</strong></div><dl>{{if .TenantName}}<div><dt>租客</dt><dd>{{.TenantName}}</dd></div>{{end}}{{if .PeriodDisplay}}<div><dt>租金月份</dt><dd>{{.PeriodDisplay}}</dd></div>{{end}}{{if .Note}}<div><dt>备注</dt><dd class="review-long-text">{{.Note}}</dd></div>{{end}}</dl></article>{{end}}</div>
+      </section>
+
+      <form class="transaction-revoke-form" method="post" action="/transactions/revoke">
+        <input type="hidden" name="transaction_id" value="{{.TransactionID}}">
+        <input type="hidden" name="return_to" value="{{.ReturnTo}}">
+        <section class="transaction-review-identity" aria-labelledby="transaction-revoke-reason-title"><div class="transaction-review-section-head"><h3 id="transaction-revoke-reason-title">撤销原因</h3></div><label for="reason">请填写原因（必填）</label><textarea id="reason" name="reason" required maxlength="512" rows="3" placeholder="例如：租客或租金月份关联错误"></textarea></section>
+        <div class="drawer-actions transaction-review-actions transaction-revoke-actions"><a class="btn subtle" href="{{.ReturnTo}}">返回流水</a><button class="btn danger" type="submit">确认撤销匹配</button></div>
+      </form>
+    </section>
+  </div>
+  <script>
+  (() => {
+    const backdrop = document.querySelector('.transaction-revoke-backdrop');
+    const close = backdrop?.querySelector('.drawer-close');
+    const title = backdrop?.querySelector('#transaction-revoke-title');
+    if (!backdrop || !close) return;
+    title?.focus({preventScroll: true});
+    backdrop.addEventListener('click', event => { if (event.target === backdrop) close.click(); });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape') { close.click(); return; }
+      if (event.key !== 'Tab') return;
+      const controls = [...backdrop.querySelectorAll('a[href], button:not([disabled]), textarea:not([disabled])')].filter(element => element.getClientRects().length);
+      if (!controls.length) return;
+      const first = controls[0], last = controls[controls.length - 1];
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === title)) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    });
+  })();
+  </script>
+</body>
+</html>

@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 )
@@ -82,6 +84,30 @@ func TestTransactionReviewRoommatesUseActiveRoomPlanOnMySQL(t *testing.T) {
 	}
 	if review.SelectedTenantID != f.tenant.ID || !review.IntelligentSuggestion || len(review.RoommateGroups) != 1 {
 		t.Fatalf("exact-name review = %+v", review)
+	}
+	review.setURLs(url.Values{"match": {fmt.Sprint(source.ID)}})
+	if !strings.Contains(review.RoommateGroups[0].RoomURL, fmt.Sprintf("/rooms/%d?period=%s", f.roomOne.ID, month.Format("2006-01"))) || !strings.Contains(review.RoommateGroups[0].Roommates[0].URL, "match_origin=roommate") {
+		t.Fatalf("room and roommate links = %+v", review.RoommateGroups[0])
+	}
+	contextReview, err := newTransactionService(f.db).transactionMatchReviewForMonthWithOrigin(f.ctx, f.owner.ID, source.ID, roommate.ID, 1, month.Format("2006-01"), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, candidate := range contextReview.Months {
+		if candidate.Period == month.Format("2006-01") && candidate.Viewed {
+			t.Fatal("roommate navigation incorrectly marked month as manually viewed")
+		}
+	}
+	explicitReview, err := newTransactionService(f.db).transactionMatchReviewForMonthWithOrigin(f.ctx, f.owner.ID, source.ID, roommate.ID, 1, month.Format("2006-01"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	viewed := false
+	for _, candidate := range explicitReview.Months {
+		viewed = viewed || candidate.Period == month.Format("2006-01") && candidate.Viewed
+	}
+	if !viewed {
+		t.Fatal("explicit month lookup was not marked viewed")
 	}
 	review, err = newTransactionService(f.db).transactionMatchReview(f.ctx, f.owner.ID, source.ID, roommate.ID, 1)
 	if err != nil {

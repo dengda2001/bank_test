@@ -35,6 +35,12 @@
     </nav>
     <div class="mobile-flyout" id="mobile-menu-objects" hidden aria-label="对象菜单"><a href="/properties">房产</a><a href="/rooms">房间</a><a href="/tenants">租客</a></div>
     <div class="workspace-toast" id="workspace-toast" role="status" aria-live="polite" hidden></div>
+    <dialog class="danger-confirm-dialog" id="danger-confirm-dialog" aria-labelledby="danger-confirm-title" aria-describedby="danger-confirm-message">
+      <div class="danger-confirm-heading"><span class="danger-confirm-icon" aria-hidden="true">!</span><h2 id="danger-confirm-title">确认操作</h2></div>
+      <p id="danger-confirm-message"></p>
+      <div class="danger-confirm-actions"><button class="btn" type="button" data-confirm-cancel>取消</button><button class="btn danger-confirm-submit" type="button" data-confirm-accept>确认操作</button></div>
+    </dialog>
+    <script src="/static/js/danger-confirm.js" defer></script>
     <script>
       // Only a success flash ("notice ok" after a POST) is marked data-toast. The
       // marker is an explicit opt-in on the block, never a positional guess, and it
@@ -128,13 +134,5 @@
         }
       })();
     </script>
-    <script>
-      document.addEventListener("submit", (event) => {
-        const trigger = event.target.querySelector("[data-confirm='true']");
-        // 删除按钮搬进编辑抽屉后，离它要删的对象远了，泛泛一句"高风险操作"
-        // 说不清删的是谁。按钮可以自带 data-confirm-message，没有就退回通用文案。
-        const message = trigger && trigger.getAttribute("data-confirm-message");
-        if (trigger && !window.confirm(message || "确认执行此高风险操作吗？")) event.preventDefault();
-      });
-    </script>{{end}}
+    {{end}}
 {{define "workspace-object-tabs"}}<nav class="object-tabs" aria-label="对象类型"><a href="/properties"{{if eq .ActivePage "properties"}} class="active" aria-current="page"{{end}}>房产</a><a href="/rooms"{{if eq .ActivePage "rooms"}} class="active" aria-current="page"{{end}}>房间</a><a href="/tenants"{{if eq .ActivePage "tenants"}} class="active" aria-current="page"{{end}}>租客</a></nav>{{end}}

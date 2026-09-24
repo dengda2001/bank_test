@@ -155,7 +155,7 @@ func TestRentWorkspaceMetricsKeepTheE2EShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, metric := range []string{"所选月份应收", "已收租金", "未结清责任"} {
+	for _, metric := range []string{"所选月份应收", "已收租金", "未收租金"} {
 		if !strings.Contains(page, `<div class="label">`+metric+`</div><strong>`) {
 			t.Fatalf("metric %q does not match the E2E extraction pattern", metric)
 		}

@@ -27,6 +27,7 @@
 .transaction-review-roommate-group { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .transaction-review-roommate-group > div:first-child { display: grid; gap: 3px; font-size: 12px; }
 .transaction-review-roommate-group small { color: var(--foreground-muted); font-size: 11px; }
+.transaction-review-room-link { width: fit-content; color: var(--accent); font-size: 12px; font-weight: 650; }
 .transaction-review-roommate-group > div:last-child { display: flex; flex-wrap: wrap; gap: 6px; }
 .transaction-review-roommate-group .btn { min-height: 34px; padding: 5px 9px; }
 .transaction-review-tenant-form { display: grid!important; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 10px!important; margin-top: 12px; }
@@ -52,7 +53,9 @@
 .transaction-review-evidence summary { color: var(--accent); font-size: 12px; cursor: pointer; }
 .transaction-review-evidence-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 4px 8px; padding-top: 10px; font-size: 12px; }
 .transaction-review-evidence-row p { grid-column: 1/-1; margin: 0; color: var(--foreground-muted); }
-.transaction-review-evidence-row a { grid-column: 1/-1; }
+.transaction-review-evidence-actions { grid-column: 1/-1; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.transaction-review-evidence-actions form { margin: 0; }
+.transaction-review-evidence-actions .btn.danger { min-height: 32px; color: var(--danger); border-color: color-mix(in oklch,var(--danger) 35%,var(--border)); }
 .transaction-review-history-row { padding: 13px; border: 1px solid var(--border); border-radius: 9px; }
 .transaction-review-history-row > div:first-child { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
 .transaction-review-history-row > div:first-child span { color: var(--foreground-muted); }

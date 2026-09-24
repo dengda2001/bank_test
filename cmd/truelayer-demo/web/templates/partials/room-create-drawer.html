@@ -16,14 +16,14 @@
           <div class="form-field"><label for="room-effective-month">租金生效月份</label><input id="room-effective-month" name="effective_month" type="month" value="{{.Form.EffectiveMonth}}" required></div>
           <div class="form-field"><label for="room-due-day">默认交租日</label><input id="room-due-day" name="due_day" type="number" min="1" max="31" step="1" value="{{.Form.DueDay}}" required></div>
         </div>
-        <p class="tiny">仅保存空房间时不会生成租客责任；设置租客后按所选月份开始计租。</p>
+        <p class="tiny">仅保存空房间时不会生成租客应收账单；设置租客后按所选月份开始计租。</p>
       </fieldset>
       <fieldset class="tenant-form-section room-tenant-choice"><legend>设置租客</legend>
         <label class="room-tenant-choice-row"><input type="radio" name="tenant_choice" value="existing"> 选择已有租客</label>
         <div class="form-field"><label for="room-existing-tenant">已有租客</label><select id="room-existing-tenant" name="tenant_id" data-searchable data-tenant-availability-select disabled><option value="">请选择租客</option>{{range .Tenants}}{{if eq .Status "active"}}<option value="{{.ID}}" data-tenant-name="{{.Name}}" data-occupancies="{{.OccupanciesJSON}}"{{if .ConflictRoomID}} data-tenant-conflict="true" disabled{{end}}>{{.Name}}{{if .ConflictRoomID}}（已入住 {{.ConflictRoomName}}，请先解绑）{{end}}</option>{{end}}{{end}}</select></div>
         <label class="room-tenant-choice-row"><input type="radio" name="tenant_choice" value="new" checked> 新建租客档案</label>
         <p class="tiny">保存房间后打开新增租客表单，房产、房间和月份会自动选好。</p>
-        <div class="room-tenant-conflicts" data-tenant-conflicts aria-live="polite">{{range .Tenants}}{{if .ConflictRoomID}}<p>{{.Name}} · {{.ConflictRoomName}} <a href="{{.UnbindURL}}">去解绑</a></p>{{end}}{{end}}</div>
+        <div class="room-tenant-conflicts" data-tenant-conflicts aria-live="polite" hidden></div>
       </fieldset>
       <div class="form-field"><label for="room-notes">房间备注</label><textarea id="room-notes" name="notes" maxlength="2000">{{.Form.Notes}}</textarea></div>
       <div class="drawer-actions"><a class="btn subtle" href="{{.ReturnURL}}">取消</a><button class="btn" type="submit" name="action" value="save" data-save-vacant>仅保存空房间</button><button class="btn primary" type="submit" name="action" value="save_and_setup">保存并设置租客</button></div>

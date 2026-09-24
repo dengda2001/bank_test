@@ -56,6 +56,7 @@ type propertyPageRow struct {
 	NetAmount             string
 	CollectionPercent     int
 	Actions               []pageActionView
+	SearchTerms           []string
 }
 
 type propertyPageData struct {
@@ -116,6 +117,7 @@ type roomPageRow struct {
 	CollectionStatus      string
 	CollectionStatusLabel string
 	TenantNames           []string
+	SearchTerms           []string
 	MonthlyRentCents      int64
 	MonthlyRent           string
 	Currency              string
@@ -684,7 +686,7 @@ func (a *app) redirectRoomRentPlanMutation(w http.ResponseWriter, r *http.Reques
 func rentPlanErrorMessage(errorCode string) string {
 	switch errorCode {
 	case "rent_plan_invalid":
-		return "请检查生效月份、月租、缴租日、入住租客和责任金额；责任合计必须等于房间月租。"
+		return "请检查生效月份、月租、缴租日、入住租客和租客应收金额；合计必须等于房间月租。"
 	case "rent_plan_locked":
 		return "所选月份及之后已有收款、平账或催收记录，入住与租金计划不能重算。"
 	case "rent_plan_stale":
@@ -799,6 +801,35 @@ func roomActions(id uint64, active bool) []pageActionView {
 	return actions
 }
 
+type monthlyObjectTenant struct {
+	RoomID       uint64
+	Name         string
+	DisplayAlias string
+}
+
+// The selected rent-plan month, rather than current asset or tenant status,
+// determines which tenants can be found on the object lists.
+func (a *app) monthlyObjectTenants(ctx context.Context, userID uint64, period time.Time) (map[uint64][]monthlyObjectTenant, error) {
+	var matches []monthlyObjectTenant
+	month := monthStart(period)
+	err := a.db.WithContext(ctx).Table("room_rent_plan_members AS member").
+		Select("plan.room_id, tenant.name, tenant.display_alias").
+		Joins("JOIN room_rent_plans AS plan ON plan.id = member.room_rent_plan_id AND plan.user_id = member.user_id").
+		Joins("JOIN rooms AS room ON room.id = plan.room_id AND room.user_id = plan.user_id").
+		Joins("JOIN tenants AS tenant ON tenant.id = member.tenant_id AND tenant.user_id = member.user_id").
+		Where("member.user_id = ? AND plan.effective_from_month <= ? AND (plan.effective_to_month IS NULL OR plan.effective_to_month >= ?)", userID, month, month).
+		Order("plan.room_id ASC, member.id ASC").
+		Scan(&matches).Error
+	if err != nil {
+		return nil, err
+	}
+	byRoom := make(map[uint64][]monthlyObjectTenant)
+	for _, match := range matches {
+		byRoom[match.RoomID] = append(byRoom[match.RoomID], match)
+	}
+	return byRoom, nil
+}
+
 func (a *app) loadPropertyPage(ctx context.Context, userID uint64, period time.Time, statusFilter string) (propertyPageData, error) {
 	statusFilter = firstNonEmpty(strings.TrimSpace(statusFilter), "active")
 	if statusFilter != "all" && statusFilter != "active" && statusFilter != "inactive" {
@@ -814,6 +845,10 @@ func (a *app) loadPropertyPage(ctx context.Context, userID uint64, period time.T
 		return propertyPageData{}, err
 	}
 	rooms, err := newLandlordRentRepository(a.db).listRooms(ctx, userID, roomQuery{})
+	if err != nil {
+		return propertyPageData{}, err
+	}
+	monthTenants, err := a.monthlyObjectTenants(ctx, userID, period)
 	if err != nil {
 		return propertyPageData{}, err
 	}
@@ -833,8 +868,13 @@ func (a *app) loadPropertyPage(ctx context.Context, userID uint64, period time.T
 	}
 	roomCount := make(map[uint64]int)
 	activeRoomCount := make(map[uint64]int)
+	searchTerms := make(map[uint64][]string)
 	for _, row := range rooms {
 		roomCount[row.PropertyID]++
+		searchTerms[row.PropertyID] = append(searchTerms[row.PropertyID], row.RoomLabel)
+		for _, tenantRow := range monthTenants[row.ID] {
+			searchTerms[row.PropertyID] = append(searchTerms[row.PropertyID], tenantRow.Name, tenantRow.DisplayAlias)
+		}
 		if row.Status == "active" {
 			activeRoomCount[row.PropertyID]++
 		}
@@ -850,8 +890,9 @@ func (a *app) loadPropertyPage(ctx context.Context, userID uint64, period time.T
 			StatusLabel:         assetStatusLabel(row.Status), CollectionStatus: collectionState, CollectionStatusLabel: collectionLabel, RoomCount: roomCount[row.ID], ActiveRoomCount: activeRoomCount[row.ID],
 			ExpectedCents: financialRow.ExpectedCents, PaidCents: financialRow.PaidCents, BalanceCents: financialRow.BalanceCents, ExpenseCents: financialRow.ExpenseCents, OtherIncomeCents: financialRow.OtherIncomeCents,
 			ExpectedAmount: pageCurrencyAmount(financialRow.ExpectedCents, currency), PaidAmount: pageCurrencyAmount(financialRow.PaidCents, currency), BalanceAmount: pageCurrencyAmount(financialRow.BalanceCents, currency), ExpenseAmount: pageCurrencyAmount(financialRow.ExpenseCents, currency), OtherIncomeAmount: pageCurrencyAmount(financialRow.OtherIncomeCents, currency), CollectionPercent: financialRow.CollectionPercent,
-			NetAmount: pageCurrencyAmount(financialRow.NetCents, currency),
-			Actions:   propertyActions(row.ID, row.Status == "active"),
+			NetAmount:   pageCurrencyAmount(financialRow.NetCents, currency),
+			Actions:     propertyActions(row.ID, row.Status == "active"),
+			SearchTerms: searchTerms[row.ID],
 		})
 	}
 	return propertyPageData{Period: monthStart(period).Format("2006-01"), PeriodLabel: formatMonthLabel(period), Rows: rows, StatusFilter: statusFilter}, nil
@@ -864,11 +905,20 @@ func filterPropertyPageRows(rows []propertyPageRow, search string) []propertyPag
 	}
 	filtered := make([]propertyPageRow, 0, len(rows))
 	for _, row := range rows {
-		if strings.Contains(strings.ToLower(row.Name+" "+row.CityRegion), needle) || strings.Contains(strings.ToLower(row.Address), needle) {
+		if strings.Contains(strings.ToLower(row.Name+" "+row.CityRegion), needle) || strings.Contains(strings.ToLower(row.Address), needle) || containsSearchTerm(row.SearchTerms, needle) {
 			filtered = append(filtered, row)
 		}
 	}
 	return filtered
+}
+
+func containsSearchTerm(terms []string, needle string) bool {
+	for _, term := range terms {
+		if strings.Contains(strings.ToLower(term), needle) {
+			return true
+		}
+	}
+	return false
 }
 
 func filterPropertyCollectionRows(rows []propertyPageRow, filter string) []propertyPageRow {
@@ -1009,12 +1059,7 @@ func filterRoomPageRows(rows []roomPageRow, search, status string) []roomPageRow
 		}
 		if needle != "" {
 			match := strings.Contains(strings.ToLower(row.RoomLabel), needle) || strings.Contains(strings.ToLower(row.PropertyName), needle)
-			for _, tenantName := range row.TenantNames {
-				if strings.Contains(strings.ToLower(tenantName), needle) {
-					match = true
-					break
-				}
-			}
+			match = match || containsSearchTerm(row.TenantNames, needle) || containsSearchTerm(row.SearchTerms, needle)
 			if !match {
 				continue
 			}
@@ -1509,6 +1554,10 @@ func (a *app) loadRoomRows(ctx context.Context, userID uint64, period time.Time,
 	if err != nil {
 		return nil, err
 	}
+	monthTenants, err := a.monthlyObjectTenants(ctx, userID, period)
+	if err != nil {
+		return nil, err
+	}
 	propertyByID := make(map[uint64]property, len(properties))
 	for _, row := range properties {
 		propertyByID[row.ID] = row
@@ -1532,18 +1581,11 @@ func (a *app) loadRoomRows(ctx context.Context, userID uint64, period time.Time,
 		if len(plans) > 0 {
 			plan = &plans[0]
 		}
-		partyNames := make([]string, 0)
-		if plan != nil {
-			parties, partyErr := repo.listRoomRentPlanMembers(ctx, userID, roomRentPlanMemberQuery{RoomRentPlanID: plan.ID})
-			if partyErr != nil {
-				return nil, partyErr
-			}
-			for _, party := range parties {
-				var tenantRow tenant
-				if tenantErr := a.db.WithContext(ctx).Where("id = ? AND user_id = ?", party.TenantID, userID).First(&tenantRow).Error; tenantErr == nil {
-					partyNames = append(partyNames, firstNonEmpty(tenantRow.DisplayAlias, tenantRow.Name))
-				}
-			}
+		partyNames := make([]string, 0, len(monthTenants[roomRow.ID]))
+		searchTerms := make([]string, 0, len(monthTenants[roomRow.ID])*2)
+		for _, tenantRow := range monthTenants[roomRow.ID] {
+			partyNames = append(partyNames, firstNonEmpty(tenantRow.DisplayAlias, tenantRow.Name))
+			searchTerms = append(searchTerms, tenantRow.Name, tenantRow.DisplayAlias)
 		}
 		financialRow := financial[roomRow.ID]
 		currency := firstNonEmpty(func() string {
@@ -1553,7 +1595,7 @@ func (a *app) loadRoomRows(ctx context.Context, userID uint64, period time.Time,
 			return ""
 		}(), ledgerCurrencyEUR)
 		collectionState, collectionLabel := collectionStatus(financialRow.ExpectedCents, financialRow.PaidCents)
-		pageRow := roomPageRow{ID: roomRow.ID, PropertyID: roomRow.PropertyID, PropertyName: propertyRow.Name, RoomLabel: roomRow.RoomLabel, RoomType: roomRow.RoomType, Capacity: roomRow.Capacity, Notes: stringValue(roomRow.Notes), Status: roomRow.Status, StatusLabel: assetStatusLabel(roomRow.Status), CollectionStatus: collectionState, CollectionStatusLabel: collectionLabel, TenantNames: partyNames, Currency: currency, ExpectedCents: financialRow.ExpectedCents, PaidCents: financialRow.PaidCents, BalanceCents: financialRow.BalanceCents, ExpectedAmount: pageCurrencyAmount(financialRow.ExpectedCents, currency), PaidAmount: pageCurrencyAmount(financialRow.PaidCents, currency), BalanceAmount: pageCurrencyAmount(financialRow.BalanceCents, currency), Actions: roomActions(roomRow.ID, roomRow.Status == "active")}
+		pageRow := roomPageRow{ID: roomRow.ID, PropertyID: roomRow.PropertyID, PropertyName: propertyRow.Name, RoomLabel: roomRow.RoomLabel, RoomType: roomRow.RoomType, Capacity: roomRow.Capacity, Notes: stringValue(roomRow.Notes), Status: roomRow.Status, StatusLabel: assetStatusLabel(roomRow.Status), CollectionStatus: collectionState, CollectionStatusLabel: collectionLabel, TenantNames: partyNames, SearchTerms: searchTerms, Currency: currency, ExpectedCents: financialRow.ExpectedCents, PaidCents: financialRow.PaidCents, BalanceCents: financialRow.BalanceCents, ExpectedAmount: pageCurrencyAmount(financialRow.ExpectedCents, currency), PaidAmount: pageCurrencyAmount(financialRow.PaidCents, currency), BalanceAmount: pageCurrencyAmount(financialRow.BalanceCents, currency), Actions: roomActions(roomRow.ID, roomRow.Status == "active")}
 		if plan != nil {
 			pageRow.MonthlyRentCents, pageRow.DueDay = plan.MonthlyRentCents, plan.DueDay
 			pageRow.MonthlyRent = pageCurrencyAmount(plan.MonthlyRentCents, plan.Currency)
@@ -1798,12 +1840,10 @@ func (a *app) handleRoomMutation(w http.ResponseWriter, r *http.Request, pathID 
 	}
 	if action == "save_and_setup" && createdRoomID != 0 && firstNonEmpty(strings.TrimSpace(r.Form.Get("tenant_choice")), "new") == "new" {
 		query := url.Values{
-			"add":                     []string{"1"},
-			"property_id":             []string{strconv.FormatUint(propertyID, 10)},
-			"room_id":                 []string{strconv.FormatUint(createdRoomID, 10)},
-			"arrangement_start_month": []string{strings.TrimSpace(r.Form.Get("effective_month"))},
+			"period":     []string{strings.TrimSpace(r.Form.Get("effective_month"))},
+			"tenant_add": []string{"1"},
 		}
-		http.Redirect(w, r, "/tenants?"+query.Encode(), http.StatusFound)
+		http.Redirect(w, r, "/rooms/"+strconv.FormatUint(createdRoomID, 10)+"?"+query.Encode(), http.StatusFound)
 		return
 	}
 	if action == "save_and_setup" && createdRoomID != 0 {

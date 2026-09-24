@@ -40,18 +40,19 @@
 
       <form class="object-list-filters" method="get" action="/properties">
         <label class="object-search"><span class="visually-hidden">搜索当前列表</span><input type="search" name="search" value="{{.Search}}" placeholder="搜索当前列表" aria-label="搜索当前列表"></label>
+        <button class="btn primary object-list-search-submit" type="submit">搜索</button>
         <input type="hidden" name="status" value="{{.StatusFilter}}"><input type="hidden" name="sort" value="{{.Sort}}">
         <div class="object-list-filter-fields">
           <label><span class="visually-hidden">收缴状态</span><select name="collection" aria-label="收缴状态"><option value="all"{{if eq .CollectionFilter "all"}} selected{{end}}>全部状态</option><option value="unpaid"{{if eq .CollectionFilter "unpaid"}} selected{{end}}>未收齐</option><option value="paid"{{if eq .CollectionFilter "paid"}} selected{{end}}>已收齐</option></select></label>
           <label class="object-list-period-filter"><span class="visually-hidden">月份</span><input type="month" name="period" value="{{.Period}}" aria-label="月份"></label>
         </div>
-        <button class="btn subtle object-list-filter-toggle" type="button" aria-expanded="false">搜索</button>
+        <button class="btn subtle object-list-filter-toggle" type="button" aria-expanded="false">筛选</button>
         <span class="object-list-demo-note">演示数据 · EUR</span>
       </form>
 
       <section class="panel surface object-list-panel" aria-labelledby="property-list-title">
         {{if .Rows}}
-        <div class="table-wrap object-table-wrap"><table class="object-table property-table"><thead><tr>{{template "table-sort-heading" (tableSortHeading "房产" (index .SortLinks "name"))}}{{template "table-sort-heading" (tableSortHeading "地址" (index .SortLinks "address"))}}{{template "table-sort-heading" (tableSortHeading "房间" (index .SortLinks "rooms"))}}{{template "table-sort-heading" (tableSortHeading "责任记录" (index .SortLinks "responsibilities"))}}{{template "table-sort-heading" (tableSortHeading "本月应收" (index .SortLinks "expected"))}}{{template "table-sort-heading" (tableSortHeading "本月已收" (index .SortLinks "paid"))}}{{template "table-sort-heading" (tableSortHeading "状态" (index .SortLinks "status"))}}<th>操作</th></tr></thead><tbody>
+        <div class="table-wrap object-table-wrap"><table class="object-table property-table"><thead><tr>{{template "table-sort-heading" (tableSortHeading "房产" (index .SortLinks "name"))}}{{template "table-sort-heading" (tableSortHeading "地址" (index .SortLinks "address"))}}{{template "table-sort-heading" (tableSortHeading "房间" (index .SortLinks "rooms"))}}{{template "table-sort-heading" (tableSortHeading "租客租金记录" (index .SortLinks "responsibilities"))}}{{template "table-sort-heading" (tableSortHeading "本月应收" (index .SortLinks "expected"))}}{{template "table-sort-heading" (tableSortHeading "本月已收" (index .SortLinks "paid"))}}{{template "table-sort-heading" (tableSortHeading "状态" (index .SortLinks "status"))}}<th>操作</th></tr></thead><tbody>
           {{range .Rows}}<tr data-page="properties" data-property-id="{{.ID}}">
             <td><a class="object-primary-link" href="/properties/{{.ID}}?period={{$.Period}}&amp;list_status={{$.StatusFilter}}&amp;list_search={{$.Search}}&amp;list_collection={{$.CollectionFilter}}&amp;list_sort={{$.Sort}}">{{.Name}}</a></td><td>{{if .CityRegion}}{{.CityRegion}}{{else}}{{.Address}}{{end}}</td><td>{{.RoomCount}}</td><td>{{.ResponsibilityCount}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td><span class="status {{.CollectionStatus}}">{{.CollectionStatusLabel}}</span></td>
             <td><a class="btn subtle" href="/properties/{{.ID}}?period={{$.Period}}&amp;list_status={{$.StatusFilter}}&amp;list_search={{$.Search}}&amp;list_collection={{$.CollectionFilter}}&amp;list_sort={{$.Sort}}">查看详情</a></td>

@@ -11,12 +11,12 @@
     <input type="hidden" name="page" value="{{.ReturnPage}}">
     <input type="hidden" name="page_size" value="{{.ReturnPageSize}}">
     <input type="hidden" name="return_to" value="{{.ReturnTo}}">
-    <div class="collection-balance-fact"><span>待平账责任</span><strong>{{.DutyLabel}}</strong></div>
+    <div class="collection-balance-fact"><span>待平账账单</span><strong>{{.DutyLabel}}</strong></div>
     <label class="collection-balance-field"><span>处理方式</span><select name="disposition">{{range .Dispositions}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
     <label class="collection-balance-field"><span>平账金额</span><input name="amount" value="{{.OutstandingAmount}}" readonly aria-label="平账金额"></label>
     <label class="collection-balance-field"><span>生效日期</span><input name="effective_date" type="date" value="{{.EffectiveDate}}" readonly aria-label="生效日期"></label>
     <label class="collection-balance-field"><span>处理说明</span><textarea name="reason" maxlength="512" placeholder="平账原因" aria-label="填写平账原因" required></textarea></label>
-    <button class="btn" type="submit" data-confirm="true">确认平账</button>
+    <button class="btn" type="submit" data-confirm="true" data-confirm-title="确认平账" data-confirm-label="确认平账" data-confirm-message="将对{{.DutyLabel}}按当前剩余未付金额平账。此操作会记录平账结果，请核对处理说明后继续。">确认平账</button>
   </form>
 </details>
 {{end}}

@@ -520,6 +520,7 @@ func newAppMux(a *app) *http.ServeMux {
 	mux.HandleFunc("/transactions/undefer", a.handleTransactionUndefer)
 	mux.HandleFunc("/transactions/restore", a.handleTransactionRestore)
 	mux.HandleFunc("/transactions/revoke", a.handleTransactionRevoke)
+	mux.HandleFunc("/transactions/revoke-allocation", a.handleTransactionAllocationRevoke)
 	mux.HandleFunc("/transactions/payer/preview", a.handlePayerPreview)
 	mux.HandleFunc("/transactions/payer/confirm", a.handlePayerConfirm)
 	mux.HandleFunc("/rooms", a.handleRooms)
@@ -774,18 +775,7 @@ func (a *app) handleTransactions(w http.ResponseWriter, r *http.Request) {
 		a.renderTransactionDetail(w, r, detailKey)
 		return
 	}
-	filters := filtersFromQuery(r.URL.Query())
-	transactionScope := ""
-	if r.URL.Path == "/transactions" {
-		transactionScope = firstNonEmpty(strings.TrimSpace(r.URL.Query().Get("scope")), matchStatusSelection(filters))
-		if transactionScope == "all" {
-			filters.PendingOnly = false
-			filters.MatchStatus = ""
-		} else if transactionScope == "" {
-			filters.PendingOnly = true
-			transactionScope = pendingMatchStatusFilter
-		}
-	}
+	filters, transactionScope := transactionListFiltersFromQuery(r.URL.Query())
 	filterError := ""
 	if err := validateTransactionFilters(filters); err != nil {
 		filterError = "invalid_filter"
@@ -842,7 +832,11 @@ func (a *app) handleTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 	setTransactionDetailLinks(r.URL.Query(), rows)
 	for index := range rows {
-		if rows[index].Direction == "income" && rows[index].RemainingAmountInput != "0.00" && rows[index].MatchStatus != "ignored" {
+		rows[index].PayerSearchURL = transactionNameSearchURL(r.URL.Query(), rows[index].PayerName)
+		if rows[index].MatchedTenantName != "" {
+			rows[index].TenantSearchURL = transactionNameSearchURL(r.URL.Query(), rows[index].MatchedTenantName)
+		}
+		if rows[index].Direction == "income" && rows[index].MatchStatus != "ignored" {
 			if id, err := strconv.ParseUint(rows[index].InternalID, 10, 64); err == nil {
 				rows[index].MatchURL = transactionReviewURL(r.URL.Query(), id)
 			}
@@ -948,7 +942,7 @@ func (a *app) handleTransactions(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		review, reviewErr := newTransactionService(a.db).transactionMatchReviewForMonth(r.Context(), userID, matchID, tenantID, historyPage, strings.TrimSpace(r.URL.Query().Get("match_month")))
+		review, reviewErr := newTransactionService(a.db).transactionMatchReviewForMonthWithOrigin(r.Context(), userID, matchID, tenantID, historyPage, strings.TrimSpace(r.URL.Query().Get("match_month")), r.URL.Query().Get("match_origin") != "roommate")
 		if errors.Is(reviewErr, gorm.ErrRecordNotFound) {
 			http.NotFound(w, r)
 			return
@@ -992,6 +986,25 @@ func (a *app) handleTransactions(w http.ResponseWriter, r *http.Request) {
 	if err := transactionListTemplate.Execute(w, data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func transactionListFiltersFromQuery(query url.Values) (transactionFilters, string) {
+	filters := filtersFromQuery(query)
+	// Older links can name one unfinished stored status. The visible list now
+	// offers one 待处理 group, so those links follow that same group.
+	switch filters.MatchStatus {
+	case "candidate", "needs_review", "unmatched", "partial":
+		filters.MatchStatus = ""
+		filters.PendingOnly = true
+	}
+	scope := firstNonEmpty(strings.TrimSpace(query.Get("scope")), matchStatusSelection(filters))
+	if scope == "all" {
+		filters.PendingOnly = false
+		filters.MatchStatus = ""
+	} else if scope == "" {
+		scope = "all"
+	}
+	return filters, scope
 }
 
 func rememberPayerPreference(values url.Values) bool {
@@ -1320,6 +1333,10 @@ func (a *app) createTenant(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, tenantFormRedirectURL(returnTo, "", "tenant_room_invalid"), http.StatusFound)
 		return
 	}
+	if _, valid := tenantReturnRoomID(returnTo); valid && strings.TrimSpace(r.Form.Get("tenant_id")) != "" {
+		http.Redirect(w, r, tenantFormRedirectURL(returnTo, "", "tenant_room_invalid"), http.StatusFound)
+		return
+	}
 	if err := a.persistTenantRecord(r.Context(), r, r.Form); err != nil {
 		errorCode := ""
 		switch {
@@ -1368,11 +1385,22 @@ func tenantCreatedRoomReturnURL(returnTo string, form url.Values) (string, bool)
 
 func tenantReturnRoomID(returnTo string) (uint64, bool) {
 	target, err := url.ParseRequestURI(strings.TrimSpace(returnTo))
-	if err != nil || target.IsAbs() || target.Host != "" || target.Path != "/tenants" {
+	if err != nil || target.IsAbs() || target.Host != "" || strings.HasPrefix(target.Path, "//") {
 		return 0, false
 	}
-	roomID, err := parsePositiveUint(target.Query().Get("return_room_id"))
-	return roomID, err == nil
+	if target.Path == "/tenants" {
+		roomID, err := parsePositiveUint(target.Query().Get("return_room_id"))
+		return roomID, err == nil
+	}
+	if !strings.HasPrefix(target.Path, "/rooms/") || target.Query().Get("tenant_add") != "1" {
+		return 0, false
+	}
+	roomID, err := parsePositiveUint(strings.TrimPrefix(target.Path, "/rooms/"))
+	if err != nil {
+		return 0, false
+	}
+	month, err := parsePeriodMonth(target.Query().Get("period"))
+	return roomID, err == nil && month.Format("2006-01") == target.Query().Get("period")
 }
 
 func tenantFormRedirectURL(returnTo, message, errorCode string) string {
@@ -1389,6 +1417,9 @@ func tenantFormRedirectURL(returnTo, message, errorCode string) string {
 		}
 	}
 	if !validPath {
+		_, validPath = tenantReturnRoomID(returnTo)
+	}
+	if !validPath {
 		target = &url.URL{Path: "/tenants"}
 	}
 	query := target.Query()
@@ -1400,7 +1431,7 @@ func tenantFormRedirectURL(returnTo, message, errorCode string) string {
 			if query.Get("edit") == "" {
 				query.Set("add", "1")
 			}
-		} else {
+		} else if strings.HasPrefix(target.Path, "/tenants/") {
 			query.Set("edit", "1")
 		}
 	} else {
@@ -2939,75 +2970,30 @@ var loginTemplate = template.Must(template.New("login").Parse(`<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>RentOps Login</title>
-  <style>
-    :root {
-      --background-deep: #f3f4f6;
-      --background-base: #f3f4f6;
-      --foreground: #111827;
-      --foreground-muted: #4b5563;
-      --foreground-subtle: #6b7280;
-      --accent: #2563eb;
-      --accent-bright: #1d4ed8;
-      --border: #d1d5db;
-      --border-hover: #9ca3af;
-      --sans: "Inter", "Geist Sans", "Aptos", "Segoe UI", system-ui, sans-serif;
-      --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
-    }
-    *, *::before, *::after { box-sizing: border-box; }
-    html { background: var(--background-deep); }
-    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; color: var(--foreground); font-family: var(--sans); background: var(--background-base); overflow-x: hidden; }
-    body::before, body::after, .ambient { display: none; }
-    button, input { font: inherit; }
-    .shell { width: min(424px, 100%); padding: 30px; border: 1px solid var(--border); border-radius: 12px; background: #ffffff; }
-    .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 30px; }
-    .mark { width: 38px; height: 38px; border-radius: 8px; display: grid; place-items: center; color: #ffffff; font: 700 17px var(--mono); background: var(--accent); }
-    .brand-title { font-weight: 800; letter-spacing: -0.01em; }
-    .brand-meta { color: var(--foreground-muted); font: 700 11px var(--mono); text-transform: uppercase; letter-spacing: 0.12em; margin-top: 2px; }
-    h1 { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.03em; }
-    .sub { margin: 10px 0 0; color: var(--foreground-muted); font-size: 13.5px; line-height: 1.6; }
-    label { display: block; margin: 18px 0 7px; color: #374151; font: 700 11px var(--mono); text-transform: uppercase; letter-spacing: 0.12em; }
-    input { width: 100%; height: 44px; border: 1px solid var(--border); border-radius: 8px; padding: 0 13px; color: var(--foreground); background: #f9fafb; outline: none; }
-    input::placeholder { color: var(--foreground-subtle); }
-    input:hover { border-color: var(--border-hover); }
-    input:focus { border-color: var(--accent); }
-    input:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
-    input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus { -webkit-text-fill-color: var(--foreground); caret-color: var(--foreground); background-color: #f9fafb; }
-    button { width: 100%; height: 44px; margin-top: 22px; border: 1px solid var(--accent); border-radius: 8px; background: var(--accent); color: #ffffff; font: inherit; font-weight: 800; cursor: pointer; }
-    button:hover { background: var(--accent-bright); border-color: var(--accent-bright); }
-    button:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 3px; }
-    button:disabled { cursor: not-allowed; opacity: .5; }
-    .error { margin-top: 18px; padding: 12px 14px; border: 1px solid #fecaca; border-radius: 8px; background: #fef2f2; color: #991b1b; font-size: 13px; line-height: 1.6; }
-    .hint { margin-top: 18px; color: var(--foreground-muted); font: 500 11px/1.7 var(--mono); }
-    @media (max-width: 520px) { body { padding: 16px; } .shell { padding: 24px; } }
-    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; } }
-  </style>
+  <title>登录 · RentOps</title>
+  <link rel="stylesheet" href="/static/css/workspace.css">
+  <link rel="stylesheet" href="/static/css/pages/login.css">
 </head>
 <body>
-  <div class="ambient" aria-hidden="true">
-    <div class="blob primary"></div>
-    <div class="blob secondary"></div>
-    <div class="blob tertiary"></div>
-  </div>
   <main class="shell">
     <div class="brand">
       <div class="mark">R</div>
       <div>
         <div class="brand-title">RentOps</div>
-        <div class="brand-meta">Bank income workspace</div>
+        <div class="brand-meta">收租工作区</div>
       </div>
     </div>
     <h1>登录</h1>
-    <p class="sub">使用演示管理员账号进入银行收入工作台。</p>
-    {{if .Error}}<div class="error">用户名或密码错误。</div>{{end}}
+    <p class="sub">输入账号和密码，进入收租工作区。</p>
+    {{if .Error}}<div class="error" role="alert">用户名或密码错误，请重试。</div>{{end}}
     <form method="post" action="/login-local">
       <label for="username">用户名</label>
-      <input id="username" name="username" autocomplete="username" value="{{.Username}}">
+      <input id="username" name="username" autocomplete="username" value="{{.Username}}" required>
       <label for="password">密码</label>
-      <input id="password" name="password" type="password" autocomplete="current-password">
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
       <button type="submit">登录</button>
     </form>
-    <div class="hint">登录账号由 APP_ADMIN_USERNAME 和 APP_ADMIN_PASSWORD 配置。</div>
+    <p class="hint">如需开通或重置账号，请联系工作区管理员。</p>
   </main>
 </body>
 </html>
@@ -3109,7 +3095,7 @@ var tenantTemplate = newWorkspacePageTemplate("tenants", nil, `<!doctype html>
         <div class="panel-head"><h2 id="tenant-list-title">租客列表</h2><span class="tiny">{{.FilteredCount}} / {{.TenantCount}} 条记录</span></div>
         {{if .Rows}}
         <div class="tenant-mobile-list" aria-label="移动端租客列表">
-          {{range .Rows}}<article class="tenant-mobile-card panel"><div class="tenant-mobile-head"><div><h3>{{if .DisplayAlias}}{{.DisplayAlias}}{{else}}{{.Name}}{{end}}</h3>{{if .DisplayAlias}}<p>{{.Name}}</p>{{end}}<p>{{if .Email}}{{.Email}}{{else}}未填写邮箱{{end}}</p><p>{{if .PayerNameHint}}{{.PayerNameHint}}{{else}}暂无付款识别{{end}}</p></div><span class="status {{.Status}}">{{if eq .Status "active"}}有效{{else}}已停用{{end}}</span></div><div class="tenant-mobile-actions"><a class="btn subtle" href="{{if .ListDetailURL}}{{.ListDetailURL}}{{else}}/tenants/{{.ID}}{{end}}">详情</a><a class="btn subtle" href="{{if .ListEditURL}}{{.ListEditURL}}{{else}}/tenants?edit={{.ID}}{{end}}">编辑档案</a></div>{{if .BillingHistory}}<details class="tenant-mobile-history"><summary>查看最近六个月责任</summary>{{range .BillingHistory}}<div class="tenant-mobile-history-row"><span>{{.PeriodLabel}} · {{.StatusLabel}}</span><strong>{{.BalanceAmount}}</strong></div>{{end}}</details>{{end}}</article>{{end}}
+          {{range .Rows}}<article class="tenant-mobile-card panel"><div class="tenant-mobile-head"><div><h3>{{if .DisplayAlias}}{{.DisplayAlias}}{{else}}{{.Name}}{{end}}</h3>{{if .DisplayAlias}}<p>{{.Name}}</p>{{end}}<p>{{if .Email}}{{.Email}}{{else}}未填写邮箱{{end}}</p><p>{{if .PayerNameHint}}{{.PayerNameHint}}{{else}}暂无付款识别{{end}}</p></div><span class="status {{.Status}}">{{if eq .Status "active"}}有效{{else}}已停用{{end}}</span></div><div class="tenant-mobile-actions"><a class="btn subtle" href="{{if .ListDetailURL}}{{.ListDetailURL}}{{else}}/tenants/{{.ID}}{{end}}">详情</a><a class="btn subtle" href="{{if .ListEditURL}}{{.ListEditURL}}{{else}}/tenants?edit={{.ID}}{{end}}">编辑档案</a></div>{{if .BillingHistory}}<details class="tenant-mobile-history"><summary>查看最近六个月租金账单</summary>{{range .BillingHistory}}<div class="tenant-mobile-history-row"><span>{{.PeriodLabel}} · {{.StatusLabel}}</span><strong>{{.BalanceAmount}}</strong></div>{{end}}</details>{{end}}</article>{{end}}
         </div>
         <div class="tenant-table-wrap table-wrap">
           <table>
@@ -3124,7 +3110,7 @@ var tenantTemplate = newWorkspacePageTemplate("tenants", nil, `<!doctype html>
                 <td><div class="row-actions"><a class="btn subtle" href="{{if .ListDetailURL}}{{.ListDetailURL}}{{else}}/tenants/{{.ID}}{{end}}">详情</a><a class="btn subtle" href="{{if .ListEditURL}}{{.ListEditURL}}{{else}}/tenants?edit={{.ID}}{{end}}">编辑档案</a></div></td>
               </tr>
               <tr id="tenant-billing-{{.ID}}" class="tenant-history-row" hidden><td colspan="5"><div class="tenant-history">
-                <div class="tenant-history-head"><h3>最近六个月个人责任</h3><span class="tiny">责任行按月份、房间分别保留</span></div>
+                <div class="tenant-history-head"><h3>最近六个月个人租金账单</h3><span class="tiny">账单按月份、房间分别保留</span></div>
                 {{if .BillingHistory}}
                 <div class="table-wrap"><table class="tenant-history-table">
                   <thead><tr><th>月份</th><th>应收</th><th>实际收</th><th>未收</th><th>状态</th></tr></thead>

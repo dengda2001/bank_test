@@ -13,10 +13,15 @@
         option.disabled = Boolean(conflict);
         option.dataset.tenantConflict = conflict ? "true" : "false";
         option.textContent = option.dataset.tenantName + (conflict ? "（已入住 " + conflict.room_label + "，请先解绑）" : "");
-        if (conflict) conflicts.set(option.value, {name: option.dataset.tenantName, room: conflict});
       }
       const selected = select.selectedOptions[0];
       select.setCustomValidity(selected?.disabled ? "该租客已在其他房间入住，请先去原房间解绑。" : "");
+      const choice = root.querySelector('input[name="tenant_choice"]:checked');
+      if (select.disabled || (choice && choice.value !== "existing") || !selected?.value) continue;
+      let intervals = [];
+      try { intervals = JSON.parse(selected.dataset.occupancies || "[]"); } catch (_) { /* The server remains authoritative. */ }
+      const conflict = intervals.find((item) => Number(item.room_id) !== targetRoom && (!item.to || item.to >= month));
+      if (conflict) conflicts.set(selected.value, {name: selected.dataset.tenantName, room: conflict});
     }
     const notice = root.querySelector("[data-tenant-conflicts]");
     if (!notice) return;
@@ -24,7 +29,7 @@
     notice.hidden = conflicts.size === 0;
     if (!conflicts.size) return;
     const heading = document.createElement("strong");
-    heading.textContent = "以下租客已入住其他房间，请先去原房间解绑：";
+    heading.textContent = "所选租客已入住其他房间，请先去原房间解绑：";
     notice.append(heading);
     for (const {name, room} of conflicts.values()) {
       const row = document.createElement("p");
@@ -41,6 +46,9 @@
       const month = root.querySelector(root.dataset.tenantMonthSelector || 'input[type="month"]');
       month?.addEventListener("change", () => refresh(root));
       month?.addEventListener("input", () => refresh(root));
+	  root.addEventListener("change", (event) => {
+	    if (event.target.matches('select[data-tenant-availability-select], select[name="tenant_id"], input[name="tenant_choice"]')) refresh(root);
+	  });
 	  const rows = root.querySelector("[data-plan-member-rows]");
 	  if (rows) new MutationObserver(() => refresh(root)).observe(rows, {childList: true});
       refresh(root);

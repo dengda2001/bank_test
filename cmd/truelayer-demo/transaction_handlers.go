@@ -19,7 +19,7 @@ func transactionReturnTarget(r *http.Request) string {
 	if err != nil || target.IsAbs() || target.Host != "" || (target.Path != "/transactions" && target.Path != "/rent-dashboard") {
 		return fallback
 	}
-	allowed := map[string]bool{"match_status": true, "scope": true, "period": true, "payer": true, "tenant_id": true, "direction": true, "rent_period": true, "allocation": true, "sort": true, "page": true, "page_size": true, "pending": true, "arrival_from": true, "arrival_to": true, "view": true, "property_id": true, "room_id": true, "search": true, "status": true}
+	allowed := map[string]bool{"match_status": true, "scope": true, "period": true, "payer": true, "tenant_id": true, "direction": true, "rent_period": true, "allocation": true, "sort": true, "page": true, "page_size": true, "pending": true, "arrival_from": true, "arrival_to": true, "view": true, "property_id": true, "room_id": true, "search": true, "status": true, "detail": true}
 	query := url.Values{}
 	for key, values := range target.Query() {
 		if !allowed[key] || len(values) != 1 || len(values[0]) > 191 {
@@ -233,6 +233,38 @@ func (a *app) handleTransactionRevoke(w http.ResponseWriter, r *http.Request) {
 	a.handleTransactionAction(w, r, transactionActionRevokeAllocations)
 }
 
+func (a *app) handleTransactionAllocationRevoke(w http.ResponseWriter, r *http.Request) {
+	if !a.requireAuth(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	userID, ok := a.currentUserID(r)
+	if !ok || a.db == nil {
+		http.Error(w, "database session required", http.StatusBadRequest)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	if err := parseTransactionForm(r); err != nil {
+		redirectTransactionResult(w, r, "error", "invalid_allocation_revoke")
+		return
+	}
+	allocationID, allocationErr := parsePositiveUint(r.Form.Get("allocation_id"))
+	transactionID, transactionErr := parsePositiveUint(r.Form.Get("transaction_id"))
+	if allocationErr != nil || transactionErr != nil {
+		redirectTransactionResult(w, r, "error", "invalid_allocation_revoke")
+		return
+	}
+	_, err := newTransactionService(a.db).revokeRentAllocation(r.Context(), userID, allocationID, transactionID, r.Form.Get("idempotency_key"))
+	if err != nil {
+		redirectTransactionResult(w, r, "error", transactionFailureCode(err, "allocation_revoke_failed"))
+		return
+	}
+	redirectTransactionResult(w, r, "message", "allocation_revoked")
+}
+
 func (a *app) handleTransactionRematch(w http.ResponseWriter, r *http.Request) {
 	if !a.requireAuth(w, r) {
 		return
@@ -299,7 +331,9 @@ func (a *app) handleTransactionRevokePreview(w http.ResponseWriter, r *http.Requ
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	// 确认页要把"从哪来"原样带回去。这里复用列表侧同一套白名单校验，
 	// 免得确认页成为开放重定向的跳板。
-	if err := revokePreviewTemplate.Execute(w, transactionRevokePreviewDataFromModel(preview, transactionReturnTarget(r))); err != nil {
+	data := transactionRevokePreviewDataFromModel(preview, transactionReturnTarget(r))
+	data.workspaceShell = canonicalPageShell(a, r, "transactions", "银行流水与租金关联")
+	if err := revokePreviewTemplate.Execute(w, data); err != nil {
 		http.Error(w, "unable to render transaction preview", http.StatusInternalServerError)
 	}
 }

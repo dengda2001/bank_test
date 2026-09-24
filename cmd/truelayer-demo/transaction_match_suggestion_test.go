@@ -48,6 +48,36 @@ func TestManualTenantSuggestionLinkOnlyOpensReview(t *testing.T) {
 	}
 }
 
+func TestManualTenantSuggestionsUseDistinctivePayerWordsWithoutCap(t *testing.T) {
+	tenants := []tenant{
+		{ID: 1, Name: "Eider"},
+		{ID: 2, Name: "Eider N"},
+		{ID: 3, Name: "Eider A"},
+		{ID: 4, Name: "Eider B"},
+		{ID: 5, Name: "Another name", DisplayAlias: "Eider C"},
+		{ID: 6, Name: "Rent Bank"},
+	}
+	got := manualTenantSuggestions("Eider Esneir Larios Ospino", "confirmed", tenants)
+	if len(got) != 5 {
+		t.Fatalf("word fallback candidates=%+v, want all five Eider names", got)
+	}
+	seen := make(map[uint64]bool)
+	for _, candidate := range got {
+		seen[candidate.ID] = true
+	}
+	for id := uint64(1); id <= 5; id++ {
+		if !seen[id] {
+			t.Fatalf("tenant %d missing from %+v", id, got)
+		}
+	}
+	if got := manualTenantSuggestions("Eider Esneir Larios Ospino", "inferred", tenants); len(got) != 0 {
+		t.Fatalf("inferred payer produced suggestions %+v", got)
+	}
+	if got := manualTenantSuggestions("Bank Rent Transfer", "confirmed", tenants); len(got) != 0 {
+		t.Fatalf("generic bank words produced suggestions %+v", got)
+	}
+}
+
 func TestMatchMethodLabelUsesOnlyEffectiveRentAllocations(t *testing.T) {
 	auto := paymentAllocation{AllocationKind: allocationKindRent, Status: allocationStatusConfirmed, ConfirmationSource: "auto_exact_name"}
 	manual := paymentAllocation{AllocationKind: allocationKindRent, Status: allocationStatusConfirmed, ConfirmationSource: "manual_name"}

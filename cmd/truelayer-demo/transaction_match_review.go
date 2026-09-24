@@ -22,11 +22,16 @@ type transactionReviewTenant struct {
 }
 
 type transactionReviewEvidence struct {
+	AllocationID  uint64
 	TransactionID uint64
 	Date          string
 	PayerName     string
 	Description   string
 	Amount        string
+	Reference     string
+	Period        string
+	TenantName    string
+	RequestKey    string
 	DetailURL     string
 }
 
@@ -102,6 +107,10 @@ func (s *transactionService) transactionMatchReview(ctx context.Context, userID,
 }
 
 func (s *transactionService) transactionMatchReviewForMonth(ctx context.Context, userID, transactionID, requestedTenantID uint64, historyPage int, requestedMonth string) (transactionMatchReviewData, error) {
+	return s.transactionMatchReviewForMonthWithOrigin(ctx, userID, transactionID, requestedTenantID, historyPage, requestedMonth, true)
+}
+
+func (s *transactionService) transactionMatchReviewForMonthWithOrigin(ctx context.Context, userID, transactionID, requestedTenantID uint64, historyPage int, requestedMonth string, explicitMonthLookup bool) (transactionMatchReviewData, error) {
 	if userID == 0 || transactionID == 0 {
 		return transactionMatchReviewData{}, gorm.ErrRecordNotFound
 	}
@@ -117,7 +126,7 @@ func (s *transactionService) transactionMatchReviewForMonth(ctx context.Context,
 		return transactionMatchReviewData{}, err
 	}
 	summary := summarizeTransactionAllocations(source, sourceAllocations)
-	if summary.RemainingCents <= 0 || source.MatchStatus == "ignored" {
+	if source.MatchStatus == "ignored" {
 		return transactionMatchReviewData{}, gorm.ErrRecordNotFound
 	}
 	if requestedMonth != "" {
@@ -285,7 +294,12 @@ func (s *transactionService) transactionMatchReviewForMonth(ctx context.Context,
 			}
 		}
 		data.Months = transactionReviewMonths(source, summary.RemainingCents, selectedObligations, allocations, transactions)
-		if requestedMonth != "" {
+		for monthIndex := range data.Months {
+			for evidenceIndex := range data.Months[monthIndex].Evidence {
+				data.Months[monthIndex].Evidence[evidenceIndex].TenantName = data.SelectedTenantName
+			}
+		}
+		if requestedMonth != "" && explicitMonthLookup {
 			found := false
 			for index := range data.Months {
 				if data.Months[index].Period == requestedMonth {
@@ -295,7 +309,7 @@ func (s *transactionService) transactionMatchReviewForMonth(ctx context.Context,
 			}
 			if !found {
 				period, _ := parsePeriodMonth(requestedMonth)
-				data.Months = append([]transactionReviewMonth{{Period: requestedMonth, Label: formatMonthLabel(period), Viewed: true, Note: "该月没有可分配的租金责任，请核对房间租金计划。"}}, data.Months...)
+				data.Months = append([]transactionReviewMonth{{Period: requestedMonth, Label: formatMonthLabel(period), Viewed: true, Note: "该月没有可分配的租金账单，请核对房间租金计划。"}}, data.Months...)
 			}
 		}
 		for _, month := range data.Months {
@@ -371,6 +385,8 @@ func transactionReviewMonths(source paymentTransaction, sourceRemaining int64, o
 			row.Note = "币种不同，不能匹配这笔流水"
 		case remaining == 0:
 			row.Note = "本月已交清，请先核对下方原匹配流水"
+		case sourceRemaining <= 0:
+			row.Note = "本笔流水已分配完。如需调整，请先撤销下方对应的已入账份额。"
 		default:
 			row.Selectable = true
 			coverage := min(sourceRemaining, remaining)
@@ -390,18 +406,22 @@ func transactionReviewMonths(source paymentTransaction, sourceRemaining int64, o
 				continue
 			}
 			row.Evidence = append(row.Evidence, transactionReviewEvidence{
+				AllocationID:  allocation.ID,
 				TransactionID: transaction.ID,
 				Date:          transactionReviewDate(transaction.TransactionTime),
 				PayerName:     firstNonEmpty(stringValue(transaction.PayerName), "未知付款人"),
 				Description:   firstNonEmpty(transaction.Description, "无描述"),
 				Amount:        formatMoney(centsToMoney(allocation.AmountCents), transaction.Currency, 2),
+				Reference:     firstNonEmpty(transaction.Reference, "—"),
+				Period:        period,
+				RequestKey:    recordID("share-revoke", time.Now().UTC()),
 				DetailURL:     "/transactions?detail=" + strconv.FormatUint(transaction.ID, 10),
 			})
 		}
 		rows = append(rows, row)
 	}
 	if parsedPeriod != "" && !seenPeriod[parsedPeriod] {
-		note := "系统未找到该月租金责任，请核对入住与租金计划"
+		note := "系统未找到该月租金账单，请核对入住与租金计划"
 		if !periodEvidence.Explicit {
 			note = "入账日期建议；" + note
 		}
@@ -504,6 +524,7 @@ func transactionReviewURL(query url.Values, transactionID uint64) string {
 	values.Del("match_tenant")
 	values.Del("match_history_page")
 	values.Del("match_month")
+	values.Del("match_origin")
 	values.Set("match", strconv.FormatUint(transactionID, 10))
 	return "/transactions?" + values.Encode()
 }
@@ -526,6 +547,8 @@ func transactionReviewErrorText(code string) string {
 		return "分配清单无效，请核对租客、月份和金额。"
 	case "batch_match_failed":
 		return "分配未保存。租金或流水余额可能已变化，请核对后重试。"
+	case "allocation_revoke_failed", "invalid_allocation_revoke":
+		return "撤销未完成。该份分配可能已变化，请刷新后重试。"
 	default:
 		return ""
 	}
@@ -551,7 +574,7 @@ func (d *transactionMatchReviewData) setURLs(query url.Values) {
 	d.FormAction = "/transactions"
 	d.ListValues = cloneQueryValues(query)
 	d.setSuggestionURLs(query)
-	for _, key := range []string{"match", "match_tenant", "match_history_page", "match_month", "detail", "error", "message"} {
+	for _, key := range []string{"match", "match_tenant", "match_history_page", "match_month", "match_origin", "detail", "error", "message"} {
 		d.ListValues.Del(key)
 	}
 	if d.HistoryPage > 1 {
@@ -573,7 +596,7 @@ func (d *transactionMatchReviewData) setWorkspaceURLs(filters rentWorkspaceFilte
 	d.AllowDefer = isPendingMatchStatus(d.Source.MatchStatus)
 	d.ListValues = cloneQueryValues(query)
 	d.setSuggestionURLs(query)
-	for _, key := range []string{"match", "match_tenant", "match_history_page", "match_month", "detail", "error", "message"} {
+	for _, key := range []string{"match", "match_tenant", "match_history_page", "match_month", "match_origin", "detail", "error", "message"} {
 		d.ListValues.Del(key)
 	}
 	d.AllHistoryURL = "/transactions?scope=all&payer=" + url.QueryEscape(d.Source.PayerName)
@@ -590,12 +613,40 @@ func (d *transactionMatchReviewData) setWorkspaceURLs(filters rentWorkspaceFilte
 	d.Error = transactionReviewErrorText(query.Get("error"))
 }
 
+func (d *transactionMatchReviewData) setDetailURLs(query url.Values) {
+	d.setURLs(query)
+	transactionID, _ := strconv.ParseUint(d.Source.ID, 10, 64)
+	d.CloseURL = transactionDetailURL(query, transactionID)
+	d.ReturnURL = d.CloseURL
+	d.ListValues.Set("detail", strconv.FormatUint(transactionID, 10))
+	for i := range d.SuggestedTenants {
+		d.SuggestedTenants[i].URL = transactionReviewDetailURL(d.SuggestedTenants[i].URL, transactionID)
+	}
+	for i := range d.RoommateGroups {
+		for j := range d.RoommateGroups[i].Roommates {
+			d.RoommateGroups[i].Roommates[j].URL = transactionReviewDetailURL(d.RoommateGroups[i].Roommates[j].URL, transactionID)
+		}
+	}
+}
+
+func transactionReviewDetailURL(raw string, transactionID uint64) string {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	query := parsed.Query()
+	query.Set("detail", strconv.FormatUint(transactionID, 10))
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
+}
+
 func (d *transactionMatchReviewData) setSuggestionURLs(query url.Values) {
 	for i := range d.SuggestedTenants {
 		values := cloneQueryValues(query)
 		values.Del("detail")
 		values.Del("match_history_page")
 		values.Del("match_month")
+		values.Del("match_origin")
 		values.Set("match", d.Source.ID)
 		values.Set("match_tenant", strconv.FormatUint(d.SuggestedTenants[i].ID, 10))
 		d.SuggestedTenants[i].URL = d.FormAction + "?" + values.Encode()
@@ -609,6 +660,7 @@ func (d *transactionMatchReviewData) setSuggestionURLs(query url.Values) {
 			values.Set("match", d.Source.ID)
 			values.Set("match_tenant", strconv.FormatUint(group.Roommates[roommateIndex].ID, 10))
 			values.Set("match_month", group.Period)
+			values.Set("match_origin", "roommate")
 			group.Roommates[roommateIndex].URL = d.FormAction + "?" + values.Encode()
 		}
 	}

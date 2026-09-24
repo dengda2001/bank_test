@@ -118,10 +118,10 @@ func TestWritePrototypePreviewHTML(t *testing.T) {
 			review := transactionMatchReviewData{
 				Source:    transactionPageRow{ID: "11", InternalID: "11", DetailKey: "11", MatchURL: "/transactions?match=11&match_status=pending", DateDisplay: "12 Aug 2026 09:12", PayerName: "WAHAJULLAH KHAN", AmountDisplay: "€1,250.00", RemainingAmountDisplay: "€1,250.00", Description: "AUGUST RENT WAHAJULLAH KHAN VERY LONG BANK DESCRIPTION", MatchStatus: "needs_review", MatchStatusLabel: "需处理", ParsedPeriodDisplay: "2026-08", MatchReason: "租客已识别，但8月似乎已经交过。"},
 				Reference: "IE0023260847", SelectedTenantID: 7, SelectedTenantName: "WAHAJULLAH KHAN", IdentifiedTenant: true, IntelligentSuggestion: true, IdentityNote: "根据已保存的付款人关系识别；请与银行原文核对。", CloseURL: "/transactions?match_status=pending", ReturnURL: "/transactions?match_status=pending", FormAction: "/transactions", CanMatch: true, SourceAmountCents: 125000, SourceRemainingCents: 125000, RequestKey: "preview-review-key",
-				TenantOptions: []transactionReviewTenant{{ID: 7, Name: "WAHAJULLAH KHAN", Selected: true}, {ID: 11, Name: "Bríd Ní Bhraonáin"}},
+				TenantOptions:  []transactionReviewTenant{{ID: 7, Name: "WAHAJULLAH KHAN", Selected: true}, {ID: 11, Name: "Bríd Ní Bhraonáin"}},
 				RoommateGroups: []transactionReviewRoommateGroup{{AnchorName: "WAHAJULLAH KHAN", PropertyName: "78 Old County Road", RoomLabel: "03", Period: "2026-09", Roommates: []transactionReviewTenant{{ID: 11, Name: "Bríd Ní Bhraonáin", URL: "/transactions?match=11&match_tenant=11&match_month=2026-09"}}}},
-				Months:        []transactionReviewMonth{{Period: "2026-08", Label: "2026年8月", Expected: "€1,250.00", Paid: "€1,250.00", Remaining: "€0.00", Highlighted: true, Note: "本月已交清，请先核对下方原匹配流水", Evidence: []transactionReviewEvidence{{Date: "2026-08-01", PayerName: "WAHAJULLAH KHAN", Description: "AUGUST RENT RECEIVED ON 1ST", Amount: "€1,250.00", DetailURL: "/transactions?detail=10"}}}, {Period: "2026-09", Label: "2026年9月", Expected: "€625.00", Paid: "€0.00", Remaining: "€625.00", RemainingCents: 62500, Selectable: true, Coverage: "€625.00", SourceRemainder: "€625.00"}, {Period: "2026-10", Label: "2026年10月", Expected: "€625.00", Paid: "€0.00", Remaining: "€625.00", RemainingCents: 62500, Selectable: true, Coverage: "€625.00", SourceRemainder: "€0.00"}},
-				History:       []transactionReviewHistory{{Date: "2026-08-01", PayerName: "WAHAJULLAH KHAN", Description: "AUGUST RENT RECEIVED ON 1ST", Amount: "€1,250.00", ParsedPeriod: "2026-08", MatchedPeriod: "2026-08", Status: "已关联", DetailURL: "/transactions?detail=10"}}, HistoryPage: 1, HistoryPages: 2, NextHistoryURL: "/transactions?match=11&match_tenant=7&match_history_page=2",
+				Months:         []transactionReviewMonth{{Period: "2026-08", Label: "2026年8月", Expected: "€1,250.00", Paid: "€1,250.00", Remaining: "€0.00", Highlighted: true, Note: "本月已交清，请先核对下方原匹配流水", Evidence: []transactionReviewEvidence{{Date: "2026-08-01", PayerName: "WAHAJULLAH KHAN", Description: "AUGUST RENT RECEIVED ON 1ST", Amount: "€1,250.00", DetailURL: "/transactions?detail=10"}}}, {Period: "2026-09", Label: "2026年9月", Expected: "€625.00", Paid: "€0.00", Remaining: "€625.00", RemainingCents: 62500, Selectable: true, Coverage: "€625.00", SourceRemainder: "€625.00"}, {Period: "2026-10", Label: "2026年10月", Expected: "€625.00", Paid: "€0.00", Remaining: "€625.00", RemainingCents: 62500, Selectable: true, Coverage: "€625.00", SourceRemainder: "€0.00"}},
+				History:        []transactionReviewHistory{{Date: "2026-08-01", PayerName: "WAHAJULLAH KHAN", Description: "AUGUST RENT RECEIVED ON 1ST", Amount: "€1,250.00", ParsedPeriod: "2026-08", MatchedPeriod: "2026-08", Status: "已关联", DetailURL: "/transactions?detail=10"}}, HistoryPage: 1, HistoryPages: 2, NextHistoryURL: "/transactions?match=11&match_tenant=7&match_history_page=2",
 			}
 			return transactionListTemplate.Execute(body, transactionListPageData{workspaceShell: workspaceShell{ActivePage: "transactions", Username: "audit", Environment: "sandbox", FootNote: "银行流水与租金关联", CompactTitle: "流水"}, CanonicalPath: "/transactions", TransactionScope: "pending", MatchReview: &review, TransactionRows: []transactionPageRow{review.Source}})
 		})
@@ -129,6 +129,16 @@ func TestWritePrototypePreviewHTML(t *testing.T) {
 	write("transaction-match-list.html", func() error {
 		return writeFile("transaction-match-list.html", func(body *strings.Builder) error {
 			return transactionListTemplate.Execute(body, transactionListPageData{CanonicalPath: "/transactions", TransactionRows: []transactionPageRow{{ID: "11", InternalID: "11", DetailKey: "11", PayerName: "WAHAJULLAH KHAN", MatchURL: "/transactions?match=11&match_status=pending", MatchStatus: "needs_review", MatchStatusLabel: "需处理"}}})
+		})
+	})
+	write("transaction-revoke.html", func() error {
+		return writeFile("transaction-revoke.html", func(body *strings.Builder) error {
+			return revokePreviewTemplate.Execute(body, transactionRevokePreviewData{
+				workspaceShell: workspaceShell{ActivePage: "transactions", Username: "audit", Environment: "sandbox", FootNote: "银行流水与租金关联", CompactTitle: "流水"},
+				TransactionID:  "12", DateDisplay: "02 Sep 2026 11:40", PayerName: "BRID NI BHRAONAIN", MatchStatusLabel: "已关联", Description: "SEPTEMBER RENT 72 WALKINSTOWN ROAD ROOM 01", ParsedPeriodDisplay: "2026-09",
+				AmountDisplay: "€1,250.00", AllocatedAmountDisplay: "€950.00", CurrentRemainingAmountDisplay: "€300.00", RemainingAmountDisplay: "€1,250.00", ReturnTo: "/transactions?match_status=matched",
+				Allocations: []transactionRevokePreviewAllocation{{Kind: "房租", AmountDisplay: "€750.00", TenantName: "Bríd Ní Bhraonáin", PeriodDisplay: "2026-09"}, {Kind: "押金", AmountDisplay: "€200.00", TenantName: "Bríd Ní Bhraonáin", Note: "押金补缴"}},
+			})
 		})
 	})
 	write("properties.html", func() error {

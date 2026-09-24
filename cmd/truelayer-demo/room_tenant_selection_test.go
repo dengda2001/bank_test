@@ -39,15 +39,28 @@ func TestTenantCreatedRoomReturnURLIsBoundToAssignedRoom(t *testing.T) {
 	if !ok || got != "/rooms/7?period=2026-09&rent=1&message=tenant_added" {
 		t.Fatalf("return URL = %q, valid = %t", got, ok)
 	}
+	roomTarget := "/rooms/7?period=2026-09&tenant_add=1"
+	if got, ok := tenantCreatedRoomReturnURL(roomTarget, form); !ok || got != "/rooms/7?period=2026-09&rent=1&message=tenant_added" {
+		t.Fatalf("room-scoped return URL = %q, valid = %t", got, ok)
+	}
+	if got := tenantFormRedirectURL(roomTarget, "", "invalid_tenant"); got != "/rooms/7?error=invalid_tenant&period=2026-09&tenant_add=1" {
+		t.Errorf("room-scoped error redirect = %q", got)
+	}
 	for _, target := range []string{
 		"https://evil.example/tenants?return_room_id=7",
 		"//evil.example/tenants?return_room_id=7",
 		"/tenants?return_room_id=8",
 		"/tenants?return_room_id=invalid",
+		"/rooms/7?period=2026-09",
+		"/rooms/7?period=invalid&tenant_add=1",
+		"https://evil.example/rooms/7?period=2026-09&tenant_add=1",
 	} {
 		if got, ok := tenantCreatedRoomReturnURL(target, form); ok {
 			t.Errorf("accepted %q as %q", target, got)
 		}
+	}
+	if got, ok := tenantCreatedRoomReturnURL("/rooms/7?period=2026-10&tenant_add=1", form); !ok || got != "/rooms/7?period=2026-09&rent=1&message=tenant_added" {
+		t.Fatalf("changed month should return to the assigned room and month; got %q, valid = %t", got, ok)
 	}
 }
 
@@ -60,10 +73,13 @@ func TestRoomTenantDrawersExposeCreateAndUnbindPaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, marker := range []string{`name="tenant_choice" value="existing"`, `name="tenant_choice" value="new"`, `name="tenant_id"`, `data-tenant-conflict="true" disabled`, `href="/rooms/8?period=2026-09&amp;rent=1"`, `room-tenant-availability.js`} {
+	for _, marker := range []string{`name="tenant_choice" value="existing"`, `name="tenant_choice" value="new"`, `name="tenant_id"`, `data-tenant-conflict="true" disabled`, `data-tenant-conflicts aria-live="polite" hidden`, `room-tenant-availability.js`} {
 		if !strings.Contains(roomPage, marker) {
 			t.Errorf("room creation lacks %q", marker)
 		}
+	}
+	if strings.Contains(roomPage, `>去解绑</a>`) {
+		t.Error("room creation rendered a conflict before selecting an existing tenant")
 	}
 	roomDetail, err := executeTemplate(rentRoomDetailTemplate, rentRoomDetailPageData{
 		workspaceShell: workspaceShell{ActivePage: "rooms"}, RoomID: 7, Period: "2026-09", PlanEditor: true, PlanExists: true,
@@ -72,10 +88,13 @@ func TestRoomTenantDrawersExposeCreateAndUnbindPaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, marker := range []string{`return_room_id=7`, `新增租客`, `data-tenant-conflict="true" disabled`, `去解绑`, `room-tenant-availability.js`} {
+	for _, marker := range []string{`/rooms/7?period=2026-09&amp;tenant_add=1`, `新增租客`, `data-tenant-conflict="true" disabled`, `data-tenant-conflicts aria-live="polite" hidden`, `room-tenant-availability.js`} {
 		if !strings.Contains(roomDetail, marker) {
 			t.Errorf("room occupancy editor lacks %q", marker)
 		}
+	}
+	if strings.Contains(roomDetail, `>去解绑</a>`) {
+		t.Error("room editor rendered a conflict for an unselected candidate")
 	}
 	tenantPage, err := executeTemplate(tenantTemplate, tenantPageData{
 		workspaceShell: workspaceShell{ActivePage: "tenants"}, ShowForm: true, TenantRoomLocked: true,
@@ -91,6 +110,20 @@ func TestRoomTenantDrawersExposeCreateAndUnbindPaths(t *testing.T) {
 		if !strings.Contains(tenantPage, marker) {
 			t.Errorf("room-bound tenant form lacks %q", marker)
 		}
+	}
+	roomDetailTenantForm, err := executeTemplate(rentRoomDetailTemplate, rentRoomDetailPageData{
+		workspaceShell: workspaceShell{ActivePage: "rooms"}, RoomID: 7, Period: "2026-09",
+		TenantDrawer: &tenantPageData{Form: tenantRecord{Status: "active"}, TenantRoomLocked: true,
+			TenantAssignmentPropertyID: 2, TenantAssignmentRoomID: 7, TenantArrangementStartMonth: "2026-09",
+			TenantProperties: []tenantPropertyAssignmentOption{{ID: 2, Name: "Property"}},
+			TenantRooms:      []tenantRoomAssignmentOption{{ID: 7, PropertyID: 2, RoomLabel: "New room"}},
+			ReturnURL:        "/rooms/7?period=2026-09&rent=1", PostReturnURL: "/rooms/7?period=2026-09&tenant_add=1"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(roomDetailTenantForm, `name="return_to" value="/rooms/7?period=2026-09&amp;tenant_add=1"`) || !strings.Contains(roomDetailTenantForm, `role="dialog"`) {
+		t.Fatal("room page did not render its bound tenant drawer")
 	}
 	if os.Getenv("RENTOPS_WRITE_ROOM_TENANT_PREVIEW") == "1" {
 		root := "/private/tmp/rentops-room-tenant-preview"

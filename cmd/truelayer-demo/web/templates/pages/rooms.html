@@ -14,7 +14,7 @@
     {{template "workspace-nav" .}}
     <main class="content workspace object-list-page">
       <header class="object-list-heading">
-        <div><div class="eyebrow desktop-object-eyebrow">RentOps · 房间管理</div><div class="eyebrow mobile-object-eyebrow">资产与关系</div><h1 class="desktop-object-title">房间管理</h1><h1 class="mobile-object-title">对象管理</h1><p class="desktop-object-subtitle">按月查看房间、租客关系与责任收款。</p><p class="mobile-object-subtitle">按房产、房间或租客查找。</p></div>
+        <div><div class="eyebrow desktop-object-eyebrow">RentOps · 房间管理</div><div class="eyebrow mobile-object-eyebrow">资产与关系</div><h1 class="desktop-object-title">房间管理</h1><h1 class="mobile-object-title">对象管理</h1><p class="desktop-object-subtitle">按月查看房间、入住租客与收租情况。</p><p class="mobile-object-subtitle">按房产、房间或租客查找。</p></div>
         <a class="btn primary" href="/rooms?add=1&amp;period={{.Period}}{{if .PropertyID}}&amp;property_id={{.PropertyID}}{{end}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}&amp;collection={{.CollectionFilter}}&amp;sort={{.Sort}}"><span class="desktop-object-action">新增房间</span><span class="mobile-object-action">新增</span></a>
       </header>
       {{template "workspace-object-tabs" .}}
@@ -27,19 +27,20 @@
 
       <form class="object-list-filters room-list-filters" method="get" action="/rooms">
         <label class="object-search"><span class="visually-hidden">搜索当前列表</span><input type="search" name="search" value="{{.Search}}" placeholder="搜索当前列表" aria-label="搜索当前列表"></label>
+        <button class="btn primary object-list-search-submit" type="submit">搜索</button>
         <input type="hidden" name="status" value="{{.StatusFilter}}"><input type="hidden" name="sort" value="{{.Sort}}">
         <div class="object-list-filter-fields">
           <label><span class="visually-hidden">所属房产</span><select name="property_id" aria-label="所属房产"><option value="">全部房产</option>{{range .PropertyOptions}}<option value="{{.ID}}"{{if eq $.PropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
           <label><span class="visually-hidden">收缴状态</span><select name="collection" aria-label="收缴状态"><option value="all"{{if eq .CollectionFilter "all"}} selected{{end}}>全部状态</option><option value="unpaid"{{if eq .CollectionFilter "unpaid"}} selected{{end}}>未收齐</option><option value="paid"{{if eq .CollectionFilter "paid"}} selected{{end}}>已收齐</option></select></label>
           <label class="object-list-period-filter"><span class="visually-hidden">月份</span><input type="month" name="period" value="{{.Period}}" aria-label="月份"></label>
         </div>
-        <button class="btn subtle object-list-filter-toggle" type="button" aria-expanded="false">搜索</button>
+        <button class="btn subtle object-list-filter-toggle" type="button" aria-expanded="false">筛选</button>
         <span class="object-list-demo-note">演示数据 · EUR</span>
       </form>
 
       <section class="panel surface object-list-panel" aria-labelledby="room-list-title">
         {{if .Rows}}
-        <div class="table-wrap object-table-wrap"><table class="object-table room-table"><thead><tr>{{template "table-sort-heading" (tableSortHeading "房间" (index .SortLinks "room"))}}{{template "table-sort-heading" (tableSortHeading "所属房产" (index .SortLinks "property"))}}{{template "table-sort-heading" (tableSortHeading "当前责任人" (index .SortLinks "tenants"))}}{{template "table-sort-heading" (tableSortHeading "月度应收" (index .SortLinks "expected"))}}{{template "table-sort-heading" (tableSortHeading "月度实收" (index .SortLinks "paid"))}}{{template "table-sort-heading" (tableSortHeading "人数" (index .SortLinks "count"))}}{{template "table-sort-heading" (tableSortHeading "本月状态" (index .SortLinks "status"))}}<th>操作</th></tr></thead><tbody>
+        <div class="table-wrap object-table-wrap"><table class="object-table room-table"><thead><tr>{{template "table-sort-heading" (tableSortHeading "房间" (index .SortLinks "room"))}}{{template "table-sort-heading" (tableSortHeading "所属房产" (index .SortLinks "property"))}}{{template "table-sort-heading" (tableSortHeading "入住租客" (index .SortLinks "tenants"))}}{{template "table-sort-heading" (tableSortHeading "月度应收" (index .SortLinks "expected"))}}{{template "table-sort-heading" (tableSortHeading "月度实收" (index .SortLinks "paid"))}}{{template "table-sort-heading" (tableSortHeading "人数" (index .SortLinks "count"))}}{{template "table-sort-heading" (tableSortHeading "本月状态" (index .SortLinks "status"))}}<th>操作</th></tr></thead><tbody>
           {{range .Rows}}<tr data-page="rooms" data-room-id="{{.ID}}"><td><a class="object-primary-link" href="/rooms/{{.ID}}?period={{$.Period}}&amp;from=rooms&amp;return_property_id={{$.PropertyID}}&amp;return_status={{$.StatusFilter}}&amp;return_search={{$.Search}}&amp;return_collection={{$.CollectionFilter}}&amp;return_sort={{$.Sort}}">{{.RoomLabel}}</a></td><td><a href="/properties/{{.PropertyID}}?period={{$.Period}}">{{.PropertyName}}</a></td><td>{{range $index, $name := .TenantNames}}{{if $index}}、{{end}}{{$name}}{{else}}空置{{end}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td>{{len .TenantNames}}</td><td><span class="status {{.CollectionStatus}}">{{.CollectionStatusLabel}}</span></td><td><a class="btn subtle" href="/rooms/{{.ID}}?period={{$.Period}}&amp;from=rooms&amp;return_property_id={{$.PropertyID}}&amp;return_status={{$.StatusFilter}}&amp;return_search={{$.Search}}&amp;return_collection={{$.CollectionFilter}}&amp;return_sort={{$.Sort}}">查看详情</a></td></tr>{{end}}
         </tbody></table></div>
         <div class="object-mobile-list">{{range .Rows}}<article class="object-mobile-card" data-page="rooms" data-room-id="{{.ID}}">

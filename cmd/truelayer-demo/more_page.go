@@ -40,7 +40,7 @@ var morePageTemplate = newWorkspacePageTemplate("more-page", nil, `<!doctype htm
         <p>低频操作集中在这里。</p>
       </header>
       <nav class="more-page-grid" aria-label="更多功能">
-        <a class="more-page-card" href="/dunning"><span class="more-page-icon">D</span><strong>催收任务</strong><span>跟进未结清的租金责任</span></a>
+        <a class="more-page-card" href="/dunning"><span class="more-page-icon">D</span><strong>催收任务</strong><span>跟进未结清的租金账单</span></a>
         <a class="more-page-card" href="/cash-receipts"><span class="more-page-icon">C</span><strong>现金收款</strong><span>补录并核对现金租金</span></a>
         <a class="more-page-card" href="/expenses"><span class="more-page-icon">E</span><strong>房屋支出</strong><span>记录房产和房间支出</span></a>
         <a class="more-page-card" href="/bank"><span class="more-page-icon">B</span><strong>银行设置</strong><span>同步与授权状态</span></a>

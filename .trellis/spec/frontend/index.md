@@ -30,6 +30,7 @@ that parse the rendered markup. Those are the things that bite.
 | [Rent Workspace Navigation](./rent-workspace-navigation.md) | Canonical rent workspace routes, hidden legacy pages, safe redirects | Filled |
 | [Tenant Room Assignment](./tenant-room-assignment.md) | Creation-time room selection, safe plan previews, and composite form contract | Filled |
 | [Sortable List Headings](./sortable-list-headings.md) | Typed server-side ordering, URL context, and accessible desktop heading links | Filled |
+| [Shared Danger Confirmation](./danger-confirmation.md) | Form submitter and imperative dialog contracts for destructive actions | Filled |
 
 ---
 

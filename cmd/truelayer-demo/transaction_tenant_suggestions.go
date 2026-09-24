@@ -21,18 +21,54 @@ func manualTenantSuggestions(payerName, payerNameKind string, tenants []tenant) 
 		score float64
 	}
 	scores := make([]scoredTenant, 0)
+	payer := strings.Join(payerTokens, " ")
 	for _, row := range tenants {
-		tokens := tenantNameTokens(row.Name)
-		if len(tokens) == 0 {
-			continue
+		best := float64(0)
+		for _, name := range []string{row.Name, row.DisplayAlias} {
+			tokens := tenantNameTokens(name)
+			if len(tokens) == 0 {
+				continue
+			}
+			candidate := strings.Join(tokens, " ")
+			ratio := nameEditSimilarity(payer, candidate)
+			if payer == candidate || ratio >= .72 && (sharesDistinctiveNameToken(payerTokens, tokens) || ratio >= .86) {
+				best = max(best, ratio)
+			}
 		}
-		payer := strings.Join(payerTokens, " ")
-		candidate := strings.Join(tokens, " ")
-		ratio := nameEditSimilarity(payer, candidate)
-		if payer != candidate && (ratio < .72 || (!sharesDistinctiveNameToken(payerTokens, tokens) && ratio < .86)) {
-			continue
+		if best > 0 {
+			scores = append(scores, scoredTenant{row: row, score: best})
 		}
-		scores = append(scores, scoredTenant{row: row, score: ratio})
+	}
+	if len(scores) == 0 {
+		// A bank name can contain extra given/family names. A distinctive payer
+		// word is a navigation hint only, never identity evidence.
+		noise := map[string]bool{"bank": true, "from": true, "rent": true, "payment": true, "transfer": true, "sepa": true, "credit": true, "direct": true, "debit": true}
+		for _, row := range tenants {
+			best := float64(0)
+			for _, name := range []string{row.Name, row.DisplayAlias} {
+				for _, candidate := range tenantNameTokens(name) {
+					if len([]rune(candidate)) < 4 {
+						continue
+					}
+					for _, payerToken := range payerTokens {
+						if len([]rune(payerToken)) < 4 || noise[payerToken] {
+							continue
+						}
+						switch {
+						case candidate == payerToken:
+							best = max(best, 1)
+						case len([]rune(payerToken)) >= 5 && strings.HasPrefix(candidate, payerToken):
+							best = max(best, .8)
+						case len([]rune(payerToken)) >= 5 && strings.Contains(candidate, payerToken):
+							best = max(best, .6)
+						}
+					}
+				}
+			}
+			if best > 0 {
+				scores = append(scores, scoredTenant{row: row, score: best})
+			}
+		}
 	}
 	sort.Slice(scores, func(i, j int) bool {
 		if scores[i].score != scores[j].score {
@@ -40,11 +76,8 @@ func manualTenantSuggestions(payerName, payerNameKind string, tenants []tenant) 
 		}
 		return scores[i].row.ID < scores[j].row.ID
 	})
-	result := make([]transactionReviewTenant, 0, min(3, len(scores)))
+	result := make([]transactionReviewTenant, 0, len(scores))
 	for _, candidate := range scores {
-		if len(result) == 3 {
-			break
-		}
 		result = append(result, transactionReviewTenant{ID: candidate.row.ID, Name: firstNonEmpty(candidate.row.DisplayAlias, candidate.row.Name)})
 	}
 	return result

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"sort"
+	"strconv"
 	"time"
 
 	"gorm.io/gorm"
@@ -13,6 +14,7 @@ type transactionReviewRoommateGroup struct {
 	PropertyName string
 	RoomLabel    string
 	Period       string
+	RoomURL      string
 	Roommates    []transactionReviewTenant
 }
 
@@ -96,6 +98,7 @@ func loadTransactionReviewRoommates(ctx context.Context, db *gorm.DB, userID uin
 			groups = append(groups, transactionReviewRoommateGroup{
 				AnchorName: anchorNames[row.AnchorID], PropertyName: row.PropertyName,
 				RoomLabel: row.RoomLabel, Period: monthStart(month).Format("2006-01"),
+				RoomURL: "/rooms/" + strconv.FormatUint(row.RoomID, 10) + "?period=" + monthStart(month).Format("2006-01"),
 			})
 		}
 		roommateKey := [3]uint64{row.AnchorID, row.RoomID, row.RoommateID}

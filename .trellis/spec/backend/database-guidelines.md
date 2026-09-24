@@ -1689,9 +1689,18 @@ original dates, descriptions, and allocated amounts. A voided allocation or
 one for a different allocation kind is not evidence that rent was paid.
 
 Same-payer transaction history is supporting evidence, not a tenant identity
-decision. The transaction list drawer pages it; the dashboard drawer shows all
-same-payer rows for the selected transaction. Show the actual effective
-allocation period alongside the bank-parsed period. Scope every transaction,
-obligation, allocation, and tenant lookup by `user_id`; the final confirmation
-service must repeat its ownership, currency, and remaining-balance checks after
-the user submits.
+decision. Both drawers page it so every same-payer row remains reachable. Show
+the actual effective allocation period alongside the bank-parsed period. Scope
+every transaction, obligation, allocation, and tenant lookup by `user_id`; the
+final confirmation service must repeat ownership, currency, and remaining
+balance checks after the user submits.
+
+An evidence-row correction revokes the selected confirmed rent allocation ID,
+not every allocation from its bank source. Lock the owned source and affected
+obligation, mark only that share voided, recompute the obligation from effective
+allocations and cash receipts, then project the source status from all its
+allocations. Keep the source and voided share for audit. A repeated request key
+must be idempotent, while a new request for an already voided share is rejected.
+The freed source remainder must be eligible for manual review unless the source
+has a separate effective deferral action. Parse browser `FormData` requests as
+multipart forms as well as URL-encoded forms before reading revoke parameters.

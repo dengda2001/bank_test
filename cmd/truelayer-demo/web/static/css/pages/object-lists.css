@@ -9,6 +9,7 @@
 .object-list-filters { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; padding: 0; }
 .object-list-filters label { display: block; min-width: 148px; margin: 0; }
 .object-list-filters .object-search { flex: 0 0 240px; max-width: none; }
+.object-list-search-submit { min-height: 36px; padding: 0 14px; white-space: nowrap; }
 .object-list-filter-fields label { min-width: 0; }
 .object-list-filter-fields select[name="collection"] { width: 132px; min-width: 132px; }
 .object-list-filter-fields select[name="property_id"] { width: 180px; }
@@ -57,16 +58,17 @@
   .object-list-heading .mobile-object-eyebrow, .object-list-heading .mobile-object-title { display: block; }
   .object-list-heading .mobile-object-action { display: inline; }
   .object-list-heading > .btn { flex: 0 0 auto; min-height: 38px; padding: 0 12px; font-size: 12px; }
-  .object-list-filters { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; margin-bottom: 12px; padding: 0; }
-  .object-list-filters .object-search { max-width: none; min-width: 0; flex: 1 1 auto; }
+  .object-list-filters { display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 8px; margin-bottom: 12px; padding: 0; }
+  .object-list-filters .object-search { grid-column: 1; grid-row: 1; max-width: none; min-width: 0; flex: 1 1 auto; }
   .object-list-filters .object-search input { width: 100%; }
+  .object-list-search-submit { grid-column: 2; grid-row: 1; min-height: 44px; padding: 0 10px; }
   .object-list-filters input, .object-list-filters select { min-height: 44px; padding: 8px 12px; font-size: 13px; }
-  .object-list-filter-fields { display: none; grid-column: 1 / -1; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+  .object-list-filter-fields { display: none; grid-column: 1 / -1; grid-row: 2; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
   .object-list-filter-fields label { min-width: 0; }
   .object-list-filter-fields .object-list-period-filter { width: 100%; }
   .object-list-filter-fields label:last-child { grid-column: 1 / -1; }
   .object-list-filters.filters-open .object-list-filter-fields { display: grid; }
-  .object-list-filter-toggle { display: block; min-height: 44px; }
+  .object-list-filter-toggle { display: block; grid-column: 3; grid-row: 1; min-height: 44px; padding: 0 10px; }
   .object-list-demo-note { display: none; }
   .object-list-panel { margin: 0; }
   .object-table-wrap { display: none; }

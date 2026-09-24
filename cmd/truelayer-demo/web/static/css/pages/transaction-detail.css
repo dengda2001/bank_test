@@ -35,12 +35,13 @@
 .transaction-risk-note { padding: 14px 16px; border: 1px solid color-mix(in oklch, var(--warning) 30%, var(--border)); border-left: 3px solid var(--warning); border-radius: 8px; background: color-mix(in oklch, var(--warning) 6%, var(--surface)); color: var(--foreground-subtle); font-size: 12px; line-height: 1.6; }
 .transaction-detail-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 7px; color: var(--foreground-muted); font-size: 12px; }
 .transaction-match-method { padding: 3px 7px; border-radius: 5px; background: color-mix(in oklch,var(--accent) 12%,var(--surface)); color: var(--accent); font-size: 11px; font-weight: 650; }
-.transaction-detail-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
-.transaction-detail-metrics .metric { display: flex; min-width: 0; min-height: 112px; flex-direction: column; align-items: flex-start; justify-content: center; gap: 7px; padding: 16px; }
-.transaction-detail-metrics .metric strong { font: 700 23px var(--mono); font-variant-numeric: tabular-nums; }
-.transaction-detail-metrics .metric > span:last-child { color: var(--foreground-muted); font-size: 11px; line-height: 1.45; }
-.transaction-primary-metric { border-color: color-mix(in oklch, var(--accent) 42%, var(--border)) !important; background: color-mix(in oklch, var(--accent) 5%, var(--surface)) !important; }
-.transaction-detail-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, .8fr); align-items: start; gap: 14px; }
+.transaction-detail-grid { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 14px; }
+.transaction-detail-page > .panel { margin-bottom: 14px; }
+.transaction-detail-panel-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.transaction-detail-progress { margin: 0 16px 14px; padding: 16px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-muted); }
+.transaction-detail-allocation-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 16px 12px; }
+.transaction-detail-allocation-heading h3 { margin: 0; font-size: 14px; }
+.transaction-detail-undefer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; padding: 12px 16px; border: 1px solid var(--border); border-radius: 9px; color: var(--foreground-muted); font-size: 12px; }
 .transaction-detail-stack { display: grid; min-width: 0; gap: 14px; }
 .transaction-detail-page .panel { min-width: 0; overflow: hidden; }
 .transaction-detail-page .panel-head { align-items: center; }
@@ -48,7 +49,7 @@
 .transaction-detail-page .panel-head p { margin: 4px 0 0; }
 .transaction-quick-match form { display: grid; gap: 9px; padding: 0 16px 16px; }
 .transaction-quick-match form .btn { justify-self: start; min-height: 40px; }
-/* 仍被「关联责任与对象」表里的租客链接使用，所以留着。 */
+/* 分配表里的租客链接。 */
 .transaction-inline-link { color: var(--accent); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 .transaction-allocation-table { width: 100%; min-width: 680px; }
 .transaction-allocation-table td small { display: block; margin-top: 4px; color: var(--foreground-muted); font-size: 11px; }
@@ -80,14 +81,14 @@
   .transaction-detail-toolbar { margin-bottom: 14px; }
   .transaction-detail-toolbar .btn { min-height: 44px; }
   .transaction-detail-head { align-items: flex-start; flex-direction: column; gap: 12px; margin-bottom: 14px; }
-  .transaction-detail-head > .transaction-detail-actions { display: none; }
+  .transaction-detail-head > .transaction-detail-actions { display: flex; width: 100%; justify-content: flex-start; }
   .transaction-raw-description { padding: 0 13px 12px; }
   .code-block { font-size: 11px; }
   .transaction-detail-mark { width: 42px; height: 42px; }
   .transaction-detail-head h1 { font-size: 21px; }
-  .transaction-detail-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
-  .transaction-detail-metrics .metric { min-height: 96px; gap: 5px; padding: 12px; }
-  .transaction-detail-metrics .metric strong { font-size: 18px; overflow-wrap: anywhere; }
+  .transaction-detail-progress { margin: 0 13px 12px; padding: 12px; }
+  .transaction-detail-allocation-heading { margin: 0 13px 12px; }
+  .transaction-detail-panel-actions .btn { min-height: 40px; }
   .transaction-detail-grid { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .transaction-detail-stack { gap: 10px; }
   .transaction-detail-page .panel-head { gap: 8px; padding: 13px; }

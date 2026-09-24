@@ -35,7 +35,7 @@ func TestDunningPageRendersFocusedQueueWithoutSavingConfigOnGet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"催收任务", "待核对责任", "Aoife Murphy", `action="/dunning/preview"`, `action="/dunning/config"`} {
+	for _, expected := range []string{"催收任务", "待核对账单", "Aoife Murphy", `action="/dunning/preview"`, `action="/dunning/config"`} {
 		if !strings.Contains(page, expected) {
 			t.Fatalf("dunning page missing %q", expected)
 		}

@@ -6,6 +6,7 @@
   <title>RentOps 流水详情</title>
   <link rel="stylesheet" href="/static/css/workspace.css">
   <link rel="stylesheet" href="/static/css/pages/transaction-detail.css">
+  <link rel="stylesheet" href="/static/css/pages/transaction-match-review.css">
 </head>
 <body>
   <div class="app">
@@ -31,26 +32,6 @@
         </div>
         <div class="transaction-detail-actions">
           <details class="transaction-head-action">
-            <summary class="btn">编辑分配</summary>
-            <div class="transaction-head-action-body">
-              {{if .Transaction.CanEditRentMatch}}
-                <p class="tiny">修改这笔流水关联的租客与租金月份。</p>
-                <form method="post" action="{{.ActionBase}}/rematch">
-                  <input type="hidden" name="transaction_id" value="{{.Transaction.ID}}">
-                  <input type="hidden" name="remember_payer" value="0">
-                  <input type="hidden" name="return_to" value="{{.BackURL}}">
-                  <select name="tenant_id" aria-label="修改匹配租客" data-searchable required><option value="">选择租客...</option>{{range .Transaction.RematchTenantOptions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
-                  <select name="period" aria-label="修改租金月份" required><option value="">选择租金月份...</option>{{range .Transaction.RematchMonthOptions}}<option value="{{.Period}}">{{.Label}} · 未收 {{.Remaining}}</option>{{end}}</select>
-                  <button class="btn primary" type="submit">确认修改</button>
-                </form>
-              {{else if .Transaction.CanRematch}}
-                <p class="tiny">当前没有可替换的租金目标；如需调整，请撤销后重新归类。</p>
-              {{else}}
-                <p class="tiny">该流水尚无已确认的租金匹配，或已拆分／含其他用途；请先确认匹配，或撤销后重新归类。</p>
-              {{end}}
-            </div>
-          </details>
-          <details class="transaction-head-action">
             <summary class="btn">标记非租金</summary>
             <div class="transaction-head-action-body">
               {{if eq .Transaction.MatchStatus "ignored"}}
@@ -75,10 +56,10 @@
             </div>
           </details>
           <details class="transaction-head-action">
-            <summary class="btn">归类／拆分</summary>
+            <summary class="btn">非租金归类</summary>
             <div class="transaction-head-action-body">
               {{if and (eq .Transaction.Direction "income") (ne .Transaction.MatchStatus "matched") (ne .Transaction.MatchStatus "ignored")}}
-                <p class="tiny">房租走匹配；押金、其他收入，或一笔拆成几份，走这里。保存只新增分配记录，不改银行原文。</p>
+                <p class="tiny">押金和其他收入可在这里归类或拆分；房租请使用「处理分配」。</p>
                 <form method="post" action="{{.ActionBase}}/allocate" data-allocation-form>
                   <input type="hidden" name="transaction_id" value="{{.Transaction.ID}}">
                   <input type="hidden" name="return_to" value="{{.BackURL}}">
@@ -86,9 +67,9 @@
                      克隆体里的 select 由 workspace-controls.js 的 MutationObserver 在
                      append 之后自动增强，所以这里不能预先把行渲染成增强后的结构。 */}}
                   <div class="allocation-rows" data-allocation-rows>
-                    <div class="allocation-line"><select name="allocation_kind" aria-label="入账用途"><option value="rent">房租</option><option value="deposit">押金</option><option value="other_income">其他收入</option></select><select name="tenant_id" aria-label="归类租客" data-searchable><option value="">不指定租客</option>{{range .TenantOptions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select><select name="period" aria-label="归类租金月份"><option value="">选择租金月份...</option>{{range .Transaction.MonthOptions}}<option value="{{.Period}}">{{.Label}} · 余款 {{.Remaining}}</option>{{end}}</select><input name="amount" inputmode="decimal" value="{{.Transaction.RemainingAmountInput}}" aria-label="归类金额" required><input name="note" placeholder="其他收入备注（其他收入必填）" aria-label="归类备注"></div>
+                    <div class="allocation-line"><select name="allocation_kind" aria-label="入账用途"><option value="deposit">押金</option><option value="other_income">其他收入</option></select><select name="tenant_id" aria-label="归类租客" data-searchable><option value="">不指定租客</option>{{range .TenantOptions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select><select name="period" aria-label="归类租金月份"><option value="">选择租金月份...</option>{{range .Transaction.MonthOptions}}<option value="{{.Period}}">{{.Label}} · 余款 {{.Remaining}}</option>{{end}}</select><input name="amount" inputmode="decimal" value="{{.Transaction.RemainingAmountInput}}" aria-label="归类金额" required><input name="note" placeholder="其他收入备注（其他收入必填）" aria-label="归类备注"></div>
                   </div>
-                  <template data-allocation-line-template><div class="allocation-line"><select name="allocation_kind" aria-label="入账用途"><option value="rent">房租</option><option value="deposit">押金</option><option value="other_income">其他收入</option></select><select name="tenant_id" aria-label="归类租客" data-searchable><option value="">不指定租客</option>{{range .TenantOptions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select><select name="period" aria-label="归类租金月份"><option value="">选择租金月份...</option>{{range .Transaction.MonthOptions}}<option value="{{.Period}}">{{.Label}} · 余款 {{.Remaining}}</option>{{end}}</select><input name="amount" inputmode="decimal" value="" aria-label="归类金额" required><input name="note" placeholder="其他收入备注（其他收入必填）" aria-label="归类备注"></div></template>
+                  <template data-allocation-line-template><div class="allocation-line"><select name="allocation_kind" aria-label="入账用途"><option value="deposit">押金</option><option value="other_income">其他收入</option></select><select name="tenant_id" aria-label="归类租客" data-searchable><option value="">不指定租客</option>{{range .TenantOptions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select><select name="period" aria-label="归类租金月份"><option value="">选择租金月份...</option>{{range .Transaction.MonthOptions}}<option value="{{.Period}}">{{.Label}} · 余款 {{.Remaining}}</option>{{end}}</select><input name="amount" inputmode="decimal" value="" aria-label="归类金额" required><input name="note" placeholder="其他收入备注（其他收入必填）" aria-label="归类备注"></div></template>
                   <div class="allocation-actions"><button class="btn" type="button" data-add-allocation-line>添加拆分项</button><button class="btn primary" type="submit">保存归类</button></div>
                 </form>
               {{else if eq .Transaction.MatchStatus "ignored"}}
@@ -96,35 +77,70 @@
               {{else if eq .Transaction.Direction "expense"}}
                 <p class="tiny">支出流水不走归类。</p>
               {{else}}
-                <p class="tiny">该流水已有确认的租金匹配。如需改成押金或其他收入，请先在流水列表撤销匹配，再回到这里归类。</p>
+                <p class="tiny">该流水已分配完。如需调整，请先在「处理分配」中撤销对应份额。</p>
               {{end}}
             </div>
           </details>
         </div>
       </header>
+      {{if eq .Message "rent_confirmed"}}<div class="notice ok" data-toast>分配已保存，入账进度已更新。</div>{{end}}
+      {{if eq .Message "allocation_revoked"}}<div class="notice ok" data-toast>已撤销所选份额，其余分配已保留。</div>{{end}}
+      {{if .Error}}<div class="notice error" role="alert">本次操作未完成，请刷新后核对流水与租金余额。</div>{{end}}
+      {{if .Transaction.Deferred}}<form class="transaction-detail-undefer" method="post" action="{{.ActionBase}}/undefer"><input type="hidden" name="transaction_id" value="{{.Transaction.ID}}"><input type="hidden" name="reason" value="重新加入首页队列"><input type="hidden" name="return_to" value="{{.BackURL}}"><span>这笔流水已从首页待处理队列移出。</span><button class="btn subtle" type="submit">重新加入首页队列</button></form>{{end}}
 
-      <section class="transaction-detail-metrics" aria-label="流水金额摘要">
-        <article class="panel metric transaction-primary-metric">
-          <span class="label">流水金额</span>
-          <strong>{{.Transaction.AmountDisplay}}</strong>
-          <span>{{.Transaction.DirectionLabel}} · {{.Transaction.AccountName}}</span>
-        </article>
-        <article class="panel metric">
-          <span class="label">处理状态</span>
-          <strong>{{.Transaction.MatchStatusLabel}}</strong>
-          <span>{{if .Transaction.MatchReason}}{{.Transaction.MatchReason}}{{else}}当前流水状态{{end}}</span>
-        </article>
-        <article class="panel metric">
-          <span class="label">已分配金额</span>
-          <strong>{{.AllocatedAmount}}</strong>
-          <span>{{.AllocationCount}} 条有效分配</span>
-        </article>
-        <article class="panel metric">
-          <span class="label">未分配余额</span>
-          <strong>{{.RemainingAmount}}</strong>
-          <span>流水金额减去有效分配</span>
-        </article>
-      </section>
+          <section class="panel" aria-labelledby="transaction-allocations-title">
+            <div class="panel-head">
+              <div>
+                <h2 id="transaction-allocations-title">流水分配</h2>
+                <p class="tiny">按租客和月份查看入账情况；可在同一核对抽屉中调整。</p>
+              </div>
+              <div class="transaction-detail-panel-actions">{{if .CanReview}}<a class="btn primary" href="{{.MatchURL}}">处理分配</a>{{end}}{{if gt .AllocationCount 0}}<a class="btn subtle danger" href="{{.RevokeURL}}">撤销整笔匹配</a>{{end}}</div>
+            </div>
+            <div class="transaction-detail-progress">
+              <div class="transaction-review-progress-heading"><span>分配进度</span><strong>流水总额 {{.Transaction.AmountDisplay}}</strong></div>
+              <div class="transaction-review-progress-track" role="img" aria-label="已确认 {{.AllocatedAmount}}；未分配 {{.RemainingAmount}}"><span class="transaction-review-progress-confirmed" style="width:{{.ProgressConfirmed}}"></span><span class="transaction-review-progress-remaining" style="width:{{.ProgressRemaining}}"></span></div>
+              <div class="transaction-review-progress-legend"><div><span><i class="transaction-review-progress-swatch confirmed" aria-hidden="true"></i>已确认</span><strong>{{.AllocatedAmount}}</strong></div><div><span><i class="transaction-review-progress-swatch draft" aria-hidden="true"></i>本次待确认</span><strong>€0.00</strong></div><div><span><i class="transaction-review-progress-swatch remaining" aria-hidden="true"></i>未分配</span><strong>{{.RemainingAmount}}</strong></div></div>
+            </div>
+            <div class="transaction-detail-allocation-heading"><h3>租客与入账分配</h3><span class="tiny">{{.AllocationCount}} 条有效分配</span></div>
+            {{if .Allocations}}
+              <div class="transaction-allocation-table-wrap table-wrap">
+                <table class="transaction-allocation-table">
+                  <thead><tr><th>租客与房间</th><th>租金月份</th><th>分类</th><th>分配金额</th><th>状态</th></tr></thead>
+                  <tbody>{{range .Allocations}}
+                    <tr class="{{if not .Effective}}allocation-inactive{{end}}">
+                      <td>
+                        {{if .TenantURL}}<a class="transaction-inline-link" href="{{.TenantURL}}">{{.TenantName}}</a>{{else}}<strong>{{.TenantName}}</strong>{{end}}
+                        {{if or .PropertyName .RoomLabel}}<small>{{if .PropertyName}}{{.PropertyName}}{{end}}{{if and .PropertyName .RoomLabel}} · {{end}}{{if .RoomURL}}<a href="{{.RoomURL}}">{{.RoomLabel}}</a>{{else}}{{.RoomLabel}}{{end}}</small>{{end}}
+                      </td>
+                      <td>{{if .BillURL}}<a href="{{.BillURL}}">{{.BillLabel}}</a>{{else}}{{.BillLabel}}{{end}}{{if .Period}}<small>{{.Period}}{{if .DueDate}} · 到期 {{.DueDate}}{{end}}</small>{{end}}</td>
+                      <td>{{.KindLabel}}{{if .Note}}<small>{{.Note}}</small>{{end}}</td>
+                      <td class="amount">{{.Amount}}{{if .ExpectedAmount}}<small>本月应收 {{.ExpectedAmount}}</small>{{end}}</td>
+                      <td><span class="status {{.StatusClass}}">{{.StatusLabel}}</span></td>
+                    </tr>
+                  {{end}}</tbody>
+                </table>
+              </div>
+              <div class="transaction-allocation-cards">
+                {{range .Allocations}}
+                  <article class="transaction-allocation-card{{if not .Effective}} allocation-inactive{{end}}">
+                    <div class="transaction-allocation-card-head">
+                      <div><strong>{{if .TenantURL}}<a href="{{.TenantURL}}">{{.TenantName}}</a>{{else}}{{.TenantName}}{{end}}</strong><span>{{if .PropertyName}}{{.PropertyName}} · {{end}}{{if .RoomURL}}<a href="{{.RoomURL}}">{{.RoomLabel}}</a>{{else}}{{.RoomLabel}}{{end}}{{if .Period}} · {{.Period}}{{end}}</span></div>
+                      <span class="status {{.StatusClass}}">{{.StatusLabel}}</span>
+                    </div>
+                    <dl>
+                      <div><dt>租金月份</dt><dd>{{if .BillURL}}<a href="{{.BillURL}}">{{.BillLabel}}</a>{{else}}{{.BillLabel}}{{end}}{{if .DueDate}}<small>到期 {{.DueDate}}</small>{{end}}</dd></div>
+                      <div><dt>分类</dt><dd>{{.KindLabel}}</dd></div>
+                      <div><dt>本次分配</dt><dd class="amount">{{.Amount}}</dd></div>
+                    </dl>
+                    {{if .Note}}<p>{{.Note}}</p>{{end}}
+                  </article>
+                {{end}}
+              </div>
+            {{else}}
+              <div class="transaction-detail-empty">还没有入账分配。</div>
+            {{end}}
+          </section>
+
 
       <div class="transaction-detail-grid">
         <div class="transaction-detail-stack">
@@ -163,53 +179,6 @@
             {{end}}
           </section>
 
-          <section class="panel" aria-labelledby="transaction-allocations-title">
-            <div class="panel-head">
-              <div>
-                <h2 id="transaction-allocations-title">关联责任与对象</h2>
-                <p class="tiny">按分配记录回溯到租客责任、房间与月份。</p>
-              </div>
-              <span class="tiny">{{len .Allocations}} 条记录</span>
-            </div>
-            {{if .Allocations}}
-              <div class="transaction-allocation-table-wrap table-wrap">
-                <table class="transaction-allocation-table">
-                  <thead><tr><th>责任对象</th><th>对应责任</th><th>分类</th><th>分配金额</th><th>状态</th></tr></thead>
-                  <tbody>{{range .Allocations}}
-                    <tr class="{{if not .Effective}}allocation-inactive{{end}}">
-                      <td>
-                        {{if .TenantURL}}<a class="transaction-inline-link" href="{{.TenantURL}}">{{.TenantName}}</a>{{else}}<strong>{{.TenantName}}</strong>{{end}}
-                        {{if or .PropertyName .RoomLabel}}<small>{{if .PropertyName}}{{.PropertyName}}{{end}}{{if and .PropertyName .RoomLabel}} · {{end}}{{if .RoomURL}}<a href="{{.RoomURL}}">{{.RoomLabel}}</a>{{else}}{{.RoomLabel}}{{end}}</small>{{end}}
-                      </td>
-                      <td>{{if .BillURL}}<a href="{{.BillURL}}">{{.BillLabel}}</a>{{else}}{{.BillLabel}}{{end}}{{if .Period}}<small>{{.Period}}{{if .DueDate}} · 到期 {{.DueDate}}{{end}}</small>{{end}}</td>
-                      <td>{{.KindLabel}}{{if .Note}}<small>{{.Note}}</small>{{end}}</td>
-                      <td class="amount">{{.Amount}}{{if .ExpectedAmount}}<small>责任应收 {{.ExpectedAmount}}</small>{{end}}</td>
-                      <td><span class="status {{.StatusClass}}">{{.StatusLabel}}</span></td>
-                    </tr>
-                  {{end}}</tbody>
-                </table>
-              </div>
-              <div class="transaction-allocation-cards">
-                {{range .Allocations}}
-                  <article class="transaction-allocation-card{{if not .Effective}} allocation-inactive{{end}}">
-                    <div class="transaction-allocation-card-head">
-                      <div><strong>{{if .TenantURL}}<a href="{{.TenantURL}}">{{.TenantName}}</a>{{else}}{{.TenantName}}{{end}}</strong><span>{{if .PropertyName}}{{.PropertyName}} · {{end}}{{if .RoomURL}}<a href="{{.RoomURL}}">{{.RoomLabel}}</a>{{else}}{{.RoomLabel}}{{end}}{{if .Period}} · {{.Period}}{{end}}</span></div>
-                      <span class="status {{.StatusClass}}">{{.StatusLabel}}</span>
-                    </div>
-                    <dl>
-                      <div><dt>对应责任</dt><dd>{{if .BillURL}}<a href="{{.BillURL}}">{{.BillLabel}}</a>{{else}}{{.BillLabel}}{{end}}{{if .DueDate}}<small>到期 {{.DueDate}}</small>{{end}}</dd></div>
-                      <div><dt>分类</dt><dd>{{.KindLabel}}</dd></div>
-                      <div><dt>本次分配</dt><dd class="amount">{{.Amount}}</dd></div>
-                    </dl>
-                    {{if .Note}}<p>{{.Note}}</p>{{end}}
-                  </article>
-                {{end}}
-              </div>
-            {{else}}
-              <div class="transaction-detail-empty">还没有确认的分配记录。</div>
-            {{end}}
-          </section>
-
           <section class="panel" aria-labelledby="transaction-history-title">
             <div class="panel-head">
               <div><h2 id="transaction-history-title">处理记录</h2><p class="tiny">仅显示系统中留存的流水、分配与人工操作记录。</p></div>
@@ -229,35 +198,9 @@
           </section>
         </div>
 
-        <aside class="transaction-detail-stack">
-          {{if .Transaction.Deferred}}
-          <section class="panel transaction-quick-match" aria-label="首页队列状态">
-            <div class="panel-head"><div><h2>已暂不处理</h2><p class="tiny">这笔流水已从首页队列移出，仍可在此匹配。</p></div></div>
-            <form method="post" action="{{.ActionBase}}/undefer">
-              <input type="hidden" name="transaction_id" value="{{.Transaction.ID}}">
-              <input type="hidden" name="reason" value="重新加入首页队列">
-              <input type="hidden" name="return_to" value="{{.BackURL}}">
-              <button class="btn subtle" type="submit">重新加入首页队列</button>
-            </form>
-          </section>
-          {{end}}
-          {{if or .Transaction.CanConfirm .Transaction.NeedsMonthChoice .Transaction.ManualMatchOptions}}
-          <section class="panel transaction-quick-match" aria-label="匹配流水">
-            <div class="panel-head"><div><h2>匹配流水</h2><p class="tiny">付款人：{{.Transaction.PayerName}}</p></div></div>
-            <form method="post" action="{{.ActionBase}}/confirm" data-tenant-period-match>
-              <input type="hidden" name="transaction_id" value="{{.Transaction.ID}}">
-              <input type="hidden" name="remember_payer" value="0">
-              <input type="hidden" name="return_to" value="{{.BackURL}}">
-              <select name="tenant_id" aria-label="选择匹配租客" data-searchable required><option value="">选择租客...</option>{{range .Transaction.ManualMatchTenantOptions}}<option value="{{.ID}}"{{if eq .ID $.Transaction.CandidateTenantID}} selected{{end}}>{{.Name}}</option>{{end}}</select>
-              {{template "tenant-period-calendar" (tenantPeriodMatchCalendar .Transaction.ManualMatchOptions .Transaction.CandidateTenantID .Transaction.CandidatePeriod)}}
-              <label class="tiny"><input type="checkbox" name="remember_payer" value="1" checked> 记住付款人</label>
-              <button class="btn primary" type="submit">确认匹配</button>
-            </form>
-          </section>
-          {{end}}
-          <div class="transaction-risk-note">确认匹配会产生付款分配记录，但不会修改原始银行流水。撤销时同样保留审计记录。</div>
-        </aside>
+
       </div>
+      {{if .MatchReview}}{{template "transaction-match-review-drawer" .MatchReview}}{{end}}
     </main>
   </div>
   <script>

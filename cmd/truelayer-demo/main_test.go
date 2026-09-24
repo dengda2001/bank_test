@@ -700,7 +700,7 @@ func TestTransactionListRendersFilters(t *testing.T) {
 // 那一户，月份交给日历控件——选项袋里带 data-tenant，选完才报出应交与未收。
 func TestTransactionListOpensDrawerForRememberedTenantWithoutOpenMonth(t *testing.T) {
 	page := renderTransactionListPage(t, transactionListPageData{TransactionRows: []transactionPageRow{{ID: "7", InternalID: "7", Direction: "income", MatchStatus: "needs_review", CandidateTenantID: 7, MatchURL: "/transactions?match=7"}}})
-	if !strings.Contains(page, `href="/transactions?match=7"`) || !strings.Contains(page, `>匹配流水</a>`) {
+	if !strings.Contains(page, `href="/transactions?match=7"`) || !strings.Contains(page, `>处理分配</a>`) {
 		t.Fatal("recognized tenant row must open the review drawer even without an open month")
 	}
 }
@@ -780,8 +780,13 @@ func TestRevokePreviewTemplateShowsSourceAndEffectiveAllocations(t *testing.T) {
 	// 确认完会落到兜底的列表首页，等于让他重新找一遍这笔流水。
 	for _, expected := range []string{
 		"September rent", "EUR 2,000.00", "EUR 1,000.00", "Aoife Murphy", "/transactions/revoke",
+		`class="app"`, `class="entity-drawer-backdrop transaction-review-backdrop transaction-revoke-backdrop"`,
+		`class="entity-drawer transaction-review-drawer transaction-revoke-drawer"`,
+		`href="/static/css/pages/transaction-match-review.css"`,
+		`<h3 id="transaction-revoke-allocations-title">当前有效分配</h3>`,
+		`<textarea id="reason" name="reason" required maxlength="512"`,
 		`<input type="hidden" name="return_to" value="/transactions?match_status=pending">`,
-		`<a class="back" href="/transactions?match_status=pending">返回流水</a>`,
+		`<a class="btn subtle" href="/transactions?match_status=pending">返回流水</a>`,
 	} {
 		if !strings.Contains(body.String(), expected) {
 			t.Fatalf("revoke preview missing %q: %s", expected, body.String())
