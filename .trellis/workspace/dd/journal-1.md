@@ -1456,3 +1456,36 @@ Added existing or new tenant choices during room creation, disabled conflicting 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 41: Bank allocation and room workflow follow-up
+
+**Date**: 2026-09-24
+**Task**: Bank allocation and room workflow follow-up
+**Branch**: `main`
+
+### Summary
+
+Added exact-share rent allocation revocation, unified transaction review and detail, improved suggestions/search/room setup, aligned confirmations and login UI; Go, MySQL, vet, and Chrome checks passed.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `89c5151` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

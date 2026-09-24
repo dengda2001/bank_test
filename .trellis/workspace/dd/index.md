@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 40
+- **Total Sessions**: 41
 - **Last Active**: 2026-09-24
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1458 | Active |
+| `journal-1.md` | ~1491 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 41 | 2026-09-24 | Bank allocation and room workflow follow-up | `89c5151` | `main` |
 | 40 | 2026-09-24 | Room tenant selection and assignment | `c99c379` | `main` |
 | 39 | 2026-09-24 | 月底预付匹配补充 | `c89b388` | `main` |
 | 38 | 2026-09-24 | 流水日期自动匹配与租客建议 | `680635e` | `main` |
