@@ -1489,3 +1489,36 @@ Added exact-share rent allocation revocation, unified transaction review and det
 ### Next Steps
 
 - None - task complete
+
+
+## Session 42: Transaction direction and bank expense attribution
+
+**Date**: 2026-09-24
+**Task**: Transaction direction and bank expense attribution
+**Branch**: `main`
+
+### Summary
+
+Added visible income/expense filtering and row colors; linked bank debits to property/optional room expense facts with invoice upload and editing; verified Go suite, vet, disposable MySQL, and desktop/mobile browser flow.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bf3fd18` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
