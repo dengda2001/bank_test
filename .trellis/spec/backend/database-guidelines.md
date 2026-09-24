@@ -51,6 +51,13 @@ development escape.
   `user_id` and must be filtered by it.
 - `payment_transactions` uses `(user_id, stable_transaction_key)` for idempotent
   bank ingestion.
+- A bank expense is attributed through one active `manual_expenses` fact linked
+  by `payment_transaction_id`; the existing bank debit stays the sole
+  `payment_transactions` row. The linked fact has a required property and an
+  optional room belonging to it. `(user_id, payment_transaction_id)` is unique.
+  Manual expenses keep their synthetic source transaction, created and linked
+  in the same database transaction. Attribution and optional invoice
+  replacement commit together, while bank amount and date stay unchanged.
 - Rent obligations are monthly facts generated from room rent plans; tenant
   profiles do not carry rent amounts, due days, or rent validity dates.
 - Payment identity/matching data belongs to `tenant_payers`, not duplicated
@@ -85,6 +92,74 @@ development escape.
   confirmation ownership.
 - Room rent-plan migration, validation, fact materialization, locking, and
   account ownership.
+
+## Scenario: Attribute a Bank Debit to an Expense
+
+### 1. Scope / Trigger
+
+- Trigger: a signed-in landlord links or edits a synced debit from the transaction list.
+- Why: the debit already exists in `payment_transactions`; inserting a second
+  payment transaction would double count the money movement.
+
+### 2. Signatures
+
+- `POST /transactions/expense-link`: multipart fields `transaction_id`,
+  `property_id`, optional `room_id`, `category`, optional `invoice_file` and
+  invoice metadata, and `return_to`.
+- `expenseService.saveTransactionExpense(ctx, userID, transactionExpenseInput)`:
+  creates or edits one `manual_expenses` row in a database transaction.
+- `manual_expenses.payment_transaction_id`: nullable FK to
+  `payment_transactions.id`, unique with `user_id`.
+
+### 3. Contracts
+
+- Source must be an account-owned `expense` debit. New attribution accepts
+  `truelayer`; existing linked `manual_expense` sources remain editable.
+- `property_id` is required. `room_id` is optional and must belong to that
+  property. The source's date, amount, currency, and identity remain immutable.
+- Set the debit to `matched` in the same transaction as its expense fact and
+  optional invoice. Resync uses stable-key insert with `DoNothing`, preserving
+  the saved status. A manual expense creates and links its synthetic debit in
+  one transaction.
+- Invoice bytes follow the existing 8 MB PDF/JPG/PNG/WebP rule. Replacing an
+  invoice retains its previous row as history and marks exactly one current.
+
+### 4. Validation & Error Matrix
+
+| Condition | Result |
+|---|---|
+| Other account's debit/property/room | No row or authorization-safe error |
+| Missing property/category, or room from another property | Reject with no writes |
+| Unsupported/oversized invoice or incomplete invoice metadata | Reject with no writes |
+| Repeat save/edit of the same debit | Update the same expense fact; no new debit |
+
+### 5. Good/Base/Bad Cases
+
+- Good: link a €77.99 bank debit to a property with no room, then edit it to a
+  room and replace its invoice; one expense fact and one debit remain.
+- Base: a bank debit stays `unmatched` and has no expense fact until attributed.
+- Bad: create a synthetic debit during bank attribution, or count both the
+  bank debit and expense fact as two money movements.
+
+### 6. Tests Required
+
+- MySQL migration rerun succeeds and historical manual expenses link by their
+  stable key.
+- MySQL flow checks ownership, property-only save, room edit, repeat save,
+  invoice replacement history, expense totals, and unchanged debit count.
+- Browser flow checks create/edit drawer, filter return path, desktop direction
+  colors, and mobile drawer width.
+
+### 7. Wrong vs Correct
+
+```go
+// Wrong: bank debit already records the movement.
+tx.Create(&manualExpenseTransaction(userID, expense))
+
+// Correct: link the existing source inside the expense write transaction.
+expense.PaymentTransactionID = &source.ID
+tx.Create(&expense)
+```
 
 ## Scenario: Migration Authoring with the Flat SQL Runner
 

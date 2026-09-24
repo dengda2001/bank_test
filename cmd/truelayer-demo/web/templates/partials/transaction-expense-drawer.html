@@ -1,0 +1,63 @@
+{{define "transaction-expense-drawer"}}
+<div class="entity-drawer-backdrop transaction-expense-backdrop">
+  <section class="entity-drawer transaction-expense-drawer" role="dialog" aria-modal="true" aria-labelledby="transaction-expense-title">
+    <div class="panel-head"><div><p class="drawer-eyebrow">支出归属</p><h2 id="transaction-expense-title">{{if .Linked}}编辑支出关联{{else}}关联房产或房间{{end}}</h2></div><a class="drawer-close" href="{{.CloseURL}}" aria-label="关闭支出关联">×</a></div>
+    {{if .Error}}<div class="notice error" role="alert">{{if eq .Error "invalid_expense_invoice"}}发票未保存。请检查编号、开票方、日期、金额和文件格式（PDF、JPG、PNG 或 WebP，最大 8 MB）。{{else}}支出关联未保存，请检查房产、房间和用途。{{end}}</div>{{end}}
+    <div class="transaction-expense-source" aria-label="原始流水">
+      <div><span>银行流水</span><strong>{{.Description}}</strong></div>
+      <div><span>金额</span><strong>{{.Amount}}</strong></div>
+      <div><span>交易时间</span><strong>{{.Date}}</strong></div>
+      <div><span>账户</span><strong>{{.Account}}</strong></div>
+    </div>
+    {{if not .Properties}}<div class="notice error">请先建立房产，再关联这笔支出。</div>{{end}}
+    <form method="post" action="{{.PostURL}}" enctype="multipart/form-data">
+      <input type="hidden" name="transaction_id" value="{{.TransactionID}}">
+      <input type="hidden" name="return_to" value="{{.CloseURL}}">
+      <div class="form-field"><label for="transaction-expense-property">所属房产</label><select id="transaction-expense-property" name="property_id" required{{if not .Properties}} disabled{{end}}><option value="">请选择房产</option>{{range .Properties}}<option value="{{.ID}}"{{if eq $.SelectedPropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></div>
+      <div class="form-field"><label for="transaction-expense-room">关联房间（可选）</label><select id="transaction-expense-room" name="room_id"><option value="">房产公共支出</option>{{range .Rooms}}<option value="{{.ID}}" data-property="{{.PropertyID}}"{{if eq $.SelectedRoomID .ID}} selected{{end}}>{{.Label}}</option>{{end}}</select></div>
+      <div class="form-field"><label for="transaction-expense-category">支出用途</label><select id="transaction-expense-category" name="category" required>{{if and (ne .Category "维修") (ne .Category "水电") (ne .Category "清洁") (ne .Category "保险") (ne .Category "其他")}}<option value="{{.Category}}" selected>{{.Category}}</option>{{end}}<option value="维修"{{if eq .Category "维修"}} selected{{end}}>维修</option><option value="水电"{{if eq .Category "水电"}} selected{{end}}>水电</option><option value="清洁"{{if eq .Category "清洁"}} selected{{end}}>清洁</option><option value="保险"{{if eq .Category "保险"}} selected{{end}}>保险</option><option value="其他"{{if eq .Category "其他"}} selected{{end}}>其他</option></select></div>
+      <details class="transaction-expense-invoice"{{if eq .Error "invalid_expense_invoice"}} open{{end}}><summary>{{if .CurrentInvoice}}更换发票（可选）{{else}}上传发票（可选）{{end}}</summary>
+        {{if .CurrentInvoice}}<p class="tiny">当前发票：<a href="{{.CurrentInvoice.DownloadURL}}">{{.CurrentInvoice.InvoiceNumber}} · {{.CurrentInvoice.FileName}}</a>。不上传新文件则保留。</p>{{end}}
+        <div class="form-field"><label for="transaction-expense-invoice-file">发票文件</label><input id="transaction-expense-invoice-file" type="file" name="invoice_file" accept="application/pdf,image/jpeg,image/png,image/webp"><small class="tiny">PDF、JPG、PNG 或 WebP，最大 8 MB。</small></div>
+        <div class="transaction-expense-invoice-grid"><div class="form-field"><label for="transaction-expense-invoice-number">发票编号</label><input id="transaction-expense-invoice-number" name="invoice_number" maxlength="191"></div><div class="form-field"><label for="transaction-expense-invoice-vendor">开票方</label><input id="transaction-expense-invoice-vendor" name="vendor" maxlength="191"></div></div>
+        <div class="transaction-expense-invoice-grid"><div class="form-field"><label for="transaction-expense-invoice-date">开票日期</label><input id="transaction-expense-invoice-date" type="date" name="invoice_date"></div><div class="form-field"><label for="transaction-expense-invoice-amount">发票金额</label><input id="transaction-expense-invoice-amount" type="number" name="invoice_amount" min="0.01" step="0.01" inputmode="decimal"></div></div>
+      </details>
+      <div class="drawer-actions"><a class="btn subtle" href="{{.CloseURL}}">取消</a><button class="btn primary" type="submit"{{if not .Properties}} disabled{{end}}>{{if .Linked}}保存修改{{else}}确认关联{{end}}</button></div>
+    </form>
+  </section>
+</div>
+<script>
+(() => {
+  const backdrop = document.querySelector(".transaction-expense-backdrop");
+  const drawer = backdrop?.querySelector(".transaction-expense-drawer");
+  if (!drawer) return;
+  const close = drawer.querySelector(".drawer-close");
+  drawer.querySelector("select:not([disabled])")?.focus();
+  backdrop.addEventListener("click", (event) => {
+    if (event.target === backdrop && close) window.location.assign(close.href);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && close) window.location.assign(close.href);
+  });
+  const property = drawer.querySelector("#transaction-expense-property");
+  const room = drawer.querySelector("#transaction-expense-room");
+  const syncRooms = () => {
+    if (!property || !room) return;
+    Array.from(room.options).forEach((option) => {
+      if (option.dataset.property) option.disabled = option.dataset.property !== property.value;
+    });
+    if (room.options[room.selectedIndex]?.disabled) room.selectedIndex = 0;
+  };
+  property?.addEventListener("change", syncRooms);
+  syncRooms();
+  const invoiceFile = drawer.querySelector("#transaction-expense-invoice-file");
+  const invoiceFields = ["number", "vendor", "date", "amount"].map((name) => drawer.querySelector(`#transaction-expense-invoice-${name}`));
+  const syncInvoiceFields = () => {
+    const hasFile = Boolean(invoiceFile?.files?.length);
+    invoiceFields.forEach((field) => { if (field) field.required = hasFile; });
+  };
+  invoiceFile?.addEventListener("change", syncInvoiceFields);
+  syncInvoiceFields();
+})();
+</script>
+{{end}}

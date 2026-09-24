@@ -172,6 +172,15 @@ func parseExpenseInvoiceMetadata(values url.Values, fileData []byte, fileName st
 	if err != nil || expenseID == 0 {
 		return manualExpenseInvoice{}, errInvalidExpenseInvoice
 	}
+	invoice, err := parseExpenseInvoiceUpload(values, fileData, fileName)
+	if err != nil {
+		return manualExpenseInvoice{}, err
+	}
+	invoice.ExpenseID = expenseID
+	return invoice, nil
+}
+
+func parseExpenseInvoiceUpload(values url.Values, fileData []byte, fileName string) (manualExpenseInvoice, error) {
 	number := strings.TrimSpace(values.Get("invoice_number"))
 	vendor := strings.TrimSpace(values.Get("vendor"))
 	if number == "" || len([]rune(number)) > 191 || vendor == "" || len([]rune(vendor)) > 191 || len([]rune(values.Get("note"))) > 2000 {
@@ -198,7 +207,7 @@ func parseExpenseInvoiceMetadata(values url.Values, fileData []byte, fileName st
 	}
 	digest := sha256.Sum256(fileData)
 	return manualExpenseInvoice{
-		ExpenseID: expenseID, InvoiceNumber: number, Vendor: vendor, InvoiceDate: date,
+		InvoiceNumber: number, Vendor: vendor, InvoiceDate: date,
 		AmountCents: moneyToCents(amount), Currency: ledgerCurrencyEUR,
 		FileName: fileName, ContentType: contentType, SHA256: hex.EncodeToString(digest[:]),
 		FileData: fileData, Note: nullableString(strings.TrimSpace(values.Get("note"))), IsCurrent: true,
@@ -229,22 +238,29 @@ func (a *app) bindExpenseInvoice(ctx context.Context, userID uint64, invoice man
 		return errInvalidExpenseInvoice
 	}
 	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var expense manualExpense
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", invoice.ExpenseID, userID).First(&expense).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, sql.ErrNoRows) {
-				return errInvalidExpenseInvoice
-			}
-			return err
-		}
-		now := time.Now().UTC()
-		if err := tx.Model(&manualExpenseInvoice{}).Where("user_id = ? AND expense_id = ? AND is_current = ?", userID, invoice.ExpenseID, true).
-			Updates(map[string]any{"is_current": false, "replaced_at": now}).Error; err != nil {
-			return err
-		}
-		invoice.UserID = userID
-		invoice.Currency = firstNonEmpty(expense.Currency, ledgerCurrencyEUR)
-		return tx.Create(&invoice).Error
+		return bindExpenseInvoiceInTx(tx, userID, invoice)
 	})
+}
+
+func bindExpenseInvoiceInTx(tx *gorm.DB, userID uint64, invoice manualExpenseInvoice) error {
+	if tx == nil || userID == 0 || invoice.ExpenseID == 0 {
+		return errInvalidExpenseInvoice
+	}
+	var expense manualExpense
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", invoice.ExpenseID, userID).First(&expense).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, sql.ErrNoRows) {
+			return errInvalidExpenseInvoice
+		}
+		return err
+	}
+	now := time.Now().UTC()
+	if err := tx.Model(&manualExpenseInvoice{}).Where("user_id = ? AND expense_id = ? AND is_current = ?", userID, invoice.ExpenseID, true).
+		Updates(map[string]any{"is_current": false, "replaced_at": now}).Error; err != nil {
+		return err
+	}
+	invoice.UserID = userID
+	invoice.Currency = firstNonEmpty(expense.Currency, ledgerCurrencyEUR)
+	return tx.Create(&invoice).Error
 }
 
 func (a *app) handleExpenseInvoiceFile(w http.ResponseWriter, r *http.Request) {

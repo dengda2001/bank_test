@@ -64,6 +64,14 @@ var transactionListTemplate = newWorkspacePageTemplate("transactions", nil, `<!d
     .transaction-route-desktop-table .route-txn-context { min-width: 130px; color: var(--foreground-muted); font-size: 12px; }
     .transaction-route-desktop-table .route-txn-description { min-width: 100px; max-width: 140px; overflow-wrap: anywhere; color: var(--foreground-muted); font-size: 12px; }
     .transaction-route-desktop-table .route-txn-amount { white-space: nowrap; font: 700 13px var(--mono); }
+    .transaction-route-desktop-table tbody tr[data-direction="income"] { background: color-mix(in srgb,var(--positive) 7%,var(--surface)); }
+    .transaction-route-desktop-table tbody tr[data-direction="expense"] { background: color-mix(in srgb,var(--danger) 7%,var(--surface)); }
+    .transaction-route-desktop-table tbody tr[data-direction="income"]:hover { background: color-mix(in srgb,var(--positive) 12%,var(--surface)); }
+    .transaction-route-desktop-table tbody tr[data-direction="expense"]:hover { background: color-mix(in srgb,var(--danger) 12%,var(--surface)); }
+    .transaction-direction { display: inline-block; margin-right: 6px; padding: 2px 5px; border-radius: 4px; font: 700 11px var(--sans); white-space: nowrap; }
+    .transaction-direction.income { color: var(--accent-bright); background: color-mix(in srgb,var(--positive) 15%,var(--surface)); }
+    .transaction-direction.expense { color: var(--danger); background: color-mix(in srgb,var(--danger) 15%,var(--surface)); }
+    .transaction-expense-invoice-label { display: block; margin-top: 3px; color: var(--foreground-muted); font-size: 11px; font-weight: 400; }
     /* Matching explanations can wrap so the new description stays readable. */
     .transaction-route-desktop-table .route-txn-reason { max-width: 130px; }
     .transaction-route-desktop-table .route-txn-period { white-space: nowrap; font: 600 12px var(--mono); }
@@ -109,14 +117,17 @@ var transactionListTemplate = newWorkspacePageTemplate("transactions", nil, `<!d
       .transaction-route-page .transaction-route-filters[open] > summary { display: flex; }
       .transaction-route-filters .filterbar { grid-template-columns: 1fr; margin: 0; padding: 12px 0; }
       .transaction-route-filters .filter-actions { display: grid; grid-template-columns: 1fr 1fr; }
-      .transaction-route-quickfilter { margin-bottom: 12px; }
-      .transaction-route-quickfilter select { flex: 1 1 auto; min-height: 44px; }
+      .transaction-route-quickfilter { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); margin-bottom: 12px; }
+      .transaction-route-quickfilter select { width: 100%; min-width: 0; min-height: 44px; }
+      .transaction-route-quickfilter input[type="search"] { grid-column: 1/-1; min-width: 0; }
       .transaction-route-quickfilter input[type="month"], .transaction-route-quickfilter .btn { display: none; }
       .transaction-route-page .panel-head { display: none; }
       .transaction-route-desktop-list { display: none; }
       .transaction-route-mobile-list { display: grid; gap: 9px; }
       .transaction-route-page .pagination { display: none; }
       .transaction-review-card { min-width: 0; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+      .transaction-review-card[data-direction="income"] { background: color-mix(in srgb,var(--positive) 7%,var(--surface)); }
+      .transaction-review-card[data-direction="expense"] { background: color-mix(in srgb,var(--danger) 7%,var(--surface)); }
       .transaction-review-head { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; align-items: start; }
       .transaction-review-head h3 { margin: 0; overflow-wrap: anywhere; font-size: 14px; }
       .transaction-review-head p { margin: 3px 0 0; color: var(--foreground-muted); font-size: 11px; line-height: 1.45; }
@@ -145,6 +156,7 @@ var transactionListTemplate = newWorkspacePageTemplate("transactions", nil, `<!d
     }
   </style>
   <link rel="stylesheet" href="/static/css/pages/transaction-match-review.css">
+  <link rel="stylesheet" href="/static/css/pages/transaction-expense.css">
 </head>
 <body>
   <div class="app">
@@ -184,14 +196,17 @@ var transactionListTemplate = newWorkspacePageTemplate("transactions", nil, `<!d
       {{if .CashReceiptDrawer}}{{template "cash-receipt-drawer" .CashReceiptDrawer}}{{end}}
       {{if .MatchReview}}{{template "transaction-match-review-drawer" .MatchReview}}{{end}}
       {{if .ExpenseDrawer}}{{template "expense-form-drawer" .ExpenseDrawer}}{{end}}
+      {{if .ExpenseLinkDrawer}}{{template "transaction-expense-drawer" .ExpenseLinkDrawer}}{{end}}
+      {{if eq .Message "expense_linked"}}<div class="notice ok" data-toast>支出已关联到房产或房间。</div>{{end}}
+      {{if and (eq .Error "invalid_expense_link") (not .ExpenseLinkDrawer)}}<div class="notice error">支出关联未保存，请重新打开流水核对。</div>{{end}}
       <form class="transaction-route-quickfilter" method="get" action="/transactions" aria-label="搜索流水">
 		{{if .SortFilter}}<input type="hidden" name="sort" value="{{.SortFilter}}">{{end}}
         {{if .TenantFilter}}<input type="hidden" name="tenant_id" value="{{.TenantFilter}}">{{end}}
         {{if .RentPeriodFilter}}<input type="hidden" name="rent_period" value="{{.RentPeriodFilter}}">{{end}}
         {{if .AllocationFilter}}<input type="hidden" name="allocation" value="{{.AllocationFilter}}">{{end}}
-        {{if .DirectionFilter}}<input type="hidden" name="direction" value="{{.DirectionFilter}}">{{end}}
         {{if .ArrivalFromFilter}}<input type="hidden" name="arrival_from" value="{{.ArrivalFromFilter}}">{{end}}
         {{if .ArrivalToFilter}}<input type="hidden" name="arrival_to" value="{{.ArrivalToFilter}}">{{end}}
+        <select id="direction" name="direction" aria-label="收支方向" onchange="this.form.requestSubmit()"><option value="" {{if eq .DirectionFilter ""}}selected{{end}}>全部收支</option><option value="income" {{if eq .DirectionFilter "income"}}selected{{end}}>收入</option><option value="expense" {{if eq .DirectionFilter "expense"}}selected{{end}}>支出</option></select>
         <select id="match_status" name="match_status" aria-label="关联状态" onchange="this.form.requestSubmit()"><option value="" {{if eq .MatchStatusSelection ""}}selected{{end}}>全部</option><option value="pending" {{if eq .MatchStatusSelection "pending"}}selected{{end}}>待处理</option><option value="matched" {{if eq .MatchStatusSelection "matched"}}selected{{end}}>已关联</option><option value="ignored" {{if eq .MatchStatusSelection "ignored"}}selected{{end}}>已忽略</option></select>
         <input type="search" name="payer" value="{{.PayerFilter}}" placeholder="付款人、描述或租客" aria-label="搜索付款人、描述或租客">
         <input type="month" name="period" value="{{.PeriodFilter}}" aria-label="到账月份">
@@ -204,7 +219,7 @@ var transactionListTemplate = newWorkspacePageTemplate("transactions", nil, `<!d
         <label for="period">流水到账月<input id="period" name="period" type="month" value="{{.PeriodFilter}}" onchange="this.form.submit()"></label>
         <label for="rent_period">租金所属月<input id="rent_period" name="rent_period" type="month" value="{{.RentPeriodFilter}}"></label>
         <label for="allocation">入账用途<select id="allocation" name="allocation"><option value="">全部用途</option><option value="rent" {{if eq .AllocationFilter "rent"}}selected{{end}}>房租</option><option value="deposit" {{if eq .AllocationFilter "deposit"}}selected{{end}}>押金</option><option value="other_income" {{if eq .AllocationFilter "other_income"}}selected{{end}}>其他收入</option></select></label>
-        <label for="direction">收支<select id="direction" name="direction"><option value="">全部</option><option value="income" {{if eq .DirectionFilter "income"}}selected{{end}}>收入</option><option value="expense" {{if eq .DirectionFilter "expense"}}selected{{end}}>支出</option></select></label>
+        {{if .DirectionFilter}}<input type="hidden" name="direction" value="{{.DirectionFilter}}">{{end}}
         {{if .MatchStatusSelection}}<input type="hidden" name="match_status" value="{{.MatchStatusSelection}}">{{end}}
         {{if .ArrivalFromFilter}}<input type="hidden" name="arrival_from" value="{{.ArrivalFromFilter}}">{{end}}
         {{if .ArrivalToFilter}}<input type="hidden" name="arrival_to" value="{{.ArrivalToFilter}}">{{end}}
@@ -215,17 +230,20 @@ var transactionListTemplate = newWorkspacePageTemplate("transactions", nil, `<!d
       <section class="panel surface" aria-labelledby="statement-title">
         <div class="panel-head"><h2 id="statement-title">流水明细</h2><span class="tiny">{{.LastSync}}</span></div>
         {{if .TransactionRows}}
-<div class="transaction-route-desktop-list table-wrap"><table class="transaction-route-desktop-table"><thead><tr>{{template "table-sort-heading" (tableSortHeading "日期" (index .SortLinks "arrival"))}}{{template "table-sort-heading" (tableSortHeading "付款人" (index .SortLinks "payer"))}}<th>租客姓名</th><th>Description</th>{{template "table-sort-heading" (tableSortHeading "房产 / 房间" (index .SortLinks "object"))}}{{template "table-sort-heading" (tableSortHeading "金额" (index .SortLinks "amount"))}}{{template "table-sort-heading" (tableSortHeading "识别租金月份" (index .SortLinks "rent_period"))}}<th>入账用途</th>{{template "table-sort-heading" (tableSortHeading "匹配依据" (index .SortLinks "reason"))}}{{template "table-sort-heading" (tableSortHeading "状态" (index .SortLinks "status"))}}<th>操作</th></tr></thead><tbody>{{range .TransactionRows}}{{$row := .}}<tr id="transaction-row-{{.DetailKey}}"><td class="mono route-txn-fixed">{{if .DateShort}}{{.DateShort}}{{else}}{{.DateDisplay}}{{end}}</td><td class="route-txn-payer"><a class="transaction-name-search" href="{{.PayerSearchURL}}" title="搜索付款人 {{.PayerName}}">{{.PayerName}}</a></td><td>{{if .MatchedTenantName}}<a class="transaction-name-search" href="{{.TenantSearchURL}}" title="搜索租客 {{.MatchedTenantName}}">{{.MatchedTenantName}}</a>{{else}}—{{end}}</td><td class="route-txn-description">{{.Description}}</td><td class="route-txn-context">{{if .ObjectLabel}}{{.ObjectLabel}}{{else}}—{{end}}</td><td class="route-txn-amount">{{.AmountDisplay}}</td><td class="route-txn-period">{{if .ParsedPeriodDisplay}}{{.ParsedPeriodDisplay}}{{if .ParsedPeriodSourceLabel}} <small>{{.ParsedPeriodSourceLabel}}</small>{{end}}{{else}}<span class="route-txn-period-none">未识别</span>{{end}}</td><td class="route-txn-fixed">{{if .AllocationUseDisplay}}{{.AllocationUseDisplay}}{{else}}{{.MatchStatusLabel}}{{end}}</td><td class="route-txn-context route-txn-reason">{{if .MatchReason}}{{.MatchReason}}{{else}}—{{end}}</td><td class="route-txn-fixed"><span class="status {{.MatchStatus}}">{{.MatchStatusLabel}}</span>{{if .MatchMethodLabel}}<br><span class="transaction-match-method">{{.MatchMethodLabel}}</span>{{end}}</td><td class="route-txn-action"><a class="btn subtle" href="{{.DetailURL}}">查看详情</a>{{if .MatchURL}}<a class="btn primary" href="{{.MatchURL}}" data-match-trigger="{{.InternalID}}">处理分配</a>{{end}}{{if or (eq .MatchStatus "matched") (eq .MatchStatus "partial")}}<a class="btn subtle danger" href="/transactions/revoke?transaction_id={{.ID}}&amp;return_to={{.ReturnURL | urlquery}}">撤销整笔匹配</a>{{end}}</td></tr>{{end}}</tbody></table></div>
+<div class="transaction-route-desktop-list table-wrap"><table class="transaction-route-desktop-table"><thead><tr>{{template "table-sort-heading" (tableSortHeading "日期" (index .SortLinks "arrival"))}}{{template "table-sort-heading" (tableSortHeading "付款人" (index .SortLinks "payer"))}}<th>租客姓名</th><th>Description</th>{{template "table-sort-heading" (tableSortHeading "房产 / 房间" (index .SortLinks "object"))}}{{template "table-sort-heading" (tableSortHeading "金额" (index .SortLinks "amount"))}}{{template "table-sort-heading" (tableSortHeading "识别租金月份" (index .SortLinks "rent_period"))}}<th>用途</th>{{template "table-sort-heading" (tableSortHeading "匹配依据" (index .SortLinks "reason"))}}{{template "table-sort-heading" (tableSortHeading "状态" (index .SortLinks "status"))}}<th>操作</th></tr></thead><tbody>{{range .TransactionRows}}{{$row := .}}<tr id="transaction-row-{{.DetailKey}}" data-direction="{{.Direction}}"><td class="mono route-txn-fixed">{{if .DateShort}}{{.DateShort}}{{else}}{{.DateDisplay}}{{end}}</td><td class="route-txn-payer"><a class="transaction-name-search" href="{{.PayerSearchURL}}" title="搜索付款人 {{.PayerName}}">{{.PayerName}}</a></td><td>{{if .MatchedTenantName}}<a class="transaction-name-search" href="{{.TenantSearchURL}}" title="搜索租客 {{.MatchedTenantName}}">{{.MatchedTenantName}}</a>{{else}}—{{end}}</td><td class="route-txn-description">{{.Description}}</td><td class="route-txn-context">{{if .ObjectLabel}}{{.ObjectLabel}}{{else}}—{{end}}</td><td class="route-txn-amount">{{if .Direction}}<span class="transaction-direction {{.Direction}}">{{.DirectionLabel}}</span>{{end}}{{.AmountDisplay}}</td><td class="route-txn-period">{{if eq .Direction "expense"}}—{{else if .ParsedPeriodDisplay}}{{.ParsedPeriodDisplay}}{{if .ParsedPeriodSourceLabel}} <small>{{.ParsedPeriodSourceLabel}}</small>{{end}}{{else}}<span class="route-txn-period-none">未识别</span>{{end}}</td><td class="route-txn-fixed">{{if .AllocationUseDisplay}}{{.AllocationUseDisplay}}{{else}}{{.MatchStatusLabel}}{{end}}{{if .ExpenseInvoiceLinked}}<small class="transaction-expense-invoice-label">发票已上传</small>{{end}}</td><td class="route-txn-context route-txn-reason">{{if .MatchReason}}{{.MatchReason}}{{else}}—{{end}}</td><td class="route-txn-fixed"><span class="status {{.MatchStatus}}">{{.MatchStatusLabel}}</span>{{if .MatchMethodLabel}}<br><span class="transaction-match-method">{{.MatchMethodLabel}}</span>{{end}}</td><td class="route-txn-action"><a class="btn subtle" href="{{.DetailURL}}">查看详情</a>{{if .MatchURL}}<a class="btn primary" href="{{.MatchURL}}" data-match-trigger="{{.InternalID}}">{{if or (eq .MatchStatus "matched") (eq .MatchStatus "partial")}}调整分配{{else}}处理分配{{end}}</a>{{end}}{{if .ExpenseLinkURL}}<a class="btn primary" href="{{.ExpenseLinkURL}}">{{if .ExpenseLinked}}编辑关联{{else}}关联房间{{end}}</a>{{end}}{{if and (eq .Direction "income") (or (eq .MatchStatus "matched") (eq .MatchStatus "partial"))}}<a class="btn subtle danger" href="/transactions/revoke?transaction_id={{.ID}}&amp;return_to={{.ReturnURL | urlquery}}">撤销整笔匹配</a>{{end}}</td></tr>{{end}}</tbody></table></div>
         <div class="transaction-route-mobile-list">
           {{range .TransactionRows}}
           {{$row := .}}
-          <article class="transaction-review-card" id="mobile-transaction-{{.DetailKey}}">
+          <article class="transaction-review-card" id="mobile-transaction-{{.DetailKey}}" data-direction="{{.Direction}}">
             <div class="transaction-review-head">
-              <div><h3><a class="transaction-name-search" href="{{.PayerSearchURL}}" title="搜索付款人 {{.PayerName}}">{{.PayerName}}</a></h3><p>{{if .DateShort}}{{.DateShort}}{{else}}{{.DateDisplay}}{{end}} · {{if .ObjectLabel}}{{.ObjectLabel}}{{else}}账户：{{.AccountName}}{{end}}</p><p class="transaction-review-description">{{.Description}}</p><p class="tiny">识别租金月份：{{if .ParsedPeriodDisplay}}{{.ParsedPeriodDisplay}}{{if .ParsedPeriodSourceLabel}} · {{.ParsedPeriodSourceLabel}}{{end}}{{else}}未识别{{end}}</p>{{if .MatchedTenantName}}<p class="tiny">租客姓名：<a class="transaction-name-search" href="{{.TenantSearchURL}}" title="搜索租客 {{.MatchedTenantName}}">{{.MatchedTenantName}}</a></p>{{end}}{{if .MatchMethodLabel}}<span class="transaction-match-method">{{.MatchMethodLabel}}</span>{{end}}</div>
+              <div><h3><a class="transaction-name-search" href="{{.PayerSearchURL}}" title="搜索付款人 {{.PayerName}}">{{.PayerName}}</a></h3><p>{{if .DateShort}}{{.DateShort}}{{else}}{{.DateDisplay}}{{end}} · {{if .Direction}}<span class="transaction-direction {{.Direction}}">{{.DirectionLabel}}</span> · {{end}}{{if .ObjectLabel}}{{.ObjectLabel}}{{else}}账户：{{.AccountName}}{{end}}</p><p class="transaction-review-description">{{.Description}}</p>{{if eq .Direction "income"}}<p class="tiny">识别租金月份：{{if .ParsedPeriodDisplay}}{{.ParsedPeriodDisplay}}{{if .ParsedPeriodSourceLabel}} · {{.ParsedPeriodSourceLabel}}{{end}}{{else}}未识别{{end}}</p>{{end}}{{if .MatchedTenantName}}<p class="tiny">租客姓名：<a class="transaction-name-search" href="{{.TenantSearchURL}}" title="搜索租客 {{.MatchedTenantName}}">{{.MatchedTenantName}}</a></p>{{end}}{{if .MatchMethodLabel}}<span class="transaction-match-method">{{.MatchMethodLabel}}</span>{{end}}</div>
               <strong class="transaction-review-amount{{if eq .Direction "expense"}} expense{{end}}">{{if eq .Direction "income"}}+{{end}}{{.AmountDisplay}}</strong>
             </div>
             <div class="transaction-review-facts">
-              {{if .CanConfirm}}
+              {{if eq .Direction "expense"}}
+              <div><span>支出用途</span><strong>{{.AllocationUseDisplay}}</strong></div>
+              <div><span>发票</span><strong>{{if .ExpenseInvoiceLinked}}已上传{{else}}未上传{{end}}</strong></div>
+              {{else if .CanConfirm}}
               <div><span>入账用途</span><strong>{{if .AllocationUseDisplay}}{{.AllocationUseDisplay}}{{else}}{{.MatchStatusLabel}}{{end}}</strong></div>
               <div><span>未分配</span><strong>{{.RemainingAmountDisplay}}</strong></div>
               {{else if .NeedsMonthChoice}}
@@ -239,8 +257,8 @@ var transactionListTemplate = newWorkspacePageTemplate("transactions", nil, `<!d
             {{if and .MatchReason (not .NeedsMonthChoice)}}<p class="transaction-review-note">{{.MatchReason}}</p>{{end}}
             <div class="transaction-review-actions">
               <a class="btn" href="{{.DetailURL}}">查看详情</a>
-              {{if .MatchURL}}<a class="btn primary" href="{{.MatchURL}}" data-match-trigger="{{.InternalID}}">处理分配</a>{{end}}
-              {{if or (eq .MatchStatus "matched") (eq .MatchStatus "partial")}}<a class="btn subtle danger" href="/transactions/revoke?transaction_id={{.ID}}&amp;return_to={{.ReturnURL | urlquery}}">撤销整笔匹配</a>{{end}}
+              {{if .MatchURL}}<a class="btn primary" href="{{.MatchURL}}" data-match-trigger="{{.InternalID}}">{{if or (eq .MatchStatus "matched") (eq .MatchStatus "partial")}}调整分配{{else}}处理分配{{end}}</a>{{end}}{{if .ExpenseLinkURL}}<a class="btn primary" href="{{.ExpenseLinkURL}}">{{if .ExpenseLinked}}编辑关联{{else}}关联房间{{end}}</a>{{end}}
+              {{if and (eq .Direction "income") (or (eq .MatchStatus "matched") (eq .MatchStatus "partial"))}}<a class="btn subtle danger" href="/transactions/revoke?transaction_id={{.ID}}&amp;return_to={{.ReturnURL | urlquery}}">撤销整笔匹配</a>{{end}}
             </div>
           </article>
           {{end}}

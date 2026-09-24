@@ -31,6 +31,9 @@
           </div>
         </div>
         <div class="transaction-detail-actions">
+          {{if eq .Transaction.Direction "expense"}}
+            {{if .Transaction.ExpenseLinkURL}}<a class="btn primary" href="{{.Transaction.ExpenseLinkURL}}">{{if .Transaction.ExpenseLinked}}编辑关联{{else}}关联房间{{end}}</a>{{end}}
+          {{else}}
           <details class="transaction-head-action">
             <summary class="btn">标记非租金</summary>
             <div class="transaction-head-action-body">
@@ -81,6 +84,7 @@
               {{end}}
             </div>
           </details>
+          {{end}}
         </div>
       </header>
       {{if eq .Message "rent_confirmed"}}<div class="notice ok" data-toast>分配已保存，入账进度已更新。</div>{{end}}
@@ -88,6 +92,20 @@
       {{if .Error}}<div class="notice error" role="alert">本次操作未完成，请刷新后核对流水与租金余额。</div>{{end}}
       {{if .Transaction.Deferred}}<form class="transaction-detail-undefer" method="post" action="{{.ActionBase}}/undefer"><input type="hidden" name="transaction_id" value="{{.Transaction.ID}}"><input type="hidden" name="reason" value="重新加入首页队列"><input type="hidden" name="return_to" value="{{.BackURL}}"><span>这笔流水已从首页待处理队列移出。</span><button class="btn subtle" type="submit">重新加入首页队列</button></form>{{end}}
 
+          {{if eq .Transaction.Direction "expense"}}
+          <section class="panel" aria-labelledby="transaction-expense-title">
+            <div class="panel-head">
+              <div><h2 id="transaction-expense-title">支出归属</h2><p class="tiny">房产必选，房间可选；用途和发票可以随时修改。</p></div>
+              {{if .Transaction.ExpenseLinkURL}}<a class="btn primary" href="{{.Transaction.ExpenseLinkURL}}">{{if .Transaction.ExpenseLinked}}编辑关联{{else}}关联房间{{end}}</a>{{end}}
+            </div>
+            <dl class="transaction-facts">
+              <div><dt>状态</dt><dd>{{.Transaction.MatchStatusLabel}}</dd></div>
+              <div><dt>房产 / 房间</dt><dd>{{if .Transaction.ObjectLabel}}{{.Transaction.ObjectLabel}}{{else}}未归属{{end}}</dd></div>
+              <div><dt>支出用途</dt><dd>{{if .Transaction.ExpenseLinked}}{{.Transaction.ExpenseCategory}}{{else}}未选择{{end}}</dd></div>
+              <div><dt>发票</dt><dd>{{if .Transaction.ExpenseInvoiceLinked}}已上传{{else}}未上传{{end}}</dd></div>
+            </dl>
+          </section>
+          {{else}}
           <section class="panel" aria-labelledby="transaction-allocations-title">
             <div class="panel-head">
               <div>
@@ -140,6 +158,7 @@
               <div class="transaction-detail-empty">还没有入账分配。</div>
             {{end}}
           </section>
+          {{end}}
 
 
       <div class="transaction-detail-grid">
@@ -157,15 +176,15 @@
               </div>
             </div>
             <dl class="transaction-facts">
-              <div><dt>付款人名称</dt><dd>{{.Transaction.PayerName}}</dd></div>
+              <div><dt>{{if eq .Transaction.Direction "expense"}}交易对方{{else}}付款人名称{{end}}</dt><dd>{{.Transaction.PayerName}}</dd></div>
               <div><dt>交易时间</dt><dd class="mono">{{.TransactionTime}}</dd></div>
               <div><dt>流水号</dt><dd>{{.Reference}}</dd></div>
-              <div><dt>收款账户</dt><dd>{{.Transaction.AccountName}}</dd></div>
-              <div><dt>识别租金月份</dt><dd>{{if .ParsedPeriod}}{{.ParsedPeriod}}{{else}}未识别{{end}}{{if .ParsedPeriodNote}}<small>{{.ParsedPeriodNote}}</small>{{end}}</dd></div>
+              <div><dt>{{if eq .Transaction.Direction "expense"}}银行账户{{else}}收款账户{{end}}</dt><dd>{{.Transaction.AccountName}}</dd></div>
+              {{if ne .Transaction.Direction "expense"}}<div><dt>识别租金月份</dt><dd>{{if .ParsedPeriod}}{{.ParsedPeriod}}{{else}}未识别{{end}}{{if .ParsedPeriodNote}}<small>{{.ParsedPeriodNote}}</small>{{end}}</dd></div>{{end}}
               <div><dt>数据来源</dt><dd>{{.SourceLabel}}</dd></div>
               <div><dt>银行交易 ID</dt><dd>{{.ProviderID}}</dd></div>
-              <div><dt>稳定付款人 ID</dt><dd>{{if eq .Transaction.PayerID "无付款人编号"}}未提供{{else}}{{.Transaction.PayerID}}{{end}}</dd></div>
-              <div><dt>收款账户 ID</dt><dd>{{if .Transaction.AccountID}}{{.Transaction.AccountID}}{{else}}—{{end}}</dd></div>
+              {{if ne .Transaction.Direction "expense"}}<div><dt>稳定付款人 ID</dt><dd>{{if eq .Transaction.PayerID "无付款人编号"}}未提供{{else}}{{.Transaction.PayerID}}{{end}}</dd></div>{{end}}
+              <div><dt>{{if eq .Transaction.Direction "expense"}}银行账户 ID{{else}}收款账户 ID{{end}}</dt><dd>{{if .Transaction.AccountID}}{{.Transaction.AccountID}}{{else}}—{{end}}</dd></div>
             </dl>
             <div class="transaction-raw-description">
               <h3>原始描述</h3>

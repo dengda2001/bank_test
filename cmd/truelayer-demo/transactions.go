@@ -414,6 +414,10 @@ type transactionPageRow struct {
 	DetailURL                 string
 	ReturnURL                 string
 	MatchURL                  string
+	ExpenseLinkURL            string
+	ExpenseLinked             bool
+	ExpenseCategory           string
+	ExpenseInvoiceLinked      bool
 	PayerSearchURL            string
 	TenantSearchURL           string
 	Direction                 string
@@ -640,7 +644,13 @@ func applyTransactionFilters(q *gorm.DB, userID uint64, filters transactionFilte
 		q = q.Where("payment_transactions.direction = ?", filters.Direction)
 	}
 	if filters.PendingOnly {
-		q = q.Where("payment_transactions.direction = ?", "income").Where("payment_transactions.match_status IN ?", pendingMatchStatuses)
+		if filters.Direction == "expense" {
+			q = q.Where("payment_transactions.match_status = ?", "unmatched")
+		} else if filters.Direction == "income" {
+			q = q.Where("payment_transactions.match_status IN ?", pendingMatchStatuses)
+		} else {
+			q = q.Where("(payment_transactions.direction = ? AND payment_transactions.match_status IN ?) OR (payment_transactions.direction = ? AND payment_transactions.match_status = ?)", "income", pendingMatchStatuses, "expense", "unmatched")
+		}
 	}
 	if filters.MatchStatus != "" {
 		q = q.Where("payment_transactions.match_status = ?", filters.MatchStatus)
@@ -730,7 +740,7 @@ func applyTransactionFilters(q *gorm.DB, userID uint64, filters transactionFilte
 }
 
 func (s *transactionService) countPendingTransactions(ctx context.Context, userID uint64, periodMonth string) (int64, error) {
-	return s.countPendingTransactionsWithFilters(ctx, userID, transactionFilters{PeriodMonth: periodMonth, PendingOnly: true})
+	return s.countPendingTransactionsWithFilters(ctx, userID, transactionFilters{PeriodMonth: periodMonth, Direction: "income", PendingOnly: true})
 }
 
 func (s *transactionService) countPendingTransactionsWithFilters(ctx context.Context, userID uint64, filters transactionFilters) (int64, error) {

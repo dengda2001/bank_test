@@ -340,6 +340,9 @@ func (s *transactionService) listTransactionPageRowsWithTotal(ctx context.Contex
 			rows[index].ObjectLabel, rows[index].RoomOnlyLabel = transactionRentObjectLabels(chargeIDsByRow[index], charges)
 		}
 	}
+	if err := s.decorateExpensePageRows(ctx, userID, transactions, rows); err != nil {
+		return nil, 0, err
+	}
 	return rows, total, nil
 }
 

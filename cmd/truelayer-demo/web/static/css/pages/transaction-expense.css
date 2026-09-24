@@ -1,0 +1,19 @@
+.transaction-expense-drawer { gap: 16px; }
+.transaction-expense-source { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; padding: 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-muted); }
+.transaction-expense-source > div { display: grid; min-width: 0; gap: 3px; }
+.transaction-expense-source span { color: var(--foreground-muted); font-size: 11px; }
+.transaction-expense-source strong { overflow-wrap: anywhere; font-size: 13px; }
+.transaction-expense-source > div:first-child { grid-column: 1/-1; }
+.transaction-expense-drawer form { display: grid; gap: 14px; }
+.transaction-expense-drawer .form-field { min-width: 0; }
+.transaction-expense-drawer .form-field input, .transaction-expense-drawer .form-field select { width: 100%; }
+.transaction-expense-invoice { padding: 12px; border: 1px solid var(--border); border-radius: 8px; }
+.transaction-expense-invoice summary { cursor: pointer; font-weight: 650; }
+.transaction-expense-invoice[open] { display: grid; gap: 12px; }
+.transaction-expense-invoice a { color: var(--accent); }
+.transaction-expense-invoice-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+@media (max-width: 640px) {
+  .transaction-expense-source, .transaction-expense-invoice-grid { grid-template-columns: 1fr; }
+  .transaction-expense-source > div:first-child { grid-column: auto; }
+  .transaction-expense-drawer input, .transaction-expense-drawer select, .transaction-expense-drawer .btn { min-height: 44px; }
+}

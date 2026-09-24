@@ -41,7 +41,7 @@ func TestTransactionRouteUsesPrototypeQueueAndKeepsLocalReturnPath(t *testing.T)
 		`<span class="transaction-mobile-copy">流水处理</span>`,
 		`<select id="match_status" name="match_status"`,
 		`class="transaction-route-mobile-list"`,
-		`<th>入账用途</th>`,
+		`<th>用途</th>`,
 		`class="transaction-review-card"`,
 		`href="/transactions?match=7&amp;match_status=pending"`,
 		`href="/transactions?detail=7&amp;match_status=pending"`,
@@ -51,7 +51,7 @@ func TestTransactionRouteUsesPrototypeQueueAndKeepsLocalReturnPath(t *testing.T)
 		}
 	}
 	quickFilters := markupBetween(t, page, `<form class="transaction-route-quickfilter"`, `</form>`)
-	for _, kept := range []string{`id="match_status"`, `name="payer"`, `name="period"`} {
+	for _, kept := range []string{`id="direction"`, `id="match_status"`, `name="payer"`, `name="period"`} {
 		if !strings.Contains(quickFilters, kept) {
 			t.Errorf("compact filter form lost %q: %s", kept, quickFilters)
 		}
@@ -196,6 +196,40 @@ func TestTransactionStatusSelectorIsOutsideAdvancedFiltersWithFourOptions(t *tes
 	}
 }
 
+func TestTransactionDirectionSelectorAndRowsDistinguishIncomeFromExpense(t *testing.T) {
+	page := renderTransactionListPage(t, transactionListPageData{
+		DirectionFilter: "expense",
+		TransactionRows: []transactionPageRow{
+			{ID: "7", DetailKey: "7", Direction: "income", DirectionLabel: "收入", AmountDisplay: "EUR 950.00"},
+			{ID: "8", DetailKey: "8", Direction: "expense", DirectionLabel: "支出", AmountDisplay: "EUR 77.99"},
+		},
+	})
+	quick := markupBetween(t, page, `<form class="transaction-route-quickfilter"`, `</form>`)
+	advanced := markupBetween(t, page, `<form class="filterbar"`, `</form>`)
+	if strings.Count(page, `id="direction"`) != 1 || !strings.Contains(quick, `<option value="expense" selected>支出</option>`) {
+		t.Fatal("direction selector must be visible, unique, and show the active filter")
+	}
+	if !strings.Contains(advanced, `type="hidden" name="direction" value="expense"`) {
+		t.Fatal("advanced filters lost the selected direction")
+	}
+	for _, marker := range []string{
+		`id="transaction-row-7" data-direction="income"`,
+		`id="transaction-row-8" data-direction="expense"`,
+		`<span class="transaction-direction income">收入</span>EUR 950.00`,
+		`<span class="transaction-direction expense">支出</span>EUR 77.99`,
+		`id="mobile-transaction-7" data-direction="income"`,
+		`id="mobile-transaction-8" data-direction="expense"`,
+		`.transaction-route-desktop-table tbody tr[data-direction="income"] { background:`,
+		`.transaction-route-desktop-table tbody tr[data-direction="expense"] { background:`,
+		`.transaction-review-card[data-direction="income"] { background:`,
+		`.transaction-review-card[data-direction="expense"] { background:`,
+	} {
+		if !strings.Contains(page, marker) {
+			t.Errorf("transaction direction missing %q", marker)
+		}
+	}
+}
+
 func TestTransactionListStatusDefaultsToAllAndGroupsOldLinks(t *testing.T) {
 	for _, tc := range []struct {
 		query       url.Values
@@ -225,11 +259,11 @@ func TestTransactionListStatusDefaultsToAllAndGroupsOldLinks(t *testing.T) {
 func TestTransactionFilterBarKeepsDetailedQuestions(t *testing.T) {
 	page := renderTransactionListPage(t, transactionListPageData{
 		Page: 1, PageSize: 50, TotalTransactions: 3, TotalPages: 1,
-		PeriodFilter: "2026-09", MatchStatusSelection: "pending",
+		PeriodFilter: "2026-09", MatchStatusSelection: "pending", DirectionFilter: "expense",
 	})
 	filterBar := markupBetween(t, page, `<form class="filterbar"`, `</form>`)
 
-	for _, expected := range []string{`id="payer"`, `id="tenant_id"`, `id="tenant_id" name="tenant_id" data-searchable`, `id="period"`, `id="rent_period"`, `id="allocation"`, `id="direction"`, `type="hidden" name="match_status" value="pending"`} {
+	for _, expected := range []string{`id="payer"`, `id="tenant_id"`, `id="tenant_id" name="tenant_id" data-searchable`, `id="period"`, `id="rent_period"`, `id="allocation"`, `type="hidden" name="direction" value="expense"`, `type="hidden" name="match_status" value="pending"`} {
 		if !strings.Contains(filterBar, expected) {
 			t.Fatalf("filter bar lost %q: %s", expected, filterBar)
 		}
@@ -371,7 +405,7 @@ func TestTransactionListKeepsFullRevokeSeparateFromShareCorrection(t *testing.T)
 	page := renderTransactionListPage(t, transactionListPageData{TransactionRows: []transactionPageRow{{
 		ID: "9", MatchURL: "/transactions?match=9", Direction: "income", MatchStatus: "matched", MatchStatusLabel: "已关联",
 	}}})
-	if !strings.Contains(page, ">处理分配</a>") || !strings.Contains(page, ">撤销整笔匹配</a>") {
+	if !strings.Contains(page, ">调整分配</a>") || !strings.Contains(page, ">撤销整笔匹配</a>") {
 		t.Fatal("matched source needs both exact-share review and full-source revoke")
 	}
 	if strings.Contains(page, `action="/transactions/rematch"`) {
@@ -495,7 +529,7 @@ func TestMatchedTransactionRowOffersReviewAndFullRevokeOnMobile(t *testing.T) {
 		Direction: "income", PayerName: "BRID NI BHRAONAIN", MatchStatus: "matched", MatchStatusLabel: "已关联",
 		ReturnURL: "/transactions?match_status=pending",
 	}}})
-	for _, expected := range []string{`href="/transactions?match=12"`, `href="/transactions/revoke?transaction_id=12`, ">处理分配</a>", ">撤销整笔匹配</a>"} {
+	for _, expected := range []string{`href="/transactions?match=12"`, `href="/transactions/revoke?transaction_id=12`, ">调整分配</a>", ">撤销整笔匹配</a>"} {
 		if got := strings.Count(page, expected); got != 2 {
 			t.Fatalf("desktop/mobile %q count=%d", expected, got)
 		}

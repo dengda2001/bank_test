@@ -107,6 +107,7 @@ func transactionListURL(query url.Values) string {
 	values.Del("match_history_page")
 	values.Del("match_month")
 	values.Del("match_origin")
+	values.Del("expense_link")
 	values.Del("error")
 	values.Del("message")
 	if len(values) == 0 {
@@ -269,6 +270,16 @@ func (a *app) transactionDetailPageData(ctx context.Context, r *http.Request, us
 		}
 	}
 	row.ObjectLabel, row.RoomOnlyLabel = transactionRentObjectLabels(transactionObjectChargeIDs(row, allocations, obligationByID), charges)
+	if source.Direction == "expense" {
+		expenseRows := []transactionPageRow{row}
+		if err := newTransactionService(a.db).decorateExpensePageRows(ctx, userID, []paymentTransaction{source}, expenseRows); err != nil {
+			return transactionDetailPageData{}, err
+		}
+		row = expenseRows[0]
+		if source.Source == "truelayer" || row.ExpenseLinked {
+			row.ExpenseLinkURL = transactionExpenseActionURL(r.URL.Query(), source.ID)
+		}
+	}
 
 	allocationRows := transactionDetailAllocationRows(allocations, source.Currency, obligationByID, charges, rooms, properties, nameByTenant)
 	events, err := a.transactionDetailEvents(ctx, userID, source, allocations)

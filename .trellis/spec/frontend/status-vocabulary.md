@@ -58,9 +58,10 @@ value.
   `rent_workspace.go`). The visible transaction list intentionally groups the
   four unfinished values under 待处理; exact legacy query values remain valid.
 - **Pseudo-filters are not values.** `pending` (transactions) and `unpaid` (rent
-  workspace) are not in the whitelist as states — they expand to a set:
-  `pendingMatchStatuses` is `candidate, needs_review, unmatched, partial`
-  (`transactions.go:78`), and `unpaid` expands to
+  workspace) are not in the whitelist as states. For income, transaction
+  `pending` expands to `candidate, needs_review, unmatched, partial`; for
+  expenses, it selects `unmatched` debits that still need attribution. The
+  direction selector narrows this combined queue. `unpaid` expands to
   `needs_review + overdue + partial + open` (`rent_workspace.go:944`). They are
   accepted by the parser (`transactions.go:318`) but never round-trip as a row's
   own status, so never derive a badge label from them.
@@ -75,7 +76,7 @@ value.
 | Input | Result |
 |---|---|
 | Status outside the whitelist | HTTP 400 (transactions), or falls back to `all` (rent filters) |
-| Pseudo-filter (`pending`, `unpaid`) | Accepted; expands to its set, filtered income-only (`pending`) |
+| Pseudo-filter (`pending`, `unpaid`) | Accepted; `pending` includes unfinished income and unattributed expense debits, narrowed by `direction` |
 | Empty status | Renders all rows; the dropdown shows the 全部 option |
 | Transaction list status | The outside selector offers 全部 (default), 待处理, 已关联, 已忽略 |
 | Individual `candidate`, `unmatched`, `needs_review`, `partial` query values | Valid for existing links; the outside selector groups them under 待处理 |

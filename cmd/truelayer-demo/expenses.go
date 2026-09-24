@@ -11,29 +11,29 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 type manualExpense struct {
-	ID             uint64 `gorm:"primaryKey"`
-	UserID         uint64
-	PropertyID     *uint64
-	RoomID         *uint64
-	Description    string
-	Category       string
-	AmountCents    int64
-	Currency       string
-	ExpenseDate    time.Time
-	PaymentMethod  string
-	RecordStatus   string `gorm:"default:active"`
-	VoidedAt       *time.Time
-	VoidedByUserID *uint64
-	VoidReason     *string
-	RoomHint       *string
-	TenantHint     *string
-	InvoiceURL     *string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID                   uint64 `gorm:"primaryKey"`
+	UserID               uint64
+	PaymentTransactionID *uint64
+	PropertyID           *uint64
+	RoomID               *uint64
+	Description          string
+	Category             string
+	AmountCents          int64
+	Currency             string
+	ExpenseDate          time.Time
+	PaymentMethod        string
+	RecordStatus         string `gorm:"default:active"`
+	VoidedAt             *time.Time
+	VoidedByUserID       *uint64
+	VoidReason           *string
+	RoomHint             *string
+	TenantHint           *string
+	InvoiceURL           *string
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
 }
 
 type expenseService struct {
@@ -305,18 +305,22 @@ func (s *expenseService) createExpense(ctx context.Context, userID uint64, input
 		Currency:      input.Currency,
 		ExpenseDate:   expenseDate,
 		PaymentMethod: input.PaymentMethod,
+		RecordStatus:  obligationRecordActive,
 		RoomHint:      nullableString(input.RoomHint),
 		TenantHint:    nullableString(input.TenantHint),
 		InvoiceURL:    nullableString(input.InvoiceURL),
 	}
-	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
-		return manualExpense{}, err
-	}
-	tx := manualExpenseTransaction(userID, row)
-	if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "user_id"}, {Name: "stable_transaction_key"}},
-		DoNothing: true,
-	}).Create(&tx).Error; err != nil {
+	if err := s.db.WithContext(ctx).Transaction(func(db *gorm.DB) error {
+		if err := db.Create(&row).Error; err != nil {
+			return err
+		}
+		tx := manualExpenseTransaction(userID, row)
+		if err := db.Create(&tx).Error; err != nil {
+			return err
+		}
+		row.PaymentTransactionID = &tx.ID
+		return db.Model(&row).Update("payment_transaction_id", tx.ID).Error
+	}); err != nil {
 		return manualExpense{}, err
 	}
 	return row, nil
@@ -373,7 +377,7 @@ func manualExpenseTransaction(userID uint64, row manualExpense) paymentTransacti
 		TransactionTime: &txTime,
 		Description:     row.Description,
 		Reference:       row.Category,
-		MatchStatus:     "unmatched",
+		MatchStatus:     "matched",
 	}
 	input.StableTransactionKey = "manual_expense:" + strconv.FormatUint(row.ID, 10)
 	return paymentTransactionFromInput(userID, input)

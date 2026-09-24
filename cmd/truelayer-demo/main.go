@@ -133,6 +133,7 @@ type transactionListPageData struct {
 	Error              string
 	TransactionRows    []transactionPageRow
 	ExpenseDrawer      *expenseDrawerData
+	ExpenseLinkDrawer  *transactionExpenseDrawerData
 	CashReceiptDrawer  *cashReceiptDrawerData
 	MatchReview        *transactionMatchReviewData
 	ExpenseOpenURL     string
@@ -521,6 +522,7 @@ func newAppMux(a *app) *http.ServeMux {
 	mux.HandleFunc("/transactions/restore", a.handleTransactionRestore)
 	mux.HandleFunc("/transactions/revoke", a.handleTransactionRevoke)
 	mux.HandleFunc("/transactions/revoke-allocation", a.handleTransactionAllocationRevoke)
+	mux.HandleFunc("/transactions/expense-link", a.handleTransactionExpenseLink)
 	mux.HandleFunc("/transactions/payer/preview", a.handlePayerPreview)
 	mux.HandleFunc("/transactions/payer/confirm", a.handlePayerConfirm)
 	mux.HandleFunc("/rooms", a.handleRooms)
@@ -840,6 +842,10 @@ func (a *app) handleTransactions(w http.ResponseWriter, r *http.Request) {
 			if id, err := strconv.ParseUint(rows[index].InternalID, 10, 64); err == nil {
 				rows[index].MatchURL = transactionReviewURL(r.URL.Query(), id)
 			}
+		} else if rows[index].Direction == "expense" && (rows[index].Source == "truelayer" || rows[index].ExpenseLinked) {
+			if id, err := strconv.ParseUint(rows[index].InternalID, 10, 64); err == nil {
+				rows[index].ExpenseLinkURL = transactionExpenseActionURL(r.URL.Query(), id)
+			}
 		}
 	}
 	transactionReturnURL := transactionListURL(r.URL.Query())
@@ -964,6 +970,24 @@ func (a *app) handleTransactions(w http.ResponseWriter, r *http.Request) {
 			data.ExpenseDrawer = drawer
 		}
 	}
+	if rawID := strings.TrimSpace(r.URL.Query().Get("expense_link")); rawID != "" {
+		transactionID, parseErr := parsePositiveUint(rawID)
+		if parseErr != nil {
+			http.NotFound(w, r)
+			return
+		}
+		userID, _ := a.currentUserID(r)
+		drawer, drawerErr := a.loadTransactionExpenseDrawer(r.Context(), userID, transactionID, r.URL.Query())
+		if errors.Is(drawerErr, gorm.ErrRecordNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		if drawerErr != nil {
+			http.Error(w, drawerErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		data.ExpenseLinkDrawer = drawer
+	}
 	if drawer := cashReceiptDrawerFromRequest(r); drawer != nil {
 		data.CashReceiptDrawer = drawer
 	} else if r.URL.Query().Get("cash") == "1" {
@@ -1023,7 +1047,7 @@ func rememberPayerPreference(values url.Values) bool {
 func transactionDrawerURL(r *http.Request, drawer string) string {
 	values := url.Values{}
 	for key, items := range r.URL.Query() {
-		if key == "cash" || key == "expense" || key == "error" || key == "message" || key == "detail" {
+		if key == "cash" || key == "expense" || key == "expense_link" || key == "error" || key == "message" || key == "detail" {
 			continue
 		}
 		values[key] = append([]string(nil), items...)
