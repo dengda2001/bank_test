@@ -1423,3 +1423,36 @@ Audited 179 income descriptions; ignored bank TxnDate and non-rent months for ex
 ### Next Steps
 
 - None - task complete
+
+
+## Session 40: Room tenant selection and assignment
+
+**Date**: 2026-09-24
+**Task**: Room tenant selection and assignment
+**Branch**: `main`
+
+### Summary
+
+Added existing or new tenant choices during room creation, disabled conflicting tenants until unbound, enabled new tenants from room occupancy, and verified isolated staged code with Go tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c99c379` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
