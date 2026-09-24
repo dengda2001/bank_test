@@ -1,6 +1,6 @@
 {{define "tenant-form-drawer"}}
 <div class="entity-drawer-backdrop"><section class="entity-drawer tenant-drawer" role="dialog" aria-modal="true" aria-labelledby="tenant-form-title">
-  <div class="panel-head"><div><h2 id="tenant-form-title">{{if .Editing}}编辑租客资料{{else}}新增租客{{end}}</h2><p class="tiny">{{if .Editing}}编辑人员与付款人资料。{{else}}可选设置入住的房间与租金；留空仅保存租客资料。{{end}}</p></div><a class="drawer-close" href="{{.ReturnURL}}" aria-label="关闭租客表单">×</a></div>
+  <div class="panel-head"><div><h2 id="tenant-form-title">{{if .Editing}}编辑租客资料{{else}}新增租客{{end}}</h2><p class="tiny">{{if .Editing}}编辑人员与付款人资料。{{else if .TenantRoomLocked}}为当前房间新增租客，保存后返回房间。{{else}}可选设置入住的房间与租金；留空仅保存租客资料。{{end}}</p></div><a class="drawer-close" href="{{.ReturnURL}}" aria-label="关闭租客表单">×</a></div>
   {{if .Error}}<div class="notice error" role="alert">{{.ErrorMessage}}</div>{{end}}
   <form method="post" action="/tenants" id="tenant-form">
     <input type="hidden" name="return_to" value="{{.PostReturnURL}}">
@@ -22,11 +22,12 @@
     </fieldset>
     {{if not .Editing}}
     <fieldset class="tenant-form-section tenant-room-assignment" data-tenant-room-assignment>
-      <legend>入住与租金（可选）</legend>
+      <legend>入住与租金{{if not .TenantRoomLocked}}（可选）{{end}}</legend>
+      {{if .TenantRoomLocked}}<p class="tiny">从房间新增租客：入住的房产和房间已固定，保存后返回该房间。</p><input type="hidden" name="property_id" value="{{.TenantAssignmentPropertyID}}"><input type="hidden" name="room_id" value="{{.TenantAssignmentRoomID}}">{{end}}
       <p class="tiny">留空则按照入住人数均分房间租金。</p>
       <div class="room-meta-form-grid">
-        <div class="form-field"><label for="tenant-property">房产</label><select id="tenant-property" name="property_id"><option value="">暂不设置房产</option>{{range .TenantProperties}}<option value="{{.ID}}"{{if eq $.TenantAssignmentPropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></div>
-        <div class="form-field"><label for="tenant-room">房间</label><select id="tenant-room" name="room_id"><option value="">暂不设置房间</option>{{range .TenantRooms}}<option value="{{.ID}}" data-property-id="{{.PropertyID}}" data-rent-plan-version="{{.RentPlanVersion}}" data-plans="{{.PlansJSON}}"{{if eq $.TenantAssignmentRoomID .ID}} selected{{end}}>{{.RoomLabel}}</option>{{end}}</select></div>
+        <div class="form-field"><label for="tenant-property">房产</label><select id="tenant-property" name="property_id"{{if .TenantRoomLocked}} disabled{{end}}><option value="">暂不设置房产</option>{{range .TenantProperties}}<option value="{{.ID}}"{{if eq $.TenantAssignmentPropertyID .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></div>
+        <div class="form-field"><label for="tenant-room">房间</label><select id="tenant-room" name="room_id"{{if .TenantRoomLocked}} disabled{{end}}><option value="">暂不设置房间</option>{{range .TenantRooms}}<option value="{{.ID}}" data-property-id="{{.PropertyID}}" data-rent-plan-version="{{.RentPlanVersion}}" data-plans="{{.PlansJSON}}"{{if eq $.TenantAssignmentRoomID .ID}} selected{{end}}>{{.RoomLabel}}</option>{{end}}</select></div>
         <div class="form-field"><label for="tenant-arrangement-month">入住与租金生效月份</label><input id="tenant-arrangement-month" name="arrangement_start_month" type="month" value="{{.TenantArrangementStartMonth}}" required></div>
       </div>
       <input type="hidden" name="plan_version" id="tenant-plan-version"><input type="hidden" name="room_plan" id="tenant-room-plan">

@@ -158,6 +158,7 @@ type roomCreateDrawerData struct {
 	Sort                 string
 	PropertyID           uint64
 	Properties           []propertyPageRow
+	Tenants              []roomRentPlanTenantOption
 	Form                 roomPageForm
 	ReturnURL            string
 	ReturnContext        string
@@ -691,7 +692,7 @@ func rentPlanErrorMessage(errorCode string) string {
 	case "rent_plan_conflict":
 		return "房间计划时间线存在重叠，请刷新后重试。"
 	case "tenant_room_month_conflict":
-		return "该租客从所选月份起已在其他房间入住，请先结束原房间的入住计划。"
+		return "该租客从所选月份起已安排在其他房间。请先到原房间的「入住与租金」移除该租客，再回来保存。"
 	case "rent_plan_failed":
 		return "入住与租金计划保存失败，请稍后重试。"
 	default:
@@ -1206,9 +1207,15 @@ func (a *app) handlePropertyDetail(w http.ResponseWriter, r *http.Request, prope
 	if r.URL.Query().Get("room") == "1" || r.URL.Query().Get("room_error") != "" {
 		returnURL := propertyDetailReturnURL(r)
 		form := defaultRoomCreateForm(propertyID)
+		formMonth, _ := parsePeriodMonth(form.EffectiveMonth)
+		tenantOptions, tenantErr := loadRoomTenantOptions(r.Context(), a.db, userID, 0, formMonth)
+		if tenantErr != nil {
+			http.Error(w, tenantErr.Error(), http.StatusInternalServerError)
+			return
+		}
 		data.RoomDrawer = &roomCreateDrawerData{
 			Period: period.Format("2006-01"), StatusFilter: "all", CollectionFilter: "all", PropertyID: propertyID,
-			Properties: []propertyPageRow{{ID: propertyRow.ID, Name: propertyRow.Name}}, Form: form, ReturnURL: returnURL,
+			Properties: []propertyPageRow{{ID: propertyRow.ID, Name: propertyRow.Name}}, Tenants: tenantOptions, Form: form, ReturnURL: returnURL,
 			ReturnContext: "property", ReturnPropertyID: propertyID, ReturnPeriod: period.Format("2006-01"),
 			ReturnListStatus: listStatus, ReturnListSearch: strings.TrimSpace(r.URL.Query().Get("list_search")), ReturnListCollection: listCollection, ReturnListSort: listSort,
 			ErrorMessage: roomMutationErrorMessage(r.URL.Query().Get("room_error")),
@@ -1625,7 +1632,13 @@ func (a *app) handleRooms(w http.ResponseWriter, r *http.Request) {
 	data := roomPageData{workspaceShell: canonicalPageShell(a, r, "rooms", "房间与房产绑定"), Period: period.Format("2006-01"), PeriodLabel: formatMonthLabel(period), PeriodOptions: pagePeriodOptions(period), Rows: rows, Properties: propertyRows, PropertyOptions: propertyOptions, PropertyID: propertyID, StatusFilter: statusFilter, CollectionFilter: collectionFilter, Search: search, Sort: sortValue, SortLinks: roomPageSortLinks(period.Format("2006-01"), propertyID, statusFilter, search, collectionFilter, sortValue), ShowForm: r.URL.Query().Get("add") == "1", Form: defaultRoomCreateForm(propertyID), Message: r.URL.Query().Get("message"), Error: r.URL.Query().Get("error")}
 	if data.ShowForm {
 		returnURL := roomListURL(data.Period, propertyID, statusFilter, search, collectionFilter, sortValue)
-		data.Drawer = &roomCreateDrawerData{Period: data.Period, StatusFilter: statusFilter, CollectionFilter: collectionFilter, Search: search, Sort: sortValue, PropertyID: propertyID, Properties: propertyRows, Form: data.Form, ReturnURL: returnURL, ErrorMessage: roomMutationErrorMessage(data.Error)}
+		formMonth, _ := parsePeriodMonth(data.Form.EffectiveMonth)
+		tenantOptions, tenantErr := loadRoomTenantOptions(r.Context(), a.db, userID, 0, formMonth)
+		if tenantErr != nil {
+			http.Error(w, tenantErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		data.Drawer = &roomCreateDrawerData{Period: data.Period, StatusFilter: statusFilter, CollectionFilter: collectionFilter, Search: search, Sort: sortValue, PropertyID: propertyID, Properties: propertyRows, Tenants: tenantOptions, Form: data.Form, ReturnURL: returnURL, ErrorMessage: roomMutationErrorMessage(data.Error)}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := roomPageTemplate.Execute(w, data); err != nil {
@@ -1730,8 +1743,24 @@ func (a *app) handleRoomMutation(w http.ResponseWriter, r *http.Request, pathID 
 				err = ErrInvalidRentPlan
 				break
 			}
+			selectedTenantID := uint64(0)
+			if action == "save_and_setup" {
+				switch firstNonEmpty(strings.TrimSpace(r.Form.Get("tenant_choice")), "new") {
+				case "existing":
+					selectedTenantID, err = parsePositiveUint(r.Form.Get("tenant_id"))
+					if err != nil {
+						err = ErrInvalidRentPlan
+					}
+				case "new":
+				default:
+					err = ErrInvalidRentPlan
+				}
+				if err != nil {
+					break
+				}
+			}
 			var created room
-			created, _, err = service.createRoomWithRentPlan(r.Context(), userID, roomInput{PropertyID: propertyID, RoomLabel: r.Form.Get("room_label"), RoomType: r.Form.Get("room_type"), Capacity: capacity, Notes: r.Form.Get("notes")}, roomRentPlanSetupInput{EffectiveMonth: effectiveMonth, MonthlyRentCents: monthlyRent, Currency: ledgerCurrencyEUR, DueDay: dueDay})
+			created, _, err = service.createRoomWithRentPlanAndTenant(r.Context(), userID, roomInput{PropertyID: propertyID, RoomLabel: r.Form.Get("room_label"), RoomType: r.Form.Get("room_type"), Capacity: capacity, Notes: r.Form.Get("notes")}, roomRentPlanSetupInput{EffectiveMonth: effectiveMonth, MonthlyRentCents: monthlyRent, Currency: ledgerCurrencyEUR, DueDay: dueDay}, selectedTenantID)
 			createdRoomID = created.ID
 		} else if err == nil {
 			_, err = service.updateRoom(r.Context(), userID, roomID, roomInput{PropertyID: propertyID, RoomLabel: r.Form.Get("room_label"), RoomType: r.Form.Get("room_type"), Capacity: capacity, Notes: r.Form.Get("notes")})
@@ -1748,6 +1777,12 @@ func (a *app) handleRoomMutation(w http.ResponseWriter, r *http.Request, pathID 
 		if errors.Is(err, ErrRoomPropertyLocked) {
 			errorCode = "room_property_locked"
 		}
+		if errors.Is(err, ErrTenantRoomMonthConflict) {
+			errorCode = "tenant_room_conflict"
+		}
+		if errors.Is(err, ErrInvalidRentPlan) || errors.Is(err, gorm.ErrRecordNotFound) {
+			errorCode = "tenant_room_invalid"
+		}
 		if action == "delete" && errors.Is(err, errRoomDeletionBlocked) {
 			redirectRoomDetail(w, r, roomID, "", "room_delete_blocked")
 			return
@@ -1761,7 +1796,7 @@ func (a *app) handleRoomMutation(w http.ResponseWriter, r *http.Request, pathID 
 		}
 		return
 	}
-	if action == "save_and_setup" && createdRoomID != 0 {
+	if action == "save_and_setup" && createdRoomID != 0 && firstNonEmpty(strings.TrimSpace(r.Form.Get("tenant_choice")), "new") == "new" {
 		query := url.Values{
 			"add":                     []string{"1"},
 			"property_id":             []string{strconv.FormatUint(propertyID, 10)},
@@ -1769,6 +1804,10 @@ func (a *app) handleRoomMutation(w http.ResponseWriter, r *http.Request, pathID 
 			"arrangement_start_month": []string{strings.TrimSpace(r.Form.Get("effective_month"))},
 		}
 		http.Redirect(w, r, "/tenants?"+query.Encode(), http.StatusFound)
+		return
+	}
+	if action == "save_and_setup" && createdRoomID != 0 {
+		http.Redirect(w, r, "/rooms/"+strconv.FormatUint(createdRoomID, 10)+"?period="+url.QueryEscape(strings.TrimSpace(r.Form.Get("effective_month")))+"&rent=1&message=room_saved", http.StatusFound)
 		return
 	}
 	if action == "delete" {
@@ -1867,6 +1906,10 @@ func parseOptionalRentPlanAmountCents(raw string) (int64, error) {
 
 func roomMutationErrorMessage(errorCode string) string {
 	switch errorCode {
+	case "tenant_room_conflict":
+		return "该租客从所选月份起已在其他房间入住。请先去原房间的「入住与租金」解绑，再回来选择。"
+	case "tenant_room_invalid":
+		return "请检查所选租客、月份和租金；租客可能已停用或不可用。"
 	case "room_property_locked":
 		return "房间已有租金记录，不能更改所属房产。"
 	case "room_action_failed":

@@ -31,6 +31,7 @@
   .room-edit-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:19px 14px; }
   .rent-plan-editor { width:min(820px,calc(100vw - 32px)); max-height:calc(100vh - 32px); overflow:auto; }
   .plan-members-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:8px; }
+  .plan-members-actions { display:flex; flex-wrap:wrap; gap:8px; }
   .plan-members-head h3 { margin:0; font-size:15px; }
   .plan-members-head p { margin:4px 0 0; }
   .plan-split-toggle { display:flex; align-items:center; gap:8px; color:var(--foreground-muted); font-size:13px; }
@@ -113,6 +114,7 @@
     .room-plan-summary .panel-head { align-items:flex-start; }
     .room-plan-summary .panel-head .btn { min-height:40px; padding:7px 10px; white-space:nowrap; }
     .plan-member-row { grid-template-columns:1fr; }
+    .plan-members-head { align-items:flex-start; flex-wrap:wrap; }
     .plan-member-row .btn { justify-self:start; }
     .end-occupancy-row { align-items:stretch; }
     .room-edit-grid .full{grid-column:auto}

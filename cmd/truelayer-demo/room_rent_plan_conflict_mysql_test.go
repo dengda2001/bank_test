@@ -156,6 +156,87 @@ func TestCreateRoomWithRentPlanStoresAnEmptyRentRuleAtomicallyOnMySQL(t *testing
 	}
 }
 
+func TestCreateRoomWithExistingTenantIsAtomicOnMySQL(t *testing.T) {
+	f := newRoomRentPlanConflictFixture(t)
+	var propertyRow property
+	if err := f.db.WithContext(f.ctx).Where("user_id = ?", f.owner.ID).First(&propertyRow).Error; err != nil {
+		t.Fatal(err)
+	}
+	month := dublinCurrentMonth(time.Now())
+	service := newLandlordDomainService(f.db)
+	input := roomInput{PropertyID: propertyRow.ID, RoomLabel: "Selected existing tenant"}
+	setup := roomRentPlanSetupInput{EffectiveMonth: month, MonthlyRentCents: 120000, Currency: ledgerCurrencyEUR, DueDay: 3}
+	created, plan, err := service.createRoomWithRentPlanAndTenant(f.ctx, f.owner.ID, input, setup, f.tenant.ID)
+	if err != nil {
+		t.Fatalf("create occupied room: %v", err)
+	}
+	if created.RentPlanVersion != 2 {
+		t.Fatalf("plan version = %d, want 2", created.RentPlanVersion)
+	}
+	var members []roomRentPlanMember
+	if err := f.db.WithContext(f.ctx).Where("user_id = ? AND room_rent_plan_id = ?", f.owner.ID, plan.ID).Find(&members).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(members) != 1 || members[0].TenantID != f.tenant.ID || members[0].ResponsibilityCents != setup.MonthlyRentCents {
+		t.Fatalf("initial plan members = %+v", members)
+	}
+	conflictingInput := roomInput{PropertyID: propertyRow.ID, RoomLabel: "Should roll back"}
+	_, _, err = service.createRoomWithRentPlanAndTenant(f.ctx, f.owner.ID, conflictingInput, setup, f.tenant.ID)
+	if !errors.Is(err, ErrTenantRoomMonthConflict) {
+		t.Fatalf("conflicting room error = %v, want ErrTenantRoomMonthConflict", err)
+	}
+	var count int64
+	if err := f.db.WithContext(f.ctx).Model(&room{}).Where("user_id = ? AND room_label = ?", f.owner.ID, conflictingInput.RoomLabel).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("conflicting room count = %d, want rollback", count)
+	}
+	foreignInput := roomInput{PropertyID: propertyRow.ID, RoomLabel: "Unknown tenant rollback"}
+	_, _, err = service.createRoomWithRentPlanAndTenant(f.ctx, f.owner.ID, foreignInput, setup, f.tenant.ID+1000000)
+	if !errors.Is(err, ErrInvalidRentPlan) {
+		t.Fatalf("unknown tenant error = %v, want ErrInvalidRentPlan", err)
+	}
+	if err := f.db.WithContext(f.ctx).Model(&room{}).Where("user_id = ? AND room_label = ?", f.owner.ID, foreignInput.RoomLabel).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("unknown-tenant room count = %d, want rollback", count)
+	}
+}
+
+func TestRemovingLastRoomTenantKeepsVacantRentRuleOnMySQL(t *testing.T) {
+	f := newRoomRentPlanConflictFixture(t)
+	month := dublinCurrentMonth(time.Now())
+	service := newRoomRentPlanService(f.db)
+	if _, _, err := service.SaveRoomRentPlan(f.ctx, roomRentPlanCommandFor(f, f.roomOne.ID, month)); err != nil {
+		t.Fatal(err)
+	}
+	nextMonth := month.AddDate(0, 1, 0)
+	if _, _, err := service.SaveRoomRentPlan(f.ctx, SaveRoomRentPlanCommand{
+		UserID: f.owner.ID, RoomID: f.roomOne.ID, EffectiveMonth: nextMonth,
+		MonthlyRentCents: 100000, Currency: ledgerCurrencyEUR, DueDay: 5,
+		ExpectedTimelineVersion: 1,
+	}); err != nil {
+		t.Fatalf("remove final occupant: %v", err)
+	}
+	plans, err := newLandlordRentRepository(f.db).listRoomRentPlans(f.ctx, f.owner.ID, roomRentPlanQuery{RoomID: f.roomOne.ID})
+	if err != nil || len(plans) != 2 {
+		t.Fatalf("plans after unbind = %+v, err = %v", plans, err)
+	}
+	if plans[1].EffectiveToMonth == nil || !plans[1].EffectiveToMonth.Equal(month) || plans[0].EffectiveToMonth != nil {
+		t.Fatalf("plan boundaries after unbind = %+v", plans)
+	}
+	members, err := newLandlordRentRepository(f.db).listRoomRentPlanMembers(f.ctx, f.owner.ID, roomRentPlanMemberQuery{RoomRentPlanID: plans[0].ID})
+	if err != nil || len(members) != 0 {
+		t.Fatalf("vacant plan members = %+v, err = %v", members, err)
+	}
+	previousMembers, err := newLandlordRentRepository(f.db).listRoomRentPlanMembers(f.ctx, f.owner.ID, roomRentPlanMemberQuery{RoomRentPlanID: plans[1].ID})
+	if err != nil || len(previousMembers) != 1 || previousMembers[0].TenantID != f.tenant.ID {
+		t.Fatalf("historical members = %+v, err = %v", previousMembers, err)
+	}
+}
+
 func TestCreateTenantWithRoomPlanAddsTheFirstOccupantAtomicallyOnMySQL(t *testing.T) {
 	f := newRoomRentPlanConflictFixture(t)
 	month := dublinCurrentMonth(time.Now())

@@ -270,6 +270,7 @@ type tenantPageData struct {
 	TenantAssignmentPropertyID  uint64
 	TenantAssignmentRoomID      uint64
 	TenantArrangementStartMonth string
+	TenantRoomLocked            bool
 }
 
 type tenantPropertyAssignmentOption struct {
@@ -1209,6 +1210,11 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "tenant room selection is invalid", http.StatusBadRequest)
 		return
 	}
+	returnRoomID, returnRoomErr := parseOptionalUint(r.URL.Query().Get("return_room_id"))
+	if returnRoomErr != nil || (returnRoomID != 0 && (editing || returnRoomID != assignmentRoomID)) {
+		http.Error(w, "tenant room return is invalid", http.StatusBadRequest)
+		return
+	}
 	returnURL := tenantListURL(search, sortValue)
 	postReturnQuery := url.Values{}
 	if search != "" {
@@ -1228,6 +1234,9 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 			postReturnQuery.Set("room_id", strconv.FormatUint(assignmentRoomID, 10))
 		}
 		postReturnQuery.Set("arrangement_start_month", arrangementStartMonth)
+		if returnRoomID != 0 {
+			postReturnQuery.Set("return_room_id", strconv.FormatUint(returnRoomID, 10))
+		}
 	}
 	postReturnURL := "/tenants"
 	if encoded := postReturnQuery.Encode(); encoded != "" {
@@ -1264,6 +1273,7 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 		TenantAssignmentPropertyID:  assignmentPropertyID,
 		TenantAssignmentRoomID:      assignmentRoomID,
 		TenantArrangementStartMonth: arrangementStartMonth,
+		TenantRoomLocked:            returnRoomID != 0,
 	}
 	if showForm && !editing {
 		properties, rooms, loadErr := a.loadTenantRoomAssignmentOptions(r.Context(), userID)
@@ -1272,6 +1282,20 @@ func (a *app) handleTenants(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		data.TenantProperties, data.TenantRooms = properties, rooms
+		if returnRoomID != 0 {
+			found := false
+			for _, roomOption := range rooms {
+				if roomOption.ID == returnRoomID && roomOption.PropertyID == assignmentPropertyID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				http.NotFound(w, r)
+				return
+			}
+			data.ReturnURL = "/rooms/" + strconv.FormatUint(returnRoomID, 10) + "?period=" + url.QueryEscape(arrangementStartMonth) + "&rent=1"
+		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tenantTemplate.Execute(w, data); err != nil {
@@ -1291,6 +1315,10 @@ func (a *app) createTenant(w http.ResponseWriter, r *http.Request) {
 		} else {
 			returnTo = "/tenants?add=1"
 		}
+	}
+	if returnRoomID, valid := tenantReturnRoomID(returnTo); valid && r.Form.Get("room_id") != strconv.FormatUint(returnRoomID, 10) {
+		http.Redirect(w, r, tenantFormRedirectURL(returnTo, "", "tenant_room_invalid"), http.StatusFound)
+		return
 	}
 	if err := a.persistTenantRecord(r.Context(), r, r.Form); err != nil {
 		errorCode := ""
@@ -1319,7 +1347,32 @@ func (a *app) createTenant(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(r.Form.Get("tenant_id")) != "" {
 		message = "tenant_updated"
 	}
+	if message == "tenant_added" {
+		if roomReturnURL, valid := tenantCreatedRoomReturnURL(returnTo, r.Form); valid {
+			http.Redirect(w, r, roomReturnURL, http.StatusFound)
+			return
+		}
+	}
 	http.Redirect(w, r, tenantFormRedirectURL(returnTo, message, ""), http.StatusFound)
+}
+
+func tenantCreatedRoomReturnURL(returnTo string, form url.Values) (string, bool) {
+	roomID, valid := tenantReturnRoomID(returnTo)
+	assignedRoomID, assignedErr := parsePositiveUint(form.Get("room_id"))
+	month, monthErr := parsePeriodMonth(form.Get("arrangement_start_month"))
+	if !valid || assignedErr != nil || monthErr != nil || roomID != assignedRoomID {
+		return "", false
+	}
+	return "/rooms/" + strconv.FormatUint(roomID, 10) + "?period=" + month.Format("2006-01") + "&rent=1&message=tenant_added", true
+}
+
+func tenantReturnRoomID(returnTo string) (uint64, bool) {
+	target, err := url.ParseRequestURI(strings.TrimSpace(returnTo))
+	if err != nil || target.IsAbs() || target.Host != "" || target.Path != "/tenants" {
+		return 0, false
+	}
+	roomID, err := parsePositiveUint(target.Query().Get("return_room_id"))
+	return roomID, err == nil
 }
 
 func tenantFormRedirectURL(returnTo, message, errorCode string) string {
@@ -1665,7 +1718,7 @@ func tenantFormErrorMessage(errorCode string) string {
 	case "tenant_room_stale":
 		return "房间的入住或租金已更新，请重新打开表单后再保存。"
 	case "tenant_room_conflict":
-		return "该租客从所选月份起已在其他房间入住，请先结束原房间的计划。"
+		return "该租客从所选月份起已安排在其他房间。请先到原房间的「入住与租金」移除该租客。"
 	case "tenant_room_locked":
 		return "所选月份的租金已锁定，不能调整入住人员。"
 	case "tenant_room_unavailable":

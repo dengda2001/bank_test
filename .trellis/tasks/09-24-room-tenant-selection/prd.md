@@ -15,11 +15,11 @@ Make it possible to choose an existing tenant or create a new tenant while setti
 
 ## Acceptance criteria
 
-- [ ] A new room can be saved with an available existing tenant and an initial occupancy/rent plan.
-- [ ] A new room can be saved and lead into creating a new tenant with the new room preselected.
-- [ ] Tenants assigned to another room are highlighted, disabled for assignment, and given an actionable unbind explanation; forged or stale submissions are rejected server-side.
-- [ ] From a room's occupancy/rent editor, a user can begin creating a tenant with the room and property preselected, then return to the room with the new tenant assigned.
-- [ ] Relevant UI and service tests pass, including stale occupancy conflicts and the property/room preselection.
+- [x] A new room can be saved with an available existing tenant and an initial occupancy/rent plan.
+- [x] A new room can be saved and lead into creating a new tenant with the new room preselected.
+- [x] Tenants assigned to another room are highlighted, disabled for assignment, and given an actionable unbind explanation; forged or stale submissions are rejected server-side.
+- [x] From a room's occupancy/rent editor, a user can begin creating a tenant with the room and property preselected, then return to the room with the new tenant assigned.
+- [x] Relevant UI and service tests pass, including stale occupancy conflicts and the property/room preselection.
 
 ## Scope notes
 

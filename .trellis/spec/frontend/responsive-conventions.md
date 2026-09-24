@@ -742,5 +742,7 @@ reading area and a full-height mobile layout. Load its page CSS after
 the inline transaction list and the embedded rent workspace. A full-height flex
 drawer must keep its sticky header from shrinking (`flex: 0 0 auto`), or the
 title can render above the mobile viewport while the scroll position is zero.
+The mobile rule in `entity-drawers.css` now applies that flex constraint to
+all entity drawer headers; keep it when adding a long room or tenant form.
 Check the title position, internal scroll, and document width in a real browser
 at 1440px, 1024px, and 390px.

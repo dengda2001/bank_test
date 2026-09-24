@@ -121,6 +121,10 @@ func (s *landlordDomainService) createRoom(ctx context.Context, userID uint64, i
 }
 
 func (s *landlordDomainService) createRoomWithRentPlan(ctx context.Context, userID uint64, input roomInput, setup roomRentPlanSetupInput) (room, roomRentPlan, error) {
+	return s.createRoomWithRentPlanAndTenant(ctx, userID, input, setup, 0)
+}
+
+func (s *landlordDomainService) createRoomWithRentPlanAndTenant(ctx context.Context, userID uint64, input roomInput, setup roomRentPlanSetupInput, tenantID uint64) (room, roomRentPlan, error) {
 	if userID == 0 || input.PropertyID == 0 {
 		return room{}, roomRentPlan{}, errors.New("userID and propertyID are required")
 	}
@@ -152,6 +156,22 @@ func (s *landlordDomainService) createRoomWithRentPlan(ctx context.Context, user
 			return err
 		}
 		created.RentPlanVersion = 1
+		if tenantID != 0 {
+			assignedPlan, version, err := newRoomRentPlanService(tx).SaveRoomRentPlan(ctx, SaveRoomRentPlanCommand{
+				UserID: userID, RoomID: created.ID, EffectiveMonth: setup.EffectiveMonth,
+				MonthlyRentCents: setup.MonthlyRentCents, Currency: setup.Currency, DueDay: setup.DueDay,
+				Members:                 []RoomRentPlanMemberInput{{TenantID: tenantID, ResponsibilityCents: setup.MonthlyRentCents}},
+				ExpectedTimelineVersion: created.RentPlanVersion,
+			})
+			if err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return ErrInvalidRentPlan
+				}
+				return err
+			}
+			plan = assignedPlan
+			created.RentPlanVersion = version
+		}
 		return nil
 	})
 	return created, plan, err

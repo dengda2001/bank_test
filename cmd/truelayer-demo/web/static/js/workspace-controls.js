@@ -168,6 +168,7 @@
         item.setAttribute("data-option-index", String(index));
         item.setAttribute("aria-selected", String(option.selected));
         item.setAttribute("aria-disabled", String(optionIsDisabled(option)));
+		item.classList.toggle("tenant-conflict-option", option.dataset.tenantConflict === "true");
         item.appendChild(textNode(option.textContent.trim()));
         listbox.appendChild(item);
         return item;

@@ -3,7 +3,7 @@
   <section class="entity-drawer" role="dialog" aria-modal="true" aria-labelledby="room-create-title">
     <div class="panel-head"><div><h2 id="room-create-title">新建房间</h2><p class="tiny">房间必须绑定一个房产。</p></div><a class="drawer-close" href="{{.ReturnURL}}" aria-label="关闭新增房间">×</a></div>
     {{if .ErrorMessage}}<div class="notice error" role="alert">{{.ErrorMessage}}</div>{{end}}
-    <form method="post" action="/rooms">
+    <form method="post" action="/rooms" data-tenant-availability data-tenant-month-selector="#room-effective-month" data-tenant-target-room="0">
 	  <input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="filter_status" value="{{.StatusFilter}}"><input type="hidden" name="search" value="{{.Search}}"><input type="hidden" name="filter_property_id" value="{{.PropertyID}}"><input type="hidden" name="collection" value="{{.CollectionFilter}}"><input type="hidden" name="sort" value="{{.Sort}}">
 	  {{if eq .ReturnContext "property"}}<input type="hidden" name="return_context" value="property"><input type="hidden" name="return_property_id" value="{{.ReturnPropertyID}}"><input type="hidden" name="return_period" value="{{.ReturnPeriod}}"><input type="hidden" name="return_list_status" value="{{.ReturnListStatus}}"><input type="hidden" name="return_list_search" value="{{.ReturnListSearch}}"><input type="hidden" name="return_list_collection" value="{{.ReturnListCollection}}"><input type="hidden" name="return_list_sort" value="{{.ReturnListSort}}">{{end}}
       <div class="room-meta-form-grid">
@@ -16,11 +16,20 @@
           <div class="form-field"><label for="room-effective-month">租金生效月份</label><input id="room-effective-month" name="effective_month" type="month" value="{{.Form.EffectiveMonth}}" required></div>
           <div class="form-field"><label for="room-due-day">默认交租日</label><input id="room-due-day" name="due_day" type="number" min="1" max="31" step="1" value="{{.Form.DueDay}}" required></div>
         </div>
-        <p class="tiny">保存为空房间后，可在新增租客时设置入住与分摊租金。</p>
+        <p class="tiny">仅保存空房间时不会生成租客责任；设置租客后按所选月份开始计租。</p>
+      </fieldset>
+      <fieldset class="tenant-form-section room-tenant-choice"><legend>设置租客</legend>
+        <label class="room-tenant-choice-row"><input type="radio" name="tenant_choice" value="existing"> 选择已有租客</label>
+        <div class="form-field"><label for="room-existing-tenant">已有租客</label><select id="room-existing-tenant" name="tenant_id" data-searchable data-tenant-availability-select disabled><option value="">请选择租客</option>{{range .Tenants}}{{if eq .Status "active"}}<option value="{{.ID}}" data-tenant-name="{{.Name}}" data-occupancies="{{.OccupanciesJSON}}"{{if .ConflictRoomID}} data-tenant-conflict="true" disabled{{end}}>{{.Name}}{{if .ConflictRoomID}}（已入住 {{.ConflictRoomName}}，请先解绑）{{end}}</option>{{end}}{{end}}</select></div>
+        <label class="room-tenant-choice-row"><input type="radio" name="tenant_choice" value="new" checked> 新建租客档案</label>
+        <p class="tiny">保存房间后打开新增租客表单，房产、房间和月份会自动选好。</p>
+        <div class="room-tenant-conflicts" data-tenant-conflicts aria-live="polite">{{range .Tenants}}{{if .ConflictRoomID}}<p>{{.Name}} · {{.ConflictRoomName}} <a href="{{.UnbindURL}}">去解绑</a></p>{{end}}{{end}}</div>
       </fieldset>
       <div class="form-field"><label for="room-notes">房间备注</label><textarea id="room-notes" name="notes" maxlength="2000">{{.Form.Notes}}</textarea></div>
-      <div class="drawer-actions"><a class="btn subtle" href="{{.ReturnURL}}">取消</a><button class="btn" type="submit" name="action" value="save">仅保存空房间</button><button class="btn primary" type="submit" name="action" value="save_and_setup">保存并设置租客</button></div>
+      <div class="drawer-actions"><a class="btn subtle" href="{{.ReturnURL}}">取消</a><button class="btn" type="submit" name="action" value="save" data-save-vacant>仅保存空房间</button><button class="btn primary" type="submit" name="action" value="save_and_setup">保存并设置租客</button></div>
     </form>
   </section>
 </div>
+<script src="/static/js/room-tenant-availability.js" defer></script>
+<script>(function(){var choice=document.querySelector('.room-tenant-choice');if(!choice)return;var existing=choice.querySelector('#room-existing-tenant');choice.addEventListener('change',function(){var selected=choice.querySelector('input[name="tenant_choice"]:checked');existing.disabled=!selected||selected.value!=='existing';existing.required=!existing.disabled;existing.dispatchEvent(new Event('change',{bubbles:true}));});choice.closest('form').querySelector('[data-save-vacant]').addEventListener('click',function(){existing.required=false;});})();</script>
 {{end}}

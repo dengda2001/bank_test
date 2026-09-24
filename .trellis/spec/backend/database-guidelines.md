@@ -206,10 +206,11 @@ descriptions refer to retired behavior.
   intent)` is the only business entry point that generates obligations.
   `intent` is `rentFactsIntentRead` or
   `rentFactsIntentExplicitPayment`.
-- UI writes normally use `POST /rooms/{id}/rent-plan`. Two creation-time
+- UI writes normally use `POST /rooms/{id}/rent-plan`. Creation-time
   composite paths may call that same plan service: creating a room creates its
-  first empty-member plan, and creating a tenant may add the new tenant to a
-  selected room plan. Neither path writes rent columns on `rooms` or `tenants`.
+  first empty-member plan, selecting an existing tenant while creating a room
+  adds the first plan member, and creating a tenant may add it to a selected
+  room plan. Neither path writes rent columns on `rooms` or `tenants`.
 
 ### 3. Contracts
 
@@ -241,6 +242,15 @@ descriptions refer to retired behavior.
   complete new plan in the same outer transaction. The browser's property,
   rent, due-day, plan members, and timeline version are hints only; the service
   revalidates ownership and uses the stored plan schedule.
+- `createRoomWithRentPlanAndTenant(ctx, userID, roomInput, setup, tenantID)`
+  wraps room creation and, when `tenantID` is nonzero, calls
+  `SaveRoomRentPlan` with the new room's version inside the same outer
+  transaction. The plan member receives the full initial room rent. A foreign
+  or inactive tenant, an overlapping other-room plan, or a fact error rolls
+  the new room back. An omitted/zero tenant ID keeps the vacant-room behavior.
+- A room can save an empty member list after its final occupant is removed.
+  This preserves the rent schedule and unbinds that tenant from the chosen
+  month onward; locked historical facts still block the edit.
 - A tenant may belong to at most one room in any rent month. `SaveRoomRentPlan`
   locks the active tenant rows before checking other-room plans from the
   effective month onward; an overlap returns `ErrTenantRoomMonthConflict`.

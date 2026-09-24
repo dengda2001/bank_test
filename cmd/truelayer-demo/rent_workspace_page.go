@@ -311,9 +311,13 @@ type rentRoomDetailPageData struct {
 }
 
 type roomRentPlanTenantOption struct {
-	ID     uint64
-	Name   string
-	Status string
+	ID               uint64
+	Name             string
+	Status           string
+	OccupanciesJSON  string
+	ConflictRoomID   uint64
+	ConflictRoomName string
+	UnbindURL        string
 }
 
 type roomRentPlanMemberForm struct {
@@ -349,7 +353,7 @@ func (s *rentWorkspaceService) loadRoomDetail(ctx context.Context, userID, roomI
 		return rentRoomDetailPageData{}, planErr
 	}
 	monthlyRent, monthlyRentValue, dueDay := "—", "", 1
-	planMembers := []roomRentPlanMemberForm{{}}
+	planMembers := []roomRentPlanMemberForm{}
 	planExists := planErr == nil
 	planEffectiveFrom, planEffectiveTo, planRentValue := "", "", ""
 	planDueDay := 1
@@ -375,13 +379,9 @@ func (s *rentWorkspaceService) loadRoomDetail(ctx context.Context, userID, roomI
 			})
 		}
 	}
-	var tenantRows []tenant
-	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Order("name ASC, id ASC").Find(&tenantRows).Error; err != nil {
+	tenantOptions, err := loadRoomTenantOptions(ctx, s.db, userID, roomID, period)
+	if err != nil {
 		return rentRoomDetailPageData{}, err
-	}
-	tenantOptions := make([]roomRentPlanTenantOption, 0, len(tenantRows))
-	for _, row := range tenantRows {
-		tenantOptions = append(tenantOptions, roomRentPlanTenantOption{ID: row.ID, Name: firstNonEmpty(row.DisplayAlias, row.Name), Status: row.Status})
 	}
 	tenantNameByID := make(map[uint64]string, len(tenantOptions))
 	for _, option := range tenantOptions {

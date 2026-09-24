@@ -11,3 +11,10 @@
 
 - Confirm the final plan matches the user request before `task.py start`.
 - Pay special attention to plan intervals that start in the future, stale form data, and preserving the room drawer context after an error.
+
+## Verification evidence
+
+- `go test ./... -count=1`, `go vet ./...`, `node --check` for the new availability script, and `git diff --check` passed.
+- Focused MySQL service tests passed against an isolated disposable MySQL 8.4 server: atomic room/tenant creation, conflicting and unknown tenant rollback, removal of the final occupant, existing new-tenant assignment, and current/future room conflicts. The temporary server and data directory were removed afterward.
+- Headless Chrome checked desktop previews and true 390px and 320px mobile emulation. The new-room and occupancy drawers had no document overflow. A month-switch probe re-enabled a tenant after its old plan ended; a radio probe enabled the existing-tenant picker while preserving the disabled conflict option.
+- The mobile entity drawer title initially rendered above its header because the long form shrank the header flex item. `entity-drawers.css` now keeps the mobile header at `flex: 0 0 auto`, and the 390px rerender showed the title inside the drawer.

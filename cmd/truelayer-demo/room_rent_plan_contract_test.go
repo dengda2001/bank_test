@@ -152,7 +152,7 @@ func TestTenantRoomPlanAssignmentInputFromForm(t *testing.T) {
 }
 
 func TestRoomRentPlanTenantRoomConflictUsesStablePageMessage(t *testing.T) {
-	if got := rentPlanErrorMessage("tenant_room_month_conflict"); got != "该租客从所选月份起已在其他房间入住，请先结束原房间的入住计划。" {
+	if got := rentPlanErrorMessage("tenant_room_month_conflict"); got != "该租客从所选月份起已安排在其他房间。请先到原房间的「入住与租金」移除该租客，再回来保存。" {
 		t.Fatalf("tenant room conflict message=%q", got)
 	}
 }
