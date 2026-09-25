@@ -31,8 +31,12 @@ func manualTenantSuggestions(payerName, payerNameKind string, tenants []tenant) 
 			}
 			candidate := strings.Join(tokens, " ")
 			ratio := nameEditSimilarity(payer, candidate)
-			if payer == candidate || ratio >= .72 && (sharesDistinctiveNameToken(payerTokens, tokens) || ratio >= .86) {
+			overlap := distinctiveNameTokenOverlap(payerTokens, tokens)
+			if payer == candidate || ratio >= .72 && (overlap > 0 || ratio >= .86) || overlap >= 2 {
 				best = max(best, ratio)
+				if overlap >= 2 {
+					best = max(best, .72)
+				}
 			}
 		}
 		if best > 0 {
@@ -42,16 +46,15 @@ func manualTenantSuggestions(payerName, payerNameKind string, tenants []tenant) 
 	if len(scores) == 0 {
 		// A bank name can contain extra given/family names. A distinctive payer
 		// word is a navigation hint only, never identity evidence.
-		noise := map[string]bool{"bank": true, "from": true, "rent": true, "payment": true, "transfer": true, "sepa": true, "credit": true, "direct": true, "debit": true}
 		for _, row := range tenants {
 			best := float64(0)
 			for _, name := range []string{row.Name, row.DisplayAlias} {
 				for _, candidate := range tenantNameTokens(name) {
-					if len([]rune(candidate)) < 4 {
+					if !isDistinctiveNameToken(candidate) {
 						continue
 					}
 					for _, payerToken := range payerTokens {
-						if len([]rune(payerToken)) < 4 || noise[payerToken] {
+						if !isDistinctiveNameToken(payerToken) {
 							continue
 						}
 						switch {
@@ -96,18 +99,30 @@ func tenantNameTokens(name string) []string {
 	return result
 }
 
-func sharesDistinctiveNameToken(a, b []string) bool {
+func distinctiveNameTokenOverlap(a, b []string) int {
+	seen := make(map[string]bool)
 	for _, left := range a {
-		if len([]rune(left)) < 4 {
+		if !isDistinctiveNameToken(left) {
 			continue
 		}
 		for _, right := range b {
 			if left == right {
-				return true
+				seen[left] = true
 			}
 		}
 	}
-	return false
+	return len(seen)
+}
+
+func isDistinctiveNameToken(token string) bool {
+	if len([]rune(token)) < 4 {
+		return false
+	}
+	switch token {
+	case "bank", "from", "rent", "payment", "transfer", "sepa", "credit", "direct", "debit":
+		return false
+	}
+	return true
 }
 
 func nameEditSimilarity(a, b string) float64 {

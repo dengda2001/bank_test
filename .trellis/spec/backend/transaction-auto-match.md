@@ -14,12 +14,15 @@
 - `RENT_AUTO_CURRENT_THROUGH_DAY` (default `5`) and `RENT_AUTO_NEXT_MONTH_FROM_DAY` (default `25`) control the automatic date windows. Bounds must straddle the suggestion cutoff; invalid values fall back to the defaults. An incompatible suggestion cutoff disables date-based automatic matching.
 - `transactionService.futureRentPlanMatchesTransaction(ctx, userID, tenantID, period, amountCents, currency) (bool, error)` gates future fact creation using `room_rent_plan_members` joined to active `room_rent_plans`.
 - `payment_allocations.confirmation_source` records `auto_id`, `auto_name`, or `auto_exact_name` for automatic allocations. `transactionPageRow.MatchMethodLabel` derives the display label from effective rent allocations.
+- `manualTenantSuggestions(payerName, payerNameKind, tenants)` returns review-drawer links for confirmed payer names. Its output is never identity evidence for reconciliation.
 
 ### 3. Contracts
 
 For TrueLayer income, an explicit rent month in `description` wins on every arrival day. Strip `TxnDate` and full dates before parsing; `reference` and legacy persisted parsed months do not provide explicit evidence. Without an explicit month, local `Europe/Dublin` arrival days 1–5 suggest the current month and days 25–31 suggest the following month for automatic matching. Days 6–24 remain pending with the existing display suggestion. Deposit, refund, expense, loan and borrowing descriptions do not qualify for date-based automatic matching.
 
 Identity is unique only when an active `tenant_payers` relation identifies one tenant, or a bank-confirmed payer name equals one tenant's official `tenants.name` after trimming, case folding and collapsing spaces. Multiple or conflicting relations/name matches stay pending. Fuzzy name similarity is presentation-only in the manual review drawer.
+
+The review drawer includes a tenant whose name shares at least two distinct, non-generic words with a confirmed bank payer name, even when another tenant already passes whole-name edit similarity. For example, `DURGA NAGENDRA GONUGUNTA` offers both `Durga Nagendra` and `Nagendra Gonugunta`; the former must not disappear just because the latter crosses the edit-similarity threshold. A one-word fallback is used only when no stronger suggestions exist. Suggestions do not select a tenant or create a payer relation or rent allocation.
 
 Date-inferred matching requires exactly one active obligation for that tenant and month, matching nonempty currencies, positive amount, and a transaction amount equal to the obligation's unpaid balance. Explicit description months retain the existing partial allocation behavior. Reconciliation creates current/past monthly rent facts with `rentFactsIntentRead`. For a future date-inferred month, it may first create monthly facts only when identity is unique and exactly one active rent-plan member has the same amount and currency; it then reloads obligations and rechecks the complete match decision. The allocator revalidates balances and uses an idempotency key before writing.
 
@@ -50,6 +53,7 @@ Date-inferred matching requires exactly one active obligation for that tenant an
 - `TestBankTxnDateOnlyUsesTransferDateForAutoMatching`: `TxnDate` does not select the rent month.
 - `TestReconcilePendingRentTransactionsOnMySQL`: on a disposable DB, create only a future plan, rerun reconciliation, assert one generated obligation and allocation, and assert the earlier allocation remains unchanged; this test skips without `RENTOPS_MYSQL_TEST_DSN`.
 - `TestManualTenantSuggestionsFindCloseBankNamesOnly` and `TestMatchMethodLabelUsesOnlyEffectiveRentAllocations`: fuzzy suggestions remain manual and badges reflect confirmed effective rent allocations.
+- `TestManualTenantSuggestionsKeepOverlappingMultiPartNames`: both two-word tenants appear exactly once for a three-word bank payer, even when only one passes the whole-name similarity threshold.
 
 ### 7. Wrong vs Correct
 
