@@ -1555,3 +1555,36 @@ Implemented tenant prepayments, matching review controls and feedback, transacti
 ### Next Steps
 
 - None - task complete
+
+
+## Session 44: Fix defer FormData parsing and feedback
+
+**Date**: 2026-09-26
+**Task**: Fix defer FormData parsing and feedback
+**Branch**: `main`
+
+### Summary
+
+Traced invalid defer requests to multipart FormData sent to a ParseForm-only handler; reused the shared parser, improved the floating notice, added multipart and URL-encoded regression tests, and documented the cross-layer contract.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `adf6e37` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
