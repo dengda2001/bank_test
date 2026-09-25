@@ -41,7 +41,7 @@
   const deferErrorText = code => ({
     transaction_not_pending: '这笔流水已不在待处理状态，无法暂不处理。请刷新后查看最新状态。',
     transaction_not_found: '这笔流水已无法找到，请刷新列表。',
-    invalid_transaction_action: '暂不处理请求无效，请刷新后再试。',
+    invalid_transaction_action: '暂不处理没有保存：页面没有提交完整的流水信息。请关闭匹配窗口，重新打开这笔流水后再试。',
     transaction_action_failed: '暂不处理未保存。数据库操作失败，请稍后重试。'
   })[code] || '暂不处理未保存，请刷新后重试。';
   let drafts = [];

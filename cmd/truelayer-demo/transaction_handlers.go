@@ -72,6 +72,13 @@ func transactionFailureCode(err error, fallback string) string {
 	return fallback
 }
 
+func transactionActionIDFromRequest(r *http.Request) (uint64, error) {
+	if err := parseTransactionForm(r); err != nil {
+		return 0, err
+	}
+	return parsePositiveUint(r.Form.Get("transaction_id"))
+}
+
 func (a *app) handleTransactionAllocation(w http.ResponseWriter, r *http.Request) {
 	if !a.requireAuth(w, r) {
 		return
@@ -183,11 +190,8 @@ func (a *app) handleTransactionAction(w http.ResponseWriter, r *http.Request, ac
 		http.Error(w, "database session required", http.StatusBadRequest)
 		return
 	}
-	if err := r.ParseForm(); err != nil {
-		redirectTransactionResult(w, r, "error", "invalid_transaction_action")
-		return
-	}
-	transactionID, err := parsePositiveUint(r.Form.Get("transaction_id"))
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	transactionID, err := transactionActionIDFromRequest(r)
 	if err != nil {
 		redirectTransactionResult(w, r, "error", "invalid_transaction_action")
 		return

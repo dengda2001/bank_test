@@ -46,6 +46,46 @@ Questions to answer:
 
 ## Common Mistakes
 
+### Scenario: Browser FormData sent to transaction actions
+
+#### 1. Scope / Trigger
+
+Any transaction action posted with browser `new FormData(form)`, including the matching drawer's “暂不处理” button.
+
+#### 2. Signatures
+
+- Browser: `fetch(form.action, {method: 'POST', body: new FormData(form)})`.
+- Server: `parseTransactionForm(*http.Request) error` and `transactionActionIDFromRequest(*http.Request) (uint64, error)`.
+
+#### 3. Contracts
+
+`FormData` sends `multipart/form-data`; ordinary HTML form posts may send `application/x-www-form-urlencoded`. Both must populate `r.Form` before reading `transaction_id`, `reason`, or `return_to`. Transaction action handlers cap the request body at 1 MiB and use `parseTransactionForm`, which calls `ParseMultipartForm` for multipart requests.
+
+#### 4. Validation & Error Matrix
+
+| Request | Behavior |
+| --- | --- |
+| Multipart with valid positive `transaction_id` | Parse fields, then apply owner and state checks |
+| URL-encoded with valid positive `transaction_id` | Same checks |
+| Missing/malformed ID or malformed multipart body | Redirect with `invalid_transaction_action`; do not write an action |
+| Valid form, stale match status | Return `transaction_not_pending` |
+
+#### 5. Good / Base / Bad Cases
+
+- Good: browser defer `FormData` carries ID 677 and a reason; server reads both and reaches `deferTransaction`.
+- Base: ordinary URL-encoded POST remains supported.
+- Bad: `r.ParseForm()` alone leaves multipart fields unread, so an eligible transaction appears to have no ID.
+
+#### 6. Tests Required
+
+`TestTransactionActionReadsBrowserFormDataAndOrdinaryForms` must assert multipart and URL-encoded IDs and reasons are parsed, while a missing ID is rejected. Check the browser notice text for a useful recovery step.
+
+#### 7. Wrong vs Correct
+
+Wrong: call `r.ParseForm()` alone in a handler reached by `new FormData(form)`.
+
+Correct: bound the request body, call `parseTransactionForm(r)`, then validate the positive transaction ID before invoking the action service.
+
 ### Scenario: TrueLayer manual refresh transaction range
 
 #### 1. Scope / Trigger

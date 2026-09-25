@@ -109,6 +109,7 @@ Before implementation:
 - [ ] Mapped the complete data flow
 - [ ] Identified all layer boundaries
 - [ ] Defined format at each boundary
+- [ ] For browser form posts, checked the actual `Content-Type` (`new FormData(form)` sends multipart) against the server parser
 - [ ] Decided where validation happens
 
 After implementation:
