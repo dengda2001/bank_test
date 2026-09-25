@@ -74,6 +74,12 @@ type transactionReviewHistory struct {
 
 type transactionMatchReviewData struct {
 	Source                transactionPageRow
+	FinderMode            bool
+	FinderCanPrefill      bool
+	FinderBackURL         string
+	FinderCloseURL        string
+	FinderTenantName      string
+	FinderPeriod          string
 	Reference             string
 	CloseURL              string
 	ReturnURL             string
@@ -312,7 +318,7 @@ func (s *transactionService) transactionMatchReviewForMonthWithOrigin(ctx contex
 				data.Months[monthIndex].Evidence[evidenceIndex].TenantName = data.SelectedTenantName
 			}
 		}
-		if requestedMonth != "" && explicitMonthLookup {
+		if requestedMonth != "" {
 			found := false
 			for index := range data.Months {
 				if data.Months[index].Period == requestedMonth {

@@ -122,6 +122,7 @@ var workspaceBase = template.Must(template.New("workspace").Funcs(template.FuncM
 	"web/templates/partials/expense-form-drawer.html",
 	"web/templates/partials/cash-receipt-drawer.html",
 	"web/templates/partials/transaction-match-review-drawer.html",
+	"web/templates/partials/tenant-receipt-finder.html",
 	"web/templates/partials/transaction-expense-drawer.html",
 	"web/templates/partials/room-create-drawer.html",
 ))

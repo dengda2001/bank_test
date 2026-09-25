@@ -1,0 +1,46 @@
+.tenant-finder-drawer { width: min(820px, calc(100vw - 24px)); max-width: 100vw; gap: 16px; }
+.tenant-finder-titlebar { display: flex; justify-content: space-between; gap: 16px; }
+.tenant-finder-titlebar h2 { margin: 2px 0 4px; font-size: 22px; }
+.tenant-finder-notice { margin: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-muted); color: var(--foreground-muted); font-size: 13px; }
+.tenant-finder-filters { display: grid; gap: 11px; padding: 15px; border: 1px solid var(--border); border-radius: 10px; }
+.tenant-finder-filter-row { display: grid; grid-template-columns: 80px minmax(0, 1fr); align-items: center; gap: 8px; }
+.tenant-finder-filter-row > strong { color: var(--foreground-muted); font-size: 12px; }
+.tenant-finder-buttons { display: flex; flex-wrap: wrap; gap: 7px; }
+.tenant-finder-buttons .btn { min-height: 34px; padding: 5px 10px; font-size: 12px; }
+.tenant-finder-buttons .is-active { border-color: var(--accent); background: color-mix(in oklch, var(--accent) 10%, var(--surface)); color: var(--accent); }
+.tenant-finder-search { display: grid; gap: 10px; margin: 0; }
+.tenant-finder-search-line { display: grid; grid-template-columns: minmax(0,1fr) auto auto; align-items: end; gap: 8px; }
+.tenant-finder-search-line label { grid-column: 1/-1; color: var(--foreground-muted); font-size: 12px; }
+.tenant-finder-search-line input { min-width: 0; width: 100%; }
+.tenant-finder-results { display: grid; gap: 12px; }
+.tenant-finder-results-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.tenant-finder-results-head h3 { margin: 0; font-size: 15px; }
+.tenant-finder-results-head span { color: var(--foreground-muted); font-size: 12px; }
+.tenant-finder-list { display: grid; gap: 9px; }
+.tenant-finder-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; padding: 13px 14px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
+.tenant-finder-row-top { grid-column: 1/-1; display: flex; align-items: center; gap: 10px; }
+.tenant-finder-row-top time { margin-right: auto; color: var(--foreground-muted); font: 12px var(--mono); }
+.tenant-finder-row-top strong { font-size: 16px; }
+.tenant-finder-row dl { display: grid; gap: 5px; grid-column: 1/-1; margin: 0; }
+.tenant-finder-row dl > div { display: grid; grid-template-columns: 105px minmax(0,1fr); gap: 7px; font-size: 12px; }
+.tenant-finder-row dt { color: var(--foreground-muted); }
+.tenant-finder-row dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.tenant-finder-hint { grid-column: 1; align-self: center; margin: 0; color: var(--foreground-muted); font-size: 12px; }
+.tenant-finder-select { grid-column: 2; justify-self: end; align-self: end; }
+.tenant-finder-pagination { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; }
+.tenant-finder-empty { padding: 20px; border-radius: 9px; background: var(--surface-muted); color: var(--foreground-muted); font-size: 13px; }
+.tenant-finder-empty p { margin: 0 0 12px; }
+.tenant-finder-empty div { display: flex; flex-wrap: wrap; gap: 8px; }
+.tenant-finder-drawer .drawer-actions { justify-content: flex-end; }
+@media (max-width: 640px) {
+  .tenant-finder-drawer { width: 100vw; }
+  .tenant-finder-filter-row { grid-template-columns: 1fr; }
+  .tenant-finder-buttons .btn, .tenant-finder-search-line .btn, .tenant-finder-pagination .btn, .tenant-finder-select { min-height: 44px; }
+  .tenant-finder-search-line { grid-template-columns: minmax(0,1fr) auto; }
+  .tenant-finder-search-line > .btn:last-child { grid-column: 1/-1; }
+  .tenant-finder-row { grid-template-columns: 1fr; }
+  .tenant-finder-row-top { flex-wrap: wrap; }
+  .tenant-finder-row dl > div { grid-template-columns: 80px minmax(0,1fr); }
+  .tenant-finder-hint, .tenant-finder-select { grid-column: 1; }
+  .tenant-finder-select { justify-self: stretch; }
+}

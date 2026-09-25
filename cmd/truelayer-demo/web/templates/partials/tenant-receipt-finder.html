@@ -1,0 +1,24 @@
+{{define "tenant-receipt-finder"}}
+<div class="entity-drawer-backdrop tenant-finder-backdrop">
+  <section class="entity-drawer tenant-finder-drawer" role="dialog" aria-modal="true" aria-labelledby="tenant-finder-title">
+    <header class="panel-head tenant-finder-titlebar">
+      <div><span class="drawer-eyebrow">租客找流水</span><h2 id="tenant-finder-title" tabindex="-1">为 {{.TenantName}} 找银行流水</h2><p class="tiny">{{.PeriodLabel}}租金{{if .HasBalance}} · 未付 {{.Balance}}{{else if .HasObligation}} · 本月已结清{{else}} · 当前月份暂无应收账单{{end}}</p></div>
+      <a class="drawer-close" href="{{.CloseURL}}" aria-label="关闭查找流水抽屉">×</a>
+    </header>
+    {{if not .HasBalance}}<p class="tenant-finder-notice">当前月份没有可分配的未付租金。仍可核对这位租客的其他月份或预收款；确认前请检查目标月份。</p>{{end}}
+    <section class="tenant-finder-filters" aria-label="查找条件">
+      <div class="tenant-finder-filter-row"><strong>到账时间</strong><div class="tenant-finder-buttons"><a class="btn subtle{{if eq .Scope "two"}} is-active{{end}}" href="{{.TwoMonthURL}}"{{if eq .Scope "two"}} aria-current="true"{{end}}>本月和上月</a><a class="btn subtle{{if eq .Scope "six"}} is-active{{end}}" href="{{.SixMonthURL}}"{{if eq .Scope "six"}} aria-current="true"{{end}}>近六个月</a><a class="btn subtle{{if eq .Scope "all"}} is-active{{end}}" href="{{.AllTimeURL}}"{{if eq .Scope "all"}} aria-current="true"{{end}}>全部时间</a></div></div>
+      <div class="tenant-finder-filter-row"><strong>查找方式</strong><div class="tenant-finder-buttons"><a class="btn subtle{{if eq .Mode "all"}} is-active{{end}}" href="{{.AllURL}}"{{if eq .Mode "all"}} aria-current="true"{{end}}>全部待处理</a><a class="btn subtle{{if eq .Mode "name"}} is-active{{end}}" href="{{.NameURL}}"{{if eq .Mode "name"}} aria-current="true"{{end}}>姓名线索</a></div></div>
+      <div class="tenant-finder-filter-row"><strong>姓名按钮</strong><div class="tenant-finder-buttons">{{range .Clues}}<a class="btn subtle{{if .Selected}} is-active{{end}}" href="{{.URL}}"{{if .Selected}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}</div></div>
+      <form class="tenant-finder-search" method="get" action="/rent-dashboard">{{range $key, $values := .FormValues}}{{range $values}}<input type="hidden" name="{{$key}}" value="{{.}}">{{end}}{{end}}<div class="tenant-finder-filter-row"><strong>搜索字段</strong><div class="tenant-finder-buttons"><a class="btn subtle{{if eq .Field "all"}} is-active{{end}}" href="{{.AllFieldURL}}">全部字段</a><a class="btn subtle{{if eq .Field "payer"}} is-active{{end}}" href="{{.PayerFieldURL}}">付款人</a><a class="btn subtle{{if eq .Field "description"}} is-active{{end}}" href="{{.DescFieldURL}}">Description</a></div></div><div class="tenant-finder-search-line"><label for="tenant-finder-query">搜索付款人或银行描述</label><input id="tenant-finder-query" name="find_q" type="search" maxlength="191" value="{{.Query}}" placeholder="输入付款人或 Description 关键词"><button class="btn primary" type="submit">搜索</button><a class="btn subtle" href="{{.ClearURL}}">清除</a></div></form>
+    </section>
+    <section class="tenant-finder-results" aria-labelledby="tenant-finder-results-title">
+      <div class="tenant-finder-results-head"><h3 id="tenant-finder-results-title">可核对流水</h3><span>{{.Total}} 笔 · 姓名相似仅是线索</span></div>
+      {{if .Rows}}<div class="tenant-finder-list">{{range .Rows}}<article class="tenant-finder-row"><div class="tenant-finder-row-top"><time>{{.Date}}</time><strong>{{.Amount}}</strong><span class="status">{{.Status}}</span></div><dl><div><dt>付款人</dt><dd>{{.Payer}}</dd></div><div><dt>Description</dt><dd class="review-long-text">{{.Description}}</dd></div><div><dt>可分配余额</dt><dd>{{.Remaining}}</dd></div></dl>{{if .Hint}}<p class="tenant-finder-hint">{{.Hint}} · 请核对原始流水</p>{{end}}<a class="btn primary tenant-finder-select" href="{{.SelectURL}}" data-finder-select="{{.ID}}">用于本月租金</a></article>{{end}}</div>{{else}}<div class="tenant-finder-empty"><p>当前条件下没有找到待处理收款。</p><div><a class="btn subtle" href="{{.ClearURL}}">清除搜索</a>{{if ne .Scope "all"}}<a class="btn subtle" href="{{.AllTimeURL}}">查更早流水</a>{{end}}</div></div>{{end}}
+      {{if gt .Pages 1}}<nav class="tenant-finder-pagination" aria-label="流水分页">{{if .PreviousURL}}<a class="btn subtle" href="{{.PreviousURL}}">上一页</a>{{else}}<span></span>{{end}}<span>第 {{.Page}} / {{.Pages}} 页</span>{{if .NextURL}}<a class="btn subtle" href="{{.NextURL}}">下一页</a>{{else}}<span></span>{{end}}</nav>{{end}}
+    </section>
+    <div class="drawer-actions"><a class="btn subtle" href="{{.CloseURL}}">返回租客列表</a></div>
+  </section>
+</div>
+<script src="/static/js/tenant-receipt-finder.js"></script>
+{{end}}

@@ -60,6 +60,7 @@
     .workspace-table .amount { white-space: nowrap; }
     .workspace-table .status { white-space: nowrap; }
     .workspace-table a { color: inherit; }
+    .workspace-table a.tenant-finder-trigger, .workspace-table a.tenant-finder-trigger:hover { color: #fff; }
     .workspace-table a:hover { color: var(--accent-bright); }
     .workspace-pager { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 16px 20px 20px; }
     .workspace-pager form { margin: 0; }
@@ -157,7 +158,7 @@
       letter-spacing: 0.06em;
     }
     .workspace-card-grid dd { margin: 4px 0 0; color: var(--foreground); font-size: 14px; }
-    /* 行内操作列（原型 .detail-action）：一键平账 + 查看详情，右对齐、窄按钮。 */
+    /* 租客行的真实银行收款与人工平账并列，详情保持次级入口。 */
     .workspace-row-action { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px; min-width: 0; }
     .workspace-row-action .btn { min-height: 30px; padding: 0 10px; font-size: 12px; }
     .workspace-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

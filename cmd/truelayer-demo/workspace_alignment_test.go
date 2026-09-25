@@ -185,7 +185,7 @@ func TestRentWorkspaceRowsCarryRateAndActionColumns(t *testing.T) {
 	if got := strings.Count(desktop, `class="workspace-row-action"`); got != 3 {
 		t.Fatalf("row action cells=%d want 3 (one room, two tenant obligations): %s", got, desktop)
 	}
-	if got := strings.Count(desktop, `>一键平账</summary>`); got != 1 {
+	if got := strings.Count(desktop, `>人工平账</summary>`); got != 1 {
 		t.Fatalf("settle form count=%d want 1 (only the obligation with an outstanding balance): %s", got, desktop)
 	}
 	if got := strings.Count(desktop, `>查看详情</a>`); got != 3 {

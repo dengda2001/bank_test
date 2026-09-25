@@ -20,7 +20,7 @@ func transactionReturnTarget(r *http.Request) string {
 	if err != nil || target.IsAbs() || target.Host != "" || (target.Path != "/transactions" && target.Path != "/rent-dashboard") {
 		return fallback
 	}
-	allowed := map[string]bool{"match_status": true, "scope": true, "period": true, "payer": true, "tenant_id": true, "direction": true, "rent_period": true, "allocation": true, "sort": true, "page": true, "page_size": true, "pending": true, "arrival_from": true, "arrival_to": true, "view": true, "property_id": true, "room_id": true, "search": true, "status": true, "detail": true}
+	allowed := map[string]bool{"match_status": true, "scope": true, "period": true, "payer": true, "tenant_id": true, "direction": true, "rent_period": true, "allocation": true, "sort": true, "page": true, "page_size": true, "pending": true, "arrival_from": true, "arrival_to": true, "view": true, "property_id": true, "room_id": true, "search": true, "status": true, "detail": true, "find_tenant": true, "find_scope": true, "find_mode": true, "find_clue": true, "find_field": true, "find_q": true, "find_page": true}
 	query := url.Values{}
 	for key, values := range target.Query() {
 		if !allowed[key] || len(values) != 1 || len(values[0]) > 191 {

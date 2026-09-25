@@ -14,6 +14,7 @@
 .transaction-review-drawer .panel-head { display: flex; flex: 0 0 auto; justify-content: space-between; gap: 16px; }
 .transaction-review-drawer .panel-head h2 { font-size: 22px; }
 .transaction-review-drawer .panel-head h2:focus { outline: none; }
+.transaction-review-back { display: inline-flex; align-items: center; min-height: 36px; margin-top: 5px; color: var(--accent); font-size: 12px; font-weight: 650; }
 .transaction-review-drawer section, .transaction-review-drawer article, .transaction-review-drawer div { min-width: 0; }
 .transaction-review-drawer h3 { margin: 0; font-size: 15px; }
 .transaction-review-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }

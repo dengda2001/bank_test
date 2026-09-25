@@ -29,7 +29,7 @@
   const sourceAmount = Number(drawer.dataset.sourceCents);
   const sourceRemaining = Number(drawer.dataset.remainingCents);
   const sourceAllocated = Math.max(0, sourceAmount - sourceRemaining);
-  const storageKey = 'transactionReviewDraft:' + drawer.dataset.sourceId;
+  const storageKey = 'transactionReviewDraft:' + drawer.dataset.sourceId + (drawer.dataset.finderContext ? ':finder:' + drawer.dataset.finderContext : '');
   const money = cents => new Intl.NumberFormat('en-IE', {style: 'currency', currency: 'EUR'}).format(cents / 100);
   const asCents = value => {
     if (!/^\d+(?:\.\d{1,2})?$/.test(value.trim())) return NaN;
@@ -357,6 +357,24 @@
       return;
     }
     const add = event.target.closest('[data-add-match]');
+    const finderBack = event.target.closest('[data-finder-back]');
+    if (finderBack) {
+      event.preventDefault();
+      (async () => {
+        if (drafts.length) {
+          const confirmed = await window.RentOpsConfirm.open({
+            title: '返回流水列表',
+            message: '当前待确认分配还没有入账。返回后会清除这笔流水的草稿。',
+            confirmLabel: '清除草稿并返回',
+            trigger: finderBack
+          });
+          if (!confirmed) return;
+        }
+        sessionStorage.removeItem(storageKey);
+        location.assign(finderBack.href);
+      })().catch(cause => showError(cause.message));
+      return;
+    }
     if (add) {
       addMonth(add);
       return;
@@ -528,3 +546,8 @@
   filterLocationOptions();
   validate(false);
 })();
+  if (!drafts.length && drawer.dataset.prefillPeriod) {
+    const target = [...drawer.querySelectorAll('[data-add-match]')]
+      .find(button => button.dataset.period === drawer.dataset.prefillPeriod);
+    if (target) addMonth(target);
+  }

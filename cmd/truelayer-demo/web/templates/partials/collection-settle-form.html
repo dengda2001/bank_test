@@ -1,7 +1,7 @@
 {{define "collection-settle-form"}}
 {{if gt .ObligationID 0}}
 <details class="collection-settle">
-  <summary class="btn primary">一键平账</summary>
+  <summary class="btn {{if .ActionLabel}}subtle{{else}}primary{{end}}">{{if .ActionLabel}}{{.ActionLabel}}{{else}}一键平账{{end}}</summary>
   <form method="post" action="/rent-dashboard/settle" class="collection-balance-form">
     <input type="hidden" name="obligation_id" value="{{.ObligationID}}">
     <input type="hidden" name="period" value="{{.ReturnPeriod}}">

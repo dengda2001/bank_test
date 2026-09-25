@@ -27,6 +27,7 @@ type rentWorkspacePageData struct {
 	PendingCount     int
 	PendingItems     []rentWorkspacePendingItem
 	MatchReview      *transactionMatchReviewData
+	ReceiptFinder    *tenantReceiptFinderData
 	PropertyOptions  []rentWorkspacePropertyOption
 	PropertyRows     []rentWorkspacePropertyRow
 	PropertyTreeRows []rentWorkspacePropertyTreeRow
@@ -85,9 +86,13 @@ func rentWorkspacePendingItems(rows []paymentTransaction, periodMonth time.Time)
 
 func rentWorkspacePendingTransactions(db *gorm.DB, ctx context.Context, userID uint64, period time.Time) *gorm.DB {
 	start := monthStart(period)
+	return rentWorkspacePendingIncomeQuery(db, ctx, userID).
+		Where("payment_transactions.transaction_time >= ? AND payment_transactions.transaction_time < ?", start, start.AddDate(0, 1, 0))
+}
+
+func rentWorkspacePendingIncomeQuery(db *gorm.DB, ctx context.Context, userID uint64) *gorm.DB {
 	return db.WithContext(ctx).Model(&paymentTransaction{}).
 		Where("payment_transactions.user_id = ? AND payment_transactions.direction = ? AND payment_transactions.match_status IN ?", userID, "income", pendingMatchStatuses).
-		Where("payment_transactions.transaction_time >= ? AND payment_transactions.transaction_time < ?", start, start.AddDate(0, 1, 0)).
 		Where(`NOT EXISTS (
 			SELECT 1 FROM payment_transaction_actions AS defer_action
 			WHERE defer_action.user_id = payment_transactions.user_id
@@ -220,6 +225,23 @@ func (a *app) renderRentWorkspaceDashboard(w http.ResponseWriter, r *http.Reques
 	for index, transaction := range pendingRows {
 		page.PendingItems[index].MatchURL = rentWorkspaceURL(filters, filters.Page) + "&match=" + strconv.FormatUint(transaction.ID, 10)
 	}
+	if raw := strings.TrimSpace(r.URL.Query().Get("find_tenant")); raw != "" {
+		findTenantID, parseErr := parsePositiveUint(raw)
+		if parseErr != nil {
+			http.NotFound(w, r)
+			return
+		}
+		finder, finderErr := loadTenantReceiptFinder(r.Context(), a.db, userID, findTenantID, filters, r.URL.Query(), time.Now())
+		if errors.Is(finderErr, gorm.ErrRecordNotFound) || errors.Is(finderErr, errInvalidTenantReceiptFinder) {
+			http.NotFound(w, r)
+			return
+		}
+		if finderErr != nil {
+			http.Error(w, finderErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		page.ReceiptFinder = &finder
+	}
 	if matchKey := strings.TrimSpace(r.URL.Query().Get("match")); matchKey != "" {
 		matchID, parseErr := parsePositiveUint(matchKey)
 		if parseErr != nil {
@@ -253,6 +275,21 @@ func (a *app) renderRentWorkspaceDashboard(w http.ResponseWriter, r *http.Reques
 			return
 		}
 		review.setWorkspaceURLs(filters, r.URL.Query())
+		if page.ReceiptFinder != nil {
+			review.FinderMode = true
+			review.FinderBackURL = page.ReceiptFinder.SearchURL
+			review.FinderCloseURL = page.ReceiptFinder.CloseURL
+			review.FinderTenantName = page.ReceiptFinder.TenantName
+			review.FinderPeriod = page.Period
+			for _, month := range review.Months {
+				if month.Period == page.Period && month.Selectable && review.SourceRemainingCents > 0 {
+					review.FinderCanPrefill = true
+					break
+				}
+			}
+			review.ReturnURL = page.ReceiptFinder.SearchURL
+			review.CloseURL = page.ReceiptFinder.SearchURL
+		}
 		page.MatchReview = &review
 	}
 	if filterErr != nil {
@@ -626,6 +663,9 @@ func (a *app) handleRoomDetail(w http.ResponseWriter, r *http.Request) {
 }
 
 var rentWorkspaceTemplateFuncs = template.FuncMap{
+	"tenantFinderURL": func(filters rentWorkspaceFilters, tenantID uint64) string {
+		return tenantReceiptFinderURL(rentWorkspaceURL(filters, filters.Page), tenantID, tenantReceiptFinderFilters{Scope: "two", Mode: "all", Field: "all", Page: 1}, 0)
+	},
 	"workspaceURL": func(filters rentWorkspaceFilters, page int) string {
 		return rentWorkspaceURL(filters, page)
 	},

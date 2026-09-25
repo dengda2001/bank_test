@@ -40,6 +40,7 @@ type collectionSettleOption struct {
 }
 
 type collectionSettleFormView struct {
+	ActionLabel       string
 	ObligationID      uint64
 	DutyLabel         string
 	OutstandingAmount string
@@ -131,6 +132,7 @@ func (data rentWorkspacePageData) TenantSettleForm(row rentWorkspaceTenantRow) c
 		amount = row.ExpectedAmount
 	}
 	return collectionSettleFormView{
+		ActionLabel:       "人工平账",
 		ObligationID:      row.ObligationID,
 		DutyLabel:         duty,
 		OutstandingAmount: amount,
