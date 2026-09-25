@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 42
-- **Last Active**: 2026-09-24
+- **Total Sessions**: 43
+- **Last Active**: 2026-09-25
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1524 | Active |
+| `journal-1.md` | ~1557 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 43 | 2026-09-25 | Transaction matching and rent workspace fixes | `9a96fbf` | `main` |
 | 42 | 2026-09-24 | Transaction direction and bank expense attribution | `bf3fd18` | `main` |
 | 41 | 2026-09-24 | Bank allocation and room workflow follow-up | `89c5151` | `main` |
 | 40 | 2026-09-24 | Room tenant selection and assignment | `c99c379` | `main` |
