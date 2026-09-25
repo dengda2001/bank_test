@@ -5,6 +5,11 @@
   const form = drawer.querySelector('[data-review-batch]');
   const rows = drawer.querySelector('[data-review-drafts]');
   const error = drawer.querySelector('[data-draft-error]');
+  const floatingNotice = document.querySelector('[data-review-notice]');
+  const floatingNoticeText = floatingNotice?.querySelector('[data-review-notice-text]');
+  const detailOverlay = document.querySelector('[data-review-detail-overlay]');
+  const detailContent = detailOverlay?.querySelector('[data-review-detail-content]');
+  const detailTitle = detailOverlay?.querySelector('#transaction-review-detail-title');
   const total = drawer.querySelector('[data-draft-total]');
   const remainder = drawer.querySelector('[data-draft-remainder]');
   const progressTrack = drawer.querySelector('[data-progress-track]');
@@ -15,6 +20,10 @@
   const draftPercent = drawer.querySelector('[data-progress-draft-percent]');
   const remainingPercent = drawer.querySelector('[data-progress-remaining-percent]');
   const remember = drawer.querySelector('[data-remember-tenant]');
+  const prepaymentChoice = drawer.querySelector('[data-prepayment-choice]');
+  const prepaymentTenant = drawer.querySelector('[data-prepayment-tenant]');
+  const prepaymentAmount = drawer.querySelector('[data-prepayment-amount]');
+  const prepaymentSummary = drawer.querySelector('[data-prepayment-summary]');
   const queued = drawer.querySelector('[data-review-queued]');
   const submit = drawer.querySelector('.transaction-review-actions button[form="transaction-review-confirm"]');
   const sourceAmount = Number(drawer.dataset.sourceCents);
@@ -29,18 +38,83 @@
     return Number.isSafeInteger(cents) ? cents : NaN;
   };
   const amountText = cents => (cents / 100).toFixed(2);
+  const deferErrorText = code => ({
+    transaction_not_pending: '这笔流水已不在待处理状态，无法暂不处理。请刷新后查看最新状态。',
+    transaction_not_found: '这笔流水已无法找到，请刷新列表。',
+    invalid_transaction_action: '暂不处理请求无效，请刷新后再试。',
+    transaction_action_failed: '暂不处理未保存。数据库操作失败，请稍后重试。'
+  })[code] || '暂不处理未保存，请刷新后重试。';
   let drafts = [];
   let lookupSequence = 0;
+  let rememberTouched = false;
+  let detailTrigger = null;
+  let detailSequence = 0;
 
   function showError(message) {
     error.textContent = message;
-    error.hidden = !message;
+    error.hidden = true;
+    if (floatingNotice && floatingNoticeText) {
+      floatingNoticeText.textContent = message;
+      floatingNotice.hidden = !message;
+    }
     const feedback = drawer.querySelector('[data-add-feedback]');
     if (feedback) {
-      feedback.textContent = message;
-      feedback.hidden = !message;
+      feedback.textContent = '';
+      feedback.hidden = true;
     }
   }
+
+  floatingNotice?.querySelector('[data-review-notice-close]')?.addEventListener('click', () => showError(''));
+
+  function closeDetail() {
+    if (!detailOverlay || detailOverlay.hidden) return;
+    detailSequence++;
+    detailOverlay.hidden = true;
+    drawer.inert = false;
+    detailContent.replaceChildren();
+    detailTrigger?.focus({preventScroll: true});
+  }
+
+  async function openDetail(link) {
+    if (!detailOverlay || !detailContent) return;
+    const sequence = ++detailSequence;
+    detailTrigger = link;
+    detailOverlay.hidden = false;
+    drawer.inert = true;
+    detailContent.textContent = '正在加载流水详情…';
+    detailTitle.focus({preventScroll: true});
+    if (!document.querySelector('link[href="/static/css/pages/transaction-detail.css"]')) {
+      const stylesheet = document.createElement('link');
+      stylesheet.rel = 'stylesheet';
+      stylesheet.href = '/static/css/pages/transaction-detail.css';
+      document.head.append(stylesheet);
+    }
+    try {
+      const response = await fetch(link.href, {credentials: 'same-origin'});
+      if (!response.ok) throw new Error('流水详情加载失败，请重试。');
+      const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+      if (sequence !== detailSequence) return;
+      const page = doc.querySelector('main.transaction-detail-page');
+      if (!page) throw new Error('流水详情加载失败，请重试。');
+      const sections = ['transaction-source-title', 'transaction-allocations-title', 'transaction-expense-title', 'transaction-history-title']
+        .map(id => page.querySelector('[aria-labelledby="' + id + '"]')).filter(Boolean);
+      if (!sections.length) throw new Error('流水详情内容不可用，请刷新后重试。');
+      const heading = page.querySelector('.transaction-detail-head h1')?.textContent?.trim();
+      detailTitle.textContent = heading ? '流水详情 · ' + heading : '流水详情';
+      detailContent.replaceChildren(...sections.map(section => {
+        const copy = section.cloneNode(true);
+        copy.querySelectorAll('form, .transaction-detail-panel-actions, button').forEach(element => element.remove());
+        copy.querySelectorAll('a').forEach(anchor => anchor.replaceWith(document.createTextNode(anchor.textContent)));
+        return copy;
+      }));
+    } catch (cause) {
+      closeDetail();
+      showError(cause.message);
+    }
+  }
+
+  detailOverlay?.querySelector('[data-review-detail-close]')?.addEventListener('click', closeDetail);
+  detailOverlay?.addEventListener('click', event => { if (event.target === detailOverlay) closeDetail(); });
 
   function syncMonthButtons() {
     const panel = drawer.querySelector('.transaction-review-months');
@@ -52,11 +126,60 @@
     }
   }
 
+  function filterLocationOptions() {
+    const lookup = drawer.querySelector('[data-review-lookup]');
+    const property = lookup?.querySelector('[data-review-property]');
+    const room = lookup?.querySelector('[data-review-room]');
+    const tenant = lookup?.querySelector('#transaction-review-tenant');
+    const note = lookup?.querySelector('[data-review-location-note]');
+    if (!property || !room || !tenant) return;
+    for (const option of room.options) {
+      if (!option.value) continue;
+      const visible = !property.value || option.dataset.propertyId === property.value;
+      option.hidden = !visible;
+      option.disabled = !visible;
+    }
+    if (room.value && room.selectedOptions[0]?.disabled) room.value = '';
+    const occupantIDs = room.value ? new Set((room.selectedOptions[0]?.dataset.occupantIds || '').split(',').filter(Boolean)) : null;
+    for (const option of tenant.options) {
+      if (!option.value) continue;
+      const visible = !occupantIDs || occupantIDs.has(option.value);
+      option.hidden = !visible;
+      option.disabled = !visible;
+    }
+    if (tenant.value && tenant.selectedOptions[0]?.disabled) tenant.value = '';
+    if (note) note.textContent = room.value
+      ? (occupantIDs.size ? '请选择该房间在所选月份的入住租客。' : '该房间在所选月份没有入住租客；请换月份或核对房间计划。')
+      : '可按房产和房间查找该月入住租客，也可直接选择租客。';
+  }
+
+  function syncLocationFromTenant() {
+    const lookup = drawer.querySelector('[data-review-lookup]');
+    const property = lookup?.querySelector('[data-review-property]');
+    const room = lookup?.querySelector('[data-review-room]');
+    const tenant = lookup?.querySelector('#transaction-review-tenant');
+    const note = lookup?.querySelector('[data-review-location-note]');
+    if (!property || !room || !tenant || !tenant.value) return;
+    const matches = [...room.options].filter(option => option.value &&
+      (option.dataset.occupantIds || '').split(',').includes(tenant.value));
+    const selectedRoom = matches.find(option => option.value === room.value);
+    const onlyRoom = selectedRoom || (matches.length === 1 ? matches[0] : null);
+    const propertyIDs = new Set(matches.map(option => option.dataset.propertyId));
+    property.value = onlyRoom?.dataset.propertyId || (propertyIDs.size === 1 ? [...propertyIDs][0] : '');
+    room.value = onlyRoom?.value || '';
+    filterLocationOptions();
+    if (note && !matches.length) note.textContent = '该租客在当前查看月份没有已登记的房间，请核对入住计划。';
+    else if (note && matches.length > 1 && !onlyRoom) note.textContent = '该租客在当前月份对应多个房间，请手动选择。';
+  }
+
   function saveDrafts() {
     sessionStorage.setItem(storageKey, JSON.stringify({
       items: drafts,
       requestKey: form.elements.request_key.value,
-      rememberTenantID: remember.value
+      rememberTenantID: remember.value,
+      rememberTouched,
+      usePrepayment: prepaymentChoice.checked,
+      prepaymentTenantID: prepaymentTenant.value
     }));
   }
 
@@ -76,13 +199,21 @@
       sum += cents;
     }
     if (!message && sum > sourceRemaining) message = '本次分配合计超过流水未分配金额。';
+    const excess = sourceRemaining - sum;
+    const prepaymentCents = prepaymentChoice.checked && excess > 0 ? excess : 0;
+    if (!message && prepaymentChoice.checked && excess <= 0) message = '当前没有可记为预收款的余额。';
+    if (!message && prepaymentChoice.checked && !drafts.some(item => String(item.tenantId) === prepaymentTenant.value)) message = '请选择预收款所属的租客。';
+    prepaymentAmount.value = prepaymentCents ? amountText(prepaymentCents) : '';
+    prepaymentSummary.textContent = prepaymentChoice.checked && prepaymentCents > 0
+      ? money(sum) + ' 计入所选月份房租，' + money(prepaymentCents) + ' 保留为租客待分配预收款；以后手动用于租金。'
+      : '选择后，多出的金额不会计入本月房租，以后可在租客详情手动使用。';
     if (!message && remember.value && !drafts.some(item => String(item.tenantId) === remember.value)) {
       message = '请选择本次分配中的一位实际付款人。';
     }
-    total.textContent = money(sum);
-    remainder.textContent = money(sourceRemaining - sum);
+    total.textContent = money(sum + prepaymentCents);
+    remainder.textContent = money(sourceRemaining - sum - prepaymentCents);
     const confirmedShare = sourceAmount > 0 ? Math.min(1, sourceAllocated / sourceAmount) : 0;
-    const draftShare = sourceAmount > 0 ? Math.min(1 - confirmedShare, sum / sourceAmount) : 0;
+    const draftShare = sourceAmount > 0 ? Math.min(1 - confirmedShare, (sum + prepaymentCents) / sourceAmount) : 0;
     const remainingShare = Math.max(0, 1 - confirmedShare - draftShare);
     confirmedSegment.style.width = (confirmedShare * 100) + '%';
     draftSegment.style.width = (draftShare * 100) + '%';
@@ -91,8 +222,8 @@
     draftPercent.textContent = Math.round(draftShare * 100) + '%';
     remainingPercent.textContent = Math.round(remainingShare * 100) + '%';
     progressTrack.classList.toggle('is-over', sum > sourceRemaining);
-    progressTrack.setAttribute('aria-label', '已确认 ' + money(sourceAllocated) + '；本次待确认 ' + money(sum) + '；' + (sum > sourceRemaining ? '超出可分配金额 ' + money(sum - sourceRemaining) : '确认后未分配 ' + money(sourceRemaining - sum)));
-    queued.textContent = drafts.length ? '已加入 ' + drafts.length + ' 项 · 本次 ' + money(sum) : '还未加入分配';
+    progressTrack.setAttribute('aria-label', '已确认 ' + money(sourceAllocated) + '；本次待确认 ' + money(sum + prepaymentCents) + '；' + (sum > sourceRemaining ? '超出可分配金额 ' + money(sum - sourceRemaining) : '确认后未分配 ' + money(sourceRemaining - sum - prepaymentCents)));
+    queued.textContent = drafts.length ? '已加入 ' + drafts.length + ' 项 · 本次 ' + money(sum + prepaymentCents) : '还未加入分配';
     remainder.classList.toggle('is-negative', sum > sourceRemaining);
     submit.disabled = Boolean(message);
     if (showMessage) showError(message);
@@ -152,10 +283,14 @@
     });
 
     const selected = remember.value;
+    const selectedPrepaymentTenant = prepaymentTenant.value;
     remember.replaceChildren(new Option('不保存付款人关系', ''));
     const names = new Map(drafts.map(item => [String(item.tenantId), item.tenantName]));
     for (const [id, name] of names) remember.add(new Option(name, id));
-    remember.value = names.has(selected) ? selected : '';
+    remember.value = names.has(selected) ? selected : (!rememberTouched && names.has(drawer.dataset.rememberCandidate) ? drawer.dataset.rememberCandidate : '');
+    prepaymentTenant.replaceChildren(new Option('请选择租客', ''));
+    for (const [id, name] of names) prepaymentTenant.add(new Option(name, id));
+    prepaymentTenant.value = names.has(selectedPrepaymentTenant) ? selectedPrepaymentTenant : (names.size === 1 ? [...names.keys()][0] : '');
     syncMonthButtons();
     validate(false);
   }
@@ -203,6 +338,7 @@
     if (!historyOnly) {
       const nextIdentity = nextDrawer.querySelector('.transaction-review-identity');
       drawer.querySelector('.transaction-review-identity').replaceWith(nextIdentity);
+      syncLocationFromTenant();
       const nextMonths = nextDrawer.querySelector('.transaction-review-months');
       drawer.querySelector('.transaction-review-months').replaceWith(nextMonths);
       form.elements.match_tenant.value = nextMonths.dataset.tenantId || '';
@@ -214,6 +350,12 @@
   }
 
   drawer.addEventListener('click', event => {
+    const detailLink = event.target.closest('[data-review-detail-link]');
+    if (detailLink) {
+      event.preventDefault();
+      openDetail(detailLink);
+      return;
+    }
     const add = event.target.closest('[data-add-match]');
     if (add) {
       addMonth(add);
@@ -254,15 +396,22 @@
     saveDrafts();
   });
   drawer.addEventListener('change', event => {
+    if (event.target.matches('[data-review-property], [data-review-room]')) {
+      filterLocationOptions();
+      return;
+    }
     if (!event.target.matches('#transaction-review-tenant')) return;
+    syncLocationFromTenant();
     if (event.target.value === drawer.querySelector('.transaction-review-months')?.dataset.tenantId) return;
     drawer.querySelector('.transaction-review-smart-hint')?.remove();
-    drawer.querySelector('.transaction-review-suggestions')?.remove();
   });
   remember.addEventListener('change', () => {
+    rememberTouched = true;
     validate();
     saveDrafts();
   });
+  prepaymentChoice.addEventListener('change', () => { validate(); saveDrafts(); });
+  prepaymentTenant.addEventListener('change', () => { validate(); saveDrafts(); });
 
   drawer.addEventListener('submit', event => {
     const revokeForm = event.target.closest('[data-review-revoke-share]');
@@ -310,10 +459,13 @@
         button.disabled = true;
         try {
           const response = await fetch(deferForm.action, {method: 'POST', credentials: 'same-origin', body: new FormData(deferForm)});
-          if (!response.redirected) throw new Error('暂不处理未保存，请重试。');
+          if (!response.redirected) throw new Error('暂不处理未保存，服务未返回操作结果，请重试。');
           const target = new URL(response.url);
-          if (target.searchParams.has('error') || target.searchParams.get('message') !== 'transaction_action_saved') {
-            throw new Error('暂不处理未保存，请重试。');
+          if (target.searchParams.has('error')) {
+            throw new Error(deferErrorText(target.searchParams.get('error')));
+          }
+          if (target.searchParams.get('message') !== 'transaction_action_saved') {
+            throw new Error('暂不处理未保存，服务返回了意外结果，请刷新后重试。');
           }
           sessionStorage.removeItem(storageKey);
           location.assign(target.href);
@@ -329,6 +481,7 @@
       event.preventDefault();
       const url = new URL(lookup.action, location.href);
       for (const [key, value] of new FormData(lookup)) url.searchParams.set(key, value);
+      if (lookup.matches('[data-review-month-lookup]')) url.searchParams.delete('match_origin');
       replaceEvidence(url.href).catch(cause => showError(cause.message));
       return;
     }
@@ -362,12 +515,16 @@
     if (saved && Array.isArray(saved.items)) {
       drafts = saved.items.filter(item => Number.isInteger(item.tenantId) && /^\d{4}-\d{2}$/.test(item.period) && Number.isSafeInteger(item.maxCents) && item.maxCents > 0);
       if (saved.requestKey) form.elements.request_key.value = saved.requestKey;
+      rememberTouched = Boolean(saved.rememberTouched);
+      if (saved.rememberTenantID) remember.value = saved.rememberTenantID;
       renderRows();
-      remember.value = saved.rememberTenantID || '';
+      prepaymentChoice.checked = Boolean(saved.usePrepayment);
+      prepaymentTenant.value = saved.prepaymentTenantID || prepaymentTenant.value;
       validate(false);
     }
   } catch (_) {
     sessionStorage.removeItem(storageKey);
   }
+  filterLocationOptions();
   validate(false);
 })();

@@ -15,12 +15,14 @@ type landlordRentRepository struct {
 }
 
 type propertyQuery struct {
-	Status string
+	Status         string
+	IncludeDeleted bool
 }
 
 type roomQuery struct {
-	PropertyID uint64
-	Status     string
+	PropertyID     uint64
+	Status         string
+	IncludeDeleted bool
 }
 
 type roomRentPlanQuery struct {
@@ -100,6 +102,9 @@ func (r *landlordRentRepository) listProperties(ctx context.Context, userID uint
 	if filters.Status != "" {
 		query = query.Where("status = ?", filters.Status)
 	}
+	if !filters.IncludeDeleted {
+		query = query.Where("deleted_at IS NULL")
+	}
 	rows := make([]property, 0)
 	if err := query.Order("name ASC, id ASC").Find(&rows).Error; err != nil {
 		return nil, err
@@ -142,6 +147,9 @@ func (r *landlordRentRepository) listRooms(ctx context.Context, userID uint64, f
 	if filters.Status != "" {
 		query = query.Where("status = ?", filters.Status)
 	}
+	if !filters.IncludeDeleted {
+		query = query.Where("rooms.deleted_at IS NULL AND EXISTS (SELECT 1 FROM properties AS parent WHERE parent.id = rooms.property_id AND parent.user_id = rooms.user_id AND parent.deleted_at IS NULL)")
+	}
 	rows := make([]room, 0)
 	if err := query.Order("property_id ASC, room_label ASC, id ASC").Find(&rows).Error; err != nil {
 		return nil, err
@@ -150,8 +158,12 @@ func (r *landlordRentRepository) listRooms(ctx context.Context, userID uint64, f
 }
 
 func (r *landlordRentRepository) createRoom(ctx context.Context, userID uint64, row room) (room, error) {
-	if _, err := r.findProperty(ctx, userID, row.PropertyID); err != nil {
+	parent, err := r.findProperty(ctx, userID, row.PropertyID)
+	if err != nil {
 		return room{}, err
+	}
+	if parent.DeletedAt != nil {
+		return room{}, gorm.ErrRecordNotFound
 	}
 	row.ID = 0
 	row.UserID = userID

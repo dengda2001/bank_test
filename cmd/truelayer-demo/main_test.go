@@ -1110,7 +1110,7 @@ func TestRentWorkspaceLinksPendingCountToSelectedPeriod(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(page, `class="workspace-queue-more" href="/transactions?period=2026-09&amp;match_status=pending"`) {
+	if !strings.Contains(page, `class="workspace-queue-more" href="/transactions?scope=home_queue&amp;period=2026-09"`) {
 		t.Fatalf("pending count is not linked to the selected period: %s", page)
 	}
 }

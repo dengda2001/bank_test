@@ -229,6 +229,7 @@ type tenantDetailPageData struct {
 	PostReturnURL      string
 	Tenant             tenantRecord
 	Payers             []tenantPayerRecord
+	Prepayments        []tenantPrepaymentRow
 	History            tenantBillingHistoryPage
 	HasCurrentBilling  bool
 	CurrentBilling     tenantBillingMonth
@@ -342,6 +343,12 @@ var tenantDetailTemplate = newWorkspacePageTemplate("tenant-detail", nil, `<!doc
     .payer-meta { display: grid; gap: 4px; }
     .payer-badge { display: inline-block; border-radius: 999px; padding: 2px 7px; font-size: 11px; background: var(--surface-muted); color: var(--foreground-muted); }
     .tenant-paid-for-panel { grid-area: paidfor; min-width: 0; overflow: hidden; }
+	.tenant-credit-panel { padding: 18px 20px; display: grid; gap: 14px; }
+	.tenant-credit-row { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid var(--border); }
+	.tenant-credit-row:first-of-type { border-top: 0; padding-top: 0; }
+	.tenant-credit-form { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+	.tenant-credit-form label { display: grid; gap: 4px; font-size: 12px; }
+	.tenant-credit-form input { min-height: 40px; max-width: 160px; }
     .paid-for-table { min-width: 640px; }
     .flag { color: var(--warning); font-size: 12px; }
     .status { display: inline-block; border-radius: 999px; padding: 5px 9px; font-size: 12px; white-space: nowrap; }
@@ -408,12 +415,17 @@ var tenantDetailTemplate = newWorkspacePageTemplate("tenant-detail", nil, `<!doc
 	{{if eq .Message "cash_receipt_voided"}}<div class="notice ok" data-toast>现金收款已撤销，原始记录与撤销原因已保留。</div>{{end}}
     {{if eq .Message "payer_added"}}<div class="notice ok" data-toast>付款人关系已保存。</div>{{end}}
     {{if eq .Message "payer_removed"}}<div class="notice ok" data-toast>付款人关系已移除，历史记录未改变。</div>{{end}}
+	{{if eq .Message "prepayment_applied"}}<div class="notice ok" data-toast>预收款已用于所选月份的租金。</div>{{end}}
+	{{if eq .Error "prepayment_invalid"}}<div class="notice error" role="alert">请选择租金月份并填写大于零的使用金额。</div>{{end}}
+	{{if eq .Error "prepayment_bill_missing"}}<div class="notice error" role="alert">该租客在所选月份没有可用租金账单；请核对入住与租金计划。</div>{{end}}
+	{{if eq .Error "prepayment_apply_failed"}}<div class="notice error" role="alert">预收款未使用：余额、账单或操作状态已变化，请刷新后重试。</div>{{end}}
 	{{if eq .Error "tenant_delete_blocked"}}<div class="notice error">该租客已有租金或收款记录，不能删除；如不再使用，请停用档案。</div>{{end}}
 	{{if eq .Error "invalid_payer"}}<div class="notice error">付款人信息无效；IE… 等单笔流水号不能作为稳定付款人 ID。</div>{{end}}
 	{{if eq .Message "tenant_updated"}}<div class="notice ok" data-toast>租客资料已更新。</div>{{end}}
 	{{if .ShowForm}}{{template "tenant-form-drawer" .}}{{end}}
 	{{if .CashReceiptDrawer}}{{template "cash-receipt-drawer" .CashReceiptDrawer}}{{end}}
 	<div class="tenant-metrics" aria-label="本月租金摘要"><div class="panel metric"><div class="label">本月应收租金</div><strong>{{if .HasCurrentBilling}}{{.CurrentBilling.ExpectedAmount}}{{else}}—{{end}}</strong><span>{{.CurrentRoomCount}} 条房间租金记录</span></div><div class="panel metric"><div class="label">已收租金</div><strong>{{if .HasCurrentBilling}}{{.CurrentBilling.PaidAmount}}{{else}}—{{end}}</strong><span>银行收款与现金收款</span></div><div class="panel metric"><div class="label">本月未收</div><strong>{{if .HasCurrentBilling}}{{.CurrentBilling.BalanceAmount}}{{else}}—{{end}}</strong><span>按本月应收租金计算</span></div><div class="panel metric"><div class="label">本月状态</div><strong class="tenant-metric-state">{{if .HasCurrentBilling}}{{.CurrentBilling.StatusLabel}}{{else}}暂无应收租金{{end}}</strong><span>{{.CurrentPeriod}}</span></div></div>
+	{{if .Prepayments}}<section class="panel surface tenant-credit-panel" aria-labelledby="tenant-credit-title"><div><h2 id="tenant-credit-title">待分配预收款</h2><p class="tiny">仅在你选择月份并确认后才计入租金；不会自动抵扣。</p></div>{{range .Prepayments}}<div class="tenant-credit-row"><div><strong>可用 {{.Available}}</strong><span class="tiny"> · 原额 {{.Amount}} · <a href="{{.SourceURL}}">流水 {{.Source}}</a></span></div>{{if gt .AvailableCents 0}}<form class="tenant-credit-form" method="post" action="/tenants/prepayment/apply"><input type="hidden" name="tenant_id" value="{{$.Tenant.ID}}"><input type="hidden" name="prepayment_id" value="{{.ID}}"><input type="hidden" name="request_key" value="{{.RequestKey}}"><label>租金月份<input type="month" name="period" required></label><label>使用金额（€）<input type="number" name="amount" min="0.01" step="0.01" value="{{.AvailableInput}}" required></label><button class="btn primary" type="submit">用于该月租金</button></form>{{else}}<span class="tiny">{{.State}}</span>{{end}}</div>{{end}}</section>{{end}}
 	<div class="detail-grid"><section class="panel surface tenant-history-panel" aria-labelledby="history-title"><div class="panel-head"><h2 id="history-title">缴费历史</h2><span class="tiny">{{.History.TotalRows}} 个适用月份</span></div>
 	  <form class="history-filter" method="get" action="/tenants/{{.Tenant.ID}}"><label for="range">历史范围<select id="range" name="range"><option value="12"{{if eq .HistoryRange "12"}} selected{{end}}>近 12 个月</option><option value="24"{{if eq .HistoryRange "24"}} selected{{end}}>近 24 个月</option></select></label><input type="hidden" name="page_size" value="{{.History.PageSize}}"><button class="btn" type="submit">搜索</button></form>
 	  {{if .History.Rows}}<div class="table-wrap"><table class="history-table"><thead><tr><th>月份／房间</th><th>应缴日</th><th>应收租金</th><th>实收覆盖</th><th>未收</th><th>状态／来源</th></tr></thead><tbody>{{range .History.Rows}}<tr><td><strong>{{.PeriodLabel}}</strong><br>{{if .RoomID}}<a href="/rooms/{{.RoomID}}?period={{.Period}}&amp;rent=1">{{if .PropertyName}}{{.PropertyName}} · {{end}}{{.RoomLabel}} · 前往调整入住与租金</a>{{else}}<span class="tiny">房间信息待核对</span>{{end}}</td><td class="mono">{{.DueDate}}</td><td class="amount">{{.ExpectedAmount}}</td><td class="amount">{{.PaidAmount}}</td><td class="amount">{{.BalanceAmount}}</td><td><span class="status {{.Status}}">{{.StatusLabel}}</span>{{if .Payments}}<div class="payment-list">{{range .Payments}}<div class="payment-item"><span class="amount">{{.AmountDisplay}}</span><span class="mono">{{.DateDisplay}}</span><span class="payment-source">{{.Source}}{{if and .Reference (ne .Reference "No reference")}}<small class="payment-reference mono">{{if eq .Source "现金"}}收据号{{else}}流水号{{end}}：{{.Reference}}</small>{{end}}</span>{{if eq .Source "现金"}}<a class="void-link" href="/cash-receipts/void?receipt_id={{.PaymentID}}">撤销</a>{{end}}</div>{{end}}</div>{{else}}<div class="tiny">暂无有效收款</div>{{end}}</td></tr>{{end}}</tbody></table></div>{{else}}<div class="empty">所选期间没有租金账单。</div>{{end}}
@@ -491,6 +503,11 @@ func (a *app) handleTenantDetail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	prepayments, err := newTransactionService(a.db).listTenantPrepayments(r.Context(), userID, tenantID)
+	if err != nil {
+		http.Error(w, "tenant prepayments unavailable", http.StatusInternalServerError)
+		return
+	}
 	data := tenantDetailPageData{
 		workspaceShell: a.fillWorkspaceShell(r, workspaceShell{
 			ActivePage:   "tenants",
@@ -513,6 +530,7 @@ func (a *app) handleTenantDetail(w http.ResponseWriter, r *http.Request) {
 		PostReturnURL:     postReturnURL,
 		Tenant:            tenantRecordFromModel(tenantRow),
 		Payers:            classifyTenantPayersWithAllRows(payers, allPayers),
+		Prepayments:       prepayments,
 		History:           history,
 		PaidByOtherRows:   paidByOtherRows,
 		CurrentBilling:    history.CurrentMonth,

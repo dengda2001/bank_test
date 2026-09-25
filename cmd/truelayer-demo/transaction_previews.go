@@ -89,7 +89,7 @@ func transactionRevokePreviewDataFromModel(preview transactionRevokePreview, ret
 			continue
 		}
 		row := transactionRevokePreviewAllocation{
-			Kind:          map[string]string{allocationKindRent: "房租", allocationKindDeposit: "押金", allocationKindOther: "其他收入"}[ledgerAllocationKind(allocation)],
+			Kind:          map[string]string{allocationKindRent: "房租", allocationKindDeposit: "押金", allocationKindOther: "其他收入", allocationKindPrepayment: "待分配预收款"}[ledgerAllocationKind(allocation)],
 			AmountDisplay: formatMoney(centsToMoney(allocation.AmountCents), preview.Source.Currency, 2),
 			Note:          allocation.Note,
 		}

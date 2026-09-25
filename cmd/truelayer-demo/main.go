@@ -234,6 +234,7 @@ type expenseRecord struct {
 	TenantHint           string  `json:"tenant_hint,omitempty"`
 	InvoiceURL           string  `json:"invoice_url,omitempty"`
 	InvoiceLinked        bool    `json:"-"`
+	AttachmentCount      int     `json:"-"`
 	InvoiceNumber        string  `json:"-"`
 	InvoiceVendor        string  `json:"-"`
 	InvoiceDateDisplay   string  `json:"-"`
@@ -535,6 +536,7 @@ func newAppMux(a *app) *http.ServeMux {
 	mux.HandleFunc("/dunning/preview", a.handleDunningPreview)
 	mux.HandleFunc("/dunning/send", a.handleDunningSend)
 	mux.HandleFunc("/tenants", a.handleTenants)
+	mux.HandleFunc("/tenants/prepayment/apply", a.handleTenantPrepaymentApply)
 	mux.HandleFunc("/tenants/", a.handleTenantSubroute)
 	mux.HandleFunc("/cash-receipts/new", a.handleCashReceiptNew)
 	mux.HandleFunc("/cash-receipts/preview", a.handleCashReceiptPreview)
@@ -543,6 +545,8 @@ func newAppMux(a *app) *http.ServeMux {
 	mux.HandleFunc("/expenses", a.handleExpenses)
 	mux.HandleFunc("/expenses/invoices", a.handleExpenseInvoice)
 	mux.HandleFunc("/expenses/invoices/", a.handleExpenseInvoiceFile)
+	mux.HandleFunc("/expenses/files", a.handleExpenseAttachments)
+	mux.HandleFunc("/expenses/files/", a.handleExpenseAttachmentFile)
 	mux.HandleFunc("/bank", a.handleBank)
 	mux.HandleFunc("/bank/connect", a.handleLogin)
 	mux.HandleFunc("/bank/sync", a.handleRefresh)
@@ -806,6 +810,21 @@ func (a *app) handleTransactions(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		rowIDs := make([]uint64, 0, len(rows))
+		for _, row := range rows {
+			if id, parseErr := strconv.ParseUint(row.InternalID, 10, 64); parseErr == nil {
+				rowIDs = append(rowIDs, id)
+			}
+		}
+		deferredStates, err := transactionDeferredStates(r.Context(), a.db, userID, rowIDs)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		for index := range rows {
+			id, _ := strconv.ParseUint(rows[index].InternalID, 10, 64)
+			rows[index].Deferred = deferredStates[id]
+		}
 		var tenantRows []tenant
 		if err := a.db.WithContext(r.Context()).Where("user_id = ?", userID).Order("name ASC").Find(&tenantRows).Error; err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -907,17 +926,22 @@ func (a *app) handleTransactions(w http.ResponseWriter, r *http.Request) {
 		SortFilter:        filters.Sort,
 		SortLinks:         transactionSortLinks(r.URL.Query(), filters.Sort),
 
-		MatchStatusSelection: matchStatusSelection(filters),
-		TransactionScope:     transactionScope,
-		Page:                 page,
-		PageSize:             pageSize,
-		TotalTransactions:    totalTransactions,
-		TotalPages:           totalPages,
-		Pagination:           paginationLinks(page, totalPages, func(target int) string { return transactionPageURL(r.URL.Query(), target) }),
-		PreviousPageURL:      previousPageURL,
-		NextPageURL:          nextPageURL,
-		PendingCount:         pendingCount,
-		TokenFile:            a.cfg.TokenFile,
+		MatchStatusSelection: func() string {
+			if transactionScope == "home_queue" {
+				return pendingMatchStatusFilter
+			}
+			return matchStatusSelection(filters)
+		}(),
+		TransactionScope:  transactionScope,
+		Page:              page,
+		PageSize:          pageSize,
+		TotalTransactions: totalTransactions,
+		TotalPages:        totalPages,
+		Pagination:        paginationLinks(page, totalPages, func(target int) string { return transactionPageURL(r.URL.Query(), target) }),
+		PreviousPageURL:   previousPageURL,
+		NextPageURL:       nextPageURL,
+		PendingCount:      pendingCount,
+		TokenFile:         a.cfg.TokenFile,
 	}
 	data.ExpenseOpenURL = transactionDrawerURL(r, "expense")
 	data.CashReceiptOpenURL = transactionDrawerURL(r, "cash")
@@ -948,7 +972,8 @@ func (a *app) handleTransactions(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		review, reviewErr := newTransactionService(a.db).transactionMatchReviewForMonthWithOrigin(r.Context(), userID, matchID, tenantID, historyPage, strings.TrimSpace(r.URL.Query().Get("match_month")), r.URL.Query().Get("match_origin") != "roommate")
+		origin := r.URL.Query().Get("match_origin")
+		review, reviewErr := newTransactionService(a.db).transactionMatchReviewForMonthWithOrigin(r.Context(), userID, matchID, tenantID, historyPage, strings.TrimSpace(r.URL.Query().Get("match_month")), origin != "roommate" && origin != "lookup")
 		if errors.Is(reviewErr, gorm.ErrRecordNotFound) {
 			http.NotFound(w, r)
 			return
@@ -1829,26 +1854,28 @@ func (a *app) handleExpenses(w http.ResponseWriter, r *http.Request) {
 	var expenseRooms []expenseRoomOption
 	propertyNames := make(map[string]string)
 	roomNames := make(map[string]string)
+	activePropertyIDs := make(map[uint64]bool)
 	if userID, ok := a.currentUserID(r); ok && a.db != nil {
-		properties, propertyErr := newLandlordRentRepository(a.db).listProperties(r.Context(), userID, propertyQuery{})
+		properties, propertyErr := newLandlordRentRepository(a.db).listProperties(r.Context(), userID, propertyQuery{IncludeDeleted: true})
 		if propertyErr != nil {
 			http.Error(w, propertyErr.Error(), http.StatusInternalServerError)
 			return
 		}
 		for _, row := range properties {
 			propertyNames[strconv.FormatUint(row.ID, 10)] = row.Name
-			if row.Status == "active" {
+			if row.Status == "active" && row.DeletedAt == nil {
+				activePropertyIDs[row.ID] = true
 				expenseProperties = append(expenseProperties, expensePropertyOption{ID: row.ID, Name: row.Name})
 			}
 		}
-		rooms, roomErr := newLandlordRentRepository(a.db).listRooms(r.Context(), userID, roomQuery{})
+		rooms, roomErr := newLandlordRentRepository(a.db).listRooms(r.Context(), userID, roomQuery{IncludeDeleted: true})
 		if roomErr != nil {
 			http.Error(w, roomErr.Error(), http.StatusInternalServerError)
 			return
 		}
 		for _, row := range rooms {
 			roomNames[strconv.FormatUint(row.ID, 10)] = row.RoomLabel
-			if row.Status == "active" {
+			if row.Status == "active" && row.DeletedAt == nil && activePropertyIDs[row.PropertyID] {
 				expenseRooms = append(expenseRooms, expenseRoomOption{ID: row.ID, PropertyID: row.PropertyID, Label: row.RoomLabel})
 			}
 		}
@@ -1874,20 +1901,38 @@ func (a *app) handleExpenses(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, invoiceErr.Error(), http.StatusInternalServerError)
 			return
 		}
+		attachments, attachmentErr := listExpenseAttachments(r.Context(), a.db, userID, expenseIDs)
+		if attachmentErr != nil {
+			http.Error(w, attachmentErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		attachmentsByExpense := make(map[uint64][]expenseAttachment, len(expenseIDs))
+		for _, attachment := range attachments {
+			attachmentsByExpense[attachment.ExpenseID] = append(attachmentsByExpense[attachment.ExpenseID], attachment)
+		}
 		for index := range expenses {
 			expense := &expenses[index]
 			expenseID, parseErr := strconv.ParseUint(expense.ID, 10, 64)
 			invoice, found := currentInvoices[expenseID]
+			if files := attachmentsByExpense[expenseID]; len(files) > 0 {
+				expense.InvoiceLinked = true
+				expense.AttachmentCount = len(files)
+				expense.InvoiceDownloadURL = fmt.Sprintf("/expenses/files/%d", files[0].ID)
+			}
 			if parseErr == nil && found {
 				expense.InvoiceLinked = true
-				expense.InvoiceNumber = invoice.InvoiceNumber
+				if expense.AttachmentCount == 0 {
+					expense.InvoiceNumber = invoice.InvoiceNumber
+					expense.InvoiceDownloadURL = fmt.Sprintf("/expenses/invoices/%d", invoice.ID)
+				}
 				expense.InvoiceVendor = invoice.Vendor
 				expense.InvoiceDateDisplay = invoice.InvoiceDate.Format(dateLayout)
 				expense.InvoiceAmountDisplay = formatMoney(centsToMoney(invoice.AmountCents), invoice.Currency, 2)
-				expense.InvoiceDownloadURL = fmt.Sprintf("/expenses/invoices/%d", invoice.ID)
 			} else if strings.TrimSpace(expense.InvoiceURL) != "" {
 				expense.InvoiceLinked = true
-				expense.InvoiceDownloadURL = expense.InvoiceURL
+				if expense.AttachmentCount == 0 {
+					expense.InvoiceDownloadURL = expense.InvoiceURL
+				}
 			}
 			expense.InvoiceActionURL = expenseInvoiceActionURL(expense.ID, period.Format("2006-01"), statusFilter, search, sortValue)
 		}
@@ -1920,7 +1965,7 @@ func (a *app) handleExpenses(w http.ResponseWriter, r *http.Request) {
 	totalExpenseCount := len(expenses)
 	expenses = filterExpensePageRows(expenses, period, statusFilter, search)
 	expenses = sortExpenseRecords(expenses, sortValue)
-	showExpenseForm := r.URL.Query().Get("add") == "1" || (r.URL.Query().Get("error") != "" && r.URL.Query().Get("error") != "invalid_invoice")
+	showExpenseForm := r.URL.Query().Get("add") == "1" || (r.URL.Query().Get("error") != "" && r.URL.Query().Get("error") != "invalid_invoice" && r.URL.Query().Get("error") != "invalid_attachment" && r.URL.Query().Get("invoice") == "")
 	var expenseDrawer *expenseDrawerData
 	if showExpenseForm {
 		selectedPropertyID, _ := parseOptionalUint(r.URL.Query().Get("property_id"))
@@ -1976,16 +2021,34 @@ func (a *app) handleExpenses(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) createExpense(w http.ResponseWriter, r *http.Request) {
-	parseErr := r.ParseForm()
+	r.Body = http.MaxBytesReader(w, r.Body, maxExpenseAttachmentRequestBytes)
+	var parseErr error
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		parseErr = r.ParseMultipartForm(1 << 20)
+	} else {
+		parseErr = r.ParseForm()
+	}
+	if r.MultipartForm != nil {
+		defer r.MultipartForm.RemoveAll()
+	}
 	returnTo := strings.TrimSpace(r.Form.Get("return_to"))
 	if returnTo == "" {
 		returnTo = expensePageURL(r.Form, "", "", false)
 	}
 	if parseErr != nil {
-		http.Redirect(w, r, expenseFormRedirectURL(returnTo, "", "invalid_form"), http.StatusFound)
+		errorCode := "invalid_form"
+		if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+			errorCode = "invalid_attachment"
+		}
+		http.Redirect(w, r, expenseFormRedirectURL(returnTo, "", errorCode), http.StatusFound)
 		return
 	}
-	if err := a.persistExpenseRecord(r.Context(), r, r.Form); err != nil {
+	uploads, err := expenseAttachmentUploads(r)
+	if err != nil {
+		http.Redirect(w, r, expenseFormRedirectURL(returnTo, "", "invalid_attachment"), http.StatusFound)
+		return
+	}
+	if err := a.persistExpenseRecordWithAttachments(r.Context(), r, r.Form, uploads); err != nil {
 		if errors.Is(err, errInvalidExpenseInput) {
 			http.Redirect(w, r, expenseFormRedirectURL(returnTo, "", "invalid_expense"), http.StatusFound)
 			return
@@ -2044,6 +2107,10 @@ func (a *app) listExpenseRecords(ctx context.Context, r *http.Request) ([]expens
 }
 
 func (a *app) persistExpenseRecord(ctx context.Context, r *http.Request, values formValues) error {
+	return a.persistExpenseRecordWithAttachments(ctx, r, values, nil)
+}
+
+func (a *app) persistExpenseRecordWithAttachments(ctx context.Context, r *http.Request, values formValues, uploads []expenseAttachmentUpload) error {
 	userID, ok := a.currentUserID(r)
 	if !ok || a.db == nil {
 		return errors.New("database session required")
@@ -2052,6 +2119,7 @@ func (a *app) persistExpenseRecord(ctx context.Context, r *http.Request, values 
 	if err != nil || input.PropertyID == nil {
 		return errInvalidExpenseInput
 	}
+	input.Attachments = uploads
 	if _, err := newExpenseService(a.db).createExpense(ctx, userID, input); err != nil {
 		if isValidationError(err) {
 			return errInvalidExpenseInput

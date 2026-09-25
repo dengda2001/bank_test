@@ -304,8 +304,8 @@ func TestObjectDetailsExposeConfirmedDeleteActions(t *testing.T) {
 	for _, test := range []struct {
 		page, action, label string
 	}{
-		{propertyPage, `action="/properties/12"`, "删除房产"},
-		{roomPage, `action="/rooms/8"`, "删除房间"},
+		{propertyPage, `action="/properties/12"`, "隐藏房产"},
+		{roomPage, `action="/rooms/8"`, "隐藏房间"},
 		{tenantPage, `action="/tenants/9"`, "删除租客"},
 	} {
 		if !strings.Contains(test.page, test.action) || !strings.Contains(test.page, `name="action" value="delete"`) || !strings.Contains(test.page, `data-confirm="true"`) || !strings.Contains(test.page, test.label) {

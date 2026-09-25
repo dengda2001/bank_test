@@ -24,6 +24,7 @@ type transactionExpenseDrawerData struct {
 	SelectedPropertyID uint64
 	SelectedRoomID     uint64
 	CurrentInvoice     *expenseInvoiceView
+	Files              []expenseAttachmentView
 	Linked             bool
 	CloseURL           string
 	PostURL            string
@@ -87,6 +88,13 @@ func (a *app) loadTransactionExpenseDrawer(ctx context.Context, userID, transact
 		Error:   query.Get("error"),
 	}
 	if linked {
+		files, err := listExpenseAttachments(ctx, a.db, userID, []uint64{expense.ID})
+		if err != nil {
+			return nil, err
+		}
+		for _, file := range files {
+			drawer.Files = append(drawer.Files, attachmentView(file))
+		}
 		invoices, err := a.loadCurrentExpenseInvoices(ctx, userID, []uint64{expense.ID})
 		if err != nil {
 			return nil, err
@@ -144,10 +152,10 @@ func (a *app) handleTransactionExpenseLink(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "database session required", http.StatusServiceUnavailable)
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, maxExpenseInvoiceBytes+(1<<20))
+	r.Body = http.MaxBytesReader(w, r.Body, maxExpenseAttachmentRequestBytes)
 	if err := r.ParseMultipartForm(1 << 20); err != nil {
 		transactionID, _ := parsePositiveUint(r.URL.Query().Get("transaction_id"))
-		redirectTransactionExpenseResult(w, r, transactionID, "error", "invalid_expense_invoice")
+		redirectTransactionExpenseResult(w, r, transactionID, "error", "invalid_attachment")
 		return
 	}
 	defer func() {
@@ -174,14 +182,14 @@ func (a *app) handleTransactionExpenseLink(w http.ResponseWriter, r *http.Reques
 	if roomID != 0 {
 		selectedRoom = &roomID
 	}
-	invoice, err := optionalTransactionExpenseInvoice(r)
+	uploads, err := expenseAttachmentUploads(r)
 	if err != nil {
-		redirectTransactionExpenseResult(w, r, transactionID, "error", "invalid_expense_invoice")
+		redirectTransactionExpenseResult(w, r, transactionID, "error", "invalid_attachment")
 		return
 	}
 	_, err = newExpenseService(a.db).saveTransactionExpense(r.Context(), userID, transactionExpenseInput{
 		TransactionID: transactionID, PropertyID: propertyID, RoomID: selectedRoom,
-		Category: r.Form.Get("category"), Invoice: invoice,
+		Category: r.Form.Get("category"), Attachments: uploads,
 	})
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		http.NotFound(w, r)

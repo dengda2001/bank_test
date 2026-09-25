@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -61,6 +62,12 @@ func redirectTransactionConfirmationResult(w http.ResponseWriter, r *http.Reques
 func transactionFailureCode(err error, fallback string) string {
 	if errors.Is(err, ErrRentFactsConflict) {
 		return "rent_facts_conflict"
+	}
+	if errors.Is(err, ErrTransactionNotDeferrable) {
+		return "transaction_not_pending"
+	}
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "transaction_not_found"
 	}
 	return fallback
 }
@@ -203,6 +210,9 @@ func (a *app) handleTransactionAction(w http.ResponseWriter, r *http.Request, ac
 		err = errors.New("invalid transaction action")
 	}
 	if err != nil {
+		if actionKind == transactionActionDefer || actionKind == transactionActionUndefer {
+			log.Printf("transaction defer action failed: user_id=%d transaction_id=%d action=%s error=%v", userID, transactionID, actionKind, err)
+		}
 		redirectTransactionResult(w, r, "error", transactionFailureCode(err, "transaction_action_failed"))
 		return
 	}

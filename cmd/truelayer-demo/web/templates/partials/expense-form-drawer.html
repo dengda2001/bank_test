@@ -2,9 +2,9 @@
 <div class="entity-drawer-backdrop expense-drawer-backdrop">
   <section class="entity-drawer expense-drawer" role="dialog" aria-modal="true" aria-labelledby="expense-create-title">
     <div class="panel-head"><div><h2 id="expense-create-title">新增支出</h2><p class="tiny">支出按房产归集，房间为可选关联对象。</p></div><a class="drawer-close" href="{{.ReturnURL}}" aria-label="关闭新增支出">×</a></div>
-    {{if .Error}}<div class="notice error" role="alert">{{if eq .Error "invalid_form"}}表单无效，请检查支出信息。{{else}}支出记录未保存，请检查描述、金额和房产。{{end}}</div>{{end}}
+    {{if .Error}}<div class="notice error" role="alert">{{if eq .Error "invalid_attachment"}}附件未保存：每次最多 10 个，每个不超过 8 MB；支持 PDF、图片、Word、Excel 和 PowerPoint。{{else if eq .Error "invalid_form"}}表单无效，请检查支出信息。{{else}}支出记录未保存，请检查描述、金额和房产。{{end}}</div>{{end}}
     {{if not .Properties}}<div class="notice error">请先建立房产，再新增房产支出。</div>{{end}}
-    <form method="post" action="/expenses">
+    <form method="post" action="/expenses" enctype="multipart/form-data">
       <input type="hidden" name="return_to" value="{{.PostReturnURL}}">
       <input type="hidden" name="period" value="{{.Period}}">
       <div class="form-field"><label for="expense-description">支出描述</label><input id="expense-description" name="description" maxlength="191" required autofocus></div>
@@ -13,6 +13,7 @@
       {{if .Rooms}}<div class="form-field"><label for="expense-room">关联房间（可选）</label><select id="expense-room" name="room_id" data-clearable><option value="">房产级支出</option>{{range .Rooms}}<option value="{{.ID}}" data-property="{{.PropertyID}}"{{if eq $.SelectedRoomID .ID}} selected{{end}}>{{.Label}}</option>{{end}}</select></div>{{end}}
       <div class="expense-form-grid"><div class="form-field"><label for="expense-date">日期</label><input id="expense-date" name="expense_date" type="date" value="{{.Today}}" required></div><div class="form-field"><label for="expense-payment">付款方式</label><input id="expense-payment" name="payment_method" value="手动"></div></div>
       <input type="hidden" name="currency" value="EUR">
+      <div class="form-field"><label for="expense-attachments">附件（可选，可选多个）</label><input id="expense-attachments" name="attachments" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.docx,.xlsx,.pptx"><small class="tiny">PDF、图片或 Office 文档；每个最多 8 MB。</small></div>
       <details class="expense-extra-fields"><summary>添加备注</summary><div class="expense-form-grid"><div class="form-field"><label for="expense-room-note">房间备注</label><input id="expense-room-note" name="room_hint"></div><div class="form-field"><label for="expense-tenant-note">租客备注</label><input id="expense-tenant-note" name="tenant_hint"></div></div></details>
       <div class="drawer-actions"><a class="btn subtle" href="{{.ReturnURL}}">取消</a><button class="btn primary" type="submit"{{if not .Properties}} disabled{{end}}>保存支出</button></div>
     </form>

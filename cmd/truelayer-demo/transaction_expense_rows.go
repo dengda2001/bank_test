@@ -65,6 +65,13 @@ func (s *transactionService) decorateExpensePageRows(ctx context.Context, userID
 		for _, invoice := range current {
 			invoices[invoice.ExpenseID] = true
 		}
+		attachments, err := listExpenseAttachments(ctx, s.db, userID, expenseIDs)
+		if err != nil {
+			return err
+		}
+		for _, attachment := range attachments {
+			invoices[attachment.ExpenseID] = true
+		}
 	}
 	for index, source := range sources {
 		if source.Direction != "expense" {

@@ -87,7 +87,7 @@ func (s *landlordDomainService) updateProperty(ctx context.Context, userID, prop
 	}
 	var row property
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", propertyID, userID).First(&row).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ? AND deleted_at IS NULL", propertyID, userID).First(&row).Error; err != nil {
 			return err
 		}
 		return tx.Model(&row).Updates(map[string]any{
@@ -111,7 +111,7 @@ func (s *landlordDomainService) createRoom(ctx context.Context, userID uint64, i
 	var row room
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var propertyRow property
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND id = ?", userID, input.PropertyID).First(&propertyRow).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND id = ? AND deleted_at IS NULL", userID, input.PropertyID).First(&propertyRow).Error; err != nil {
 			return err
 		}
 		row = room{UserID: userID, PropertyID: input.PropertyID, RoomLabel: input.RoomLabel, RoomType: input.RoomType, Capacity: input.Capacity, Notes: nullableString(strings.TrimSpace(input.Notes)), Status: "active"}
@@ -141,7 +141,7 @@ func (s *landlordDomainService) createRoomWithRentPlanAndTenant(ctx context.Cont
 	var plan roomRentPlan
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var propertyRow property
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND id = ?", userID, input.PropertyID).First(&propertyRow).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND id = ? AND deleted_at IS NULL", userID, input.PropertyID).First(&propertyRow).Error; err != nil {
 			return err
 		}
 		created = room{UserID: userID, PropertyID: input.PropertyID, RoomLabel: input.RoomLabel, RoomType: input.RoomType, Capacity: input.Capacity, Notes: nullableString(strings.TrimSpace(input.Notes)), Status: "active"}
@@ -225,7 +225,11 @@ func (s *landlordDomainService) updateRoom(ctx context.Context, userID, roomID u
 	}
 	var row room
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND id = ?", userID, roomID).First(&row).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND id = ? AND deleted_at IS NULL", userID, roomID).First(&row).Error; err != nil {
+			return err
+		}
+		var currentParent property
+		if err := tx.Where("user_id = ? AND id = ? AND deleted_at IS NULL", userID, row.PropertyID).First(&currentParent).Error; err != nil {
 			return err
 		}
 		if row.PropertyID != input.PropertyID {
@@ -237,7 +241,7 @@ func (s *landlordDomainService) updateRoom(ctx context.Context, userID, roomID u
 				return ErrRoomPropertyLocked
 			}
 			var target property
-			if err := tx.Where("user_id = ? AND id = ?", userID, input.PropertyID).First(&target).Error; err != nil {
+			if err := tx.Where("user_id = ? AND id = ? AND deleted_at IS NULL", userID, input.PropertyID).First(&target).Error; err != nil {
 				return err
 			}
 		}
@@ -259,14 +263,14 @@ func (s *landlordDomainService) deactivateProperty(ctx context.Context, userID, 
 	if userID == 0 || propertyID == 0 {
 		return errors.New("userID and propertyID are required")
 	}
-	return s.db.WithContext(ctx).Model(&property{}).Where("user_id = ? AND id = ?", userID, propertyID).Update("status", "inactive").Error
+	return s.db.WithContext(ctx).Model(&property{}).Where("user_id = ? AND id = ? AND deleted_at IS NULL", userID, propertyID).Update("status", "inactive").Error
 }
 
 func (s *landlordDomainService) deactivateRoom(ctx context.Context, userID, roomID uint64, _ time.Time) error {
 	if userID == 0 || roomID == 0 {
 		return errors.New("userID and roomID are required")
 	}
-	return s.db.WithContext(ctx).Model(&room{}).Where("user_id = ? AND id = ?", userID, roomID).Update("status", "inactive").Error
+	return s.db.WithContext(ctx).Model(&room{}).Where("user_id = ? AND id = ? AND deleted_at IS NULL", userID, roomID).Update("status", "inactive").Error
 }
 
 func scopedDependencyExists(tx *gorm.DB, value any, query string, args ...any) (bool, error) {
@@ -277,68 +281,48 @@ func scopedDependencyExists(tx *gorm.DB, value any, query string, args ...any) (
 	return count > 0, nil
 }
 
-// deleteProperty only removes an object that has no child rooms or financial
-// history. Historical ledger rows must stay traceable, so callers can use the
-// existing deactivation action when this guard rejects the deletion.
+// deleteProperty hides the property and its rooms from daily lists while
+// retaining every historical relationship. Current or future rent plans must
+// be ended explicitly before the asset can be hidden.
 func (s *landlordDomainService) deleteProperty(ctx context.Context, userID, propertyID uint64) error {
 	if userID == 0 || propertyID == 0 {
 		return errors.New("userID and propertyID are required")
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var row property
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", propertyID, userID).First(&row).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ? AND deleted_at IS NULL", propertyID, userID).First(&row).Error; err != nil {
 			return err
 		}
-		for _, dependency := range []struct {
-			value any
-			query string
-			args  []any
-		}{
-			{&room{}, "user_id = ? AND property_id = ?", []any{userID, propertyID}},
-			{&rentCharge{}, "user_id = ? AND property_id = ?", []any{userID, propertyID}},
-			{&manualExpense{}, "user_id = ? AND property_id = ?", []any{userID, propertyID}},
-		} {
-			exists, err := scopedDependencyExists(tx, dependency.value, dependency.query, dependency.args...)
-			if err != nil {
-				return err
-			}
-			if exists {
-				return errPropertyDeletionBlocked
-			}
+		var activePlans int64
+		month := dublinCurrentMonth(time.Now())
+		if err := tx.Model(&roomRentPlan{}).Joins("JOIN rooms ON rooms.id = room_rent_plans.room_id AND rooms.user_id = room_rent_plans.user_id").Where("room_rent_plans.user_id = ? AND rooms.property_id = ? AND (room_rent_plans.effective_to_month IS NULL OR room_rent_plans.effective_to_month >= ?)", userID, propertyID, month).Count(&activePlans).Error; err != nil {
+			return err
 		}
-		return tx.Delete(&row).Error
+		if activePlans > 0 {
+			return errPropertyDeletionBlocked
+		}
+		return tx.Model(&row).Update("deleted_at", time.Now().UTC()).Error
 	})
 }
 
-// deleteRoom follows the same historical-record guard as property deletion.
-// A rent plan, charge, or expense means the room remains part of the audit
-// trail and should be deactivated rather than removed.
+// deleteRoom keeps ledger rows and old plan membership intact.
 func (s *landlordDomainService) deleteRoom(ctx context.Context, userID, roomID uint64) error {
 	if userID == 0 || roomID == 0 {
 		return errors.New("userID and roomID are required")
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var row room
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", roomID, userID).First(&row).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ? AND deleted_at IS NULL", roomID, userID).First(&row).Error; err != nil {
 			return err
 		}
-		for _, dependency := range []struct {
-			value any
-			query string
-			args  []any
-		}{
-			{&roomRentPlan{}, "user_id = ? AND room_id = ?", []any{userID, roomID}},
-			{&rentCharge{}, "user_id = ? AND room_id = ?", []any{userID, roomID}},
-			{&manualExpense{}, "user_id = ? AND room_id = ?", []any{userID, roomID}},
-		} {
-			exists, err := scopedDependencyExists(tx, dependency.value, dependency.query, dependency.args...)
-			if err != nil {
-				return err
-			}
-			if exists {
-				return errRoomDeletionBlocked
-			}
+		month := dublinCurrentMonth(time.Now())
+		active, err := scopedDependencyExists(tx, &roomRentPlan{}, "user_id = ? AND room_id = ? AND (effective_to_month IS NULL OR effective_to_month >= ?)", userID, roomID, month)
+		if err != nil {
+			return err
 		}
-		return tx.Delete(&row).Error
+		if active {
+			return errRoomDeletionBlocked
+		}
+		return tx.Model(&row).Update("deleted_at", time.Now().UTC()).Error
 	})
 }

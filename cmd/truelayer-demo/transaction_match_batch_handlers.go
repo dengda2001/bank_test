@@ -78,7 +78,19 @@ func (a *app) handleRentMatchBatchConfirmation(w http.ResponseWriter, r *http.Re
 		redirectTransactionBatchError(w, r, transactionID, "invalid_batch_match")
 		return
 	}
-	_, err = newTransactionService(a.db).confirmRentMatchBatch(r.Context(), userID, transactionID, items, rememberTenantID, strings.TrimSpace(r.Form.Get("request_key")))
+	var prepaymentTenantID uint64
+	var prepaymentAmountCents int64
+	if r.Form.Get("use_prepayment") == "1" {
+		prepaymentTenantID, err = parsePositiveUint(r.Form.Get("prepayment_tenant_id"))
+		if err == nil {
+			prepaymentAmountCents, err = parseOptionalRentPlanAmountCents(r.Form.Get("prepayment_amount"))
+		}
+		if err != nil || prepaymentAmountCents <= 0 {
+			redirectTransactionBatchError(w, r, transactionID, "invalid_batch_match")
+			return
+		}
+	}
+	_, err = newTransactionService(a.db).confirmRentMatchBatchWithPrepayment(r.Context(), userID, transactionID, items, rememberTenantID, prepaymentTenantID, prepaymentAmountCents, strings.TrimSpace(r.Form.Get("request_key")))
 	if err != nil {
 		redirectTransactionBatchError(w, r, transactionID, transactionFailureCode(err, "batch_match_failed"))
 		return

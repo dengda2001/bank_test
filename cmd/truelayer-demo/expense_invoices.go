@@ -59,6 +59,7 @@ type expenseInvoiceView struct {
 }
 
 type expenseInvoiceFormView struct {
+	Files         []expenseAttachmentView
 	ExpenseID     string
 	Description   string
 	ExpenseAmount string
@@ -135,8 +136,15 @@ func (a *app) expenseInvoiceForm(ctx context.Context, userID uint64, expense exp
 		ExpenseAmount: strconv.FormatFloat(expense.Amount, 'f', 2, 64),
 		InvoiceDate:   time.Now().UTC().Format(dateLayout), InvoiceAmount: strconv.FormatFloat(expense.Amount, 'f', 2, 64),
 		ReturnURL: expenseListURL(period, status, search, sortValue),
-		PostURL:   expenseInvoicePostURL(expenseID, period, status, search, sortValue),
+		PostURL:   expenseAttachmentPostURL(expenseID, period, status, search, sortValue),
 		Period:    period, StatusFilter: status, Search: search, Sort: sortValue,
+	}
+	attachments, err := listExpenseAttachments(ctx, a.db, userID, []uint64{expenseID})
+	if err != nil {
+		return nil, err
+	}
+	for _, attachment := range attachments {
+		view.Files = append(view.Files, attachmentView(attachment))
 	}
 	for _, row := range rows {
 		if row.IsCurrent && view.Current == nil {

@@ -40,7 +40,7 @@ func TestExpensePageUsesPrototypeListAndAddDrawer(t *testing.T) {
 		t.Fatal(err)
 	}
 	page := body.String()
-	for _, marker := range []string{"费用支出", "搜索当前列表", "未绑定发票", "expense-table", "expense-mobile-list", "entity-drawer-backdrop", "保存支出"} {
+	for _, marker := range []string{"费用支出", "搜索当前列表", "无附件", "expense-table", "expense-mobile-list", "entity-drawer-backdrop", "保存支出", `name="attachments" type="file" multiple`} {
 		if !strings.Contains(page, marker) {
 			t.Errorf("expense page missing %q", marker)
 		}

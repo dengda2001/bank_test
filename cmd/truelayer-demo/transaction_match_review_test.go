@@ -23,6 +23,61 @@ func TestTransactionReviewMonthsShowsPaidMonthEvidenceButOnlyOpenMonthSelectable
 	}
 }
 
+func TestTransactionReviewMonthBadgeSeparatesDescriptionFromTransferDate(t *testing.T) {
+	arrival := time.Date(2026, 8, 31, 10, 0, 0, 0, time.UTC)
+	september := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	obligations := []rentObligation{{ID: 11, PeriodMonth: september, ExpectedAmountCents: 60000, Currency: "EUR"}}
+	dateOnly := paymentTransaction{Source: "truelayer", Direction: "income", Currency: "EUR", TransactionTime: &arrival, Description: "transfer from payer"}
+	rows := transactionReviewMonths(dateOnly, 60000, obligations, nil, nil)
+	if len(rows) != 1 || rows[0].EvidenceLabel != "根据转账日期推测" || !rows[0].Highlighted {
+		t.Fatalf("date-only suggestion = %+v", rows)
+	}
+	explicit := dateOnly
+	explicit.Description = "September rent"
+	rows = transactionReviewMonths(explicit, 60000, obligations, nil, nil)
+	if len(rows) != 1 || rows[0].EvidenceLabel != "描述明确提及租金月份" || !rows[0].Highlighted {
+		t.Fatalf("explicit description evidence = %+v", rows)
+	}
+}
+
+func TestRememberPayerDefaultsOnlyForUniqueIdentity(t *testing.T) {
+	name := "Amira Khan"
+	source := paymentTransaction{PayerName: &name}
+	tenants := []tenant{{ID: 7, Name: name}, {ID: 8, Name: "Other person"}}
+	if got := rememberPayerCandidateID(source, matchDecision{Reason: "no confirmed tenant identity"}, tenants); got != 7 {
+		t.Fatalf("unique exact name candidate = %d", got)
+	}
+	if got := rememberPayerCandidateID(source, matchDecision{Reason: "no confirmed tenant identity"}, append(tenants, tenant{ID: 9, Name: name})); got != 0 {
+		t.Fatalf("shared exact name candidate = %d", got)
+	}
+	if got := rememberPayerCandidateID(source, matchDecision{Status: "needs_review", Reason: "payer identities disagree"}, tenants); got != 0 {
+		t.Fatalf("conflicting identity candidate = %d", got)
+	}
+	if got := rememberPayerCandidateID(source, matchDecision{TenantID: 8, ConfirmationSource: "auto_id"}, tenants); got != 8 {
+		t.Fatalf("saved payer relation candidate = %d", got)
+	}
+}
+
+func TestReviewShowsIdentifiedTenantAsClickableSuggestionWithoutDefaultSelection(t *testing.T) {
+	tenants := []tenant{{ID: 7, Name: "Existing tenant"}, {ID: 8, Name: "Other tenant"}}
+	suggestions := transactionReviewSuggestedTenants(7, []transactionReviewTenant{{ID: 8, Name: "Other tenant"}}, tenants)
+	if len(suggestions) != 1 || suggestions[0].ID != 7 || suggestions[0].Name != "Existing tenant" {
+		t.Fatalf("identified tenant suggestion = %+v", suggestions)
+	}
+	if suggested := transactionReviewSuggestedTenants(0, []transactionReviewTenant{{ID: 8, Name: "Other tenant"}}, tenants); len(suggested) != 1 || suggested[0].ID != 8 {
+		t.Fatalf("name suggestions = %+v", suggested)
+	}
+}
+
+func TestDeferredTransactionFailureCodeIsSpecific(t *testing.T) {
+	if code := transactionFailureCode(ErrTransactionNotDeferrable, "transaction_action_failed"); code != "transaction_not_pending" {
+		t.Fatalf("defer failure code = %s", code)
+	}
+	if text := transactionReviewErrorText("transaction_not_pending"); !strings.Contains(text, "已不在待处理状态") {
+		t.Fatalf("defer failure text = %q", text)
+	}
+}
+
 func TestTransactionReviewHistoryUsesEffectiveMatchedMonths(t *testing.T) {
 	august := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
 	september := august.AddDate(0, 1, 0)

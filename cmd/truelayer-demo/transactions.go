@@ -280,6 +280,7 @@ func filtersFromQuery(q url.Values) transactionFilters {
 		Page:           page,
 		PageSize:       pageSize,
 		PendingOnly:    pendingOnly,
+		HomeQueue:      strings.TrimSpace(q.Get("scope")) == "home_queue",
 	}
 }
 
@@ -308,9 +309,13 @@ type transactionFilters struct {
 	Page           int
 	PageSize       int
 	PendingOnly    bool
+	HomeQueue      bool
 }
 
 func validateTransactionFilters(filters transactionFilters) error {
+	if filters.HomeQueue && filters.PeriodMonth == "" {
+		return errors.New("home queue period is required")
+	}
 	if filters.Direction != "" && filters.Direction != "income" && filters.Direction != "expense" {
 		return errors.New("direction filter is invalid")
 	}
@@ -356,7 +361,7 @@ func validateTransactionFilters(filters transactionFilters) error {
 		return errors.New("payer filter is too long")
 	}
 	switch filters.AllocationKind {
-	case "", allocationKindRent, allocationKindDeposit, allocationKindOther:
+	case "", allocationKindRent, allocationKindDeposit, allocationKindOther, allocationKindPrepayment:
 	default:
 		return errors.New("allocation filter is invalid")
 	}
@@ -584,10 +589,10 @@ func enrichTransactionPageRow(row transactionPageRow, source paymentTransaction,
 	if summary.AllocatedCents == 0 {
 		row.AllocationUseDisplay = "未归类"
 	} else {
-		labels := make([]string, 0, 3)
-		for _, kind := range []string{allocationKindRent, allocationKindDeposit, allocationKindOther} {
+		labels := make([]string, 0, 4)
+		for _, kind := range []string{allocationKindRent, allocationKindDeposit, allocationKindOther, allocationKindPrepayment} {
 			if cents := summary.KindCents[kind]; cents > 0 {
-				label := map[string]string{allocationKindRent: "房租", allocationKindDeposit: "押金", allocationKindOther: "其他收入"}[kind]
+				label := map[string]string{allocationKindRent: "房租", allocationKindDeposit: "押金", allocationKindOther: "其他收入", allocationKindPrepayment: "待分配预收款"}[kind]
 				labels = append(labels, fmt.Sprintf("%s %s", label, formatMoney(centsToMoney(cents), source.Currency, 2)))
 			}
 		}
@@ -614,6 +619,13 @@ func (s *transactionService) listTransactionsPage(ctx context.Context, userID ui
 		return nil, 0, errors.New("userID is required")
 	}
 	q := s.db.WithContext(ctx).Model(&paymentTransaction{}).Where("payment_transactions.user_id = ?", userID)
+	if filters.HomeQueue {
+		period, err := parsePeriodMonth(filters.PeriodMonth)
+		if err != nil {
+			return nil, 0, err
+		}
+		q = rentWorkspacePendingTransactions(s.db, ctx, userID, period)
+	}
 	var err error
 	q, err = applyTransactionFilters(q, userID, filters)
 	if err != nil {
@@ -744,6 +756,15 @@ func (s *transactionService) countPendingTransactions(ctx context.Context, userI
 }
 
 func (s *transactionService) countPendingTransactionsWithFilters(ctx context.Context, userID uint64, filters transactionFilters) (int64, error) {
+	if filters.HomeQueue {
+		period, err := parsePeriodMonth(filters.PeriodMonth)
+		if err != nil {
+			return 0, err
+		}
+		var count int64
+		err = rentWorkspacePendingTransactions(s.db, ctx, userID, period).Count(&count).Error
+		return count, err
+	}
 	filters.PendingOnly = true
 	filters.MatchStatus = ""
 	q := s.db.WithContext(ctx).Model(&paymentTransaction{}).Where("payment_transactions.user_id = ?", userID)

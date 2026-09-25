@@ -16,6 +16,9 @@
     .workspace-period .calendar-input { flex: 1 1 auto; width: 100%; min-width: 0; }
     .workspace-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
     .workspace-summary .metric { min-height: 102px; }
+    .workspace-summary-progress { display: flex; align-items: center; gap: 9px; margin-top: 8px; }
+    .workspace-summary-progress .workspace-progress { flex: 1 1 auto; min-width: 24px; }
+    .workspace-summary-progress > span:last-child { flex: 0 0 auto; font: 700 12px var(--mono); color: var(--foreground); }
     /* 原型首卡强调（figma/rentops-desktop-suite.html `.metric.main{border-top:3px solid
        var(--accent)}`）。用 border-top 而不是背景色：指标卡在 1100 档会折成两栏，
        边框强调在任何栏数下都能把首卡和其余三张区分开。 */

@@ -271,7 +271,7 @@ func TestListPageTemplatesKeepHeadActionAndActionColumn(t *testing.T) {
 		}, []string{`href="/tenants?add=1">添加租客</a>`, `>操作</th>`, `>详情</a>`}},
 		{"expenses", func() (string, error) {
 			return executeTemplate(expenseTemplate, expensePageData{Rows: []expenseRecord{{ID: "1", Description: "维修"}}})
-		}, []string{`href="/expenses?period=`, `>新增支出<`, `>操作</th>`, `>绑定发票</a>`}},
+		}, []string{`href="/expenses?period=`, `>新增支出<`, `>操作</th>`, `>管理文件</a>`}},
 	}
 	for _, tc := range rows {
 		t.Run(tc.name, func(t *testing.T) {

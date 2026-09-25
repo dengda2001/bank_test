@@ -21,12 +21,19 @@ type rentMatchBatchItem struct {
 // Selecting a future month is explicit payment intent; the target is then
 // reloaded under the current account before the locked allocation transaction.
 func (s *transactionService) confirmRentMatchBatch(ctx context.Context, userID, transactionID uint64, items []rentMatchBatchItem, rememberTenantID uint64, requestKey string) (transactionAllocationSummary, error) {
+	return s.confirmRentMatchBatchWithPrepayment(ctx, userID, transactionID, items, rememberTenantID, 0, 0, requestKey)
+}
+
+func (s *transactionService) confirmRentMatchBatchWithPrepayment(ctx context.Context, userID, transactionID uint64, items []rentMatchBatchItem, rememberTenantID, prepaymentTenantID uint64, prepaymentAmountCents int64, requestKey string) (transactionAllocationSummary, error) {
 	if userID == 0 || transactionID == 0 || len(items) == 0 || len(items) > 20 || strings.TrimSpace(requestKey) == "" || len(requestKey) > 120 {
 		return transactionAllocationSummary{}, errors.New("invalid batch match request")
 	}
 	tenantIDs, periods, err := validateRentMatchBatchItems(items, rememberTenantID)
 	if err != nil {
 		return transactionAllocationSummary{}, err
+	}
+	if (prepaymentTenantID == 0) != (prepaymentAmountCents == 0) || prepaymentAmountCents < 0 || (prepaymentTenantID != 0 && !tenantIDs[prepaymentTenantID]) {
+		return transactionAllocationSummary{}, errors.New("prepayment must belong to a selected tenant and have a positive amount")
 	}
 	// Verify the source before explicit month selection can materialize rent
 	// facts. The locked allocation path checks it again before writing.
@@ -64,6 +71,9 @@ func (s *transactionService) confirmRentMatchBatch(ctx context.Context, userID, 
 		}
 		drafts = append(drafts, transactionAllocationDraft{TenantID: item.TenantID, RentObligationID: obligation.ID, AmountCents: item.AmountCents, Kind: allocationKindRent})
 	}
+	if prepaymentTenantID != 0 {
+		drafts = append(drafts, transactionAllocationDraft{TenantID: prepaymentTenantID, AmountCents: prepaymentAmountCents, Kind: allocationKindPrepayment})
+	}
 	var summary transactionAllocationSummary
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Serialize retries before checking the request key. A second submit
@@ -75,7 +85,7 @@ func (s *transactionService) confirmRentMatchBatch(ctx context.Context, userID, 
 		var previous paymentAllocation
 		lookup := tx.Where("user_id = ? AND idempotency_key = ?", userID, allocationRequestKey(requestKey, transactionID, 0)).First(&previous).Error
 		if lookup == nil {
-			if !sameRentMatchBatchInTx(tx, previous, transactionID, drafts) {
+			if !sameRentMatchBatchInTx(tx, previous, transactionID, drafts, requestKey) {
 				return errors.New("batch match request key was reused for different targets")
 			}
 			var source paymentTransaction
@@ -91,6 +101,19 @@ func (s *transactionService) confirmRentMatchBatch(ctx context.Context, userID, 
 		}
 		if !errors.Is(lookup, gorm.ErrRecordNotFound) {
 			return lookup
+		}
+		if prepaymentTenantID != 0 {
+			var existing []paymentAllocation
+			if err := tx.Where("user_id = ? AND payment_transaction_id = ?", userID, transactionID).Find(&existing).Error; err != nil {
+				return err
+			}
+			var rentTotal int64
+			for _, item := range items {
+				rentTotal += item.AmountCents
+			}
+			if remaining := lockedSource.AmountCents - summarizeTransactionAllocations(lockedSource, existing).AllocatedCents - rentTotal; remaining != prepaymentAmountCents {
+				return errors.New("prepayment must equal the remaining bank amount")
+			}
 		}
 		var allocationErr error
 		summary, allocationErr = s.allocateTransactionInTx(tx, userID, transactionID, drafts, requestKey, "manual_review")
@@ -150,19 +173,26 @@ func mapUint64Keys(values map[uint64]bool) []uint64 {
 	return keys
 }
 
-func sameRentMatchBatchInTx(tx *gorm.DB, first paymentAllocation, transactionID uint64, drafts []transactionAllocationDraft) bool {
-	if first.PaymentTransactionID != transactionID || first.OperationID == nil || first.ConfirmationSource != "manual_review" {
+func sameRentMatchBatchInTx(tx *gorm.DB, first paymentAllocation, transactionID uint64, drafts []transactionAllocationDraft, requestKey string) bool {
+	if first.PaymentTransactionID != transactionID || first.ConfirmationSource != "manual_review" {
 		return false
 	}
-	var rows []paymentAllocation
-	if err := tx.Where("user_id = ? AND operation_id = ?", first.UserID, *first.OperationID).Order("id ASC").Find(&rows).Error; err != nil || len(rows) != len(drafts) {
-		return false
-	}
-	for index, row := range rows {
+	for index := range drafts {
+		var row paymentAllocation
+		if err := tx.Where("user_id = ? AND idempotency_key = ?", first.UserID, allocationRequestKey(requestKey, transactionID, index)).First(&row).Error; err != nil {
+			return false
+		}
 		draft := drafts[index]
-		if row.PaymentTransactionID != transactionID || row.TenantID == nil || *row.TenantID != draft.TenantID || row.RentObligationID == nil || *row.RentObligationID != draft.RentObligationID || row.AmountCents != draft.AmountCents || ledgerAllocationKind(row) != allocationKindRent {
+		if row.PaymentTransactionID != transactionID || row.ConfirmationSource != "manual_review" || row.TenantID == nil || *row.TenantID != draft.TenantID || row.AmountCents != draft.AmountCents || ledgerAllocationKind(row) != draft.Kind {
+			return false
+		}
+		if draft.Kind == allocationKindRent && (row.RentObligationID == nil || *row.RentObligationID != draft.RentObligationID || row.PrepaymentID != nil) {
+			return false
+		}
+		if draft.Kind == allocationKindPrepayment && (row.RentObligationID != nil || row.PrepaymentID == nil) {
 			return false
 		}
 	}
-	return true
+	var next paymentAllocation
+	return errors.Is(tx.Where("user_id = ? AND idempotency_key = ?", first.UserID, allocationRequestKey(requestKey, transactionID, len(drafts))).First(&next).Error, gorm.ErrRecordNotFound)
 }

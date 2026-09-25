@@ -87,10 +87,13 @@ func validateTransactionAllocationDrafts(source paymentTransaction, existing []p
 		if draft.Kind == allocationKindOther && len([]rune(draft.Note)) == 0 {
 			return fmt.Errorf("allocation %d other income note is required", index+1)
 		}
-		if draft.Kind == allocationKindRent || draft.Kind == allocationKindDeposit {
+		if draft.Kind == allocationKindRent || draft.Kind == allocationKindDeposit || draft.Kind == allocationKindPrepayment {
 			if draft.TenantID == 0 {
 				return fmt.Errorf("allocation %d tenant is required", index+1)
 			}
+		}
+		if draft.Kind == allocationKindPrepayment && draft.RentObligationID != 0 {
+			return fmt.Errorf("allocation %d prepayment cannot target a rent obligation", index+1)
 		}
 		check := ledgerAllocationCheck{
 			UserID:                 source.UserID,
@@ -207,6 +210,21 @@ func (s *transactionService) allocateTransactionInTx(txdb *gorm.DB, userID, tran
 
 	operationID := recordID("allocation", now)
 	for index, draft := range drafts {
+		var prepaymentID *uint64
+		if draft.Kind == allocationKindPrepayment {
+			var tenantCount int64
+			if err := txdb.Model(&tenant{}).Where("id = ? AND user_id = ?", draft.TenantID, userID).Count(&tenantCount).Error; err != nil {
+				return transactionAllocationSummary{}, err
+			}
+			if tenantCount != 1 {
+				return transactionAllocationSummary{}, gorm.ErrRecordNotFound
+			}
+			credit := tenantPrepayment{UserID: userID, TenantID: draft.TenantID, PaymentTransactionID: transactionID, OriginalAmountCents: draft.AmountCents, Currency: ledgerCurrencyEUR, OperationID: fmt.Sprintf("%s:%d", operationID, index)}
+			if err := txdb.Create(&credit).Error; err != nil {
+				return transactionAllocationSummary{}, err
+			}
+			prepaymentID = &credit.ID
+		}
 		var rentObligationID *uint64
 		if draft.Kind == allocationKindRent {
 			rentObligationID = &draft.RentObligationID
@@ -219,6 +237,7 @@ func (s *transactionService) allocateTransactionInTx(txdb *gorm.DB, userID, tran
 			UserID:               userID,
 			PaymentTransactionID: transactionID,
 			RentObligationID:     rentObligationID,
+			PrepaymentID:         prepaymentID,
 			TenantID:             tenantID,
 			AmountCents:          draft.AmountCents,
 			AllocationKind:       draft.Kind,

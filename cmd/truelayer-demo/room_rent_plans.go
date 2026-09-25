@@ -69,7 +69,7 @@ func (s *roomRentPlanService) SaveRoomRentPlan(ctx context.Context, command Save
 	var version uint64
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var roomRow room
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND id = ?", command.UserID, command.RoomID).First(&roomRow).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND id = ? AND deleted_at IS NULL AND EXISTS (SELECT 1 FROM properties AS parent WHERE parent.id = rooms.property_id AND parent.user_id = rooms.user_id AND parent.deleted_at IS NULL)", command.UserID, command.RoomID).First(&roomRow).Error; err != nil {
 			return err
 		}
 		if roomRow.RentPlanVersion != command.ExpectedTimelineVersion {
@@ -177,7 +177,7 @@ func (s *roomRentPlanService) EndRoomRentPlan(ctx context.Context, command EndRo
 	var version uint64
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var roomRow room
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND id = ?", command.UserID, command.RoomID).First(&roomRow).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND id = ? AND deleted_at IS NULL AND EXISTS (SELECT 1 FROM properties AS parent WHERE parent.id = rooms.property_id AND parent.user_id = rooms.user_id AND parent.deleted_at IS NULL)", command.UserID, command.RoomID).First(&roomRow).Error; err != nil {
 			return err
 		}
 		if roomRow.RentPlanVersion != command.ExpectedTimelineVersion {

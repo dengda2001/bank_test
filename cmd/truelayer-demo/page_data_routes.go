@@ -87,6 +87,7 @@ type propertyPageForm struct {
 
 type propertyDetailPageData struct {
 	workspaceShell
+	IsDeleted      bool
 	Period         string
 	PeriodLabel    string
 	ListStatus     string
@@ -597,6 +598,10 @@ func (a *app) handleRoomRentPlanMutation(w http.ResponseWriter, r *http.Request,
 		effectiveMonth, parseErr := parsePeriodMonth(strings.TrimSpace(r.Form.Get("effective_month")))
 		monthlyRent, rentErr := parseOptionalRentPlanAmountCents(r.Form.Get("monthly_rent"))
 		dueDay, dueErr := strconv.Atoi(strings.TrimSpace(r.Form.Get("due_day")))
+		if amount, numericErr := strconv.ParseFloat(strings.TrimSpace(r.Form.Get("monthly_rent")), 64); numericErr == nil && amount <= 0 {
+			a.redirectRoomRentPlanMutation(w, r, roomID, period, "rent_plan_zero_rent")
+			return
+		}
 		if parseErr != nil || rentErr != nil || dueErr != nil {
 			a.redirectRoomRentPlanMutation(w, r, roomID, period, "rent_plan_invalid")
 			return
@@ -686,7 +691,9 @@ func (a *app) redirectRoomRentPlanMutation(w http.ResponseWriter, r *http.Reques
 func rentPlanErrorMessage(errorCode string) string {
 	switch errorCode {
 	case "rent_plan_invalid":
-		return "请检查生效月份、月租、缴租日、入住租客和租客应收金额；合计必须等于房间月租。"
+		return "入住与租金未保存。请检查月份、缴租日和租客；如果填写了个人月租，所有租客金额之和须等于房间月租。"
+	case "rent_plan_zero_rent":
+		return "房间月租必须大于 0。若房间从某月起空置，请在下方选择该月份并点击「结束入住」。"
 	case "rent_plan_locked":
 		return "所选月份及之后已有收款、平账或催收记录，入住与租金计划不能重算。"
 	case "rent_plan_stale":
@@ -831,11 +838,15 @@ func (a *app) monthlyObjectTenants(ctx context.Context, userID uint64, period ti
 }
 
 func (a *app) loadPropertyPage(ctx context.Context, userID uint64, period time.Time, statusFilter string) (propertyPageData, error) {
+	return a.loadPropertyPageWithAssetHistory(ctx, userID, period, statusFilter, false)
+}
+
+func (a *app) loadPropertyPageWithAssetHistory(ctx context.Context, userID uint64, period time.Time, statusFilter string, includeDeleted bool) (propertyPageData, error) {
 	statusFilter = firstNonEmpty(strings.TrimSpace(statusFilter), "active")
 	if statusFilter != "all" && statusFilter != "active" && statusFilter != "inactive" {
 		return propertyPageData{}, errors.New("property status filter is invalid")
 	}
-	properties, err := newLandlordRentRepository(a.db).listProperties(ctx, userID, propertyQuery{Status: func() string {
+	properties, err := newLandlordRentRepository(a.db).listProperties(ctx, userID, propertyQuery{IncludeDeleted: includeDeleted, Status: func() string {
 		if statusFilter == "all" {
 			return ""
 		}
@@ -844,7 +855,7 @@ func (a *app) loadPropertyPage(ctx context.Context, userID uint64, period time.T
 	if err != nil {
 		return propertyPageData{}, err
 	}
-	rooms, err := newLandlordRentRepository(a.db).listRooms(ctx, userID, roomQuery{})
+	rooms, err := newLandlordRentRepository(a.db).listRooms(ctx, userID, roomQuery{IncludeDeleted: includeDeleted})
 	if err != nil {
 		return propertyPageData{}, err
 	}
@@ -854,11 +865,11 @@ func (a *app) loadPropertyPage(ctx context.Context, userID uint64, period time.T
 	}
 	financial := make(map[uint64]rentWorkspacePropertyRow)
 	responsibilityCount := make(map[uint64]int)
-	if activeRows, loadErr := newRentWorkspaceService(a.db).load(ctx, userID, func() rentWorkspaceFilters {
+	if activeRows, loadErr := newRentWorkspaceService(a.db).loadWithAssetHistory(ctx, userID, func() rentWorkspaceFilters {
 		filters := defaultRentWorkspaceFilters(period)
 		filters.PageSize = rentWorkspaceMaxPageSize
 		return filters
-	}()); loadErr == nil {
+	}(), includeDeleted); loadErr == nil {
 		for _, row := range activeRows.PropertyRows {
 			financial[row.PropertyID] = row
 		}
@@ -891,7 +902,7 @@ func (a *app) loadPropertyPage(ctx context.Context, userID uint64, period time.T
 			ExpectedCents: financialRow.ExpectedCents, PaidCents: financialRow.PaidCents, BalanceCents: financialRow.BalanceCents, ExpenseCents: financialRow.ExpenseCents, OtherIncomeCents: financialRow.OtherIncomeCents,
 			ExpectedAmount: pageCurrencyAmount(financialRow.ExpectedCents, currency), PaidAmount: pageCurrencyAmount(financialRow.PaidCents, currency), BalanceAmount: pageCurrencyAmount(financialRow.BalanceCents, currency), ExpenseAmount: pageCurrencyAmount(financialRow.ExpenseCents, currency), OtherIncomeAmount: pageCurrencyAmount(financialRow.OtherIncomeCents, currency), CollectionPercent: financialRow.CollectionPercent,
 			NetAmount:   pageCurrencyAmount(financialRow.NetCents, currency),
-			Actions:     propertyActions(row.ID, row.Status == "active"),
+			Actions:     propertyActions(row.ID, row.Status == "active" && row.DeletedAt == nil),
 			SearchTerms: searchTerms[row.ID],
 		})
 	}
@@ -1219,7 +1230,7 @@ func (a *app) handlePropertyDetail(w http.ResponseWriter, r *http.Request, prope
 		http.Error(w, "period is invalid", http.StatusBadRequest)
 		return
 	}
-	rooms, err := a.loadRoomRows(r.Context(), userID, period, propertyID)
+	rooms, err := a.loadRoomRowsWithAssetHistory(r.Context(), userID, period, propertyID, propertyRow.DeletedAt != nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1247,9 +1258,9 @@ func (a *app) handlePropertyDetail(w http.ResponseWriter, r *http.Request, prope
 	if !validPropertyPageSort(listSort) {
 		listSort = ""
 	}
-	data := propertyDetailPageData{workspaceShell: canonicalPageShell(a, r, "properties", "房产详情"), Period: period.Format("2006-01"), PeriodLabel: formatMonthLabel(period), ListStatus: listStatus, ListSearch: strings.TrimSpace(r.URL.Query().Get("list_search")), ListCollection: listCollection, ListSort: listSort, Property: propertyPageRow{ID: propertyRow.ID, Mark: propertyMark(propertyRow.Name), Name: propertyRow.Name, CityRegion: propertyRow.CityRegion, Address: propertyAddress(propertyRow), Timezone: propertyRow.Timezone, Notes: stringValue(propertyRow.Notes), Status: propertyRow.Status, StatusLabel: assetStatusLabel(propertyRow.Status), Actions: propertyActions(propertyRow.ID, propertyRow.Status == "active")}, Rooms: rooms, Expenses: filteredExpenses, Editing: r.URL.Query().Get("edit") == "1", Message: r.URL.Query().Get("message"), Error: r.URL.Query().Get("error")}
+	data := propertyDetailPageData{workspaceShell: canonicalPageShell(a, r, "properties", "房产详情"), IsDeleted: propertyRow.DeletedAt != nil, Period: period.Format("2006-01"), PeriodLabel: formatMonthLabel(period), ListStatus: listStatus, ListSearch: strings.TrimSpace(r.URL.Query().Get("list_search")), ListCollection: listCollection, ListSort: listSort, Property: propertyPageRow{ID: propertyRow.ID, Mark: propertyMark(propertyRow.Name), Name: propertyRow.Name, CityRegion: propertyRow.CityRegion, Address: propertyAddress(propertyRow), Timezone: propertyRow.Timezone, Notes: stringValue(propertyRow.Notes), Status: propertyRow.Status, StatusLabel: assetStatusLabel(propertyRow.Status), Actions: propertyActions(propertyRow.ID, propertyRow.Status == "active" && propertyRow.DeletedAt == nil)}, Rooms: rooms, Expenses: filteredExpenses, Editing: r.URL.Query().Get("edit") == "1" && propertyRow.DeletedAt == nil, Message: r.URL.Query().Get("message"), Error: r.URL.Query().Get("error")}
 	data.RoomOpenURL = propertyRoomOpenURL(r)
-	if r.URL.Query().Get("room") == "1" || r.URL.Query().Get("room_error") != "" {
+	if propertyRow.DeletedAt == nil && (r.URL.Query().Get("room") == "1" || r.URL.Query().Get("room_error") != "") {
 		returnURL := propertyDetailReturnURL(r)
 		form := defaultRoomCreateForm(propertyID)
 		formMonth, _ := parsePeriodMonth(form.EffectiveMonth)
@@ -1266,7 +1277,7 @@ func (a *app) handlePropertyDetail(w http.ResponseWriter, r *http.Request, prope
 			ErrorMessage: roomMutationErrorMessage(r.URL.Query().Get("room_error")),
 		}
 	}
-	if r.URL.Query().Get("expense") == "1" || isExpenseFormError(r.URL.Query().Get("error")) {
+	if propertyRow.DeletedAt == nil && (r.URL.Query().Get("expense") == "1" || isExpenseFormError(r.URL.Query().Get("error"))) {
 		returnURL := expenseFormReturnURL(r)
 		expenseDrawer, drawerErr := a.loadExpenseDrawerData(r.Context(), userID, period.Format("2006-01"), propertyID, 0, returnURL, r.URL.Query().Get("error"))
 		if drawerErr != nil {
@@ -1275,7 +1286,7 @@ func (a *app) handlePropertyDetail(w http.ResponseWriter, r *http.Request, prope
 		}
 		data.ExpenseDrawer = expenseDrawer
 	}
-	if summary, summaryErr := a.loadPropertyPage(r.Context(), userID, period, "all"); summaryErr == nil {
+	if summary, summaryErr := a.loadPropertyPageWithAssetHistory(r.Context(), userID, period, "all", propertyRow.DeletedAt != nil); summaryErr == nil {
 		for _, row := range summary.Rows {
 			if row.ID == propertyID {
 				data.Property = row
@@ -1545,12 +1556,16 @@ func roomListURL(period string, propertyID uint64, status, search string, collec
 }
 
 func (a *app) loadRoomRows(ctx context.Context, userID uint64, period time.Time, propertyID uint64) ([]roomPageRow, error) {
+	return a.loadRoomRowsWithAssetHistory(ctx, userID, period, propertyID, false)
+}
+
+func (a *app) loadRoomRowsWithAssetHistory(ctx context.Context, userID uint64, period time.Time, propertyID uint64, includeDeleted bool) ([]roomPageRow, error) {
 	repo := newLandlordRentRepository(a.db)
-	rooms, err := repo.listRooms(ctx, userID, roomQuery{PropertyID: propertyID})
+	rooms, err := repo.listRooms(ctx, userID, roomQuery{PropertyID: propertyID, IncludeDeleted: includeDeleted})
 	if err != nil {
 		return nil, err
 	}
-	properties, err := repo.listProperties(ctx, userID, propertyQuery{})
+	properties, err := repo.listProperties(ctx, userID, propertyQuery{IncludeDeleted: includeDeleted})
 	if err != nil {
 		return nil, err
 	}
@@ -1565,7 +1580,7 @@ func (a *app) loadRoomRows(ctx context.Context, userID uint64, period time.Time,
 	financial := make(map[uint64]rentWorkspaceRoomRow)
 	filters := defaultRentWorkspaceFilters(period)
 	filters.View, filters.PageSize, filters.PropertyID = rentWorkspaceViewRooms, rentWorkspaceMaxPageSize, propertyID
-	if workspace, loadErr := newRentWorkspaceService(a.db).load(ctx, userID, filters); loadErr == nil {
+	if workspace, loadErr := newRentWorkspaceService(a.db).loadWithAssetHistory(ctx, userID, filters, includeDeleted); loadErr == nil {
 		for _, row := range workspace.RoomRows {
 			financial[row.RoomID] = row
 		}
@@ -1595,7 +1610,7 @@ func (a *app) loadRoomRows(ctx context.Context, userID uint64, period time.Time,
 			return ""
 		}(), ledgerCurrencyEUR)
 		collectionState, collectionLabel := collectionStatus(financialRow.ExpectedCents, financialRow.PaidCents)
-		pageRow := roomPageRow{ID: roomRow.ID, PropertyID: roomRow.PropertyID, PropertyName: propertyRow.Name, RoomLabel: roomRow.RoomLabel, RoomType: roomRow.RoomType, Capacity: roomRow.Capacity, Notes: stringValue(roomRow.Notes), Status: roomRow.Status, StatusLabel: assetStatusLabel(roomRow.Status), CollectionStatus: collectionState, CollectionStatusLabel: collectionLabel, TenantNames: partyNames, SearchTerms: searchTerms, Currency: currency, ExpectedCents: financialRow.ExpectedCents, PaidCents: financialRow.PaidCents, BalanceCents: financialRow.BalanceCents, ExpectedAmount: pageCurrencyAmount(financialRow.ExpectedCents, currency), PaidAmount: pageCurrencyAmount(financialRow.PaidCents, currency), BalanceAmount: pageCurrencyAmount(financialRow.BalanceCents, currency), Actions: roomActions(roomRow.ID, roomRow.Status == "active")}
+		pageRow := roomPageRow{ID: roomRow.ID, PropertyID: roomRow.PropertyID, PropertyName: propertyRow.Name, RoomLabel: roomRow.RoomLabel, RoomType: roomRow.RoomType, Capacity: roomRow.Capacity, Notes: stringValue(roomRow.Notes), Status: roomRow.Status, StatusLabel: assetStatusLabel(roomRow.Status), CollectionStatus: collectionState, CollectionStatusLabel: collectionLabel, TenantNames: partyNames, SearchTerms: searchTerms, Currency: currency, ExpectedCents: financialRow.ExpectedCents, PaidCents: financialRow.PaidCents, BalanceCents: financialRow.BalanceCents, ExpectedAmount: pageCurrencyAmount(financialRow.ExpectedCents, currency), PaidAmount: pageCurrencyAmount(financialRow.PaidCents, currency), BalanceAmount: pageCurrencyAmount(financialRow.BalanceCents, currency), Actions: roomActions(roomRow.ID, roomRow.Status == "active" && roomRow.DeletedAt == nil && propertyRow.DeletedAt == nil)}
 		if plan != nil {
 			pageRow.MonthlyRentCents, pageRow.DueDay = plan.MonthlyRentCents, plan.DueDay
 			pageRow.MonthlyRent = pageCurrencyAmount(plan.MonthlyRentCents, plan.Currency)
@@ -1955,7 +1970,7 @@ func roomMutationErrorMessage(errorCode string) string {
 	case "room_action_failed":
 		return "房间资料未能保存，请检查输入内容。"
 	case "room_delete_blocked":
-		return "该房间已有租金或支出记录，不能删除；如不再使用，请停用它。"
+		return "请先在「入住与租金」中选择结束入住的月份，再隐藏房间。历史记录会保留。"
 	default:
 		return ""
 	}

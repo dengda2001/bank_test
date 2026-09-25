@@ -19,6 +19,8 @@ const (
 	transactionActionRevokeAllocations = "revoke_allocations"
 )
 
+var ErrTransactionNotDeferrable = errors.New("only pending income transactions can be deferred")
+
 type paymentTransactionAction struct {
 	ID                   uint64 `gorm:"primaryKey"`
 	UserID               uint64
@@ -187,6 +189,26 @@ func transactionDeferredState(ctx context.Context, db *gorm.DB, userID, transact
 	return latest.ActionKind == transactionActionDefer, nil
 }
 
+func transactionDeferredStates(ctx context.Context, db *gorm.DB, userID uint64, transactionIDs []uint64) (map[uint64]bool, error) {
+	states := make(map[uint64]bool, len(transactionIDs))
+	if len(transactionIDs) == 0 {
+		return states, nil
+	}
+	var actions []paymentTransactionAction
+	if err := db.WithContext(ctx).Where("user_id = ? AND payment_transaction_id IN ? AND action_kind IN ?", userID, transactionIDs, []string{transactionActionDefer, transactionActionUndefer}).Order("id DESC").Find(&actions).Error; err != nil {
+		return nil, err
+	}
+	seen := make(map[uint64]bool, len(transactionIDs))
+	for _, action := range actions {
+		if seen[action.PaymentTransactionID] {
+			continue
+		}
+		seen[action.PaymentTransactionID] = true
+		states[action.PaymentTransactionID] = action.ActionKind == transactionActionDefer
+	}
+	return states, nil
+}
+
 func (s *transactionService) clearTransactionDeferral(txdb *gorm.DB, userID, transactionID uint64, now time.Time) error {
 	var latest paymentTransactionAction
 	err := txdb.Where("user_id = ? AND payment_transaction_id = ? AND action_kind IN ?", userID, transactionID, []string{transactionActionDefer, transactionActionUndefer}).Order("id DESC").First(&latest).Error
@@ -217,7 +239,7 @@ func (s *transactionService) setTransactionDeferred(ctx context.Context, userID,
 			return err
 		}
 		if source.Direction != "income" || !isPendingMatchStatus(source.MatchStatus) {
-			return errors.New("only pending income transactions can be deferred")
+			return ErrTransactionNotDeferrable
 		}
 		var latest paymentTransactionAction
 		err := txdb.Where("user_id = ? AND payment_transaction_id = ? AND action_kind IN ?", userID, transactionID, []string{transactionActionDefer, transactionActionUndefer}).Order("id DESC").First(&latest).Error
@@ -409,6 +431,9 @@ func (s *transactionService) rematchRentAllocation(ctx context.Context, userID, 
 		previous, ok := singleEffectiveRentAllocation(allocations)
 		if !ok {
 			return errors.New("only a transaction with one effective rent allocation can be rematched")
+		}
+		if previous.PrepaymentID != nil {
+			return errors.New("先撤销这份预收款租金，再选择新的账单使用")
 		}
 		var target rentObligation
 		if err := txdb.Where("user_id = ? AND tenant_id = ? AND period_month = ?", userID, targetTenantID, targetPeriod).First(&target).Error; err != nil {

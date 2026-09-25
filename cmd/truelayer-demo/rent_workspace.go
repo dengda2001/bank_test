@@ -1333,6 +1333,10 @@ func newRentWorkspaceService(db *gorm.DB) *rentWorkspaceService {
 }
 
 func (s *rentWorkspaceService) load(ctx context.Context, userID uint64, filters rentWorkspaceFilters) (rentWorkspaceData, error) {
+	return s.loadWithAssetHistory(ctx, userID, filters, false)
+}
+
+func (s *rentWorkspaceService) loadWithAssetHistory(ctx context.Context, userID uint64, filters rentWorkspaceFilters, includeDeleted bool) (rentWorkspaceData, error) {
 	if userID == 0 {
 		return rentWorkspaceData{}, errors.New("workspace userID is required")
 	}
@@ -1348,7 +1352,11 @@ func (s *rentWorkspaceService) load(ctx context.Context, userID uint64, filters 
 	}
 	if filters.PropertyID != 0 {
 		var propertyCount int64
-		if err := s.db.WithContext(ctx).Model(&property{}).Where("user_id = ? AND id = ?", userID, filters.PropertyID).Count(&propertyCount).Error; err != nil {
+		query := s.db.WithContext(ctx).Model(&property{}).Where("user_id = ? AND id = ?", userID, filters.PropertyID)
+		if !includeDeleted {
+			query = query.Where("deleted_at IS NULL")
+		}
+		if err := query.Count(&propertyCount).Error; err != nil {
 			return rentWorkspaceData{}, err
 		}
 		if propertyCount == 0 {
@@ -1357,7 +1365,11 @@ func (s *rentWorkspaceService) load(ctx context.Context, userID uint64, filters 
 	}
 	if filters.RoomID != 0 {
 		var roomCount int64
-		if err := s.db.WithContext(ctx).Model(&room{}).Where("user_id = ? AND id = ?", userID, filters.RoomID).Count(&roomCount).Error; err != nil {
+		query := s.db.WithContext(ctx).Model(&room{}).Where("user_id = ? AND id = ?", userID, filters.RoomID)
+		if !includeDeleted {
+			query = query.Where("deleted_at IS NULL AND EXISTS (SELECT 1 FROM properties AS parent WHERE parent.id = rooms.property_id AND parent.user_id = rooms.user_id AND parent.deleted_at IS NULL)")
+		}
+		if err := query.Count(&roomCount).Error; err != nil {
 			return rentWorkspaceData{}, err
 		}
 		if roomCount == 0 {
@@ -1370,10 +1382,18 @@ func (s *rentWorkspaceService) load(ctx context.Context, userID uint64, filters 
 		return rentWorkspaceData{}, err
 	}
 	input := rentWorkspaceInput{UserID: userID, PeriodMonth: filters.PeriodMonth, Now: time.Now().UTC()}
-	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Order("name ASC, id ASC").Find(&input.Properties).Error; err != nil {
+	propertyQuery := s.db.WithContext(ctx).Where("user_id = ?", userID)
+	if !includeDeleted {
+		propertyQuery = propertyQuery.Where("deleted_at IS NULL")
+	}
+	if err := propertyQuery.Order("name ASC, id ASC").Find(&input.Properties).Error; err != nil {
 		return rentWorkspaceData{}, err
 	}
-	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Order("property_id ASC, room_label ASC, id ASC").Find(&input.Rooms).Error; err != nil {
+	roomQuery := s.db.WithContext(ctx).Where("user_id = ?", userID)
+	if !includeDeleted {
+		roomQuery = roomQuery.Where("deleted_at IS NULL")
+	}
+	if err := roomQuery.Order("property_id ASC, room_label ASC, id ASC").Find(&input.Rooms).Error; err != nil {
 		return rentWorkspaceData{}, err
 	}
 	if err := s.db.WithContext(ctx).Where("user_id = ? AND effective_from_month <= ? AND (effective_to_month IS NULL OR effective_to_month >= ?)", userID, filters.PeriodMonth, filters.PeriodMonth).Find(&input.Plans).Error; err != nil {

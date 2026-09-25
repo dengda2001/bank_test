@@ -14,30 +14,30 @@
     {{template "workspace-nav" .}}
     <main class="content workspace expense-page">
       <header class="collection-toolbar expense-heading">
-        <div><div class="eyebrow"><span class="expense-desktop-copy">RentOps · 费用支出</span><span class="expense-mobile-copy">更多 · 支出</span></div><h1>费用支出</h1><p class="tiny"><span class="expense-desktop-subtitle">记录房产及房间支出，并将原始发票绑定到账目。</span><span class="expense-mobile-subtitle">按房产归集，并保留发票。</span></p></div>
+        <div><div class="eyebrow"><span class="expense-desktop-copy">RentOps · 费用支出</span><span class="expense-mobile-copy">更多 · 支出</span></div><h1>费用支出</h1><p class="tiny"><span class="expense-desktop-subtitle">记录房产及房间支出，并集中管理相关文件。</span><span class="expense-mobile-subtitle">按房产归集，并保留附件。</span></p></div>
         <a class="btn primary" href="/expenses?period={{.Period}}&amp;status={{.StatusFilter}}&amp;search={{.Search}}{{if .Sort}}&amp;sort={{.Sort}}{{end}}&amp;add=1"><span class="expense-desktop-copy">新增支出</span><span class="expense-mobile-copy">新增</span></a>
       </header>
 
-      {{if eq .Message "expense_added"}}<div class="notice ok" data-toast>支出记录已保存。</div>{{else if eq .Message "invoice_bound"}}<div class="notice ok" data-toast>发票已绑定，历史版本已保留。</div>{{end}}
-      {{if eq .Error "invalid_invoice"}}<div class="notice error">发票未保存，请检查编号、开票方、日期、金额和文件格式（PDF、JPG、PNG 或 WebP，最大 8 MB）。</div>{{else if .Error}}<div class="notice error">支出记录未保存，请检查描述、金额和房产。</div>{{end}}
+      {{if eq .Message "expense_added"}}<div class="notice ok" data-toast>支出记录已保存。</div>{{else if eq .Message "files_added"}}<div class="notice ok" data-toast>附件已上传。</div>{{else if eq .Message "file_removed"}}<div class="notice ok" data-toast>附件已移除。</div>{{else if eq .Message "invoice_bound"}}<div class="notice ok" data-toast>文件已保存。</div>{{end}}
+      {{if eq .Error "invalid_attachment"}}<div class="notice error" role="alert">附件未保存：最多 10 个，每个不超过 8 MB；支持 PDF、图片和 Office 文档。</div>{{else if eq .Error "invalid_invoice"}}<div class="notice error">旧版发票未保存，请检查文件和资料。</div>{{else if .Error}}<div class="notice error">支出记录未保存，请检查描述、金额和房产。</div>{{end}}
 
       <form class="expense-filters" method="get" action="/expenses">
         <label class="expense-search"><span>搜索当前列表</span><input type="search" name="search" value="{{.Search}}" placeholder="描述、房产、房间或租客"></label><input type="hidden" name="sort" value="{{.Sort}}">
-        <label><span>状态</span><select name="status"><option value="all"{{if eq .StatusFilter "all"}} selected{{end}}>全部状态</option><option value="invoice_missing"{{if eq .StatusFilter "invoice_missing"}} selected{{end}}>未绑定发票</option><option value="invoice_linked"{{if eq .StatusFilter "invoice_linked"}} selected{{end}}>已绑定发票</option></select></label>
+        <label><span>状态</span><select name="status"><option value="all"{{if eq .StatusFilter "all"}} selected{{end}}>全部状态</option><option value="invoice_missing"{{if eq .StatusFilter "invoice_missing"}} selected{{end}}>无附件</option><option value="invoice_linked"{{if eq .StatusFilter "invoice_linked"}} selected{{end}}>有附件</option></select></label>
         <label><span>月份</span><input type="month" name="period" value="{{.Period}}"></label>
         <button class="btn subtle" type="submit">搜索</button>
       </form>
 
       <section class="panel surface expense-list-panel" aria-label="费用支出列表">
         {{if .Rows}}
-        <div class="expense-table-wrap table-wrap"><table class="expense-table"><thead><tr>{{template "table-sort-heading" (tableSortHeading "月份" (index .SortLinks "date"))}}{{template "table-sort-heading" (tableSortHeading "说明" (index .SortLinks "description"))}}{{template "table-sort-heading" (tableSortHeading "关联对象" (index .SortLinks "object"))}}{{template "table-sort-heading" (tableSortHeading "类别" (index .SortLinks "category"))}}{{template "table-sort-heading" (tableSortHeading "金额" (index .SortLinks "amount"))}}{{template "table-sort-heading" (tableSortHeading "发票" (index .SortLinks "invoice"))}}<th>状态</th><th>操作</th></tr></thead><tbody>
+        <div class="expense-table-wrap table-wrap"><table class="expense-table"><thead><tr>{{template "table-sort-heading" (tableSortHeading "月份" (index .SortLinks "date"))}}{{template "table-sort-heading" (tableSortHeading "说明" (index .SortLinks "description"))}}{{template "table-sort-heading" (tableSortHeading "关联对象" (index .SortLinks "object"))}}{{template "table-sort-heading" (tableSortHeading "类别" (index .SortLinks "category"))}}{{template "table-sort-heading" (tableSortHeading "金额" (index .SortLinks "amount"))}}{{template "table-sort-heading" (tableSortHeading "附件" (index .SortLinks "invoice"))}}<th>状态</th><th>操作</th></tr></thead><tbody>
           {{range .Rows}}<tr data-page="expenses" data-expense-id="{{.ID}}">
             <td class="mono">{{.PeriodDisplay}}</td><td><strong>{{.Description}}</strong></td>
             <td>{{if .PropertyName}}{{.PropertyName}}{{else if .RoomHint}}{{.RoomHint}}{{else}}房产级支出{{end}}{{if .RoomLabel}}<small>房间 {{.RoomLabel}}</small>{{end}}{{if .TenantHint}}<small>租客 {{.TenantHint}}</small>{{end}}</td>
             <td>{{.Category}}</td><td class="amount">{{.AmountDisplay}}</td>
-            <td>{{if .InvoiceLinked}}{{if .InvoiceNumber}}<a href="{{.InvoiceDownloadURL}}">{{.InvoiceNumber}}</a>{{else}}<a href="{{.InvoiceDownloadURL}}">已绑定发票</a>{{end}}{{else}}未绑定{{end}}</td>
+            <td>{{if .InvoiceLinked}}<a href="{{.InvoiceActionURL}}">{{if gt .AttachmentCount 0}}{{.AttachmentCount}} 个文件{{else}}有附件{{end}}</a>{{else}}无附件{{end}}</td>
             <td><span class="status active">有效</span></td>
-            <td><a class="btn subtle" href="{{.InvoiceActionURL}}">{{if .InvoiceLinked}}更换发票{{else}}绑定发票{{end}}</a></td>
+            <td><a class="btn subtle" href="{{.InvoiceActionURL}}">管理文件</a></td>
           </tr>{{end}}
         </tbody></table></div>
         <div class="expense-mobile-list" aria-label="移动端支出列表">{{range .Rows}}<article class="expense-mobile-card panel" data-page="expenses" data-expense-id="{{.ID}}">
@@ -45,8 +45,8 @@
           <p class="expense-mobile-description">{{.Description}}</p>
           {{if .RoomLabel}}<div class="expense-mobile-meta"><span>关联房间</span><strong>{{.RoomLabel}}</strong></div>{{end}}
           {{if .TenantHint}}<div class="expense-mobile-meta"><span>租客</span><strong>{{.TenantHint}}</strong></div>{{end}}
-          <div class="expense-mobile-invoice">{{if .InvoiceLinked}}{{if .InvoiceNumber}}已绑定 {{.InvoiceNumber}}{{else}}已绑定发票{{end}}{{else}}尚未绑定原始发票。{{end}}</div>
-          <a class="btn full" href="{{.InvoiceActionURL}}">{{if .InvoiceLinked}}更换发票{{else}}绑定发票{{end}}</a>
+          <div class="expense-mobile-invoice">{{if .InvoiceLinked}}{{if .InvoiceNumber}}已有文件{{else}}有附件{{end}}{{else}}暂无附件。{{end}}</div>
+          <a class="btn full" href="{{.InvoiceActionURL}}">管理文件</a>
         </article>{{end}}</div>
         {{else}}<div class="workspace-empty">{{if eq .Search ""}}当前月份暂无支出记录。{{else}}没有符合当前筛选条件的支出。{{end}}</div>{{end}}
       </section>
@@ -57,18 +57,15 @@
       {{with .InvoiceForm}}
       <div class="entity-drawer-backdrop">
         <section class="entity-drawer expense-invoice-drawer" role="dialog" aria-modal="true" aria-labelledby="expense-invoice-title">
-          <div class="panel-head"><div><h2 id="expense-invoice-title">{{if .Current}}更换支出发票{{else}}绑定支出发票{{end}}</h2><p class="tiny">发票与该笔支出关联，更换后保留历史版本。</p></div><a class="drawer-close" href="{{.ReturnURL}}" aria-label="关闭发票表单">×</a></div>
+          <div class="panel-head"><div><h2 id="expense-invoice-title">支出附件</h2><p class="tiny">选择文件即可上传，可以保存多个。</p></div><a class="drawer-close" href="{{.ReturnURL}}" aria-label="关闭附件管理">×</a></div>
           <div class="expense-invoice-target"><span>支出记录</span><strong>{{.Description}}</strong><small>支出金额 {{.ExpenseAmount}} EUR</small></div>
-          {{if .Current}}<div class="expense-invoice-current"><div><span>当前发票</span><strong>{{.Current.InvoiceNumber}} · {{.Current.Vendor}}</strong><small>{{.Current.DateDisplay}} · {{.Current.AmountDisplay}}</small></div><a class="btn subtle" href="{{.Current.DownloadURL}}">查看文件</a></div>{{end}}
-          {{if .History}}<details class="expense-invoice-history"><summary>更换记录（{{len .History}}）</summary><div>{{range .History}}<p><a href="{{.DownloadURL}}">{{.InvoiceNumber}}</a> · {{.Vendor}} · {{.CreatedAtDisplay}}</p>{{end}}</div></details>{{end}}
+          {{if .Files}}<div class="expense-attachment-list" aria-label="已上传附件">{{range .Files}}<div class="expense-attachment-item"><a href="{{.DownloadURL}}">{{.FileName}}</a><small>{{.SizeLabel}}</small><form method="post" action="/expenses/files/{{.ID}}?period={{$.Period}}&amp;status={{$.StatusFilter}}&amp;search={{$.Search | urlquery}}&amp;sort={{$.Sort}}"><button class="btn subtle danger" type="submit">移除</button></form></div>{{end}}</div>{{else}}<p class="tiny">暂无上传的文件。</p>{{end}}
+          {{if .Current}}<div class="expense-invoice-current"><div><span>历史发票文件</span><strong>{{.Current.FileName}}</strong></div><a class="btn subtle" href="{{.Current.DownloadURL}}">下载</a></div>{{end}}
+          {{if .History}}<details class="expense-invoice-history"><summary>历史发票版本（{{len .History}}）</summary><div>{{range .History}}<p><a href="{{.DownloadURL}}">{{.FileName}}</a> · {{.CreatedAtDisplay}}</p>{{end}}</div></details>{{end}}
           <form method="post" action="{{.PostURL}}" enctype="multipart/form-data">
             <input type="hidden" name="expense_id" value="{{.ExpenseID}}"><input type="hidden" name="period" value="{{.Period}}"><input type="hidden" name="status" value="{{.StatusFilter}}"><input type="hidden" name="search" value="{{.Search}}"><input type="hidden" name="sort" value="{{.Sort}}">
-            <div class="form-field"><label for="invoice-number">发票编号</label><input id="invoice-number" name="invoice_number" maxlength="191" value="{{.InvoiceNumber}}" required></div>
-            <div class="form-field"><label for="invoice-vendor">开票方</label><input id="invoice-vendor" name="vendor" maxlength="191" value="{{.Vendor}}" required></div>
-            <div class="expense-form-grid"><div class="form-field"><label for="invoice-date">开票日期</label><input id="invoice-date" name="invoice_date" type="date" value="{{.InvoiceDate}}" required></div><div class="form-field"><label for="invoice-amount">发票金额</label><input id="invoice-amount" name="invoice_amount" type="number" min="0.01" step="0.01" inputmode="decimal" value="{{.InvoiceAmount}}" required></div></div>
-            <div class="form-field"><label for="invoice-file">上传发票</label><input id="invoice-file" name="invoice_file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" required><small class="tiny">PDF、JPG、PNG 或 WebP，最大 8 MB。</small></div>
-            <div class="form-field"><label for="invoice-note">备注</label><textarea id="invoice-note" name="note" maxlength="2000">{{.Note}}</textarea></div>
-            <div class="drawer-actions"><a class="btn subtle" href="{{.ReturnURL}}">取消</a><button class="btn primary" type="submit">{{if .Current}}保存并保留更换记录{{else}}绑定发票{{end}}</button></div>
+            <div class="form-field"><label for="expense-files">选择文件</label><input id="expense-files" name="attachments" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.docx,.xlsx,.pptx" required><small class="tiny">PDF、图片或 Office 文档；每个最多 8 MB，一次最多 10 个。</small></div>
+            <div class="drawer-actions"><a class="btn subtle" href="{{.ReturnURL}}">完成</a><button class="btn primary" type="submit">上传文件</button></div>
           </form>
         </section>
       </div>

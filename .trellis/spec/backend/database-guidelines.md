@@ -16,6 +16,10 @@ route are retired; they are not an authenticated UI fallback.
 
 Some lower sections retain pre-migration-014 notes. For current landlord rent
 behavior, follow “Room Rent Plans, Asset State, and Monthly Facts” below.
+For expense uploads and deletion behavior added later, follow
+[Expense Attachments](./expense-attachments.md) and
+[Asset Soft Delete](./asset-soft-delete.md); the invoice-specific paragraphs
+below describe the retained legacy routes and data only.
 
 Every business query and write must include the current `user_id`. Bank refresh
 tokens belong to `bank_connections.user_id` and are encrypted with

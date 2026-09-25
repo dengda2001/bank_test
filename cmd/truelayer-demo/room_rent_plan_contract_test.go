@@ -157,6 +157,13 @@ func TestRoomRentPlanTenantRoomConflictUsesStablePageMessage(t *testing.T) {
 	}
 }
 
+func TestZeroRoomRentHasSpecificGuidance(t *testing.T) {
+	message := rentPlanErrorMessage("rent_plan_zero_rent")
+	if !strings.Contains(message, "大于 0") || !strings.Contains(message, "结束入住") {
+		t.Fatalf("zero rent guidance = %q", message)
+	}
+}
+
 func TestTenanciesRouteIsNotRegistered(t *testing.T) {
 	mux := newAppMux(&app{})
 	for _, method := range []string{http.MethodGet, http.MethodPost} {

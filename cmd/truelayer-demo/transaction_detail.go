@@ -374,7 +374,7 @@ func transactionDetailAllocationRows(allocations []paymentAllocation, currency s
 	for _, allocation := range allocations {
 		row := transactionDetailAllocationRow{
 			TenantName:  "未指定租客",
-			KindLabel:   map[string]string{allocationKindRent: "房租", allocationKindDeposit: "押金", allocationKindOther: "其他收入"}[ledgerAllocationKind(allocation)],
+			KindLabel:   map[string]string{allocationKindRent: "房租", allocationKindDeposit: "押金", allocationKindOther: "其他收入", allocationKindPrepayment: "待分配预收款"}[ledgerAllocationKind(allocation)],
 			Amount:      formatMoney(centsToMoney(allocation.AmountCents), currency, 2),
 			StatusLabel: "已撤销",
 			StatusClass: "voided",
@@ -487,7 +487,7 @@ func transactionActionLabel(action string) string {
 }
 
 func allocationKindLabel(kind string) string {
-	return map[string]string{allocationKindRent: "房租", allocationKindDeposit: "押金", allocationKindOther: "其他收入"}[kind]
+	return map[string]string{allocationKindRent: "房租", allocationKindDeposit: "押金", allocationKindOther: "其他收入", allocationKindPrepayment: "待分配预收款"}[kind]
 }
 
 func transactionSourceLabel(source string) string {

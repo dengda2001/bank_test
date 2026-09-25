@@ -331,7 +331,7 @@ func TestMobileExpenseListUsesCards(t *testing.T) {
 		`class="expense-mobile-list"`,
 		`class="expense-mobile-card panel"`,
 		`class="expense-mobile-invoice"`,
-		`绑定发票`,
+		`管理文件`,
 		`class="expense-table-wrap table-wrap"`,
 	} {
 		if !strings.Contains(page, marker) {

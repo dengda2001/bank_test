@@ -41,6 +41,7 @@ type expenseService struct {
 }
 
 type expenseInput struct {
+	Attachments   []expenseAttachmentUpload
 	PropertyID    *uint64
 	RoomID        *uint64
 	Description   string
@@ -143,7 +144,7 @@ func expenseFormReturnURL(r *http.Request) string {
 
 func isExpenseFormError(code string) bool {
 	switch code {
-	case "invalid_form", "invalid_expense":
+	case "invalid_form", "invalid_expense", "invalid_attachment":
 		return true
 	default:
 		return false
@@ -281,14 +282,21 @@ func (s *expenseService) createExpense(ctx context.Context, userID uint64, input
 		return manualExpense{}, err
 	}
 	if input.PropertyID != nil {
-		if _, err := newLandlordRentRepository(s.db).findProperty(ctx, userID, *input.PropertyID); err != nil {
+		propertyRow, err := newLandlordRentRepository(s.db).findProperty(ctx, userID, *input.PropertyID)
+		if err != nil {
 			return manualExpense{}, err
+		}
+		if propertyRow.DeletedAt != nil {
+			return manualExpense{}, gorm.ErrRecordNotFound
 		}
 	}
 	if input.RoomID != nil {
 		roomRow, err := newLandlordRentRepository(s.db).findRoom(ctx, userID, *input.RoomID)
 		if err != nil {
 			return manualExpense{}, err
+		}
+		if roomRow.DeletedAt != nil {
+			return manualExpense{}, gorm.ErrRecordNotFound
 		}
 		if input.PropertyID != nil && roomRow.PropertyID != *input.PropertyID {
 			return manualExpense{}, gorm.ErrRecordNotFound
@@ -319,7 +327,10 @@ func (s *expenseService) createExpense(ctx context.Context, userID uint64, input
 			return err
 		}
 		row.PaymentTransactionID = &tx.ID
-		return db.Model(&row).Update("payment_transaction_id", tx.ID).Error
+		if err := db.Model(&row).Update("payment_transaction_id", tx.ID).Error; err != nil {
+			return err
+		}
+		return saveExpenseAttachments(db, userID, row.ID, input.Attachments)
 	}); err != nil {
 		return manualExpense{}, err
 	}

@@ -45,7 +45,9 @@ type transactionReviewMonth struct {
 	Coverage        string
 	SourceRemainder string
 	Note            string
+	HelpURL         string
 	Highlighted     bool
+	EvidenceLabel   string
 	Viewed          bool
 	Selectable      bool
 	Evidence        []transactionReviewEvidence
@@ -78,12 +80,16 @@ type transactionMatchReviewData struct {
 	FormAction            string
 	AllowDefer            bool
 	TenantOptions         []transactionReviewTenant
+	PropertyOptions       []transactionReviewPropertyOption
+	RoomOptions           []transactionReviewRoomOption
+	LookupMonth           string
 	SuggestedTenants      []transactionReviewTenant
 	RoommateGroups        []transactionReviewRoommateGroup
 	SelectedTenantID      uint64
 	SelectedTenantName    string
 	IdentifiedTenant      bool
 	IntelligentSuggestion bool
+	RememberCandidateID   uint64
 	IdentityNote          string
 	Months                []transactionReviewMonth
 	ExistingAllocations   []transactionReviewExistingAllocation
@@ -130,22 +136,24 @@ func (s *transactionService) transactionMatchReviewForMonthWithOrigin(ctx contex
 		return transactionMatchReviewData{}, gorm.ErrRecordNotFound
 	}
 	if requestedMonth != "" {
-		if requestedTenantID == 0 {
-			return transactionMatchReviewData{}, gorm.ErrRecordNotFound
-		}
-		var count int64
-		if err := s.db.WithContext(ctx).Model(&tenant{}).Where("id = ? AND user_id = ?", requestedTenantID, userID).Count(&count).Error; err != nil {
-			return transactionMatchReviewData{}, err
-		}
-		if count != 1 {
-			return transactionMatchReviewData{}, gorm.ErrRecordNotFound
-		}
 		period, err := parsePeriodMonth(requestedMonth)
 		if err != nil {
 			return transactionMatchReviewData{}, gorm.ErrRecordNotFound
 		}
-		if err := newMonthlyRentFactsService(s.db).ensureMonthlyRentFacts(ctx, userID, period, rentFactsIntentExplicitPayment); err != nil {
-			return transactionMatchReviewData{}, err
+		if explicitMonthLookup {
+			if requestedTenantID == 0 {
+				return transactionMatchReviewData{}, gorm.ErrRecordNotFound
+			}
+			var count int64
+			if err := s.db.WithContext(ctx).Model(&tenant{}).Where("id = ? AND user_id = ?", requestedTenantID, userID).Count(&count).Error; err != nil {
+				return transactionMatchReviewData{}, err
+			}
+			if count != 1 {
+				return transactionMatchReviewData{}, gorm.ErrRecordNotFound
+			}
+			if err := newMonthlyRentFactsService(s.db).ensureMonthlyRentFacts(ctx, userID, period, rentFactsIntentExplicitPayment); err != nil {
+				return transactionMatchReviewData{}, err
+			}
 		}
 	}
 	if period := transactionPeriodForModel(source).explicitMonth(); period != nil {
@@ -157,6 +165,11 @@ func (s *transactionService) transactionMatchReviewForMonthWithOrigin(ctx contex
 	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Order("name ASC, id ASC").Find(&tenants).Error; err != nil {
 		return transactionMatchReviewData{}, err
 	}
+	lookupMonth := transactionReviewRoommateMonth(source, requestedMonth)
+	propertyOptions, roomOptions, err := loadTransactionReviewLocations(ctx, s.db, userID, lookupMonth)
+	if err != nil {
+		return transactionMatchReviewData{}, err
+	}
 	var payers []tenantPayer
 	if err := s.db.WithContext(ctx).Where("user_id = ? AND removed_at IS NULL", userID).Find(&payers).Error; err != nil {
 		return transactionMatchReviewData{}, err
@@ -166,6 +179,7 @@ func (s *transactionService) transactionMatchReviewForMonthWithOrigin(ctx contex
 		return transactionMatchReviewData{}, err
 	}
 	decision := decideStrictRentMatch(paymentTransactionInputFromModel(source), payers, tenants, obligations)
+	rememberCandidateID := rememberPayerCandidateID(source, decision, tenants)
 	identifiedID := decision.TenantID
 	identifiedFromAllocation := false
 	if identifiedID == 0 {
@@ -181,10 +195,7 @@ func (s *transactionService) transactionMatchReviewForMonthWithOrigin(ctx contex
 			identifiedFromAllocation = true
 		}
 	}
-	selectedID := identifiedID
-	if requestedTenantID != 0 {
-		selectedID = requestedTenantID
-	}
+	selectedID := requestedTenantID
 	identityNote := "系统尚未确认付款人对应的租客，请核对后选择。"
 	if identifiedID != 0 && selectedID == identifiedID {
 		identityNote = "根据已保存的付款人关系识别；请与银行原文核对。"
@@ -203,19 +214,21 @@ func (s *transactionService) transactionMatchReviewForMonthWithOrigin(ctx contex
 	}
 	data := transactionMatchReviewData{
 		Source:                enrichTransactionPageRow(transactionPageRowFromModel(source), source, sourceAllocations),
+		PropertyOptions:       propertyOptions,
+		RoomOptions:           roomOptions,
+		LookupMonth:           lookupMonth.Format("2006-01"),
 		Reference:             firstNonEmpty(source.Reference, "—"),
 		SelectedTenantID:      selectedID,
 		IdentifiedTenant:      identifiedID != 0 && selectedID == identifiedID,
 		IntelligentSuggestion: intelligentSuggestion,
+		RememberCandidateID:   rememberCandidateID,
 		IdentityNote:          identityNote,
 		SourceAmountCents:     source.AmountCents,
 		SourceRemainingCents:  summary.RemainingCents,
 		RequestKey:            recordID("review", time.Now().UTC()),
 	}
 	data.Source.DetailURL = "/transactions?detail=" + strconv.FormatUint(source.ID, 10)
-	if identifiedID == 0 && selectedID == 0 {
-		data.SuggestedTenants = suggestions
-	}
+	data.SuggestedTenants = transactionReviewSuggestedTenants(identifiedID, suggestions, tenants)
 	selectedExists := selectedID == 0
 	for _, tenantRow := range tenants {
 		name := firstNonEmpty(tenantRow.DisplayAlias, tenantRow.Name)
@@ -254,7 +267,7 @@ func (s *transactionService) transactionMatchReviewForMonthWithOrigin(ctx contex
 				period = monthStart(obligation.PeriodMonth).Format("2006-01")
 			}
 		}
-		kindLabel := map[string]string{allocationKindRent: "房租", allocationKindDeposit: "押金", allocationKindOther: "其他收入"}[ledgerAllocationKind(allocation)]
+		kindLabel := map[string]string{allocationKindRent: "房租", allocationKindDeposit: "押金", allocationKindOther: "其他收入", allocationKindPrepayment: "待分配预收款"}[ledgerAllocationKind(allocation)]
 		data.ExistingAllocations = append(data.ExistingAllocations, transactionReviewExistingAllocation{
 			TenantName: name,
 			Period:     period,
@@ -312,6 +325,30 @@ func (s *transactionService) transactionMatchReviewForMonthWithOrigin(ctx contex
 				data.Months = append([]transactionReviewMonth{{Period: requestedMonth, Label: formatMonthLabel(period), Viewed: true, Note: "该月没有可分配的租金账单，请核对房间租金计划。"}}, data.Months...)
 			}
 		}
+		for index := range data.Months {
+			month := &data.Months[index]
+			if month.Expected != "" || (!month.Highlighted && !month.Viewed) {
+				continue
+			}
+			monthRooms := roomOptions
+			if month.Period != data.LookupMonth {
+				period, _ := parsePeriodMonth(month.Period)
+				_, monthRooms, err = loadTransactionReviewLocations(ctx, s.db, userID, period)
+				if err != nil {
+					return transactionMatchReviewData{}, err
+				}
+			}
+			month.HelpURL = "/rooms?period=" + month.Period
+			month.Note = "租客「" + data.SelectedTenantName + "」在 " + month.Period + " 没有租金账单。请核对该月入住与租金计划。"
+			for _, roomOption := range monthRooms {
+				if !strings.Contains(","+roomOption.OccupantIDs+",", ","+strconv.FormatUint(selectedID, 10)+",") {
+					continue
+				}
+				month.HelpURL = "/rooms/" + strconv.FormatUint(roomOption.ID, 10) + "?period=" + month.Period + "&rent=1"
+				month.Note = "租客「" + data.SelectedTenantName + "」在 " + month.Period + " 有入住计划，但租金账单尚未生成。请核对该房间计划，再明确选择该月份。"
+				break
+			}
+		}
 		for _, month := range data.Months {
 			data.CanMatch = data.CanMatch || month.Selectable
 		}
@@ -355,6 +392,30 @@ func (s *transactionService) transactionMatchReviewForMonthWithOrigin(ctx contex
 	return data, nil
 }
 
+func transactionReviewSuggestedTenants(identifiedID uint64, suggestions []transactionReviewTenant, tenants []tenant) []transactionReviewTenant {
+	if identifiedID == 0 {
+		return suggestions
+	}
+	for _, row := range tenants {
+		if row.ID == identifiedID {
+			return []transactionReviewTenant{{ID: row.ID, Name: firstNonEmpty(row.DisplayAlias, row.Name)}}
+		}
+	}
+	return suggestions
+}
+
+func rememberPayerCandidateID(source paymentTransaction, decision matchDecision, tenants []tenant) uint64 {
+	if decision.TenantID != 0 && (decision.ConfirmationSource == "auto_id" || decision.ConfirmationSource == "auto_name" || decision.ConfirmationSource == "auto_exact_name") {
+		return decision.TenantID
+	}
+	if decision.Reason == "no confirmed tenant identity" {
+		if exact := tenantsByName(tenants, stringValue(source.PayerName)); len(exact) == 1 {
+			return exact[0].ID
+		}
+	}
+	return 0
+}
+
 func transactionReviewMonths(source paymentTransaction, sourceRemaining int64, obligations []rentObligation, allocations []paymentAllocation, transactions map[uint64]paymentTransaction) []transactionReviewMonth {
 	byObligation := make(map[uint64][]paymentAllocation)
 	for _, allocation := range allocations {
@@ -364,6 +425,12 @@ func transactionReviewMonths(source paymentTransaction, sourceRemaining int64, o
 	}
 	periodEvidence := transactionPeriodForModel(source)
 	parsedPeriod := periodEvidence.display()
+	evidenceLabel := "根据转账日期推测"
+	if periodEvidence.Explicit && periodEvidence.Label == "Description" {
+		evidenceLabel = "描述明确提及租金月份"
+	} else if periodEvidence.Explicit {
+		evidenceLabel = "已记录的租金月份"
+	}
 	rows := make([]transactionReviewMonth, 0, len(obligations)+1)
 	seenPeriod := make(map[string]bool)
 	for _, obligation := range obligations {
@@ -379,6 +446,7 @@ func transactionReviewMonths(source paymentTransaction, sourceRemaining int64, o
 			Remaining:      formatMoney(centsToMoney(remaining), currency, 2),
 			RemainingCents: remaining,
 			Highlighted:    period == parsedPeriod,
+			EvidenceLabel:  evidenceLabel,
 		}
 		switch {
 		case !strings.EqualFold(currency, source.Currency):
@@ -425,7 +493,7 @@ func transactionReviewMonths(source paymentTransaction, sourceRemaining int64, o
 		if !periodEvidence.Explicit {
 			note = "入账日期建议；" + note
 		}
-		rows = append(rows, transactionReviewMonth{Period: parsedPeriod, Label: parsedPeriod, Highlighted: true, Note: note})
+		rows = append(rows, transactionReviewMonth{Period: parsedPeriod, Label: parsedPeriod, Highlighted: true, EvidenceLabel: evidenceLabel, Note: note})
 	}
 	sort.Slice(rows, func(i, j int) bool {
 		if rows[i].Highlighted != rows[j].Highlighted {
@@ -549,6 +617,12 @@ func transactionReviewErrorText(code string) string {
 		return "分配未保存。租金或流水余额可能已变化，请核对后重试。"
 	case "allocation_revoke_failed", "invalid_allocation_revoke":
 		return "撤销未完成。该份分配可能已变化，请刷新后重试。"
+	case "transaction_not_pending":
+		return "这笔流水已不在待处理状态，无法暂不处理。请刷新后查看最新状态。"
+	case "transaction_not_found":
+		return "这笔流水已无法找到，可能已被移除。请刷新列表。"
+	case "transaction_action_failed":
+		return "暂不处理未保存。数据库操作失败，请稍后重试；若重复出现，请核对服务日志。"
 	default:
 		return ""
 	}

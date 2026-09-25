@@ -67,3 +67,8 @@
   .expense-drawer { max-height: min(88dvh,820px); }
   .expense-form-grid { grid-template-columns: 1fr 1fr; }
 }
+.expense-attachment-list { display: grid; gap: 8px; margin: 12px 0; }
+.expense-attachment-item { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 9px; border: 1px solid var(--border); border-radius: 8px; }
+.expense-attachment-item a { min-width: 0; overflow-wrap: anywhere; flex: 1 1 auto; }
+.expense-attachment-item small { white-space: nowrap; color: var(--foreground-muted); }
+.expense-attachment-item form { margin: 0; }

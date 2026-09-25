@@ -55,21 +55,20 @@ func TestObjectDeletionGuardsKeepLedgerHistoryAndRemoveIndependentRecordsOnMySQL
 	if err := tenants.deleteTenant(ctx, owner.ID, independentTenant.ID); err != nil {
 		t.Fatalf("delete independent tenant: %v", err)
 	}
-	for _, check := range []struct {
-		value any
-		id    uint64
-	}{
-		{&property{}, independentProperty.ID},
-		{&room{}, independentRoom.ID},
-		{&tenant{}, independentTenant.ID},
-	} {
-		var count int64
-		if err := db.WithContext(ctx).Model(check.value).Where("id = ?", check.id).Count(&count).Error; err != nil {
-			t.Fatal(err)
-		}
-		if count != 0 {
-			t.Fatalf("independent record %T %d still exists", check.value, check.id)
-		}
+	var hiddenProperty property
+	if err := db.WithContext(ctx).Where("id = ?", independentProperty.ID).First(&hiddenProperty).Error; err != nil || hiddenProperty.DeletedAt == nil {
+		t.Fatalf("property history was not retained as hidden: %+v, %v", hiddenProperty, err)
+	}
+	var hiddenRoom room
+	if err := db.WithContext(ctx).Where("id = ?", independentRoom.ID).First(&hiddenRoom).Error; err != nil || hiddenRoom.DeletedAt == nil {
+		t.Fatalf("room history was not retained as hidden: %+v, %v", hiddenRoom, err)
+	}
+	if visible, err := newLandlordRentRepository(db).listProperties(ctx, owner.ID, propertyQuery{}); err != nil || len(visible) != 0 {
+		t.Fatalf("hidden property remains in daily list: %+v, %v", visible, err)
+	}
+	var tenantCount int64
+	if err := db.WithContext(ctx).Model(&tenant{}).Where("id = ?", independentTenant.ID).Count(&tenantCount).Error; err != nil || tenantCount != 0 {
+		t.Fatalf("independent tenant still exists: %d, %v", tenantCount, err)
 	}
 	var payerCount int64
 	if err := db.WithContext(ctx).Model(&tenantPayer{}).Where("user_id = ? AND tenant_id = ?", owner.ID, independentTenant.ID).Count(&payerCount).Error; err != nil {

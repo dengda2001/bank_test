@@ -1,0 +1,32 @@
+{
+  "id": "transaction-matching-rent-workspace-fixes",
+  "name": "transaction-matching-rent-workspace-fixes",
+  "title": "流水匹配与收租工作台问题修复",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "dd",
+  "assignee": "dd",
+  "createdAt": "2026-09-24",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-24-match-review-ux",
+    "09-24-transaction-list-dashboard",
+    "09-24-expense-invoice-upload",
+    "09-24-room-lifecycle-guidance",
+    "09-24-rent-prepayment-ledger"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

@@ -7,18 +7,20 @@ Use this contract when changing the transaction review drawer, `/transactions/co
 ## 2. Signatures
 
 - HTTP: `POST /transactions/confirm-batch` (`handleRentMatchBatchConfirmation`).
-- Service: `confirmRentMatchBatch(ctx, userID, transactionID, items, rememberTenantID, requestKey) (transactionAllocationSummary, error)`.
+- Service: `confirmRentMatchBatch(ctx, userID, transactionID, items, rememberTenantID, requestKey) (transactionAllocationSummary, error)`; the explicit excess path uses `confirmRentMatchBatchWithPrepayment(ctx, userID, transactionID, items, rememberTenantID, prepaymentTenantID, prepaymentAmountCents, requestKey)`.
 - Item: `rentMatchBatchItem{TenantID uint64, Period string, AmountCents int64}`.
 - Storage: reuse `allocateTransactionInTx` and the existing `payment_allocations` and rent obligation tables; no separate batch table.
 
 ## 3. Contracts
 
-- Form fields: `transaction_id`, `request_key`, repeated aligned `tenant_id[]`, `period[]` (`YYYY-MM`), and `amount[]` (positive decimal EUR amount), optional `remember_tenant_id`, `match_tenant`, and `return_to`. Maximum 20 items.
+- Form fields: `transaction_id`, `request_key`, repeated aligned `tenant_id[]`, `period[]` (`YYYY-MM`), and `amount[]` (positive decimal EUR amount), optional `remember_tenant_id`, `match_tenant`, and `return_to`. Maximum 20 items. The explicit excess option also sends `use_prepayment=1`, `prepayment_tenant_id`, and `prepayment_amount`.
 - The review drawer's selected tenant controls evidence lookup only. Each draft row owns its tenant, month, and amount. Tenant/month pairs must be unique within the batch; a tenant may appear for several months.
+- Opening a review leaves the tenant selector empty, even when a verified payer relation suggests one tenant. Show that tenant as a clickable suggestion; clicking it selects the tenant and loads evidence. After a suggestion or manual tenant selection, the location controls select the tenant's unique room and property for the viewed month. If several rooms match, leave the room unselected and ask for a choice. The transaction's suggested month supplies the initial location lookup month.
 - The service verifies the source belongs to the authenticated user and is income before explicit month materialization. It verifies every tenant belongs to the user, materializes facts only for months explicitly chosen for payment, and reloads the obligations.
 - The service locks the source and uses `allocateTransactionInTx` to validate current obligation and source balances, currency, and ownership and write the entire batch in one database transaction. An optional payer association is saved in that same transaction for one explicitly selected tenant from the batch.
 - Successful POST redirects with `message=rent_confirmed`. Invalid form or changed balances redirect back to the review drawer with an error code. The browser preserves an unsaved draft across tenant lookup, history pagination, and error redirect; cancel or close discards it.
 - `request_key` is required. An exact retry returns the existing allocation summary; reuse for different allocation targets or amounts fails.
+- When selected, the prepayment belongs to a tenant in the batch and equals the entire source remainder after existing allocations and the new rent shares. It is included in the same locked confirmation and idempotency comparison; see [Tenant Prepayment Ledger](./tenant-prepayment-ledger.md).
 
 ## 4. Validation and error matrix
 

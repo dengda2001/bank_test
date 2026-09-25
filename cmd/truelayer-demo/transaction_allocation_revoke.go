@@ -74,6 +74,22 @@ func (s *transactionService) revokeRentAllocation(ctx context.Context, userID, a
 		if result.RowsAffected != 1 {
 			return ErrRentAllocationNotRevocable
 		}
+		if allocation.PrepaymentID != nil {
+			var credit tenantPrepayment
+			if err := tx.Where("id = ? AND user_id = ? AND payment_transaction_id = ? AND tenant_id = ?", *allocation.PrepaymentID, userID, source.ID, *allocation.TenantID).First(&credit).Error; err != nil {
+				return ErrRentAllocationNotRevocable
+			}
+			creditKey := fmt.Sprintf("credit-restore:%d:%s", allocationID, operationID)
+			restored := paymentAllocation{
+				UserID: userID, PaymentTransactionID: source.ID, PrepaymentID: &credit.ID, TenantID: allocation.TenantID,
+				AmountCents: allocation.AmountCents, AllocationKind: allocationKindPrepayment,
+				Status: allocationStatusConfirmed, OperationID: &operationID, IdempotencyKey: &creditKey,
+				ConfirmedByUserID: userID, ConfirmedAt: now, ConfirmationSource: "revoke_prepayment_rent",
+			}
+			if err := tx.Create(&restored).Error; err != nil {
+				return err
+			}
+		}
 		var obligationAllocations []paymentAllocation
 		if err := tx.Where("user_id = ? AND rent_obligation_id = ?", userID, obligation.ID).Find(&obligationAllocations).Error; err != nil {
 			return err

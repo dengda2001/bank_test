@@ -15,6 +15,7 @@ type paymentAllocation struct {
 	UserID               uint64
 	PaymentTransactionID uint64
 	RentObligationID     *uint64
+	PrepaymentID         *uint64
 	TenantID             *uint64
 	AmountCents          int64
 	AllocationKind       string

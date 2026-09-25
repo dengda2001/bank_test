@@ -242,7 +242,8 @@ func (a *app) renderRentWorkspaceDashboard(w http.ResponseWriter, r *http.Reques
 				return
 			}
 		}
-		review, reviewErr := newTransactionService(a.db).transactionMatchReviewForMonthWithOrigin(r.Context(), userID, matchID, tenantID, historyPage, strings.TrimSpace(r.URL.Query().Get("match_month")), r.URL.Query().Get("match_origin") != "roommate")
+		origin := r.URL.Query().Get("match_origin")
+		review, reviewErr := newTransactionService(a.db).transactionMatchReviewForMonthWithOrigin(r.Context(), userID, matchID, tenantID, historyPage, strings.TrimSpace(r.URL.Query().Get("match_month")), origin != "roommate" && origin != "lookup")
 		if errors.Is(reviewErr, gorm.ErrRecordNotFound) {
 			http.NotFound(w, r)
 			return
@@ -276,6 +277,7 @@ type rentRoomDetailPageData struct {
 	Period            string
 	PeriodLabel       string
 	RoomID            uint64
+	IsDeleted         bool
 	RoomLabel         string
 	RoomType          string
 	Capacity          int
@@ -395,7 +397,7 @@ func (s *rentWorkspaceService) loadRoomDetail(ctx context.Context, userID, roomI
 	filters.View = rentWorkspaceViewRooms
 	filters.PropertyID = propertyRow.ID
 	filters.RoomID = roomRow.ID
-	data, err := s.load(ctx, userID, filters)
+	data, err := s.loadWithAssetHistory(ctx, userID, filters, roomRow.DeletedAt != nil || propertyRow.DeletedAt != nil)
 	if err != nil {
 		return rentRoomDetailPageData{}, err
 	}
@@ -442,6 +444,7 @@ func (s *rentWorkspaceService) loadRoomDetail(ctx context.Context, userID, roomI
 		Period:            period.Format("2006-01"),
 		PeriodLabel:       formatMonthLabel(period),
 		RoomID:            roomRow.ID,
+		IsDeleted:         roomRow.DeletedAt != nil || propertyRow.DeletedAt != nil,
 		RoomLabel:         roomRow.RoomLabel,
 		RoomType:          firstNonEmpty(roomRow.RoomType, "未设置"),
 		Capacity:          roomRow.Capacity,
@@ -545,8 +548,8 @@ func (a *app) handleRoomDetail(w http.ResponseWriter, r *http.Request) {
 	data.workspaceShell = a.fillWorkspaceShell(r, workspaceShell{ActivePage: "rooms", Username: a.displayUsername(r), Environment: a.cfg.Environment, FootNote: "房间详情", CompactTitle: data.PropertyName + " · 房间 " + data.RoomLabel, ShowNavCounts: true})
 	data.Message, data.Error = r.URL.Query().Get("message"), roomMutationErrorMessage(r.URL.Query().Get("error"))
 	tenantAdd := r.URL.Query().Get("tenant_add") == "1"
-	data.Editing = !tenantAdd && r.URL.Query().Get("edit") == "1"
-	data.PlanEditor = !tenantAdd && r.URL.Query().Get("rent") == "1"
+	data.Editing = !data.IsDeleted && !tenantAdd && r.URL.Query().Get("edit") == "1"
+	data.PlanEditor = !data.IsDeleted && !tenantAdd && r.URL.Query().Get("rent") == "1"
 	data.PlanError = rentPlanErrorMessage(r.URL.Query().Get("rent_error"))
 	data.ReturnURL = rentWorkspaceURL(data.Filters, 1)
 	if r.URL.Query().Get("from") == "rooms" {
@@ -596,7 +599,7 @@ func (a *app) handleRoomDetail(w http.ResponseWriter, r *http.Request) {
 		}
 		data.Error = ""
 	}
-	if !tenantAdd && (r.URL.Query().Get("expense") == "1" || isExpenseFormError(r.URL.Query().Get("error"))) {
+	if !data.IsDeleted && !tenantAdd && (r.URL.Query().Get("expense") == "1" || isExpenseFormError(r.URL.Query().Get("error"))) {
 		returnURL := expenseFormReturnURL(r)
 		expenseDrawer, drawerErr := a.loadExpenseDrawerData(r.Context(), userID, data.Period, data.Summary.PropertyID, data.RoomID, returnURL, r.URL.Query().Get("error"))
 		if drawerErr != nil {

@@ -13,7 +13,7 @@
   <div class="app">
     {{template "workspace-nav" .}}
     <main class="content workspace room-detail-page">
-      <nav class="detail-toolbar" aria-label="房间详情导航"><a class="detail-back detail-back-desktop" href="{{.ReturnURL}}">← {{if .FromList}}返回房间管理{{else}}返回工作台{{end}}</a><a class="detail-back detail-back-mobile" href="{{.ReturnURL}}" aria-label="返回">‹</a><a class="btn detail-mobile-edit" href="/rooms/{{.RoomID}}?period={{.Period}}{{if .FromList}}&amp;from=rooms&amp;return_property_id={{.ReturnPropertyID}}&amp;return_status={{.ReturnStatus}}&amp;return_search={{.ReturnSearch}}&amp;return_collection={{.ReturnCollection}}&amp;return_sort={{.ReturnSort}}{{end}}&amp;edit=1">编辑</a></nav>
+      <nav class="detail-toolbar" aria-label="房间详情导航"><a class="detail-back detail-back-desktop" href="{{.ReturnURL}}">← {{if .FromList}}返回房间管理{{else}}返回工作台{{end}}</a><a class="detail-back detail-back-mobile" href="{{.ReturnURL}}" aria-label="返回">‹</a>{{if not .IsDeleted}}<a class="btn detail-mobile-edit" href="/rooms/{{.RoomID}}?period={{.Period}}{{if .FromList}}&amp;from=rooms&amp;return_property_id={{.ReturnPropertyID}}&amp;return_status={{.ReturnStatus}}&amp;return_search={{.ReturnSearch}}&amp;return_collection={{.ReturnCollection}}&amp;return_sort={{.ReturnSort}}{{end}}&amp;edit=1">编辑</a>{{end}}</nav>
       <header class="detail-head">
         <div class="room-detail-identity">
           <div class="identity-mark">{{.RoomLabel}}</div>
@@ -23,13 +23,14 @@
             <div class="identity-meta"><span>{{.Summary.TenantCount}} 位当前租客 · {{.PeriodLabel}}</span><span class="detail-status {{.Summary.Status}}">{{.Summary.StatusLabel}}</span></div>
           </div>
         </div>
-        <div class="actions">
+        {{if not .IsDeleted}}<div class="actions">
           <a class="btn" href="/rooms/{{.RoomID}}?period={{.Period}}{{if .FromList}}&amp;from=rooms&amp;return_property_id={{.ReturnPropertyID}}&amp;return_status={{.ReturnStatus}}&amp;return_search={{.ReturnSearch}}&amp;return_collection={{.ReturnCollection}}&amp;return_sort={{.ReturnSort}}{{end}}&amp;edit=1">编辑房间</a>
           <a class="btn primary" href="/rooms/{{.RoomID}}?period={{.Period}}{{if .FromList}}&amp;from=rooms&amp;return_property_id={{.ReturnPropertyID}}&amp;return_status={{.ReturnStatus}}&amp;return_search={{.ReturnSearch}}&amp;return_collection={{.ReturnCollection}}&amp;return_sort={{.ReturnSort}}{{end}}&amp;rent=1">入住与租金</a>
           <a class="btn" href="/rooms/{{.RoomID}}?period={{.Period}}{{if .FromList}}&amp;from=rooms&amp;return_property_id={{.ReturnPropertyID}}&amp;return_status={{.ReturnStatus}}&amp;return_search={{.ReturnSearch}}&amp;return_collection={{.ReturnCollection}}&amp;return_sort={{.ReturnSort}}{{end}}&amp;expense=1">新增房间支出</a>
           <a class="btn primary" href="/dunning?period={{.Period}}">提醒未付款租客</a>
-        </div>
+        </div>{{end}}
       </header>
+      {{if .IsDeleted}}<div class="notice">此房间已从日常列表隐藏。历史租金、收款和支出记录仍保留。</div>{{end}}
       {{if .Message}}<div class="notice ok" data-toast>资料已保存。</div>{{end}}
       {{if .Error}}<div class="notice error">{{.Error}}</div>{{end}}
 
@@ -52,8 +53,8 @@
             <div class="drawer-actions"><a class="btn subtle" href="/rooms/{{.RoomID}}?period={{.Period}}{{if .FromList}}&amp;from=rooms&amp;return_property_id={{.ReturnPropertyID}}&amp;return_status={{.ReturnStatus}}&amp;return_search={{.ReturnSearch}}&amp;return_collection={{.ReturnCollection}}&amp;return_sort={{.ReturnSort}}{{end}}">取消</a><button class="btn primary" type="submit">保存更改</button></div>
           </form>
           <section class="drawer-danger-zone" aria-labelledby="room-danger-title">
-            <div><h3 id="room-danger-title">删除房间</h3><p class="tiny">房间的租客租金记录、收款关联与支出记录会一起删除，无法恢复。如果只是不再出租，请用「入住与租金」结束入住。</p></div>
-            <form method="post" action="/rooms/{{.RoomID}}" class="delete-object-form"><input type="hidden" name="action" value="delete"><input type="hidden" name="period" value="{{.Period}}">{{if .FromList}}<input type="hidden" name="from" value="rooms"><input type="hidden" name="return_property_id" value="{{.ReturnPropertyID}}"><input type="hidden" name="return_status" value="{{.ReturnStatus}}"><input type="hidden" name="return_search" value="{{.ReturnSearch}}"><input type="hidden" name="return_collection" value="{{.ReturnCollection}}"><input type="hidden" name="return_sort" value="{{.ReturnSort}}">{{end}}<button class="btn danger" type="submit" data-confirm="true" data-confirm-title="删除房间" data-confirm-label="确认删除房间" data-confirm-message="删除房间「{{.RoomLabel}}」及其全部租客租金记录与收款关联？此操作无法撤销。">删除房间</button></form>
+            <div><h3 id="room-danger-title">隐藏房间</h3><p class="tiny">隐藏后会从日常列表移除，历史租金、收款和支出记录保留。若入住计划仍有效，请先在「入住与租金」中结束入住。此操作不提供恢复。</p></div>
+            <form method="post" action="/rooms/{{.RoomID}}" class="delete-object-form"><input type="hidden" name="action" value="delete"><input type="hidden" name="period" value="{{.Period}}">{{if .FromList}}<input type="hidden" name="from" value="rooms"><input type="hidden" name="return_property_id" value="{{.ReturnPropertyID}}"><input type="hidden" name="return_status" value="{{.ReturnStatus}}"><input type="hidden" name="return_search" value="{{.ReturnSearch}}"><input type="hidden" name="return_collection" value="{{.ReturnCollection}}"><input type="hidden" name="return_sort" value="{{.ReturnSort}}">{{end}}<button class="btn danger" type="submit" data-confirm="true" data-confirm-title="隐藏房间" data-confirm-label="确认隐藏房间" data-confirm-message="隐藏房间「{{.RoomLabel}}」？历史账务记录会保留，且无法从页面恢复。">隐藏房间</button></form>
           </section>
         </section>
       </div>
@@ -61,7 +62,7 @@
 	  {{if .PlanEditor}}
       <div class="entity-drawer-backdrop">
         <section class="entity-drawer rent-plan-editor" role="dialog" aria-modal="true" aria-labelledby="rent-plan-title">
-          <div class="panel-head"><div><div class="drawer-eyebrow">房间 {{.RoomLabel}}</div><h2 id="rent-plan-title">入住与租金</h2><p class="tiny">从指定月份创建完整计划版本；此前月份的账务事实保持不变。</p></div><a class="drawer-close" href="/rooms/{{.RoomID}}?period={{.Period}}" aria-label="关闭入住与租金设置">×</a></div>
+          <div class="panel-head"><div><div class="drawer-eyebrow">房间 {{.RoomLabel}}</div><h2 id="rent-plan-title">入住与租金</h2><p class="tiny">租客换人时，选新租客开始入住的月份（如 9 月），移除旧租客并加入新租客后保存；旧租客截至上月的账单和收款仍保留。</p></div><a class="drawer-close" href="/rooms/{{.RoomID}}?period={{.Period}}" aria-label="关闭入住与租金设置">×</a></div>
           {{if .PlanError}}<div class="notice error" role="alert">{{.PlanError}}</div>{{end}}
           {{if not .PlanTenants}}<div class="notice">暂无租客档案。可以先保存空房间的租金规则，再从这里新增租客。</div>{{end}}
           <form method="post" action="/rooms/{{.RoomID}}/rent-plan" data-rent-plan-form data-tenant-availability data-tenant-month-selector="#plan-effective-month" data-tenant-target-room="{{.RoomID}}">
@@ -69,10 +70,10 @@
             {{if .FromList}}<input type="hidden" name="from" value="rooms"><input type="hidden" name="return_property_id" value="{{.ReturnPropertyID}}"><input type="hidden" name="return_status" value="{{.ReturnStatus}}"><input type="hidden" name="return_search" value="{{.ReturnSearch}}"><input type="hidden" name="return_collection" value="{{.ReturnCollection}}"><input type="hidden" name="return_sort" value="{{.ReturnSort}}">{{end}}
             <div class="room-edit-grid">
               <div class="form-field"><label for="plan-effective-month">入住生效月份</label><input id="plan-effective-month" name="effective_month" type="month" value="{{.Period}}" required></div>
-              <div class="form-field"><label for="plan-monthly-rent">房间月租（EUR）</label><input id="plan-monthly-rent" name="monthly_rent" inputmode="decimal" value="{{.PlanRentValue}}" placeholder="例如 1250.00" required></div>
+              <div class="form-field"><label for="plan-monthly-rent">房间月租（EUR）</label><input id="plan-monthly-rent" name="monthly_rent" type="number" step="0.01" inputmode="decimal" value="{{.PlanRentValue}}" placeholder="例如 1250.00" required></div>
               <div class="form-field"><label for="plan-due-day">每月缴租日</label><input id="plan-due-day" name="due_day" type="number" min="1" max="31" value="{{.PlanDueDay}}" required></div>
             </div>
-            <div class="plan-members-head"><div><h3>入住租客与个人月租</h3><p class="tiny">个人月租合计必须等于房间月租；移除最后一位租客可保留空房间租金规则。</p></div><div class="plan-members-actions"><button class="btn subtle" type="button" data-add-plan-member{{if not .PlanTenants}} disabled{{end}}>选已有租客</button>{{if .PlanExists}}<a class="btn subtle" data-new-room-tenant-link href="/rooms/{{.RoomID}}?period={{.Period}}&amp;tenant_add=1">新增租客</a>{{else}}<span class="tiny">先保存租金规则，再新增租客</span>{{end}}</div></div>
+            <div class="plan-members-head"><div><h3>入住租客与个人月租</h3><p class="tiny">个人月租合计必须等于房间月租；如房间空置，请在下方选择「结束入住」。</p></div><div class="plan-members-actions"><button class="btn subtle" type="button" data-add-plan-member{{if not .PlanTenants}} disabled{{end}}>选已有租客</button>{{if .PlanExists}}<a class="btn subtle" data-new-room-tenant-link href="/rooms/{{.RoomID}}?period={{.Period}}&amp;tenant_add=1">新增租客</a>{{else}}<span class="tiny">先保存租金规则，再新增租客</span>{{end}}</div></div>
             <div class="room-tenant-conflicts" data-tenant-conflicts aria-live="polite" hidden></div>
             <label class="plan-split-toggle"><input type="checkbox" name="split_evenly" value="1"{{if .PlanSplitEvenly}} checked{{end}}> 保存时按人数平均分担</label>
             <div class="plan-member-rows" data-plan-member-rows>
@@ -96,7 +97,7 @@
       </section>
 
       <section class="panel surface room-plan-summary" aria-labelledby="room-plan-summary-title">
-        <div class="panel-head"><div><h2 id="room-plan-summary-title">{{if .PlanExists}}当前收租安排{{else}}入住与租金{{end}}</h2><p class="tiny">{{.PeriodLabel}} · 房间的月度计划</p></div><a class="btn primary" href="/rooms/{{.RoomID}}?period={{.Period}}{{if .FromList}}&amp;from=rooms&amp;return_property_id={{.ReturnPropertyID}}&amp;return_status={{.ReturnStatus}}&amp;return_search={{.ReturnSearch}}&amp;return_collection={{.ReturnCollection}}&amp;return_sort={{.ReturnSort}}{{end}}&amp;rent=1">{{if .PlanExists}}调整安排{{else}}设置入住与租金{{end}}</a></div>
+        <div class="panel-head"><div><h2 id="room-plan-summary-title">{{if .PlanExists}}当前收租安排{{else}}入住与租金{{end}}</h2><p class="tiny">{{.PeriodLabel}} · 房间的月度计划</p></div>{{if not .IsDeleted}}<a class="btn primary" href="/rooms/{{.RoomID}}?period={{.Period}}{{if .FromList}}&amp;from=rooms&amp;return_property_id={{.ReturnPropertyID}}&amp;return_status={{.ReturnStatus}}&amp;return_search={{.ReturnSearch}}&amp;return_collection={{.ReturnCollection}}&amp;return_sort={{.ReturnSort}}{{end}}&amp;rent=1">{{if .PlanExists}}调整安排{{else}}设置入住与租金{{end}}</a>{{end}}</div>
         {{if .PlanExists}}<div class="room-plan-summary-content"><div class="room-plan-summary-metric"><span>房间月租</span><strong>{{.MonthlyRent}}</strong></div><div class="room-plan-summary-metric"><span>每月缴租日</span><strong>{{.DueDay}} 日</strong></div><div class="room-plan-summary-metric"><span>计划区间</span><strong>{{.PlanEffectiveFrom}}{{if .PlanEffectiveTo}} 至 {{.PlanEffectiveTo}}{{else}} 起持续有效{{end}}</strong></div><div class="room-plan-summary-members"><span>入住租客与月租</span><div>{{range .PlanMembers}}<span>{{.TenantName}} · {{.ResponsibilityValue}} EUR</span>{{end}}</div></div></div>{{else}}<div class="room-plan-summary-empty">所选月份没有入住与租金计划，房间按空置处理，不会生成租客应收记录。</div>{{end}}
       </section>
 

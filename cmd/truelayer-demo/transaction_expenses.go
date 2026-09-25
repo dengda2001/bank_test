@@ -18,6 +18,7 @@ type transactionExpenseInput struct {
 	RoomID        *uint64
 	Category      string
 	Invoice       *manualExpenseInvoice
+	Attachments   []expenseAttachmentUpload
 }
 
 // saveTransactionExpense connects one debit to one expense fact. The bank
@@ -40,8 +41,12 @@ func (s *expenseService) saveTransactionExpense(ctx context.Context, userID uint
 			return errInvalidTransactionExpense
 		}
 		repo := newLandlordRentRepository(tx)
-		if _, err := repo.findProperty(ctx, userID, input.PropertyID); err != nil {
+		propertyRow, err := repo.findProperty(ctx, userID, input.PropertyID)
+		if err != nil {
 			return err
+		}
+		if propertyRow.DeletedAt != nil {
+			return gorm.ErrRecordNotFound
 		}
 		if input.RoomID != nil {
 			if *input.RoomID == 0 {
@@ -51,11 +56,14 @@ func (s *expenseService) saveTransactionExpense(ctx context.Context, userID uint
 			if err != nil {
 				return err
 			}
+			if roomRow.DeletedAt != nil {
+				return gorm.ErrRecordNotFound
+			}
 			if roomRow.PropertyID != input.PropertyID {
 				return errInvalidTransactionExpense
 			}
 		}
-		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND payment_transaction_id = ?", userID, source.ID).First(&saved).Error
+		err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND payment_transaction_id = ?", userID, source.ID).First(&saved).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			if source.Source != "truelayer" || source.TransactionTime == nil || source.AmountCents <= 0 || source.MatchStatus != "unmatched" {
 				return errInvalidTransactionExpense
@@ -94,6 +102,9 @@ func (s *expenseService) saveTransactionExpense(ctx context.Context, userID uint
 			if err := bindExpenseInvoiceInTx(tx, userID, invoice); err != nil {
 				return err
 			}
+		}
+		if err := saveExpenseAttachments(tx, userID, saved.ID, input.Attachments); err != nil {
+			return err
 		}
 		return nil
 	})

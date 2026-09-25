@@ -13,6 +13,7 @@ const (
 	allocationKindRent        = "rent"
 	allocationKindDeposit     = "deposit"
 	allocationKindOther       = "other_income"
+	allocationKindPrepayment  = "prepayment"
 	allocationKindOtherIncome = allocationKindOther
 	allocationStatusConfirmed = "confirmed"
 	allocationStatusVoided    = "voided"
@@ -81,6 +82,10 @@ func validateLedgerAllocation(input ledgerAllocationCheck) error {
 		if input.AmountCents > input.ObligationExpectedCents-input.ObligationPaidCents {
 			return errors.New("allocation exceeds obligation balance")
 		}
+	case allocationKindPrepayment:
+		if input.TenantID == 0 {
+			return errors.New("prepayment tenant is required")
+		}
 	case allocationKindDeposit, allocationKindOther:
 		// Non-rent allocations do not consume a rent obligation balance. They
 		// still consume the source transaction budget checked above.
@@ -95,7 +100,7 @@ func ledgerAllocationIsEffective(row paymentAllocation) bool {
 		return false
 	}
 	kind := ledgerAllocationKind(row)
-	return kind == allocationKindRent || kind == allocationKindDeposit || kind == allocationKindOther
+	return kind == allocationKindRent || kind == allocationKindDeposit || kind == allocationKindOther || kind == allocationKindPrepayment
 }
 
 func ledgerAllocationKind(row paymentAllocation) string {

@@ -39,8 +39,8 @@ func TestTransactionExpenseDrawerAndActionsRenderForBothStates(t *testing.T) {
 	})
 	for _, marker := range []string{
 		`action="/transactions/expense-link?transaction_id=7&amp;return_to=%2Ftransactions%3Fdirection%3Dexpense"`, `enctype="multipart/form-data"`,
-		`name="property_id" required`, `name="room_id"`, `name="category" required`, `name="invoice_file"`,
-		`>关联房间</a>`, `>编辑关联</a>`, `>发票已上传</small>`, `>已关联</span>`,
+		`name="property_id" required`, `name="room_id"`, `name="category" required`, `name="attachments" multiple`,
+		`>关联房间</a>`, `>编辑关联</a>`, `>附件已上传</small>`, `>已关联</span>`,
 	} {
 		if !strings.Contains(page, marker) {
 			t.Errorf("expense attribution page missing %q", marker)

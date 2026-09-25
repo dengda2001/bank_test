@@ -104,11 +104,13 @@ func TestTransactionMatchDrawerKeepsPaidMonthEvidenceAndFullTenantList(t *testin
 		SelectedTenantID: 7, SelectedTenantName: "Aoife", IdentifiedTenant: true, CanMatch: true,
 		SourceAmountCents: 95000, SourceRemainingCents: 95000, RequestKey: "review-test",
 		ReturnURL: "/transactions?match_status=pending", CloseURL: "/transactions?match_status=pending",
-		TenantOptions: []transactionReviewTenant{{ID: 7, Name: "Aoife", Selected: true}, {ID: 8, Name: "Bríd"}},
-		Months:        []transactionReviewMonth{{Period: "2026-08", Label: "2026年8月", Highlighted: true, Note: "本月已交清", Evidence: []transactionReviewEvidence{{Date: "2026-08-01", PayerName: "Aoife", Amount: "EUR 950.00", Description: "Original August rent", DetailURL: "/transactions?detail=42"}}}, {Period: "2026-09", Label: "2026年9月", Selectable: true, Remaining: "EUR 950.00", RemainingCents: 95000}},
+		TenantOptions:   []transactionReviewTenant{{ID: 7, Name: "Aoife", Selected: true}, {ID: 8, Name: "Bríd"}},
+		PropertyOptions: []transactionReviewPropertyOption{{ID: 3, Name: "Main Street"}},
+		RoomOptions:     []transactionReviewRoomOption{{ID: 4, PropertyID: 3, Name: "Room 2", OccupantIDs: "7,8"}},
+		Months:          []transactionReviewMonth{{Period: "2026-08", Label: "2026年8月", Highlighted: true, EvidenceLabel: "描述明确提及租金月份", Note: "本月已交清", Evidence: []transactionReviewEvidence{{Date: "2026-08-01", PayerName: "Aoife", Amount: "EUR 950.00", Description: "Original August rent", DetailURL: "/transactions?detail=42"}}}, {Period: "2026-09", Label: "2026年9月", Selectable: true, Remaining: "EUR 950.00", RemainingCents: 95000}},
 	}
 	page := renderTransactionListPage(t, transactionListPageData{MatchReview: &data})
-	for _, marker := range []string{`role="dialog"`, `>Aoife</option>`, `>Bríd</option>`, `Original August rent`, `href="/transactions?detail=42"`, `data-period="2026-09"`, `data-tenant-id="7"`, `data-remaining-cents="95000"`, `action="/transactions/confirm-batch"`, `name="return_to" value="/transactions?match_status=pending"`} {
+	for _, marker := range []string{`role="dialog"`, `>Aoife</option>`, `>Bríd</option>`, `Original August rent`, `href="/transactions?detail=42" data-review-detail-link`, `data-period="2026-09"`, `data-tenant-id="7"`, `data-remaining-cents="95000"`, `action="/transactions/confirm-batch"`, `name="return_to" value="/transactions?match_status=pending"`, `data-review-detail-overlay`, `data-review-notice`, `data-review-property`, `data-review-room`, `data-occupant-ids="7,8"`, `描述明确提及租金月份`} {
 		if !strings.Contains(page, marker) {
 			t.Errorf("drawer missing %q", marker)
 		}
@@ -215,14 +217,11 @@ func TestTransactionDirectionSelectorAndRowsDistinguishIncomeFromExpense(t *test
 	for _, marker := range []string{
 		`id="transaction-row-7" data-direction="income"`,
 		`id="transaction-row-8" data-direction="expense"`,
-		`<span class="transaction-direction income">收入</span>EUR 950.00`,
-		`<span class="transaction-direction expense">支出</span>EUR 77.99`,
+		`<th>收支</th>`,
+		`<span class="transaction-direction income"><svg`,
+		`<span class="transaction-direction expense"><svg`,
 		`id="mobile-transaction-7" data-direction="income"`,
 		`id="mobile-transaction-8" data-direction="expense"`,
-		`.transaction-route-desktop-table tbody tr[data-direction="income"] { background:`,
-		`.transaction-route-desktop-table tbody tr[data-direction="expense"] { background:`,
-		`.transaction-review-card[data-direction="income"] { background:`,
-		`.transaction-review-card[data-direction="expense"] { background:`,
 	} {
 		if !strings.Contains(page, marker) {
 			t.Errorf("transaction direction missing %q", marker)

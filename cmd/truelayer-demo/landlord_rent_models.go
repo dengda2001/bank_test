@@ -11,6 +11,7 @@ type property struct {
 	Timezone   string
 	Notes      *string
 	Status     string `gorm:"default:active"`
+	DeletedAt  *time.Time
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 }
@@ -28,6 +29,7 @@ type room struct {
 	Capacity        int
 	Notes           *string
 	Status          string `gorm:"default:active"`
+	DeletedAt       *time.Time
 	RentPlanVersion uint64
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
